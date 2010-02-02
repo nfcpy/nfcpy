@@ -52,7 +52,7 @@ class Message(list):
         string = self[0].tostring(message_begin=True)
 
         for i in range(1,len(self)-1):
-            string += record.tostring()
+            string += self[i].tostring()
 
         return string + self[-1].tostring(message_end=True)
 
