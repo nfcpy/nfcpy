@@ -31,7 +31,8 @@ sys.path.insert(1, os.path.split(sys.path[0])[0])
 
 import nfc
 import nfc.ndef
-from nfc.ndef.ConnectionHandover import WiFiConfigData
+from nfc.ndef.WiFiSimpleConfig import WiFiConfigData
+from nfc.ndef.BluetoothEasyPairing import BluetoothConfigData
 from nfc.ndef.ConnectionHandover import HandoverSelectMessage
 
 def make_printable(data):
@@ -46,6 +47,43 @@ def format_data(data):
         s[-1] += (8 + 16*3 - len(s[-1])) * ' '
         s[-1] += make_printable(data[i:i+16])
     return '\n'.join(s)
+
+def write_configuration(tag):
+    print
+    print "Writing Wi-Fi Configuration"
+
+    wifi_cfg = WiFiConfigData()
+    wifi_cfg.ssid           = "HomeNetwork"
+    wifi_cfg.network_key    = "secret"
+    wifi_cfg.mac_address    = "00:07:E9:4C:A8:1C"
+    wifi_cfg.authentication = "WPA-Personal"
+    wifi_cfg.encryption     = "AES"
+
+    bt21_cfg = BluetoothConfigData()
+    bt21_cfg.device_address = "01:02:03:04:05:06"
+    bt21_cfg.class_of_device = "\x00\x00\x00"
+    bt21_cfg.simple_pairing_hash = range(16)
+    bt21_cfg.simple_pairing_randomizer = [ord(x) for x in os.urandom(16)]
+    bt21_cfg.short_name = "My Device"
+    bt21_cfg.long_name = "My Most Expensive Device"
+
+    message = HandoverSelectMessage()
+
+    wifi_carrier = dict()
+    wifi_carrier['carrier-type'] = 'application/vnd.wfa.wsc'
+    wifi_carrier['config-data'] = wifi_cfg.tostring()
+    wifi_carrier['power-state'] = "active"
+    message.carriers.append(wifi_carrier)
+
+    bt21_carrier = dict()
+    bt21_carrier['carrier-type'] = 'application/vnd.bluetooth.ep.oob'
+    bt21_carrier['config-data'] = bt21_cfg.tostring()
+    bt21_carrier['power-state'] = "active"
+    message.carriers.append(bt21_carrier)
+
+    print format_data(message.tostring())
+    if tag: tag.ndef.message = message.tostring()
+    return
 
 def main():
     # initialize the NFC reader, if installed
@@ -77,25 +115,7 @@ def main():
                 print "This tag is not writable - try another one"
                 continue
 
-            print
-            print "Writing Wi-Fi Configuration"
-
-            wifi_cfg = WiFiConfigData()
-            wifi_cfg.ssid           = "HomeNetwork"
-            wifi_cfg.network_key    = "secret"
-            wifi_cfg.mac_address    = "00:07:E9:4C:A8:1C"
-            wifi_cfg.authentication = "WPA-Personal"
-            wifi_cfg.encryption     = "AES"
-
-            message = HandoverSelectMessage()
-
-            carrier = dict()
-            carrier['carrier-type'] = 'application/vnd.wfa.wsc'
-            carrier['config-data'] = wifi_cfg.tostring()
-            message.carriers.append(carrier)
-
-            print format_data(message.tostring())
-            tag.ndef.message = message.tostring()
+            write_configuration(tag)
             return
 
         time.sleep(0.5)
