@@ -48,6 +48,57 @@ def format_data(data):
         s[-1] += make_printable(data[i:i+16])
     return '\n'.join(s)
 
+def print_smartposter(message):
+    print "Smart Poster"
+    sp = SmartPosterRecord(message[0])
+    for lang in sorted(sp.title):
+        print "  title[%s] = %s" % (lang, sp.title[lang])
+    print "  resource  = %s" % sp.uri
+    print "  action    = %s" % sp.action
+    if len(message) > 1:
+        print "Further Records"
+        for index, record in enumerate(message):
+            if index == 0: continue
+            record.data = make_printable(record.data)
+            print "  [%d] type = %s" %(index, record.type)
+            print "  [%d] name = %s" %(index, record.name)
+            print "  [%d] data = %s" %(index, record.data)
+
+def print_handover(message):
+    print "Connection Handover Select Message"
+    number_suffix = ('st', 'nd', 'rd', 'th')
+    message = HandoverSelectMessage(message)
+    for i, carrier in enumerate(message.carriers):
+        carrier_type = carrier['carrier-type']
+        if carrier_type == "application/vnd.wfa.wsc":
+            carrier_name = "Wi-Fi (Simple Config)"
+        elif carrier_type == "application/vnd.bluetooth.ep.oob":
+            carrier_name = "Bluetooth (Easy Pairing)"
+        else:
+            carrier_name = carrier_type
+        print "  %d%s carrier" % (i+1, number_suffix[min(i,3)]),
+        print "is %s" % carrier_name
+        print "    power    = %s" % carrier['power-state']
+        config_data  = carrier['config-data']
+        if carrier_type == "application/vnd.wfa.wsc":
+            cfg = WiFiConfigData.fromstring(config_data)
+            print "    version  = %d.%d" % cfg.version
+            print "    network  = %s" % cfg.ssid
+            print "    password = %s" % cfg.network_key
+            print "    macaddr  = %s" % cfg.mac_address
+            print "    security = %s / %s" % \
+                (cfg.authentication, cfg.encryption)
+        elif carrier_type == "application/vnd.bluetooth.ep.oob":
+            cfg = BluetoothConfigData.fromstring(config_data)
+            print "    bdaddr   = %s" % cfg.device_address
+            print "    class    = %s" % cfg.class_of_device.encode("hex")
+            print "    sp hash  = %s" % cfg.simple_pairing_hash
+            print "    sp rand  = %s" % cfg.simple_pairing_randomizer
+            print "    longname = %s" % cfg.long_name
+            print "    partname = %s" % cfg.short_name
+        else:
+            print carrier
+
 def main():
     # initialize the NFC reader, if installed
     clf = nfc.ContactlessFrontend()
@@ -74,55 +125,10 @@ def main():
                 message = nfc.ndef.Message(tag.ndef.message)
 
                 if message.type == "urn:nfc:wkt:Sp":
-                    print "Smart Poster"
-                    sp = SmartPosterRecord(message[0])
-                    for lang in sorted(sp.title):
-                        print "  title[%s] = %s" % (lang, sp.title[lang])
-                    print "  resource  = %s" % sp.uri
-                    print "  action    = %s" % sp.action
-                    if len(message) > 1:
-                        print "Further Records"
-                        for index, record in enumerate(message):
-                            if index == 0: continue
-                            record.data = make_printable(record.data)
-                            print "  [%d] type = %s" %(index, record.type)
-                            print "  [%d] name = %s" %(index, record.name)
-                            print "  [%d] data = %s" %(index, record.data)
+                    print_smartposter(message)
 
                 elif message.type == "urn:nfc:wkt:Hs":
-                    number_suffix = ('st', 'nd', 'rd', 'th')
-                    print "Connection Handover Select Message"
-                    message = HandoverSelectMessage(message)
-                    for i, carrier in enumerate(message.carriers):
-                        carrier_type = carrier['carrier-type']
-                        if carrier_type == "application/vnd.wfa.wsc":
-                            carrier_name = "Wi-Fi (Simple Config)"
-                        elif carrier_type == "application/vnd.bluetooth.ep.oob":
-                            carrier_name = "Bluetooth (Easy Pairing)"
-                        else:
-                            carrier_name = carrier_type
-                        print "  %d%s carrier" % (i+1, number_suffix[min(i,3)]),
-                        print "is %s" % carrier_name
-                        print "    power    = %s" % carrier['power-state']
-                        config_data  = carrier['config-data']
-                        if carrier_type == "application/vnd.wfa.wsc":
-                            cfg = WiFiConfigData.fromstring(config_data)
-                            print "    version  = %d.%d" % cfg.version
-                            print "    network  = %s" % cfg.ssid
-                            print "    password = %s" % cfg.network_key
-                            print "    macaddr  = %s" % cfg.mac_address
-                            print "    security = %s / %s" % \
-                                (cfg.authentication, cfg.encryption)
-                        elif carrier_type == "application/vnd.bluetooth.ep.oob":
-                            cfg = BluetoothConfigData.fromstring(config_data)
-                            print "    bdaddr   = %s" % cfg.device_address
-                            print "    class    = %s" % cfg.class_of_device.encode("hex")
-                            print "    sp hash  = %s" % cfg.simple_pairing_hash
-                            print "    sp rand  = %s" % cfg.simple_pairing_randomizer
-                            print "    longname = %s" % cfg.long_name
-                            print "    partname = %s" % cfg.short_name
-                        else:
-                            print carrier
+                    print_handover(message)
 
                 else:
                     print "Unknown Message"
