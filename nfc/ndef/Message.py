@@ -72,5 +72,8 @@ class Message(list):
 
     @property
     def type(self):
-        return self[0].type
+        if len(self):
+            return self[0].type
+        else:
+            return ""
 
