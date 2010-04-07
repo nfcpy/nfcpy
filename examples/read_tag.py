@@ -32,7 +32,7 @@ import nfc
 import nfc.ndef
 from nfc.ndef.SmartPoster import SmartPosterRecord
 from nfc.ndef.ConnectionHandover import HandoverSelectMessage
-from nfc.ndef.WiFiSimpleConfig import WiFiConfigData
+from nfc.ndef.WiFiSimpleConfig import WiFiConfigData, WiFiPasswordData
 from nfc.ndef.BluetoothEasyPairing import BluetoothConfigData
 
 def make_printable(data):
@@ -64,7 +64,7 @@ def print_smartposter(message):
             print "  [%d] name = %s" %(index, record.name)
             print "  [%d] data = %s" %(index, record.data)
 
-def print_handover(message):
+def print_handover_select(message):
     print "Connection Handover Select Message"
     number_suffix = ('st', 'nd', 'rd', 'th')
     message = HandoverSelectMessage(message)
@@ -99,6 +99,32 @@ def print_handover(message):
         else:
             print carrier
 
+def print_wifi_token(message):
+    try:
+        data = WiFiPasswordData.fromstring(message[0].data)
+        print "  Wi-Fi Password Token"
+        print "    version  = %d.%d" % data.version
+        print "    PK Hash  = %s" % data.public_key_hash.encode("hex")
+        print "    DevPwdID = %s" % data.device_password_id
+        print "    Password = %s" % data.device_password.encode("hex")
+        for key, val in data.other_attributes:
+            print "    0x%04x   = %s" % (key, val.encode("hex"))
+        return
+    except ValueError:
+        pass
+    try:
+        data = WiFiConfigData.fromstring(message[0].data)
+        print "  Wi-Fi Configuration Token"
+        print "    version  = %d.%d" % data.version
+        print "    network  = %s" % data.ssid
+        print "    password = %s" % data.network_key
+        print "    macaddr  = %s" % data.mac_address
+        print "    security = %s / %s" % \
+            (data.authentication, data.encryption)
+        return
+    except ValueError:
+        pass
+
 def main():
     # initialize the NFC reader, if installed
     clf = nfc.ContactlessFrontend()
@@ -120,15 +146,19 @@ def main():
                 print "  writeable = %s" % ("no", "yes")[tag.ndef.writeable]
                 print "  capacity  = %d byte" % tag.ndef.capacity
                 print "  data size = %d byte" % len(tag.ndef.message)
-                print format_data(tag.ndef.message)
 
+            if tag.ndef and len(tag.ndef.message):
+                print format_data(tag.ndef.message)
                 message = nfc.ndef.Message(tag.ndef.message)
 
                 if message.type == "urn:nfc:wkt:Sp":
                     print_smartposter(message)
 
                 elif message.type == "urn:nfc:wkt:Hs":
-                    print_handover(message)
+                    print_handover_select(message)
+
+                elif message.type == "application/vnd.wfa.wsc":
+                    print_wifi_token(message)
 
                 else:
                     print "Unknown Message"

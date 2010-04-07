@@ -56,6 +56,7 @@ class WiFiConfigData(object):
         self.encryption = "AES"
         self.network_key = key
         self.mac_address = mac_address
+        self._other = list()
 
     @property
     def version(self):
@@ -117,6 +118,10 @@ class WiFiConfigData(object):
             raise ValueError("value must be a string")
         self._key = value
 
+    @property
+    def other_attributes(self):
+        return self._other
+
     def tostring(self):
         string  = struct.pack('>2HB', 0x1026, 1, 0x0001)
         string += struct.pack('>2H', 0x1045, len(self.ssid)) + self.ssid
@@ -137,21 +142,20 @@ class WiFiConfigData(object):
             return Type, Length, Value, string[4+Length:]
             
         cfg = WiFiConfigData()
+
+        # first attribute must be a Version TLV with value 1.0
         Type, Length, Value, string = TLV(string)
         if Type != 0x104A or Length != 1 or Value != '\x10':
-            raise ValueError("does not start with expected version attribute")
+            raise ValueError("expected Version1 attribute")
         cfg._version = (1, 0)
 
-        Type, Length, Value, string = TLV(string)
-        if Type == 0x100E: credential = Value
-        if len(string):
-            Type, Length, Value, string = TLV(string)
-            if Type == 0x1067 and Length == 1:
-                cfg._version = (ord(Value) >> 4, ord(Value) & 0x0F)
+        # second attribute must be a Credential TLV
+        Type, Length, credential, string = TLV(string)
+        if Type != 0x100E:
+            raise ValueError("expected Credential attribute")
 
-        string = credential
-        while len(string):
-            Type, Length, Value, string = TLV(string)
+        while len(credential):
+            Type, Length, Value, credential = TLV(credential)
             if Type == 0x1045:
                 cfg.ssid = Value
             elif Type == 0x1003:
@@ -165,5 +169,114 @@ class WiFiConfigData(object):
             elif Type == 0x1020:
                 cfg._mac_addr = Value
 
+        if len(string):
+            Type, Length, Value, string = TLV(string)
+            if Type == 0x1067 and Length == 1:
+                cfg._version = (ord(Value) >> 4, ord(Value) & 0x0F)
+            else:
+                cfg._other.append((Type, Value))
+
+        while len(string):
+            Type, Length, Value, string = TLV(string)
+            cfg._other.append((Type, Value))
+
         return cfg
 
+class WiFiPasswordData(object):
+    def __init__(self):
+        self._version = (2, 0)
+        self._pkhash = None
+        self._passid = None
+        self._devpwd = None
+        self._other = list()
+
+    @property
+    def version(self):
+        return self._version
+
+    @property
+    def public_key_hash(self):
+        return self._pkhash
+
+    @public_key_hash.setter
+    def public_key_hash(self, value):
+        if not type(value) == type(str()):
+            raise ValueError("public key hash must be a string")
+        if not len(value) == 20:
+            raise ValueError("public key hash length must be 20 byte")
+        self._pkhash = value
+
+    @property
+    def device_password_id(self):
+        return self._passid
+
+    @device_password_id.setter
+    def device_password_id(self, value):
+        if not type(value) == type(int()):
+            raise ValueError("device password id must be an integer")
+        if not (value > 0x000F and value <= 0xFFFF):
+            raise ValueError("device password id range is 16-65536")
+        self._passid = value
+
+    @property
+    def device_password(self):
+        return self._devpwd
+
+    @device_password.setter
+    def device_password(self, value):
+        if not type(value) == type(str()):
+            raise ValueError("device password must be a string")
+        if not (len(value) >= 16 and len(value) <= 32):
+            raise ValueError("device password must be 16 to 32 characters")
+        self._devpwd = value
+
+    @property
+    def other_attributes(self):
+        return self._other
+
+    def tostring(self):
+        string  = '\x10\x4A\x00\x01\x10'
+        string += struct.pack('>HH', 0x102C, 22 + len(self._devpwd))
+        string += self._pkhash + struct.pack('>H', self._passid) + self._devpwd
+        string += struct.pack('>HHB', 0x1067, 1, 0x20)
+        for opt in self._other:
+            string += struct.pack('>HH', opt[0], len(opt[1])) + opt[1]
+        return string
+
+    @staticmethod
+    def fromstring(string):
+        def TLV(string):
+            Type, Length = struct.unpack_from('>2H', string)
+            Value = string[4:4+Length]
+            return Type, Length, Value, string[4+Length:]
+            
+        pwd = WiFiPasswordData()
+
+        # first attribute must be a Version TLV with value 1.0
+        Type, Length, Value, string = TLV(string)
+        if Type != 0x104A or Length != 1 or Value != '\x10':
+            raise ValueError("expected Version1 attribute")
+        pwd._version = (1, 0)
+
+        # second attribute must be a OOB Device Password TLV
+        Type, Length, Value, string = TLV(string)
+        if Type != 0x102C:
+            raise ValueError("expected OOB Device Password")
+        if Length < 22+16 or Length > 58:
+            raise ValueError("invalid OOB Device Password")
+        pwd._pkhash = Value[0:20]
+        pwd._passid = struct.unpack_from('>H', Value, 20)[0]
+        pwd._devpwd = Value[22:]
+
+        if len(string):
+            Type, Length, Value, string = TLV(string)
+            if Type == 0x1067 and Length == 1:
+                pwd._version = (ord(Value) >> 4, ord(Value) & 0x0F)
+            else:
+                pwd._other.append((Type, Value))
+
+        while len(string):
+            Type, Length, Value, string = TLV(string)
+            pwd._other.append((Type, Value))
+
+        return pwd
