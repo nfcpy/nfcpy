@@ -95,7 +95,7 @@ class NDEF(object):
             data += (len(blocks)*16 - len(data)) * '\x00'
             self.tag.write(data[offset:], blocks)
 
-        self.attr[9] = 0x0F;
+        self.attr[9] = 0x00; # Writing finished
         self.attr[14:16] = split2(sum(self.attr[0:14]))
         self.tag.write(''.join([chr(x) for x in self.attr]), [0])
 
