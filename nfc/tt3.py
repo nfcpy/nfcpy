@@ -55,12 +55,13 @@ class NDEF(object):
         if self.data is None:
             length = self.attr[11]*65536 + self.attr[12]*256 + self.attr[13]
             blocks = range(1, (length+15)/16 + 1)
+            nb_max = self.attr[1]
             data = ""
-            while len(blocks) > self.attr[1]:
+            while len(blocks) > nb_max:
                 # attr[1] has the max number of blocks for one read command
-                block_list = blocks[0:self.attr[1]]
-                data += self.tag.read(blocks[0:self.attr[1]])
-                del blocks[0:self.attr[1]]
+                block_list = blocks[0:nb_max]
+                data += self.tag.read(blocks[0:nb_max])
+                del blocks[0:nb_max]
             if len(blocks) > 0:
                 data += self.tag.read(blocks)
             self.data = data[0:length]
@@ -87,7 +88,7 @@ class NDEF(object):
         nb_max = self.attr[2] # blocks to write at once
         length = nb_max * 16  # bytes to write at once
         offset = 0
-        while len(blocks) > self.attr[2]:
+        while len(blocks) > nb_max:
             self.tag.write(data[offset:offset+length], blocks[0:nb_max])
             del blocks[0:nb_max]
             offset += length

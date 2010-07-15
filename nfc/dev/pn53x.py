@@ -76,7 +76,7 @@ class pn53x_usb(object):
         if self.dh:
             return self.usb_write(data)
 
-    def read(self, timeout = 100):
+    def read(self, timeout = 500):
         data = ""
         if self.fd:
             # need to use select, poll or similar to implement the timeout 
@@ -85,7 +85,7 @@ class pn53x_usb(object):
         if self.dh:
             try: data = self.usb_read(timeout)
             except usb.USBError: return ""
-        log.debug("pn53x: read %d byte\n" % len(data) + format_data(data))
+        log.debug("read %d byte\n" % len(data) + format_data(data))
         return data
 
     def usb_write(self, data):
@@ -108,6 +108,9 @@ class pn53x_usb(object):
 class device(object):
     def __init__(self):
         self.dev = pn53x_usb()
+        # set response timeouts (ATR: 102.4 ms, Thru: 204.8 ms)
+        self.dev.write("\xD4\x32\x02\x00\x0B\x0C")
+        self.dev.read()
 
     def poll_dep(self, gb):
         log.debug("pn53x: poll for dep")
