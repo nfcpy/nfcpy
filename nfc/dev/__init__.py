@@ -20,3 +20,7 @@
 # -----------------------------------------------------------------------------
 
 __all__ = ["pn53x"]
+
+# uncomment the following line for LLCP testing with a TCP/IP simulated link
+#__all__.append("ipsim")
+

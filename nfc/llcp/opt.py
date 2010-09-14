@@ -1,3 +1,5 @@
+#!/usr/bin/python
+# -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
 # Copyright 2009,2010 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
 #
@@ -19,6 +21,9 @@
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
 
-from clf import ContactlessFrontend
-from dep import DEP, DEPTarget, DEPInitiator
-from tt3 import Type3Tag
+SO_SNDMIU = 1
+SO_RCVMIU = 2
+SO_SNDBUF = 3
+SO_RCVBUF = 4
+SO_SNDBSY = 5
+SO_RCVBSY = 6

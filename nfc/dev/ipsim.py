@@ -23,7 +23,7 @@
 #
 
 import logging
-log = logging.getLogger("ipsim")
+log = logging.getLogger(__name__)
 
 import socket
 import select
@@ -152,9 +152,9 @@ class device(object):
         pdu = "\xD4\x06" + chr((self.pni % 4) | 0x40)
         self._send(pdu)
 
-    #
-    # initiator receive functions
-    #
+    ##
+    ## initiator receive functions
+    ##
     def _recv_dep_res_inf(self, timeout):
         pdu = self._recv(timeout)
         if pdu and pdu.startswith("\xD5\x07") and ord(pdu[2]) % 4 == self.pni:
@@ -162,6 +162,7 @@ class device(object):
             more = bool(ord(pdu[2]) & 0x10)
             data = pdu[3:]
             return data, more
+        return (None, False)
         
     def _recv_dep_res_ack(self, timeout):
         pdu = self._recv(timeout)

@@ -20,7 +20,7 @@
 # -----------------------------------------------------------------------------
 
 import logging
-log = logging.getLogger("TT3")
+log = logging.getLogger(__name__)
 
 ndef_read_service = 11 # service code for NDEF reading
 ndef_write_service = 9 # service code for NDEF writing

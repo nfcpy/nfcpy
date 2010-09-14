@@ -1,3 +1,5 @@
+#!/usr/bin/python
+# -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
 # Copyright 2009,2010 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
 #
@@ -19,6 +21,24 @@
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
 
-from clf import ContactlessFrontend
-from dep import DEP, DEPTarget, DEPInitiator
-from tt3 import Type3Tag
+from os import strerror
+import errno
+
+class Error(Exception):
+    def __init__(self, err, info=None):
+        self.args = (err, strerror(err) if not info else info)
+
+    def __str__(self):
+        return "nfc.llcp.Error: [{errno}] {info}".format(
+            errno=errno.errorcode[self.args[0]], info=self.args[1])
+
+class ConnectRefused(Error):
+    def __init__(self, reason):
+        self.args = (errno.ECONNREFUSED, strerror(errno.ECONNREFUSED))
+        self.reason = reason
+
+    def __str__(self):
+        return "nfc.llcp.ConnectRefused: [{0}] {1} with reason {2}".format(
+            errno.errorcode[self.args[0]], self.args[1], self.reason)
+
+    

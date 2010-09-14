@@ -19,12 +19,12 @@
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
 
+import logging
+log = logging.getLogger(__name__)
+
 import dev
 from dep import DEPTarget, DEPInitiator
 from tt3 import Type3Tag
-
-import logging
-log = logging.getLogger("CLF")
 
 class ContactlessFrontend(object):
     """Contactless frontend is an abstraction of nearfield
@@ -64,7 +64,7 @@ class ContactlessFrontend(object):
             data = self.dev.poll_dep(general_bytes)
             if not data is None: 
                 log.debug("got dep target, general bytes " + data.encode("hex"))
-                return DEPTarget(self.dev, data)
+                return DEPInitiator(self.dev, data)
 
         data = self.dev.poll_tt3()
         if data and len(data) == 18:
@@ -82,6 +82,6 @@ class ContactlessFrontend(object):
         data = self.dev.listen(general_bytes, timeout)
         if not data is None:
             log.debug("got dep master, general bytes " + data.encode("hex"))
-            return DEPInitiator(self.dev, data)
+            return DEPTarget(self.dev, data)
 
 

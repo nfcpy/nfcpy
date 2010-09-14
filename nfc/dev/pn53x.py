@@ -22,9 +22,10 @@
 # pn53x.py - hardware access module for the PN53x family of NFC chips
 #
 
-import os, time, usb
 import logging
-log = logging.getLogger("pn53x")
+log = logging.getLogger(__name__)
+
+import os, time, usb
 
 supported_devices = [
     (0x054c, 0x02e1), # Sony RC-S330
