@@ -424,7 +424,7 @@ def test_11():
 
 def main(options):
     general_bytes = nfc.llcp.startup(lto=1000, miu=1024)
-    clf = nfc.ContactlessFrontend()
+    clf = nfc.ContactlessFrontend(options.device)
 
     peer = None
     while True:
@@ -468,16 +468,22 @@ if __name__ == '__main__':
     import sys
     from optparse import OptionParser, OptionGroup
     parser = OptionParser()
-    parser.add_option("-t", action="append", dest="run_test", default=[],
-                      help="run test number <INT>", metavar="INT")
-    parser.add_option("-q", action="store_false", dest="verbose", default=True,
-                      help="do only print errors to console")
-    parser.add_option("-d", action="append", dest="debug", default=[],
-                      metavar="MODULE", help="print debug messages for module")
-    parser.add_option("-f", action="store", type="string", dest="logfile",
+    parser.add_option("-t", "--test", type="int", default=[],
+                      action="append", dest="run_test", metavar="N",
+                      help="run test number <N>")
+    parser.add_option("-q", default=True,
+                      action="store_false", dest="verbose",
+                      help="be quiet, only print errors")
+    parser.add_option("-d", type="string", default=[],
+                      action="append", dest="debug", metavar="MODULE",
+                      help="print debug messages for MODULE")
+    parser.add_option("-f", type="string",
+                      action="store", dest="logfile",
                       help="write log messages to LOGFILE")
+    parser.add_option("--device", type="string", default=[],
+                      action="append", dest="device", metavar="NAME",
+                      help="use this device ('ipsim' for TCP/IP simulation)")
     options, args = parser.parse_args()
-    print options
 
     verbosity = logging.INFO if options.verbose else logging.ERROR
     logging.basicConfig(level=verbosity, format='%(message)s')

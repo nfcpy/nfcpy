@@ -177,7 +177,7 @@ class ConnectionModeDumpServer(Thread):
 
 def main(options):
     general_bytes = nfc.llcp.startup(lto=1000, miu=options.link_miu)
-    clf = nfc.ContactlessFrontend()
+    clf = nfc.ContactlessFrontend(options.device)
 
     peer = None
     while True:
@@ -209,14 +209,21 @@ def main(options):
 if __name__ == '__main__':
     from optparse import OptionParser, OptionGroup
     parser = OptionParser()
-    parser.add_option("-q", action="store_false", dest="verbose", default=True,
-                      help="do only print errors to console")
-    parser.add_option("-d", action="append", dest="debug", default=[],
-                      metavar="MODULE", help="print debug messages for module")
-    parser.add_option("-f", action="store", type="string", dest="logfile",
+    parser.add_option("-q", default=True,
+                      action="store_false", dest="verbose",
+                      help="be quiet, only print errors")
+    parser.add_option("-d", type="string", default=[],
+                      action="append", dest="debug", metavar="MODULE",
+                      help="print debug messages for MODULE")
+    parser.add_option("-f", type="string",
+                      action="store", dest="logfile",
                       help="write log messages to LOGFILE")
-    parser.add_option("--link-miu", action="store", type="int", dest="link_miu",
-                      default=128, help="write log messages to LOGFILE")
+    parser.add_option("--link-miu", type="int", default=128,
+                      action="store", dest="link_miu", metavar="MIU",
+                      help="set maximum information unit size to MIU")
+    parser.add_option("--device", type="string", default=[],
+                      action="append", dest="device", metavar="NAME",
+                      help="use this device ('ipsim' for TCP/IP simulation)")
     options, args = parser.parse_args()
 
     verbosity = logging.INFO if options.verbose else logging.ERROR

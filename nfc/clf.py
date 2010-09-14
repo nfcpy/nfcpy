@@ -33,9 +33,13 @@ class ContactlessFrontend(object):
     first usable is claimed. Raises a LookupError exception if no
     reader was found."""
 
-    def __init__(self):
+    def __init__(self, probe=[]):
         self.dev = None
-        for name in dev.__all__:
+        if type(probe) is str:
+            probe = [probe]
+        if not probe:
+            probe = dev.__all__
+        for name in probe:
             device = __import__("dev."+name, globals(), {}, ["device"]).device
             try: self.dev = device()
             except LookupError: pass
