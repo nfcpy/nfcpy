@@ -155,6 +155,9 @@ class ServiceDiscovery(object):
                 self.resp.wait()
             return None if self.snl is None else self.snl[name]
 
+    #
+    # enqueue() and dequeue() are called from llc run thread
+    #
     def enqueue(self, pdu):
         with self.llc.lock:
             if isinstance(pdu, ServiceNameLookup) and not self.snl is None:
@@ -162,17 +165,15 @@ class ServiceDiscovery(object):
                     try: name = self.sent[tid]
                     except KeyError: pass
                     else:
-                        log.debug("'{0}' is on remote addr {1}"
+                        log.debug("resolved '{0}' to remote addr {1}"
                                   .format(name, sap))
                         self.snl[name] = sap
                         self.tids.append(tid)
                         self.resp.notify_all()
                 for tid, name in pdu.sdreq:
                     try: sap = self.llc.snl[name]
-                    except KeyError: pass
-                    else:
-                        self.sdres.append((tid, sap))
-            pass
+                    except KeyError: sap = 0
+                    self.sdres.append((tid, sap))
 
     def dequeue(self, max_size):
         if max_size < 2:
