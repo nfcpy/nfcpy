@@ -122,7 +122,7 @@ class device(object):
             data = data + resp
         return data
 
-    def dep_set_data(self, data, mtu):
+    def dep_set_data(self, data, timeout, mtu):
         mtu = 251 if mtu is None else mtu
         for i in range(0, len(data), mtu)[0:-1]:
             self._send_dep_res_inf(data[i:i+mtu], more = True)

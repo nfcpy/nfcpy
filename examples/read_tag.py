@@ -20,7 +20,7 @@
 # -----------------------------------------------------------------------------
 
 import logging
-logging.basicConfig(level=logging.ERROR)
+log = logging.getLogger()
 
 import os
 import sys
@@ -173,8 +173,36 @@ def main():
 
         time.sleep(0.5)
 
-try:
-    main()
-except KeyboardInterrupt:
-    pass
+if __name__ == '__main__':
+    from optparse import OptionParser, OptionGroup
+
+    parser = OptionParser()
+    parser.add_option("-q", default=True,
+                      action="store_false", dest="verbose",
+                      help="be quiet, only print errors")
+    parser.add_option("-d", default=False,
+                      action="store_true", dest="debug",
+                      help="print debug messages")
+    parser.add_option("-f", type="string",
+                      action="store", dest="logfile",
+                      help="write log messages to LOGFILE")
+
+    global options
+    options, args = parser.parse_args()
+
+    verbosity = logging.INFO if options.verbose else logging.ERROR
+    verbosity = logging.DEBUG if options.debug else verbosity
+    logging.basicConfig(level=verbosity, format='%(message)s')
+
+    if options.logfile:
+        logfile_format = '%(asctime)s %(levelname)-5s [%(name)s] %(message)s'
+        logfile = logging.FileHandler(options.logfile, "w")
+        logfile.setFormatter(logging.Formatter(logfile_format))
+        logfile.setLevel(logging.DEBUG)
+        logging.getLogger('').addHandler(logfile)
+
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass
 

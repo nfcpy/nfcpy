@@ -1,3 +1,4 @@
+# -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
 # Copyright 2009,2010 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
 #
@@ -24,29 +25,29 @@ log = logging.getLogger(__name__)
 
 class DEP(object):
     def __init__(self, dev, general_bytes, role):
-        self.__dev = dev
-        self.__gb = general_bytes
-        self.__role = role
+        self._dev = dev
+        self._gb = general_bytes
+        self._role = role
 
     @property
     def general_bytes(self):
         """The general bytes received with the ATR exchange"""
-        return self.__gb
+        return self._gb
 
     @property
     def role(self):
         """Role in DEP communication, either 'Target' or 'Initiator'"""
-        return self.__role
+        return self._role
 
     @property
-    def dev(self):
-        return self.__dev
+    def maximum_transport_unit(self):
+        return self._dev.mtu
 
 class DEPInitiator(DEP):
     def __init__(self, dev, general_bytes):
         DEP.__init__(self, dev, general_bytes, "Initiator")
 
-    def exchange(self, data, timeout=100, mtu=None):
+    def exchange(self, data, timeout, mtu=None):
         """Send *data* bytes to the remote NFCIP-1 target device. If a 
         response is received within *timeout* milliseconds, exchange()
         returns a byte string with the response data, otherwise IOError
@@ -54,24 +55,28 @@ class DEPInitiator(DEP):
         specific value for the maximum number of bytes sent within a
         single DEP command, i.e. before NFCIP-1 chaining will be 
         applied."""
-        return self.dev.dep_exchange(data, timeout, mtu)
+        return self._dev.dep_exchange(data, timeout, mtu)
 
 class DEPTarget(DEP):
     def __init__(self, dev, general_bytes):
         DEP.__init__(self, dev, general_bytes, "Target")
 
-    def wait_command(self, timeout=100):
+    @property
+    def response_waiting_time(self):
+        return self._dev.rwt
+
+    def wait_command(self, timeout):
         """Receive an NFCIP-1 DEP command. If a command is received within
         *timeout* milliseconds the data portion is returned as a byte 
         string, otherwise an IOError exception is raised."""
-        return self.dev.dep_get_data(timeout)
+        return self._dev.dep_get_data(timeout)
 
-    def send_response(self, data, mtu=None):
+    def send_response(self, data, timeout, mtu=None):
         """Send an NFCIP-1 DEP response with the byte string *data*
         as the payload. The *mtu* parameter may be used to set a 
         specifc value for the maximum number of bytes sent within a
         single DEP command, i.e. before NFCIP-1 chaining will be 
         applied."""
-        self.dev.dep_set_data(data, mtu)
+        self._dev.dep_set_data(data, timeout, mtu)
 
 

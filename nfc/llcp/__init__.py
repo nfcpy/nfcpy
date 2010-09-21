@@ -50,12 +50,24 @@ def shutdown():
 def resolve(name):
     """resolve() converts a service name into an address. This may involve
     conversation with the remote service discovery instance if the name is
-    to be resolved for the first time.
+    to be resolved for the first time. The return value is the service
+    access point address number for the given service name if that name is
+    available at the remote device. The return value is zero if the name was
+    not known to the remote device. Link termination makes resolve() return
+    None.
     """
     return _llc.resolve(name)
 
-def socket(socket_type):
-    return _llc.socket(socket_type)
+def socket(type):
+    """socket() creates an endpoint for communication.and returns a socket
+    descriptor. The *type* parameter specifies the communication semantics.
+    Currently defined types are:
+    LOGICAL_DATA_LINK - provides unreliable, connectionless transmission of
+        messages of a fixed maximum length
+    DATA_LINK_CONNECTION - provides sequenced, reliable, two-way connection-
+        based transmission of messages of a fixed maximum length
+    """
+    return _llc.socket(type)
 
 def setsockopt(sid, option, value):
     return _llc.setsockopt(sid, option, value)
@@ -102,9 +114,18 @@ def connect(sid, dest):
     return _llc.connect(sid, dest)
 
 def send(sid, message):
+    """send() is used to transmit a message to a remote socket. It may be 
+    used only if the socket is in a connected state (so that the intended
+    recipient is known).
+    """
     return _llc.send(sid, message)
 
 def sendto(sid, message, dest):
+    """sendto() is used to transmit a message to a remote socket. If sendto()
+    is used on a connection-mode socket, the argument *dest* is ignored. 
+    Otherwise *dest* is the service access point address to which *message*
+    is to be sent.
+    """
     return _llc.sendto(sid, message, dest)
 
 def recv(sid):
@@ -117,10 +138,23 @@ def poll(sid, event, timeout=None):
     return _llc.poll(sid, event, timeout)
 
 def close(sid):
+    """close() closes the socket referred to by *sid*. If the socket was of
+    type DATA_LINK_CONNECTION, close() will perform termination of the data
+    link connection if one was established earlier and has not yet been 
+    closed by the remote endpoint.
+    """
     return _llc.close(sid)
 
 def getsockname(sid):
+    """getsockname() returns the address to which the socket *sid* is bound.
+    This may be None if the socket has not yet be bound, either explicitely 
+    calling bind() or implicitely by a send() or sendto() operation on a 
+    logical data link socket or connect() on a data link connection socket.
+    """
     return _llc.getsockname(sid)
 
 def getpeername(sid):
+    """getpeername() returns the address of the peer connected to the
+    socket *sid*, or None if the socket is presently not connected.
+    """
     return _llc.getpeername(sid)

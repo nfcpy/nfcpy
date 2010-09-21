@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
 # Copyright 2009,2010 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
@@ -249,10 +248,11 @@ class LogicalLinkControl(threading.Thread):
         link_terminate_str = link_terminate_pdu.to_string()
         link_symmetry_pdu = Symmetry()
 
-        recv_timeout = self.cfg['recv-lto'] + 10
-        send_timeout = self.cfg['send-lto'] - 10
+        recv_timeout = self.cfg['recv-lto'] + 50
+        send_timeout = self.cfg['send-lto'] / 2
 
         recv_symm_count = 0
+        recv_symm_level = 10
 
         if self.mac.role == "Initiator":
             pdu = self._collect()
@@ -262,11 +262,15 @@ class LogicalLinkControl(threading.Thread):
                 if pdu == link_terminate_pdu:
                     log.info("shutdown on local request")
                     log.debug("SEND " + str(pdu))
-                    self.mac.exchange(pdu.to_string(), timeout=0)
+                    try: self.mac.exchange(pdu.to_string(), timeout=1)
+                    except IOError: pass
                     shutdown_clients(self.sap)
                     break
                 log.debug("SEND " + str(pdu))
-                data = self.mac.exchange(pdu.to_string(), recv_timeout)
+                try: data = self.mac.exchange(pdu.to_string(), recv_timeout)
+                except IOError as error:
+                    log.debug("in exchange => IOError {0}".format(error))
+                    data = None
                 if data is None or data == link_terminate_str:
                     if data: log.info("shutdown on remote request")
                     else: log.info("shutdown on link disruption")
@@ -280,13 +284,16 @@ class LogicalLinkControl(threading.Thread):
                     recv_symm_count = 0
                     self._dispatch(pdu)
                 pdu = self._collect()
-                if pdu is None and recv_symm_count >= 3:
+                if pdu is None and recv_symm_count >= recv_symm_level:
                     time.sleep(0.001 * send_timeout)
                     pdu = self._collect()
 
         if self.mac.role == "Target":
             while True:
-                data = self.mac.wait_command(recv_timeout)
+                try: data = self.mac.wait_command(recv_timeout)
+                except IOError as error:
+                    log.debug("wait_command: IOError {0}".format(str(error)))
+                    data = None
                 if data:
                     pdu = ProtocolDataUnit.from_string(data)
                     log.debug("RECV " + str(pdu))
@@ -301,15 +308,17 @@ class LogicalLinkControl(threading.Thread):
                     recv_symm_count = 0
                     self._dispatch(pdu)
                 pdu = self._collect()
-                if pdu is None and recv_symm_count >= 3:
+                if pdu is None and recv_symm_count >= recv_symm_level:
                     time.sleep(0.001 * send_timeout)
                     pdu = self._collect()
                 if pdu is None:
                     pdu = Symmetry()
                 log.debug("SEND " + str(pdu))
-                self.mac.send_response(pdu.to_string())
-                if pdu == link_terminate_pdu:
-                    log.info("shutdown on local request")
+                try: self.mac.send_response(pdu.to_string(), recv_timeout)
+                except IOError as err:
+                    if not pdu == link_terminate_pdu:
+                        log.debug("send_response: IOError {0}".format(err))
+                        log.info("shutdown on link disruption")
                     shutdown_clients(self.sap)
                     break
 
@@ -464,7 +473,7 @@ class LogicalLinkControl(threading.Thread):
         if not socket.is_bound:
             self.bind(socket)
         socket.connect(dest)
-        log.debug("new data link connection ({dlc.addr} ===> {dlc.peer})"
+        log.debug("connected ({dlc.addr} ===> {dlc.peer})"
                   .format(dlc=socket))
 
     def listen(self, socket, backlog):
