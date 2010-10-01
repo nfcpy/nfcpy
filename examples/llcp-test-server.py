@@ -119,7 +119,7 @@ class ConnectionModeEchoServer(Thread):
     def run(self):
         socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
         try:
-            nfc.llcp.bind(socket, 'urn:nfc:sn:cm-echo')
+            nfc.llcp.bind(socket, 'urn:nfc:sn:co-echo')
             addr = nfc.llcp.getsockname(socket)
             log.info("connectionmode server bound to port {0}".format(addr))
             nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)

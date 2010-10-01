@@ -177,11 +177,11 @@ def test_03():
     if nfc.llcp.getsockopt(socket, nfc.llcp.SO_RCVBUF) == 2:
         info("socket recv window set 2")
     else: raise TestError("could not set the socket recv window")
-    cm_echo_server = nfc.llcp.resolve("urn:nfc:sn:cm-echo")
-    if not cm_echo_server:
+    co_echo_server = nfc.llcp.resolve("urn:nfc:sn:co-echo")
+    if not co_echo_server:
         raise TestError("no connection-mode echo server on peer device")
-    info("connection-mode echo server on sap {0}".format(cm_echo_server))
-    nfc.llcp.connect(socket, cm_echo_server)
+    info("connection-mode echo server on sap {0}".format(co_echo_server))
+    nfc.llcp.connect(socket, co_echo_server)
     peer_sap = nfc.llcp.getpeername(socket)
     info("connected with sap {0}".format(peer_sap))
     nfc.llcp.send(socket, default_miu * "\xFF")
@@ -215,13 +215,13 @@ def test_04():
     if nfc.llcp.getsockopt(socket, nfc.llcp.SO_RCVBUF) == 2:
         info("receive window set to 2")
     else: raise TestError("failed to set receive window to 2")
-    cm_echo_server = nfc.llcp.resolve("urn:nfc:sn:cm-echo")
-    if not cm_echo_server:
+    co_echo_server = nfc.llcp.resolve("urn:nfc:sn:co-echo")
+    if not co_echo_server:
         raise TestError("no connection-mode echo server on peer device")
-    info("connection-mode echo server on sap {0}".format(cm_echo_server))
+    info("connection-mode echo server on sap {0}".format(co_echo_server))
     recv_thread = Thread(target=receiver, args=[socket, rcvd_data])
     try:
-        nfc.llcp.connect(socket, cm_echo_server)
+        nfc.llcp.connect(socket, co_echo_server)
         peer_sap = nfc.llcp.getpeername(socket)
         info("connected with sap {0}".format(peer_sap))
         recv_thread.start()
@@ -250,12 +250,12 @@ def test_05():
     if nfc.llcp.getsockopt(socket, nfc.llcp.SO_RCVBUF) == 0:
         info("receive window set to 0")
     else: raise TestError("failed to set receive window to 0")
-    cm_echo_server = nfc.llcp.resolve("urn:nfc:sn:cm-echo")
-    if not cm_echo_server:
+    co_echo_server = nfc.llcp.resolve("urn:nfc:sn:co-echo")
+    if not co_echo_server:
         raise TestError("no connection-mode echo server on peer device")
-    info("connection-mode echo server on sap {0}".format(cm_echo_server))
+    info("connection-mode echo server on sap {0}".format(co_echo_server))
     try:
-        nfc.llcp.connect(socket, cm_echo_server)
+        nfc.llcp.connect(socket, co_echo_server)
         peer_sap = nfc.llcp.getpeername(socket)
         info("connected with sap {0}".format(peer_sap))
         info("now sending 4 messages")
@@ -277,15 +277,15 @@ def test_06():
     info("Test 6: rejection of connect request", prefix="")
     socket1 = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
     socket2 = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
-    cm_echo_server = nfc.llcp.resolve("urn:nfc:sn:cm-echo")
-    if not cm_echo_server:
+    co_echo_server = nfc.llcp.resolve("urn:nfc:sn:co-echo")
+    if not co_echo_server:
         raise TestError("no connection-mode echo server on peer device")
-    info("connection-mode echo server on sap {0}".format(cm_echo_server))
+    info("connection-mode echo server on sap {0}".format(co_echo_server))
     try:
-        nfc.llcp.connect(socket1, cm_echo_server)
+        nfc.llcp.connect(socket1, co_echo_server)
         peer_sap = nfc.llcp.getpeername(socket1)
         info("first connection established with sap {0}".format(peer_sap))
-        try: nfc.llcp.connect(socket2, cm_echo_server)
+        try: nfc.llcp.connect(socket2, co_echo_server)
         except nfc.llcp.ConnectRefused as e:
             info("second connection rejected with reason {0}".format(e.reason))
         else: raise TestError("second connection not rejected")
@@ -297,8 +297,8 @@ def test_07():
     info("Test 7: connect by service name", prefix="")
     socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
     try:
-        nfc.llcp.connect(socket, "urn:nfc:sn:cm-echo")
-        info("connected to service 'urn:nfc:sn:cm-echo'")
+        nfc.llcp.connect(socket, "urn:nfc:sn:co-echo")
+        info("connected to service 'urn:nfc:sn:co-echo'")
         peer_sap = nfc.llcp.getpeername(socket)
         info("connection established with sap {0}".format(peer_sap))
         if nfc.llcp.send(socket, "here's stephen"):
@@ -373,14 +373,14 @@ def test_09():
 def test_10():
     import nfc.llcp.pdu
     info("Test 10: exceed the maximum information unit size", prefix="")
-    cm_echo_server = nfc.llcp.resolve("urn:nfc:sn:cm-echo")
-    if not cm_echo_server:
+    co_echo_server = nfc.llcp.resolve("urn:nfc:sn:co-echo")
+    if not co_echo_server:
         raise TestError("no connection-mode echo server on peer device")
-    info("connection-mode echo server on sap {0}".format(cm_echo_server))
+    info("connection-mode echo server on sap {0}".format(co_echo_server))
     dlc_socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
     raw_socket = nfc.llcp.socket(nfc.llcp.llc.RAW_ACCESS_POINT)
     try:
-        nfc.llcp.connect(dlc_socket, cm_echo_server)
+        nfc.llcp.connect(dlc_socket, co_echo_server)
         addr = nfc.llcp.getsockname(dlc_socket)
         peer = nfc.llcp.getpeername(dlc_socket)
         info("connected with sap {0}".format(peer))
@@ -400,14 +400,14 @@ def test_10():
 def test_11():
     import nfc.llcp.pdu
     info("Test 11: generate invalid send sequence number", prefix="")
-    cm_echo_server = nfc.llcp.resolve("urn:nfc:sn:cm-echo")
-    if not cm_echo_server:
+    co_echo_server = nfc.llcp.resolve("urn:nfc:sn:co-echo")
+    if not co_echo_server:
         raise TestError("no connection-mode echo server on peer device")
-    info("connection-mode echo server on sap {0}".format(cm_echo_server))
+    info("connection-mode echo server on sap {0}".format(co_echo_server))
     dlc_socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
     raw_socket = nfc.llcp.socket(nfc.llcp.llc.RAW_ACCESS_POINT)
     try:
-        nfc.llcp.connect(dlc_socket, cm_echo_server)
+        nfc.llcp.connect(dlc_socket, co_echo_server)
         addr = nfc.llcp.getsockname(dlc_socket)
         peer = nfc.llcp.getpeername(dlc_socket)
         info("connected with sap {0}".format(peer))
