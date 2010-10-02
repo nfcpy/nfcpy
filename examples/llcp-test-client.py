@@ -365,10 +365,31 @@ def test_08():
 
 def test_09():
     info("Test 9: service name lookup", prefix="")
-    sdp_addr = nfc.llcp.resolve("urn:nfc:sn:sdp")
-    if not sdp_addr:
+    addr = nfc.llcp.resolve("urn:nfc:sn:sdp")
+    if not addr:
         raise TestError("no answer for 'urn:nfc:sn:sdp' lookup")
-    info("resolved 'urn:nfc:sn:sdp' to sap {0}".format(sdp_addr))
+    info("step 1: resolved 'urn:nfc:sn:sdp' to sap {0}".format(addr))
+    addr = nfc.llcp.resolve("urn:nfc:sn:cl-echo")
+    if not addr:
+        raise TestError("no answer for 'urn:nfc:sn:cl-echo' lookup")
+    info("step 2: resolved 'urn:nfc:sn:cl-echo' to sap {0}".format(addr))
+    socket = nfc.llcp.socket(nfc.llcp.LOGICAL_DATA_LINK)
+    t0 = time.time()
+    if nfc.llcp.sendto(socket, 128 * "\xA9", addr):
+        info("step 3: sent 128 byte message to sap {0}".format(addr))
+        if not nfc.llcp.poll(socket, "recv", timeout=5):
+            raise TestError("did not receive echo within 5 seconds")
+        data, peer = nfc.llcp.recvfrom(socket)
+        if not data == 128 * "\xA9":
+            raise TestError("received wrong data in step 3")
+        if not peer == addr:
+            raise TestError("received from wrong sap in step 3")
+        t1 = time.time()
+        info("step 3: received echo after {0:.3} seconds".format(t1-t0))
+    addr = nfc.llcp.resolve("urn:nfc:sn:sdp-test")
+    if not addr == 0:
+        raise TestError("'urn:nfc:sn:sdp-test' did not yield 0")
+    info("step 4: resolved 'urn:nfc:sn:sdp-test' as {0}".format(addr))
 
 def test_10():
     import nfc.llcp.pdu
