@@ -44,7 +44,8 @@ class ConnectionLessEchoServer(Thread):
         socket = nfc.llcp.socket(nfc.llcp.LOGICAL_DATA_LINK)
         try:
             nfc.llcp.bind(socket, 'urn:nfc:sn:cl-echo')
-            log.info("connectionless server bound to port 63")
+            addr = nfc.llcp.getsockname(socket)
+            log.info("connectionless server bound to port {0}".format(addr))
             nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
             if nfc.llcp.getsockopt(socket, nfc.llcp.SO_RCVBUF) == 2:
                 log.info("connectionless server recv queue size is 2")
