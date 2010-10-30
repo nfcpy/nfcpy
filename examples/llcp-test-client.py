@@ -156,7 +156,9 @@ def test_02():
     if nfc.llcp.getsockopt(socket, nfc.llcp.SO_RCVBUF) == 10:
         info("socket recv buffer set to 10")
     else: raise TestError("could not set the socket recv buffer")
-    cl_echo_server = nfc.llcp.resolve("urn:nfc:sn:cl-echo")
+    cl_echo_server = options.cl_echo_sap
+    if not cl_echo_server:
+        cl_echo_server = nfc.llcp.resolve("urn:nfc:sn:cl-echo")
     if not cl_echo_server:
         raise TestError("no connection-less echo server on peer device")
     info("connection-less echo server on sap {0}".format(cl_echo_server))
@@ -177,7 +179,9 @@ def test_03():
     if nfc.llcp.getsockopt(socket, nfc.llcp.SO_RCVBUF) == 2:
         info("socket recv window set 2")
     else: raise TestError("could not set the socket recv window")
-    co_echo_server = nfc.llcp.resolve("urn:nfc:sn:co-echo")
+    co_echo_server = options.co_echo_sap
+    if not co_echo_server:
+        co_echo_server = nfc.llcp.resolve("urn:nfc:sn:co-echo")
     if not co_echo_server:
         raise TestError("no connection-mode echo server on peer device")
     info("connection-mode echo server on sap {0}".format(co_echo_server))
@@ -215,7 +219,9 @@ def test_04():
     if nfc.llcp.getsockopt(socket, nfc.llcp.SO_RCVBUF) == 2:
         info("receive window set to 2")
     else: raise TestError("failed to set receive window to 2")
-    co_echo_server = nfc.llcp.resolve("urn:nfc:sn:co-echo")
+    co_echo_server = options.co_echo_sap
+    if not co_echo_server:
+        co_echo_server = nfc.llcp.resolve("urn:nfc:sn:co-echo")
     if not co_echo_server:
         raise TestError("no connection-mode echo server on peer device")
     info("connection-mode echo server on sap {0}".format(co_echo_server))
@@ -250,7 +256,9 @@ def test_05():
     if nfc.llcp.getsockopt(socket, nfc.llcp.SO_RCVBUF) == 0:
         info("receive window set to 0")
     else: raise TestError("failed to set receive window to 0")
-    co_echo_server = nfc.llcp.resolve("urn:nfc:sn:co-echo")
+    co_echo_server = options.co_echo_sap
+    if not co_echo_server:
+        co_echo_server = nfc.llcp.resolve("urn:nfc:sn:co-echo")
     if not co_echo_server:
         raise TestError("no connection-mode echo server on peer device")
     info("connection-mode echo server on sap {0}".format(co_echo_server))
@@ -277,7 +285,9 @@ def test_06():
     info("Test 6: rejection of connect request", prefix="")
     socket1 = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
     socket2 = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
-    co_echo_server = nfc.llcp.resolve("urn:nfc:sn:co-echo")
+    co_echo_server = options.co_echo_sap
+    if not co_echo_server:
+        co_echo_server = nfc.llcp.resolve("urn:nfc:sn:co-echo")
     if not co_echo_server:
         raise TestError("no connection-mode echo server on peer device")
     info("connection-mode echo server on sap {0}".format(co_echo_server))
@@ -320,7 +330,9 @@ def test_08():
         if nfc.llcp.getsockopt(socket, nfc.llcp.SO_RCVBUF) != 10:
             raise TestError("could not set the socket recv buffer")
         info("socket recv buffer set to 10")
-        cl_echo_server = nfc.llcp.resolve("urn:nfc:sn:cl-echo")
+        cl_echo_server = options.cl_echo_sap
+        if not cl_echo_server:
+            cl_echo_server = nfc.llcp.resolve("urn:nfc:sn:cl-echo")
         if not cl_echo_server:
             raise TestError("no connection-less echo server on peer device")
         info("connection-less echo server on sap {0}".format(cl_echo_server))
@@ -515,6 +527,12 @@ if __name__ == '__main__':
                       choices=["target", "initiator"],
                       action="store", dest="mode",
                       help="restrict mode to 'target' or 'initiator'")
+    parser.add_option("--cl-echo", type="int", default=None,
+                      action="store", dest="cl_echo_sap", metavar="SAP",
+                      help="connection-less echo server address")
+    parser.add_option("--co-echo", type="int", default=None,
+                      action="store", dest="co_echo_sap", metavar="SAP",
+                      help="connection-oriented echo server address")
 
     global options
     options, args = parser.parse_args()
