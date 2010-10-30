@@ -317,6 +317,9 @@ def test_07():
             if nfc.llcp.poll(socket, "recv", timeout=5):
                 if nfc.llcp.recv(socket) == "here's stephen":
                     info("got echo after {0:.3f} sec".format(time.time()-t0))
+                else: raise TestError("received wrong data from echo server")
+            else: raise TestError("no echo response within 5 seconds")
+        else: raise TestError("failed to send data")
     finally:
         nfc.llcp.close(socket)
 
