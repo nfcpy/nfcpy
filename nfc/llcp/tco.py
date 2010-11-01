@@ -55,7 +55,7 @@ class TransmissionControlObject(object):
         
     class Mode(object):
         def __init__(self):
-            self.names = ("BLOCK", "SEND_BUSY", "RECV_BUSY")
+            self.names = ("BLOCK", "SEND_BUSY", "RECV_BUSY", "RECV_BUSY_SENT")
             self.value = dict([(name,False) for name in self.names])
         def __str__(self):
             return str(self.value)
@@ -598,7 +598,8 @@ class DataLinkConnection(TransmissionControlObject):
                     self.send_ack = pdu.nr # V(SA) := N(R)
                 if isinstance(pdu, ReceiveNotReady):
                     self.mode.SEND_BUSY = True
-                else: self.mode.SEND_BUSY = False
+                if isinstance(pdu, ReceiveReady):
+                    self.mode.SEND_BUSY = False
 
         if isinstance(pdu, Information):
             with self.lock:
@@ -609,9 +610,16 @@ class DataLinkConnection(TransmissionControlObject):
     def dequeue(self, maxlen):
         self.super = super(DataLinkConnection, self)
         with self.lock:
+            if self.state.ESTABLISHED:
+                if self.mode.RECV_BUSY_SENT != self.mode.RECV_BUSY:
+                    self.mode.RECV_BUSY_SENT = self.mode.RECV_BUSY
+                    Ack = (ReceiveReady, ReceiveNotReady)[self.mode.RECV_BUSY]
+                    return Ack(self.peer, self.addr, self.recv_ack)
+
             try: pdu = self.super.dequeue(maxlen, notify=False)
             except IndexError: pdu = None # no pdu available
             if pdu: self.log("dequeued {0} PDU".format(pdu.name))
+
             if isinstance(pdu, FrameReject):
                 self.state.SHUTDOWN = True
                 self.close()
