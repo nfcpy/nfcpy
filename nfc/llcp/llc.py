@@ -133,6 +133,7 @@ class ServiceDiscovery(object):
         self.sent = dict()
         self.sdreq = collections.deque()
         self.sdres = collections.deque()
+        self.dmpdu = collections.deque()
 
     def __str__(self):
         return "SAP  1"
@@ -192,6 +193,8 @@ class ServiceDiscovery(object):
                         pdu.sdreq.append(self.sdreq.popleft())
                         self.sent[tid] = name
                 return pdu
+            if len(self.dmpdu) > 0 and max_size >= 2:
+                return self.dmpdu.popleft()
 
     def shutdown(self):
         with self.llc.lock:
@@ -374,7 +377,7 @@ class LogicalLinkControl(threading.Thread):
             if not addr or self.sap[addr] is None:
                 log.debug("no service named '{0}'".format(pdu.sn))
                 pdu = DisconnectedMode(pdu.ssap, 1, reason=2)
-                self.sap[1].send(pdu)
+                self.sap[1].dmpdu.append(pdu)
                 return
             pdu = Connect(dsap=addr, ssap=pdu.ssap, rw=pdu.rw, miu=pdu.miu)
 
