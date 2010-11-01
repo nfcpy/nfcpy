@@ -310,6 +310,8 @@ def test_07():
         nfc.llcp.connect(socket, "urn:nfc:sn:co-echo")
         info("connected to service 'urn:nfc:sn:co-echo'")
         peer_sap = nfc.llcp.getpeername(socket)
+        if peer_sap == 1:
+            raise TestError("connection established with SDP port")
         info("connection established with sap {0}".format(peer_sap))
         if nfc.llcp.send(socket, "here's stephen"):
             t0 = time.time()
@@ -320,6 +322,14 @@ def test_07():
                 else: raise TestError("received wrong data from echo server")
             else: raise TestError("no echo response within 5 seconds")
         else: raise TestError("failed to send data")
+    finally:
+        nfc.llcp.close(socket)
+    try:
+        socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
+        nfc.llcp.connect(socket, "urn:nfc:sn:co-echo-test")
+        raise TestError("connect 'co-echo-test' rejected")
+    except nfc.llcp.ConnectRefused as e:
+        info("connect 'co-echo-test' rejected with reason {0}".format(e.reason))
     finally:
         nfc.llcp.close(socket)
 
@@ -409,7 +419,9 @@ def test_09():
 def test_10():
     import nfc.llcp.pdu
     info("Test 10: exceed the maximum information unit size", prefix="")
-    co_echo_server = nfc.llcp.resolve("urn:nfc:sn:co-echo")
+    co_echo_server = options.co_echo_sap
+    if not co_echo_server:
+        co_echo_server = nfc.llcp.resolve("urn:nfc:sn:co-echo")
     if not co_echo_server:
         raise TestError("no connection-mode echo server on peer device")
     info("connection-mode echo server on sap {0}".format(co_echo_server))
@@ -436,7 +448,9 @@ def test_10():
 def test_11():
     import nfc.llcp.pdu
     info("Test 11: generate invalid send sequence number", prefix="")
-    co_echo_server = nfc.llcp.resolve("urn:nfc:sn:co-echo")
+    co_echo_server = options.co_echo_sap
+    if not co_echo_server:
+        co_echo_server = nfc.llcp.resolve("urn:nfc:sn:co-echo")
     if not co_echo_server:
         raise TestError("no connection-mode echo server on peer device")
     info("connection-mode echo server on sap {0}".format(co_echo_server))
@@ -457,6 +471,64 @@ def test_11():
         nfc.llcp.close(dlc_socket)
         nfc.llcp.close(raw_socket)
 
+def test_12():
+    info("Test 12: maximum data size on data link connection", prefix="")
+    socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
+    nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
+    if nfc.llcp.getsockopt(socket, nfc.llcp.SO_RCVBUF) == 2:
+        info("socket recv window set 2")
+    else: raise TestError("could not set the socket recv window")
+    nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVMIU, 300)
+    co_echo_server = options.co_echo_sap
+    if not co_echo_server:
+        co_echo_server = nfc.llcp.resolve("urn:nfc:sn:co-echo")
+    if not co_echo_server:
+        raise TestError("no connection-mode echo server on peer device")
+    info("connection-mode echo server on sap {0}".format(co_echo_server))
+    nfc.llcp.connect(socket, co_echo_server)
+    peer_sap = nfc.llcp.getpeername(socket)
+    info("connected with sap {0}".format(peer_sap))
+    miu = nfc.llcp.getsockopt(socket, nfc.llcp.SO_SNDMIU)
+    nfc.llcp.send(socket, miu * "\xFF")
+    t0 = time.time()
+    info("sent one information pdu")
+    if nfc.llcp.poll(socket, "acks", timeout = 5):
+        elapsed = time.time() - t0
+        info("got confirm after {0:.3f}".format(elapsed))
+        if not elapsed < 1.9:
+            raise TestError("no confirmation within 1.9 seconds")
+        if not nfc.llcp.poll(socket, "recv", timeout=5):
+            raise TestError("did not receive second message within 5 sec")
+        data = nfc.llcp.recv(socket)
+        info("got message after {0:.3f}".format(time.time() - t0))
+    else: raise TestError("no data received within 5 seconds")
+    nfc.llcp.close(socket)
+
+def test_13():
+    info("Test 13: DLC connect - release - connect", prefix="")
+    socket1 = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
+    socket2 = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
+    co_echo_server = options.co_echo_sap
+    if not co_echo_server:
+        co_echo_server = nfc.llcp.resolve("urn:nfc:sn:co-echo")
+    if not co_echo_server:
+        raise TestError("no connection-mode echo server on peer device")
+    info("connection-mode echo server on sap {0}".format(co_echo_server))
+    try:
+        nfc.llcp.connect(socket1, co_echo_server)
+        peer_sap = nfc.llcp.getpeername(socket1)
+        info("first connection established with sap {0}".format(peer_sap))
+        nfc.llcp.send(socket1, "I'm the first connection")
+        nfc.llcp.close(socket1)
+        info("first connection terminated")
+        nfc.llcp.connect(socket2, co_echo_server)
+        peer_sap = nfc.llcp.getpeername(socket2)
+        info("second connection established with sap {0}".format(peer_sap))
+        nfc.llcp.send(socket2, "Hi, I'm the second connection")
+        nfc.llcp.close(socket2)
+    finally:
+        pass
+
 
 def main():
     general_bytes = nfc.llcp.startup(lto=1000, miu=1024)
@@ -466,8 +538,7 @@ def main():
     try:
         while True:
             if options.mode == "target" or options.mode is None:
-                #listen_time = 250 + ord(os.urandom(1))
-                listen_time = 5000
+                listen_time = 250 + ord(os.urandom(1))
                 peer = clf.listen(listen_time, general_bytes)
                 if isinstance(peer, nfc.DEP):
                     if peer.general_bytes.startswith("Ffm"):
@@ -489,7 +560,7 @@ def main():
 
     test_suite = [test_01, test_02, test_03, test_04, test_05,
                   test_06, test_07, test_08, test_09, test_10,
-                  test_11]
+                  test_11, test_12, test_13]
     try:
         for test in options.run_test:
             if test > 0 and test <= len(test_suite):

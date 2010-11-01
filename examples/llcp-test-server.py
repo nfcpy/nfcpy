@@ -82,6 +82,8 @@ class ConnectionModeEchoServer(Thread):
                 log.info("data available, wait 2 seconds")
                 time.sleep(2.0)
             while data != None:
+                if not echo_queue.full():
+                    nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVBSY, False)
                 try:
                     if nfc.llcp.send(socket, data):
                         log.info("sent {0} byte to sap {1}"
@@ -109,7 +111,8 @@ class ConnectionModeEchoServer(Thread):
             data = nfc.llcp.recv(socket)
             if data == None: break
             log.info("rcvd {0} byte from sap {1}".format(len(data), peer))
-            nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVBSY, echo_queue.full())
+            if echo_queue.full():
+                nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVBSY, True)
             echo_queue.put(data)
         try: echo_queue.put_nowait(int(0))
         except queue.Full: pass
