@@ -112,12 +112,12 @@ class BluetoothConfigData(object):
             string += chr(len(self._short_name)+1) + '\x08' + self._short_name
         if self._long_name:
             string += chr(len(self._long_name)+1) + '\x09' + self._long_name
-        return struct.pack('>H', 2 + len(string)) + string
+        return struct.pack('<H', 2 + len(string)) + string
 
     @staticmethod
     def fromstring(string):
         cfg = BluetoothConfigData()
-        oob_length, = struct.unpack_from('>H', string)
+        oob_length, = struct.unpack_from('<H', string)
         cfg._bdaddr = string[2:8]
         offset = 8
         while offset < oob_length - 8:
