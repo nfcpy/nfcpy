@@ -93,7 +93,7 @@ class NDEF(object):
             del blocks[0:nb_max]
             offset += length
         if len(blocks) > 0:
-            data += (len(blocks)*16 - len(data)) * '\x00'
+            data += (len(blocks)*16 - len(data)%16) * '\x00'
             self.tag.write(data[offset:], blocks)
 
         self.attr[9] = 0x00; # Writing finished
