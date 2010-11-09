@@ -179,7 +179,7 @@ class device(object):
         atr_res_to = chr(atr_res_to); non_dep_to = chr(non_dep_to)
         self.dev.write("\xD4\x32\x02\x00" + atr_res_to + non_dep_to)
         # retries for ATR_REQ, PSL_REQ, target activation
-        self.dev.write("\xD4\x32\x05\xFF\xFF\xFF")
+        self.dev.write("\xD4\x32\x05\xFF\xFF\x00")
 
         if self.ic == "PN533":
             self._pn533_init()
@@ -233,19 +233,25 @@ class device(object):
         pass
 
     def poll_tt3(self):
+        def poll(sc, br):
+            cmd = "\xD4\x4A\x01" + br + "\x00" + sc + "\x01\x03"
+            if self.dev.write(cmd):
+                rsp = self.dev.read(timeout=1000)
+                if rsp and rsp.startswith("\xD5\x4B\x01\x01\x14\x01"):
+                    return rsp[6:]
+
         log.debug("polling for a type 3 tag")
         if self.ic == "PN533":
             self._pn533_reset_mode()
-        # poll 424 kbps
-        if self.dev.write("\xD4\x4A\x01\x02\x00\xff\xff\x01\x00"):
-            data = self.dev.read(timeout=250)
-            if data and data.startswith("\xD5\x4B\x01\x01\x14\x01"):
-                return data[6:]
-        # poll 212 kbps
-        if self.dev.write("\xD4\x4A\x01\x01\x00\xff\xff\x01\x00"):
-            data = self.dev.read(timeout=250)
-            if data and data.startswith("\xD5\x4B\x01\x01\x14\x01"):
-                return data[6:]
+
+        for br in ("\x01", "\x02"): # 421 and 212 kbps
+            data = poll(sc="\xFF\xFF", br=br)
+            if data and data[-2:] != "\x12\xFC":
+                data2 = poll(sc="\x12\xFC", br=br)
+                if data2: data = data2
+            if data:
+                log.info(("212kbps", "424kbps")[ord(br)-1])
+                return data
 
     def listen(self, gb, timeout):
         log.debug("listen: gb={0} timeout={1} ms"
