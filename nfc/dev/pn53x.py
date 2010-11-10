@@ -244,13 +244,13 @@ class device(object):
         if self.ic == "PN533":
             self._pn533_reset_mode()
 
-        for br in ("\x01", "\x02"): # 421 and 212 kbps
+        for br in ("\x02", "\x01"): # first 421 then 212 kbps
             data = poll(sc="\xFF\xFF", br=br)
             if data and data[-2:] != "\x12\xFC":
                 data2 = poll(sc="\x12\xFC", br=br)
                 if data2: data = data2
             if data:
-                log.info(("212kbps", "424kbps")[ord(br)-1])
+                log.debug("bitrate " + ("212 kbps", "424 kbps")[ord(br)-1])
                 return data
 
     def listen(self, gb, timeout):
