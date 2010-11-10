@@ -91,7 +91,10 @@ def tt3_format(tag):
             while True:
                 data = tag.read([block], 9)
                 block += 1
-        except Exception: return block
+        except Exception:
+            if tag.pmm[0:2] == "\x00\xF0":
+                block -= 1 # last block on FeliCa Lite is unusable
+            return block
 
     def determine_block_read_count(tag, block_count):
         try:
