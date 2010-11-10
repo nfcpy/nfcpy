@@ -93,7 +93,7 @@ class NDEF(object):
             del blocks[0:nb_max]
             offset += length
         if len(blocks) > 0:
-            data += (len(blocks)*16 - len(data)%16) * '\x00'
+            data += (16 - len(data)%16) * '\x00'
             self.tag.write(data[offset:], blocks)
 
         self.attr[9] = 0x00; # Writing finished
@@ -120,7 +120,8 @@ class Type3Tag(object):
 
     @property
     def ndef(self):
-        """For an NDEF tag this attribute holds an :class:`nfc.tt3.NDEF` object."""
+        """For an NDEF tag this attribute holds an :class:`nfc.tt3.NDEF`
+        object."""
         return self._ndef
 
     @property
@@ -146,10 +147,10 @@ class Type3Tag(object):
         cmd += ''.join(["\x00" + chr(b%256) + chr(b/256) for b in blocks])
         resp = self.dev.tt3_exchange(chr(len(cmd)+1) + cmd)
         if not resp.startswith(chr(len(resp)) + "\x07" + self.idm):
-            log.error("invalid data")
+            log.debug("invalid data")
             raise IOError("invalid data")
         if resp[11] != "\x00":
-            log.error("tt3 command error "+resp[11:13].encode("hex"))
+            log.debug("tt3 command error "+resp[11:13].encode("hex"))
             raise IOError("tt3 command error "+resp[11:13].encode("hex"))
         return resp[13:]
 
@@ -168,10 +169,10 @@ class Type3Tag(object):
         cmd += data
         resp = self.dev.tt3_exchange(chr(len(cmd)+1) + cmd)
         if not resp.startswith(chr(len(resp)) + "\x09" + self.idm):
-            log.error("invalid data")
+            log.debug("invalid data")
             raise IOError("invalid data")
         if resp[11] != "\x00":
-            log.error("tt3 command error "+resp[11:13].encode("hex"))
+            log.debug("tt3 command error "+resp[11:13].encode("hex"))
             raise IOError("tt3 command error "+resp[11:13].encode("hex"))
         return
 
