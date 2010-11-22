@@ -19,9 +19,13 @@
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
 
+import logging
+log = logging.getLogger(__name__)
+
 import nfc.ndef
-import struct
 import re
+
+from nfc.ndef.Record import type_prefix
 
 class HandoverMessage(object):
     def __init__(self, scope, message):
@@ -29,6 +33,7 @@ class HandoverMessage(object):
         if message is None:
             return
         handover_record = scope(message[0])
+        print handover_record
         record_map = dict([(record.name, record) for record in message[1:]])
         for ac_record in handover_record.alternative_carrier_list:
             carrier_record = record_map[ac_record.carrier_data_reference]
@@ -133,29 +138,46 @@ class HandoverCarrierRecord(nfc.ndef.Record):
         nfc.ndef.Record.__init__(self, record)
 
     @property
+    def type(self):
+        return "urn:nfc:wkt:Hc"
+
+    @type.setter
+    def type(self, value):
+        pass
+
+    @property
     def data(self):
         carrier_type = self.carrier_type
         if carrier_type == '':
             type_format = 0
         elif carrier_type.startswith("urn:nfc:wkt:"):
-            type_format = 1; carrier_type = carrier_type[12:]
+            type_format = 1
+            carrier_type = carrier_type[12:]
         elif re.match(r'[a-zA-Z0-9-]+/[a-zA-Z0-9-+.]+', carrier_type):
-            type_format = 2; carrier_type = carrier_type
+            type_format = 2
+            carrier_type = carrier_type
         elif re.match(r'[a-zA-Z][a-zA-Z0-9+-.]*://', carrier_type):
-            type_format = 3; carrier_type = carrier_type
+            type_format = 3
+            carrier_type = carrier_type
         elif carrier_type.startswith("urn:nfc:ext:"):
-            type_format = 4; carrier_type = carrier_type[12:]
+            type_format = 4
+            carrier_type = carrier_type[12:]
         elif carrier_type.startswith("application/octet-stream"):
-            type_format = 5; carrier_type = carrier_type[24:]
-        return chr(len(carrier_type)) + carrier_type + self.carrier_data
+            type_format = 5
+            carrier_type = carrier_type[24:]
+        else:
+            log.error("unrecognized carrier type format")
+            type_format = 0
+            carrier_type = ''
+        return chr(type_format) + chr(len(carrier_type)) \
+            + carrier_type + self.carrier_data
 
     @data.setter
     def data(self, string):
         if not string: return
         type_format = ord(string[0]) & 0x7
         type_length = ord(string[1])
-        self.carrier_type = nfc.ndef.type_prefix[type_format]
-        self.carrier_type+= string[2:2+type_length]
+        self.carrier_type = type_prefix[type_format] + string[2:2+type_length]
         self.carrier_data = string[2+type_length:]
 
 class AlternativeCarrierRecord(nfc.ndef.Record):
@@ -228,8 +250,9 @@ class AlternativeCarrierRecord(nfc.ndef.Record):
         return self._adr_list
 
 def read_pascal_string(string, offset):
-    length = ord(string[offset]); offset += 1
-    text = string[offset:offset+length]
-    return text, offset+length
+    """parse a (size, text) string at offset, returns (text, offset+size)"""
+    length = ord(string[offset])
+    offset = offset + 1
+    return string[offset:offset+length], offset+length
 
 
