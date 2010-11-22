@@ -59,7 +59,7 @@ class HandoverMessage(object):
                 record.data = carrier['config-data']
                 message.append(record)
             else:
-                record = HandoverSelectRecord()
+                record = HandoverCarrierRecord()
                 record.name = ac_record.carrier_data_reference
                 record.carrier_type = carrier['carrier-type']
                 if "carrier-data" in carrier:
@@ -128,7 +128,8 @@ class HandoverSelectRecord(HandoverRequestRecord):
         pass
 
 class HandoverCarrierRecord(nfc.ndef.Record):
-    def __init__(self, record):
+    def __init__(self, record=None):
+        self.carrier_data = ""
         nfc.ndef.Record.__init__(self, record)
 
     @property
