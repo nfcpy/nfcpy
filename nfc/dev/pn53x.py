@@ -76,10 +76,7 @@ class pn53x_usb(object):
         if self.fd:
             os.close(self.fd)
         if self.dh:
-            if (self.vid, self.pid) == (0x054c, 0x02e1):
-                self.write("\xD4\x18\x00")
-                self.read(timeout=100); self.write("")
-            else: self.dh.reset()
+            self.dh.reset()
 
     @property
     def vendor_id(self):
