@@ -132,7 +132,13 @@ class Type3Tag(object):
             rsp = self.dev.tt3_exchange(chr(len(cmd)+1) + cmd)
             return rsp.startswith(chr(len(rsp)) + "\x05" + self.idm)
         except IOError:
-            return False
+            pass
+        try:
+            cmd = "\x00" + self.sc + "\x00\x00"
+            rsp = self.dev.tt3_exchange(chr(len(cmd)+1) + cmd)
+            return rsp.startswith(chr(len(rsp)) + "\x01" + self.idm)
+        except IOError:
+            pass
 
     def read(self, blocks, service=ndef_read_service):
         """Read service data blocks from tag. The *service* argument is the
