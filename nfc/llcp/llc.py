@@ -393,9 +393,9 @@ class LogicalLinkControl(threading.Thread):
         return self.sap[1].resolve(name)
 
     def socket(self, socket_type):
-        if socket_type is RAW_ACCESS_POINT:
+        if socket_type == RAW_ACCESS_POINT:
             return RawAccessPoint(self.cfg["send-miu"], self.cfg["recv-miu"])
-        if socket_type is LOGICAL_DATA_LINK:
+        if socket_type == LOGICAL_DATA_LINK:
             return LogicalDataLink(self.cfg["send-miu"], self.cfg["recv-miu"])
         if socket_type == DATA_LINK_CONNECTION:
             return DataLinkConnection()
