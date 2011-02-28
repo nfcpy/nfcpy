@@ -71,6 +71,11 @@ class SnepServer(Thread):
                     break # bail out, this is a bad client
 
                 version, opcode, length = unpack(">BBL", snep_request[:6])
+                if (version >> 4) > 1:
+                    log.debug("unsupported version {}".format(version>>4))
+                    nfc.llcp.send(socket, "\x10\xE1\x00\x00\x00\x00")
+                    continue
+
                 if length > snep_server.acceptable_length:
                     log.debug("snep msg exceeds acceptable length")
                     nfc.llcp.send(socket, "\x10\xFF\x00\x00\x00\x00")
