@@ -29,7 +29,7 @@ from struct import unpack
 import nfc.llcp
 
 class SnepServer(Thread):
-    """
+    """SNEP Server implementation. 
     """
     def __init__(self, service_name):
         super(SnepServer, self).__init__()
@@ -62,30 +62,33 @@ class SnepServer(Thread):
         send_miu = nfc.llcp.getsockopt(socket, nfc.llcp.SO_SNDMIU)
         try:
             while True:
-                snep_request = nfc.llcp.recv(socket)
-                if not snep_request:
+                data = nfc.llcp.recv(socket)
+                if not data:
                     break # connection closed
 
-                if len(snep_request) < 6:
+                if len(data) < 6:
                     log.debug("snep msg initial fragment too short")
                     break # bail out, this is a bad client
 
-                version, opcode, length = unpack(">BBL", snep_request[:6])
+                version, opcode, length = unpack(">BBL", data[:6])
                 if (version >> 4) > 1:
                     log.debug("unsupported version {}".format(version>>4))
                     nfc.llcp.send(socket, "\x10\xE1\x00\x00\x00\x00")
                     continue
-
+                
                 if length > snep_server.acceptable_length:
                     log.debug("snep msg exceeds acceptable length")
                     nfc.llcp.send(socket, "\x10\xFF\x00\x00\x00\x00")
                     continue
 
+                snep_request = data
                 if len(snep_request) - 6 < length:
-                    # send continue to get remaining fragments
+                    # request remaining fragments
                     nfc.llcp.send(socket, "\x10\x80\x00\x00\x00\x00")
                     while len(snep_request) - 6 < length:
-                        snep_request += nfc.llcp.recv(socket)
+                        data = nfc.llcp.recv(socket)
+                        if data: snep_request += data
+                        else: break # connection closed
 
                 # message complete, now handle the request
                 if opcode == 1 and len(snep_request) >= 10:
@@ -93,7 +96,7 @@ class SnepServer(Thread):
                 elif opcode == 2:
                     snep_response = snep_server._put(snep_request)
                 else:
-                    # return a "bad request" response
+                    log.debug("bad request {}".format(version & 0x0f))
                     snep_response = "\x10\xC2\x00\x00\x00\x00"
 
                 # send the snep response, fragment if needed
@@ -102,12 +105,11 @@ class SnepServer(Thread):
                 else:
                     nfc.llcp.send(socket, snep_response[0:send_miu])
                     if nfc.llcp.recv(socket) == "\x10\x00\x00\x00\x00\x00":
-                        parts = xrange(send_miu, len(snep_response), send_miu)
+                        parts = range(send_miu, len(snep_response), send_miu)
                         for offset in parts:
                             fragment = snep_response[offset:offset+send_miu]
                             nfc.llcp.send(socket, fragment)
 
-                continue # wait for next request
         except Exception as e:
             log.debug("caught exception" + str(e))
         finally:
@@ -126,8 +128,11 @@ class SnepServer(Thread):
         return "\x10" + response_code + ndef_length + ndef_message
 
     def get(self, acceptable_length, ndef_message):
+        """Handle Get requests. This method should be overwritten by a
+        subclass of SnepServer to customize it's behavior. The default
+        implementation simply returns Not Implemented."""
         log.debug("get method called")
-        print ndef_message.encode("hex")
+        log.debug(ndef_message.encode("hex"))
         return 0xE0
 
     def _put(self, snep_request):
@@ -137,6 +142,9 @@ class SnepServer(Thread):
         return "\x10" + chr(response) + ndef_length
 
     def put(self, ndef_message):
+        """Handle Put requests. This method should be overwritten by a
+        subclass of SnepServer to customize it's behavior. The default
+        implementation simply returns Not Implemented."""
         log.debug("put method called")
-        print ndef_message.encode("hex")
+        log.debug(ndef_message.encode("hex"))
         return 0xE0
