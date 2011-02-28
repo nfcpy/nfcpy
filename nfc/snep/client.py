@@ -54,7 +54,7 @@ def recv_response(socket, acceptable_length, timeout):
         return snep_response
 
 class SnepClient(object):
-    """
+    """ Simple NDEF Exchange Protocol - client side
     """
     def __init__(self):
         self.socket = None
@@ -72,29 +72,50 @@ class SnepClient(object):
             self.socket = None
 
     def get(self, ndef_message = ''):
+        """Get an NDEF message from the server. Temporarily connects
+        to the default SNEP server if the client is not yet connected.
+        """
         if not self.socket:
             self.connect('urn:nfc:sn:snep')
-        snep_request = '\x10\x01'
-        snep_request += struct.pack('>L', 4 + len(ndef_message))
-        snep_request += struct.pack('>L', self.acceptable_length)
-        snep_request += ndef_message
-        if send_request(self.socket, snep_request, self.send_miu):
-            snep_response = recv_response(self.socket, self.acceptable_length)
-            response_code = ord(snep_response[1])
-            if response_code != 0x81:
-                raise SnepError(response_code)
-            return snep_response[6:]
+            self.release = True
+        else:
+            self.release = False
+        try:
+            snep_request = '\x10\x01'
+            snep_request += struct.pack('>L', 4 + len(ndef_message))
+            snep_request += struct.pack('>L', self.acceptable_length)
+            snep_request += ndef_message
+            if send_request(self.socket, snep_request, self.send_miu):
+                snep_response = recv_response(self.socket,
+                                              self.acceptable_length)
+                response_code = ord(snep_response[1])
+                if response_code != 0x81:
+                    raise SnepError(response_code)
+                return snep_response[6:]
+        finally:
+            if self.release:
+                self.close()
 
     def put(self, ndef_message):
+        """Send an NDEF message to the server. Temporarily connects to
+        the default SNEP server if the client is not yet connected.
+        """
         if not self.socket:
             self.connect('urn:nfc:sn:snep')
-        ndef_msgsize = struct.pack('>L', len(ndef_message))
-        snep_request = '\x10\x02' + ndef_msgsize + ndef_message
-        if send_request(self.socket, snep_request, self.send_miu):
-            snep_response = recv_response(self.socket, 0)
-            response_code = ord(snep_response[1])
-            if response_code != 0x81:
-                raise SnepError(response_code)
+            self.release = True
+        else:
+            self.release = False
+        try:
+            ndef_msgsize = struct.pack('>L', len(ndef_message))
+            snep_request = '\x10\x02' + ndef_msgsize + ndef_message
+            if send_request(self.socket, snep_request, self.send_miu):
+                snep_response = recv_response(self.socket, 0)
+                response_code = ord(snep_response[1])
+                if response_code != 0x81:
+                    raise SnepError(response_code)
+        finally:
+            if self.release:
+                self.close()
 
 class SnepError(Exception):
     strerr = {0xC0: "resource not found",
