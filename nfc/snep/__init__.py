@@ -26,3 +26,9 @@ from nfc.snep.server import SnepServer
 from nfc.snep.client import SnepClient
 from nfc.snep.client import SnepError
 
+Success = 0x81
+NotFound = 0xC0
+ExcessData = 0xC1
+BadRequest = 0xC2
+NotImplemented = 0xE0
+UnsupportedVersion = 0xE1

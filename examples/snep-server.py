@@ -37,7 +37,7 @@ class DefaultSnepServer(nfc.snep.SnepServer):
     def put(self, ndef_message):
         log.info("default snep server got put request")
         print ndef_message.encode("hex")
-        return 0x81
+        return nfc.snep.Success
 
 class SonyStcSnepServer(nfc.snep.SnepServer):
     def __init__(self):
@@ -46,12 +46,12 @@ class SonyStcSnepServer(nfc.snep.SnepServer):
     def put(self, ndef_message):
         log.info("sonystc snep server got put request")
         print ndef_message.encode("hex")
-        return 0x81 # Success response
+        return nfc.snep.Success
 
     def get(self, acceptable_length, ndef_message):
         log.info("sonystc snep server got get request")
         print ndef_message.encode("hex")
-        return 0xC0 # Not Found response
+        return nfc.snep.NotFound
 
 def main():
     general_bytes = nfc.llcp.startup(lto=1000, miu=1024)
