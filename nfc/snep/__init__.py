@@ -19,11 +19,8 @@
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
 #
-# record.py -- contains the base class for NDEF records
-#
-# BUGS:
-#   - does not handle chunked records
-#
+# Implementation of the Simple NDEF Exchange Protocol (SNEP)
+# 
 
 from nfc.snep.server import SnepServer
 from nfc.snep.client import SnepClient
