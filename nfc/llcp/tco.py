@@ -335,7 +335,8 @@ class DataLinkConnection(TransmissionControlObject):
         return s.format(dlc=self)
 
     def log(self, string):
-        log.debug("DLC ({dlc.addr},{dlc.peer}) {s}".format(dlc=self, s=string))
+        log.debug("DLC ({dlc.addr},{dlc.peer}) {dlc.state} {s}"
+                  .format(dlc=self, s=string))
 
     def err(self, string):
         log.error("DLC ({dlc.addr},{dlc.peer}) {s}".format(dlc=self, s=string))
@@ -505,7 +506,7 @@ class DataLinkConnection(TransmissionControlObject):
 
     def close(self):
         with self.lock:
-            self.log("close() in state {dlc.state}".format(dlc=self))
+            self.log("close()")
             if self.state.ESTABLISHED and self.is_bound:
                 self.state.DISCONNECT = True
                 self.send_token.notify_all()
@@ -521,7 +522,7 @@ class DataLinkConnection(TransmissionControlObject):
     # enqueue() and dequeue() are called from llc thread context
     #
     def enqueue(self, pdu):
-        self.log("enqueue {pdu.name}".format(pdu=pdu))
+        self.log("enqueue {pdu.name} PDU".format(pdu=pdu))
         if not pdu.type in connection_mode_pdu_types:
             self.err("non connection mode pdu on data link connection")
             pdu = FrameReject.from_pdu(pdu, flags="W", dlc=self)
@@ -618,7 +619,7 @@ class DataLinkConnection(TransmissionControlObject):
 
             try: pdu = self.super.dequeue(maxlen, notify=False)
             except IndexError: pdu = None # no pdu available
-            if pdu: self.log("dequeued {0} PDU".format(pdu.name))
+            if pdu: self.log("dequeue {0} PDU".format(pdu.name))
 
             if isinstance(pdu, FrameReject):
                 self.state.SHUTDOWN = True

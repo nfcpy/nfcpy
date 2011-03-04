@@ -100,13 +100,19 @@ class ServiceAccessPoint(object):
     #
     def enqueue(self, pdu):
         with self.llc.lock:
-            for socket in self.sock_list:
-                if pdu.ssap == socket.peer or socket.peer is None:
-                    socket.enqueue(pdu)
-                    break
+            if isinstance(pdu, Connect):
+                for socket in self.sock_list:
+                    if socket.state.LISTEN:
+                        socket.enqueue(pdu)
+                        return
             else:
-                if pdu.type in connection_mode_pdu_types:
-                    self.send(DisconnectedMode(pdu.ssap, pdu.dsap, reason=1))
+                for socket in self.sock_list:
+                    if pdu.ssap == socket.peer or socket.peer is None:
+                        socket.enqueue(pdu)
+                        return
+                    
+            if pdu.type in connection_mode_pdu_types:
+                self.send(DisconnectedMode(pdu.ssap, pdu.dsap, reason=1))
 
     def dequeue(self, max_size):
         with self.llc.lock:
@@ -367,7 +373,7 @@ class LogicalLinkControl(threading.Thread):
 
         if isinstance(pdu, AggregatedFrame):
             if pdu.dsap == 0 and pdu.ssap == 0:
-                [log.debug(5*" " + str(p)) for p in pdu]
+                [log.debug("     " + str(p)) for p in pdu]
                 [self._dispatch(p) for p in pdu]
             return
 
@@ -382,8 +388,9 @@ class LogicalLinkControl(threading.Thread):
             pdu = Connect(dsap=addr, ssap=pdu.ssap, rw=pdu.rw, miu=pdu.miu)
 
         with self.lock:
-            if self.sap[pdu.dsap]:
-                self.sap[pdu.dsap].enqueue(pdu)
+            sap = self.sap[pdu.dsap]
+            if sap:
+                sap.enqueue(pdu)
                 return
 
         log.debug("discard PDU {0}".format(str(pdu)))
