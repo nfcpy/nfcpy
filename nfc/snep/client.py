@@ -28,13 +28,14 @@ import nfc.llcp
 
 def send_request(socket, snep_request, send_miu):
     if len(snep_request) <= send_miu:
-        nfc.llcp.send(socket, snep_request)
+        return nfc.llcp.send(socket, snep_request)
     else:
-        nfc.llcp.send(socket, snep_request[0:send_miu])
-        if nfc.llcp.recv(socket) == "\x10\x80\x00\x00\x00\x00":
-            for offset in xrange(send_miu, len(snep_request), send_miu):
-                fragment = snep_request[offset:offset+send_miu]
-                nfc.llcp.send(socket, fragment)
+        if nfc.llcp.send(socket, snep_request[0:send_miu]):
+            if nfc.llcp.recv(socket) == "\x10\x80\x00\x00\x00\x00":
+                for offset in xrange(send_miu, len(snep_request), send_miu):
+                    fragment = snep_request[offset:offset+send_miu]
+                    if not nfc.llcp.send(socket, fragment): break
+                else: return True
 
 def recv_response(socket, acceptable_length, timeout):
     if nfc.llcp.poll(socket, "recv", timeout):
@@ -109,7 +110,7 @@ class SnepClient(object):
             ndef_msgsize = struct.pack('>L', len(ndef_message))
             snep_request = '\x10\x02' + ndef_msgsize + ndef_message
             if send_request(self.socket, snep_request, self.send_miu):
-                snep_response = recv_response(self.socket, 0)
+                snep_response = recv_response(self.socket, 0, timeout=1.0)
                 response_code = ord(snep_response[1])
                 if response_code != 0x81:
                     raise SnepError(response_code)

@@ -110,8 +110,8 @@ class SnepServer(Thread):
                             fragment = snep_response[offset:offset+send_miu]
                             nfc.llcp.send(socket, fragment)
 
-        except Exception as e:
-            log.debug("caught exception" + str(e))
+        except nfc.llcp.Error as e:
+            log.debug("caught exception {0}".format(e))
         finally:
             nfc.llcp.close(socket)
 
@@ -130,7 +130,8 @@ class SnepServer(Thread):
     def get(self, acceptable_length, ndef_message):
         """Handle Get requests. This method should be overwritten by a
         subclass of SnepServer to customize it's behavior. The default
-        implementation simply returns Not Implemented."""
+        implementation simply returns Not Implemented.
+        """
         log.debug("get method called")
         log.debug(ndef_message.encode("hex"))
         return 0xE0
@@ -144,7 +145,8 @@ class SnepServer(Thread):
     def put(self, ndef_message):
         """Handle Put requests. This method should be overwritten by a
         subclass of SnepServer to customize it's behavior. The default
-        implementation simply returns Not Implemented."""
+        implementation simply returns Not Implemented.
+        """
         log.debug("put method called")
         log.debug(ndef_message.encode("hex"))
         return 0xE0

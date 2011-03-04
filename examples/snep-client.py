@@ -44,9 +44,10 @@ def main():
         snep = nfc.snep.SnepClient()
         #snep.connect('urn:nfc:sn:snep')
         snep.put(''.join([chr(x) for x in range(200)]))
-        snep.connect('urn:nfc:xsn:sony.de:snep')
         snep.put(''.join([chr(x) for x in range(200)]))
-        time.sleep(5)
+        #snep.connect('urn:nfc:xsn:sony.de:snep')
+        #snep.put(''.join([chr(x) for x in range(200)]))
+        time.sleep(2)
     except KeyboardInterrupt:
         log.info("aborted by user")
         for thread in threading.enumerate():
