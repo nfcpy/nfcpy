@@ -519,12 +519,14 @@ def test_13():
         peer_sap = nfc.llcp.getpeername(socket1)
         info("first connection established with sap {0}".format(peer_sap))
         nfc.llcp.send(socket1, "I'm the first connection")
+        assert(nfc.llcp.recv(socket1) == "I'm the first connection")
         nfc.llcp.close(socket1)
         info("first connection terminated")
         nfc.llcp.connect(socket2, co_echo_server)
         peer_sap = nfc.llcp.getpeername(socket2)
         info("second connection established with sap {0}".format(peer_sap))
-        nfc.llcp.send(socket2, "Hi, I'm the second connection")
+        nfc.llcp.send(socket2, "I'm the second connection")
+        assert(nfc.llcp.recv(socket2) == "I'm the second connection")
         nfc.llcp.close(socket2)
     finally:
         pass
