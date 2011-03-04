@@ -114,6 +114,7 @@ class ConnectionModeEchoServer(Thread):
             if echo_queue.full():
                 nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVBSY, True)
             echo_queue.put(data)
+        log.info("remote peer {0} closed closed connection".format(peer))
         try: echo_queue.put_nowait(int(0))
         except queue.Full: pass
         echo_thread.join()
