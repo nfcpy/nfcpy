@@ -56,6 +56,7 @@ class pn53x_usb(object):
                         self.pid = dev.idProduct
                         try:
                             self.dh = dev.open()
+                            self.dh.setConfiguration(dev.configurations[0])
                             self.dh.claimInterface(0)
                             conf = dev.configurations[0]
                             intf = conf.interfaces[0]
