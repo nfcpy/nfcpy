@@ -23,7 +23,9 @@
 #
 # BUGS:
 #   - does not handle chunked records
-#
+#   - does not control validity of parsed string
+import logging
+log = logging.getLogger(__name__)
 
 from struct import pack, unpack
 import re
@@ -60,6 +62,8 @@ class Record(object):
         record_type = string[offset:offset+type_length]; offset += type_length
         record_name = string[offset:offset+name_length]; offset += name_length
         record_data = string[offset:offset+data_length]; offset += data_length
+        if len(record_data) < data_length:
+            log.warning("Not enough data to put into NDEF record!")
         
         record_type = type_prefix[tnf] + record_type
 
