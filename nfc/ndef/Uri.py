@@ -27,7 +27,7 @@ class UriRecord(Record):
             Record.__init__(self, initializer)
         else:
             Record.__init__(self)
-            self._uri = initializer
+            self._uri = initializer.encode("ascii")
 
     @property
     def data(self):
