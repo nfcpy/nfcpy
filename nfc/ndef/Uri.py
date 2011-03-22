@@ -56,7 +56,7 @@ class UriRecord(Record):
 
     @uri.setter
     def uri(self, value):
-        self._uri = value
+        self._uri = value.encode("ascii")
 
 protocol_strings = ("",
     "http://www.",

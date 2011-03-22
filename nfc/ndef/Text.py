@@ -28,6 +28,7 @@ class TextRecord(Record):
         else:
             Record.__init__(self)
             self._lang, self._text = initializer
+            self._lang.encode('ascii')
 
     @property
     def data(self):
@@ -59,7 +60,7 @@ class TextRecord(Record):
 
     @language.setter
     def language(self, value):
-        self._lang = value
+        self._lang = value.encode('ascii')
 
     @property
     def text(self):

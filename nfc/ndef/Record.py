@@ -59,7 +59,7 @@ class Record(object):
         name_length = ord(string[3 if srf else 6]) if ilf else 0
         offset = (3 if srf else 6) + int(ilf)
 
-        if offset + type_length + name_length + data length > len(string):
+        if offset + type_length + name_length + data_length > len(string):
             log.error("insufficient data for ndef record extraction")
         
         record_type = string[offset:offset+type_length]; offset += type_length
