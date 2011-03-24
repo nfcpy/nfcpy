@@ -38,9 +38,10 @@ class Message(list):
         elif isinstance(initializer, Record):
             self.append(initializer)
         elif type(initializer) == type(list()):
-            if sum([not isinstance(elem, Record) for elem in initializer]):
-                raise ValueError("list elements must be class Record type")
-            self = initializer
+            for elem in initializer:
+                if not isinstance(elem, Record):
+                    raise ValueError("elements must be nfc.ndef.Records")
+                self.append(elem)
 
     def tostring(self):
         if len(self) == 0:
