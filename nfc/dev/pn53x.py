@@ -126,6 +126,9 @@ class pn53x_usb(object):
         frame += [(256 - sum(frame[-len(data):])) % 256, 0]
         #log.debug("cmd: " + ' '.join(["%02x" % x for x in frame]))
         self.dh.bulkWrite(self.usb_out, frame)
+        if len(frame) % 64 == 0:
+            # send zero-length frame to end bulk transfer
+            self.dh.bulkWrite(self.usb_out, '')
         ack = self.dh.bulkRead(self.usb_inp, 256, 100)
         return True if ack == (0, 0, 255, 0, 255, 0) else False
 
@@ -260,10 +263,7 @@ class device(object):
         mifare = "\x01\x01\x00\x00\x00\x40" # "\x08\x00\x12\x34\x56\x40"
         felica = "\x01\xFE" + os.urandom(6) + 8*"\x00" + "\xFF\xFF"
         nfcid3 = felica[0:8] + "\x00\x00"
-        if len(gb) == 20 and self.ic in ("PN531","PN533"):
-            # avoid chipset error when len(gb) is 20
-            # this is ok for LLCP initialization bytes
-            gb = gb + "\x00\x00"
+
         if self.ic == "PN532":
             gb = len(gb) + gb + '\x00'
 
