@@ -354,10 +354,10 @@ class device(object):
     def tt2_exchange(self, cmd):
         raise NotImplemented
 
-    def tt3_exchange(self, cmd):
+    def tt3_exchange(self, cmd, timeout=500):
         log.debug("tt3_exchange")
         if self.dev.write("\xD4\x42" + cmd):
-            resp = self.dev.read(timeout=500)
+            resp = self.dev.read(timeout)
             if resp is None:
                 raise IOError(0, "no response")
             if not resp.startswith("\xD5\x43"):
