@@ -76,7 +76,7 @@ class NDEF(object):
             raise IOError("tag writing disabled")
 
         if len(data) > self.capacity:
-            raise IOError("too much data")
+            raise IOError("ndef message beyond tag capacity")
 
         self.data = data
         self.attr[9] = 0x0F;
