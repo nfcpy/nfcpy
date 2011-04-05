@@ -197,8 +197,10 @@ def main():
                 peer = clf.poll(general_bytes)
                 if isinstance(peer, nfc.DEP):
                     if peer.general_bytes.startswith("Ffm"):
+                        # Ugly workaround for Google Nexus S which does not
+                        # receive the first packet if we send immediately.
+                        time.sleep(0.1)
                         break
-                time.sleep(1)
     except KeyboardInterrupt:
         log.info("aborted by user")
         return

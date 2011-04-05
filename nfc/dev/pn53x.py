@@ -205,6 +205,8 @@ class device(object):
             self.dev.write("\xD4\x32\x0B" + data[2:])
 
     def _pn533_reset_mode(self):
+        self.dev.write("\xD4\x32\x01\x00") # RF off
+        self.dev.read(timeout=100)
         self.dev.write("\xD4\x18\x01")
         self.dev.read(timeout=100)
         self.dev.write('')
@@ -218,12 +220,12 @@ class device(object):
         baud = "\x02" # 424 kbps
         next = "\x05" # pollrq, !nfcid3, gb
 
-        pollrq = "\x00\xFF\xFF\x00\x00"
+        pollrq = "\x00\xFF\xFF\x00\x03"
         nfcid3 = "\x01\xfe" + os.urandom(8)
 
         if self.dev.write("\xD4\x56"+mode+baud+next+pollrq+gb):
             data = self.dev.read(timeout=500)
-            if data and data.startswith("\xD5\x57\x00"):
+            if data and data.startswith("\xD5\x57\x00\x01"):
                 try: return data[19:]
                 except IndexError: pass
 
