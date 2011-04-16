@@ -55,7 +55,7 @@ def recv_response(socket, acceptable_length, timeout):
         return snep_response
 
 class SnepClient(object):
-    """ Simple NDEF Exchange Protocol - client side
+    """ A simple NDEF exchange protocol - client side
     """
     def __init__(self):
         self.socket = None

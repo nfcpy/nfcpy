@@ -91,12 +91,6 @@ if __name__ == '__main__':
                       choices=["target", "initiator"],
                       action="store", dest="mode",
                       help="restrict mode to 'target' or 'initiator'")
-    parser.add_option("--cl-echo", type="int", default=None,
-                      action="store", dest="cl_echo_sap", metavar="SAP",
-                      help="connection-less echo server address")
-    parser.add_option("--co-echo", type="int", default=None,
-                      action="store", dest="co_echo_sap", metavar="SAP",
-                      help="connection-oriented echo server address")
 
     global options
     options, args = parser.parse_args()

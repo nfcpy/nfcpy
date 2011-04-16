@@ -29,7 +29,7 @@ from struct import unpack
 import nfc.llcp
 
 class SnepServer(Thread):
-    """SNEP Server implementation. 
+    """ A simple NDEF exchange protocol - server side
     """
     def __init__(self, service_name):
         super(SnepServer, self).__init__()
