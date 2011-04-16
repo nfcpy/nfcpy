@@ -38,21 +38,19 @@ class SmartPosterRecord(Record):
 
     @property
     def data(self):
-        string = UriRecord(self._uri).tostring()
+        # smart poster payload is an ndef message
+        message = Message(UriRecord(self._uri))
         for title_lang, title_text in self.title.iteritems():
-            string += TextRecord((title_lang, title_text)).tostring()
+            message.append(TextRecord((title_lang, title_text)))
         for image_type, image_data in self.image.iteritems():
-            string += Record(("image/"+image_type, "", image_data)).tostring()
+            message.append(Record(("image/"+image_type, "", image_data)))
         if self._action:
             action_record = Record(("urn:nfc:wkt:act", "", chr(self._action)))
-            string += action_record.tostring()
+            message.append(action_record)
         if self._res_size:
             size = struct.pack('>L', self._res_size)
-            string += Record(("urn:nfc:wkt:s", "", size)).tostring()
-        if self._res_type:
-            string += Record(("urn:nfc:wkt:t", "", self._res_type)).tostring()
-            
-        return string
+            message.append(Record(("urn:nfc:wkt:s", "", size)))
+        return message.tostring()
 
     @data.setter
     def data(self, string):

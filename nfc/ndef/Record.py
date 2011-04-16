@@ -23,7 +23,9 @@
 #
 # BUGS:
 #   - does not handle chunked records
-#
+#   - does not control validity of parsed string
+import logging
+log = logging.getLogger(__name__)
 
 from struct import pack, unpack
 import re
@@ -57,6 +59,9 @@ class Record(object):
         name_length = ord(string[3 if srf else 6]) if ilf else 0
         offset = (3 if srf else 6) + int(ilf)
 
+        if offset + type_length + name_length + data_length > len(string):
+            log.error("insufficient data for ndef record extraction")
+        
         record_type = string[offset:offset+type_length]; offset += type_length
         record_name = string[offset:offset+name_length]; offset += name_length
         record_data = string[offset:offset+data_length]; offset += data_length

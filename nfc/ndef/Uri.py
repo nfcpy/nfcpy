@@ -27,7 +27,7 @@ class UriRecord(Record):
             Record.__init__(self, initializer)
         else:
             Record.__init__(self)
-            self._uri = initializer
+            self.uri = initializer
 
     @property
     def data(self):
@@ -56,7 +56,7 @@ class UriRecord(Record):
 
     @uri.setter
     def uri(self, value):
-        self._uri = value
+        self._uri = value.encode("ascii")
 
 protocol_strings = ("",
     "http://www.",

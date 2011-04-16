@@ -56,6 +56,7 @@ class pn53x_usb(object):
                         self.pid = dev.idProduct
                         try:
                             self.dh = dev.open()
+                            self.dh.setConfiguration(dev.configurations[0])
                             self.dh.claimInterface(0)
                             conf = dev.configurations[0]
                             intf = conf.interfaces[0]
@@ -125,6 +126,9 @@ class pn53x_usb(object):
         frame += [(256 - sum(frame[-len(data):])) % 256, 0]
         #log.debug("cmd: " + ' '.join(["%02x" % x for x in frame]))
         self.dh.bulkWrite(self.usb_out, frame)
+        if len(frame) % 64 == 0:
+            # send zero-length frame to end bulk transfer
+            self.dh.bulkWrite(self.usb_out, '')
         ack = self.dh.bulkRead(self.usb_inp, 256, 100)
         return True if ack == (0, 0, 255, 0, 255, 0) else False
 
@@ -201,6 +205,8 @@ class device(object):
             self.dev.write("\xD4\x32\x0B" + data[2:])
 
     def _pn533_reset_mode(self):
+        self.dev.write("\xD4\x32\x01\x00") # RF off
+        self.dev.read(timeout=100)
         self.dev.write("\xD4\x18\x01")
         self.dev.read(timeout=100)
         self.dev.write('')
@@ -214,12 +220,12 @@ class device(object):
         baud = "\x02" # 424 kbps
         next = "\x05" # pollrq, !nfcid3, gb
 
-        pollrq = "\x00\xFF\xFF\x00\x00"
+        pollrq = "\x00\xFF\xFF\x00\x03"
         nfcid3 = "\x01\xfe" + os.urandom(8)
 
         if self.dev.write("\xD4\x56"+mode+baud+next+pollrq+gb):
             data = self.dev.read(timeout=500)
-            if data and data.startswith("\xD5\x57\x00"):
+            if data and data.startswith("\xD5\x57\x00\x01"):
                 try: return data[19:]
                 except IndexError: pass
 
@@ -259,10 +265,7 @@ class device(object):
         mifare = "\x01\x01\x00\x00\x00\x40" # "\x08\x00\x12\x34\x56\x40"
         felica = "\x01\xFE" + os.urandom(6) + 8*"\x00" + "\xFF\xFF"
         nfcid3 = felica[0:8] + "\x00\x00"
-        if len(gb) == 20 and self.ic in ("PN531","PN533"):
-            # avoid chipset error when len(gb) is 20
-            # this is ok for LLCP initialization bytes
-            gb = gb + "\x00\x00"
+
         if self.ic == "PN532":
             gb = len(gb) + gb + '\x00'
 
@@ -351,10 +354,10 @@ class device(object):
     def tt2_exchange(self, cmd):
         raise NotImplemented
 
-    def tt3_exchange(self, cmd):
+    def tt3_exchange(self, cmd, timeout=500):
         log.debug("tt3_exchange")
         if self.dev.write("\xD4\x42" + cmd):
-            resp = self.dev.read(timeout=500)
+            resp = self.dev.read(timeout)
             if resp is None:
                 raise IOError(0, "no response")
             if not resp.startswith("\xD5\x43"):

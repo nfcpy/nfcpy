@@ -76,7 +76,7 @@ class NDEF(object):
             raise IOError("tag writing disabled")
 
         if len(data) > self.capacity:
-            raise IOError("too much data")
+            raise IOError("ndef message beyond tag capacity")
 
         self.data = data
         self.attr[9] = 0x0F;
@@ -106,6 +106,9 @@ class Type3Tag(object):
         self.idm = idm
         self.pmm = pmm
         self.sc  = sc
+        rto, wto = ord(pmm[5]), ord(pmm[6])
+        self.rto = ((rto&0x07)+1, (rto>>3&0x07)+1, 0.302 * 4**(rto >> 6))
+        self.wto = ((wto&0x07)+1, (wto>>3&0x07)+1, 0.302 * 4**(wto >> 6))
         self._ndef = None
         if self.sc == "\x12\xFC":
             try: self._ndef = NDEF(self)
@@ -151,7 +154,9 @@ class Type3Tag(object):
         cmd += "\x01" + ("%02X%02X" % (service%256,service/256)).decode("hex")
         cmd += chr(len(blocks))
         cmd += ''.join(["\x00" + chr(b%256) + chr(b/256) for b in blocks])
-        resp = self.dev.tt3_exchange(chr(len(cmd)+1) + cmd)
+        rto = int((self.rto[0] + self.rto[1] * len(blocks)) * self.rto[2]) + 5
+        log.debug("read timeout is {0} ms".format(rto))
+        resp = self.dev.tt3_exchange(chr(len(cmd)+1) + cmd, rto)
         if not resp.startswith(chr(len(resp)) + "\x07" + self.idm):
             log.debug("invalid data")
             raise IOError("invalid data")
@@ -173,7 +178,9 @@ class Type3Tag(object):
         cmd += chr(len(blocks))
         cmd += ''.join(["\x00" + chr(b%256) + chr(b/256) for b in blocks])
         cmd += data
-        resp = self.dev.tt3_exchange(chr(len(cmd)+1) + cmd)
+        wto = int((self.wto[0] + self.wto[1] * len(blocks)) * self.wto[2]) + 5
+        log.debug("write timeout is {0} ms".format(wto))
+        resp = self.dev.tt3_exchange(chr(len(cmd)+1) + cmd, wto)
         if not resp.startswith(chr(len(resp)) + "\x09" + self.idm):
             log.debug("invalid data")
             raise IOError("invalid data")
