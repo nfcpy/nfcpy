@@ -31,6 +31,7 @@ import nfc.ndef.Text
 def main():
     clf = nfc.ContactlessFrontend()
 
+    print "Please touch a tag to send a hello to the world"
     while True:
         tag = clf.poll()
         if tag and tag.ndef:
@@ -43,10 +44,12 @@ def main():
     message = nfc.ndef.Message( [text_en, text_de, text_fr] )
 
     tag.ndef.message = message.tostring()
-
+    
+    print "Remove this tag"
     while tag.is_present:
         time.sleep(1)
     
+    print "Now touch it again to receive a hello from the world"
     while True:
         tag = clf.poll()
         if tag and tag.ndef:
