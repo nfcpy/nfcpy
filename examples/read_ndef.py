@@ -125,6 +125,16 @@ def print_wifi_token(message):
     except ValueError:
         pass
 
+def print_bt21_token(message):
+    cfg = BluetoothConfigData.fromstring(message[0].data)
+    print "  Bluetooth (Easy Pairing)"
+    print "    bdaddr   = %s" % cfg.device_address
+    print "    class    = %s" % cfg.class_of_device.encode("hex")
+    print "    sp hash  = %s" % cfg.simple_pairing_hash
+    print "    sp rand  = %s" % cfg.simple_pairing_randomizer
+    print "    longname = %s" % cfg.long_name
+    print "    partname = %s" % cfg.short_name
+    
 def main():
     # initialize the NFC reader, if installed
     clf = nfc.ContactlessFrontend()
@@ -159,6 +169,9 @@ def main():
 
                 elif message.type == "application/vnd.wfa.wsc":
                     print_wifi_token(message)
+
+                elif message.type == "application/vnd.bluetooth.ep.oob":
+                    print_bt21_token(message)
 
                 else:
                     print "Unknown Message"
