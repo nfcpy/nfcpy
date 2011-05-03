@@ -29,9 +29,9 @@ from opt import *
 
 _llc = None
 
-def startup(miu, lto):
+def startup(config):
     global _llc
-    _llc = llc.LogicalLinkControl(miu, lto)
+    _llc = llc.LogicalLinkControl(config)
     return _llc.parameter_string
 
 def activate(mac):
