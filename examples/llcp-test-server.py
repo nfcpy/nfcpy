@@ -181,7 +181,11 @@ class ConnectionModeDumpServer(Thread):
             nfc.llcp.close(socket)
 
 def main():
-    general_bytes = nfc.llcp.startup(lto=1000, miu=options.link_miu)
+    llcp_config = {'recv-miu': options.link_miu, 'send-lto': 1000}
+    if options.quirks == "android":
+        llcp_config['send-agf'] = False
+
+    general_bytes = nfc.llcp.startup(llcp_config)
     clf = nfc.ContactlessFrontend(options.device)
 
     peer = None
@@ -197,9 +201,10 @@ def main():
                 peer = clf.poll(general_bytes)
                 if isinstance(peer, nfc.DEP):
                     if peer.general_bytes.startswith("Ffm"):
-                        # Ugly workaround for Google Nexus S which does not
-                        # receive the first packet if we send immediately.
-                        time.sleep(0.1)
+                        if options.quirks == "android":
+                            # Google Nexus S does not receive the first
+                            # packet if we send immediately.
+                            time.sleep(0.1)
                         break
     except KeyboardInterrupt:
         log.info("aborted by user")
@@ -244,6 +249,9 @@ if __name__ == '__main__':
                       choices=["target", "initiator"],
                       action="store", dest="mode",
                       help="restrict mode to 'target' or 'initiator'")
+    parser.add_option("--quirks", type="string",
+                      action="store", dest="quirks", metavar="choice",
+                      help="quirks mode, choices are 'android'")
 
     global options
     options, args = parser.parse_args()
