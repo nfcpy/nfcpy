@@ -65,7 +65,7 @@ class pn53x(object):
         br_ty = ("106A", "212F", "424F", "106B", "106J").index(br_ty)
         if self.write("\xD4\x4A" + chr(max_tg) + chr(br_ty) + initiator_data):
             targets = list()
-            rsp = self.read(timeout=1000)
+            rsp = self.read(timeout=500)
             if rsp and len(rsp) >= 3 and rsp.startswith("\xD5\x4B"):
                 nb_tg = ord(rsp[2])
                 rsp = rsp[3:]
@@ -81,9 +81,36 @@ class pn53x(object):
                         attrib_res_length = ord(rsp[13])
                         targets.append(rsp[1:14+pol_res_length])
                     rsp = rsp[1+len(targets[-1]):]
-                return targets
-            return None
+            return targets
         raise IOError("in_list_passive_target")
+
+    def in_jump_for_dep(self, communication_mode, baud_rate,
+                        passive_initiator_data=None,
+                        nfcid3=None, general_bytes=None):
+        if communication_mode == "passive":
+            if baud_rate == "212" or baud_rate == "424":
+                if passive_initiator_data is None:
+                    raise ValueError("missing passive initiator data")
+                if not nfcid3 is None:
+                    log.debug("nfcid3 not used in 212/424 kbps passive mode")
+                    nfcid3 = ''
+        
+        mode = ("passive", "active").index(communication_mode)
+        baud = ("106", "212", "424").index(baud_rate)
+        next = (bool(passive_initiator_data) |
+                bool(nfcid3) << 1 |
+                bool(general_bytes) << 2)
+
+        if self.write("\xD4\x56" + chr(mode) + chr(baud) + chr(next) +
+                      passive_initiator_data + nfcid3 + general_bytes):
+            rsp = self.read(timeout=500)
+            if rsp and len(rsp) >= 19 and rsp.startswith("\xD5\x57\x00\x01"):
+                log.info("ATR_RES(nfcid3={0}, did={1:02x}, bs={2:02x},"
+                         " br={3:02x}, to={4:02x}, pp={5:02x}, gb={6})"
+                         .format(rsp[4:14].encode("hex"), ord(rsp[14]),
+                                 ord(rsp[15]), ord(rsp[16]), ord(rsp[17]),
+                                 ord(rsp[18]), rsp[19:].encode("hex")))
+                return rsp[4:]
     
     def _build_frame(self, data):
         if len(data) < 256:
@@ -258,18 +285,11 @@ class device(object):
         if self.dev.ic == "PN533":
             self._pn533_reset_mode()
 
-        mode = "\x01" # 0 -> passive, 1 -> active
-        baud = "\x02" # 424 kbps
-        next = "\x05" # pollrq, !nfcid3, gb
-
         pollrq = "\x00\xFF\xFF\x00\x03"
         nfcid3 = "\x01\xfe" + os.urandom(8)
 
-        if self.dev.write("\xD4\x56"+mode+baud+next+pollrq+gb):
-            data = self.dev.read(timeout=500)
-            if data and data.startswith("\xD5\x57\x00\x01"):
-                try: return data[19:]
-                except IndexError: pass
+        atr_rsp = self.dev.in_jump_for_dep("active", "424", pollrq, nfcid3, gb)
+        return atr_rsp[15:] if atr_rsp else None
 
     def poll_tt1(self):
         pass
@@ -278,11 +298,6 @@ class device(object):
         pass
 
     def poll_tt3(self):
-        def poll(sc, br):
-            poll_req = "\x00" + sc + "\x01\x03"
-            targets = self.dev.in_list_passive_target(1, br, poll_req)
-            if targets: return targets[0][2:]
-
         log.debug("polling for a type 3 tag")
         if self.dev.ic == "PN533":
             self._pn533_reset_mode()
@@ -301,14 +316,6 @@ class device(object):
             log.debug("target found, bitrate is {0} kbps".format(br[0:3]))
             return rsp[2:]
             
-#            data = poll(sc="\xFF\xFF", br=br)
-#            if data and data[-2:] != "\x12\xFC":
-#                data2 = poll(sc="\x12\xFC", br=br)
-#                if data2: data = data2
-#            if data:
-#                log.debug("bitrate {0} kbps".format(br[0:3]))
-#                return data
-
     def listen(self, gb, timeout):
         log.debug("listen: gb={0} timeout={1} ms"
                   .format(gb.encode("hex"), timeout))
