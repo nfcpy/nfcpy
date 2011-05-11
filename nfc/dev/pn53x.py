@@ -327,7 +327,7 @@ class device(object):
         nfcid3 = felica[0:8] + "\x00\x00"
 
         if self.dev.ic == "PN532":
-            gb = len(gb) + gb + '\x00'
+            gb = chr(len(gb)) + gb + '\x00'
 
         if self.dev.write("\xD4\x8C\x02" + mifare + felica + nfcid3 + gb):
             data = self.dev.read(timeout)
