@@ -26,7 +26,13 @@
 import logging
 log = logging.getLogger(__name__)
 
-import os, time, glob, fcntl, usb, serial
+import os
+import time
+import usb
+
+if os.name == "posix":
+    import serial
+    import fcntl
 
 supported_devices = []
 supported_devices.append((0x054c,0x02e1)) # Sony RC-S330
@@ -40,6 +46,7 @@ class pn53x(object):
             log.info("searching for a usb tty reader")
             import glob
             for name in glob.glob("/dev/ttyUSB*"):
+                log.info("trying reader at {0}".format(name))
                 try: return pn53x_tty(name)
                 except IOError: pass
 
@@ -47,8 +54,8 @@ class pn53x(object):
         for bus in usb.busses():
             for dev in bus.devices:
                 if (dev.idVendor, dev.idProduct) in supported_devices:
-                    log.info("trying reader at usb port %s:%s"
-                             % (bus.dirname, dev.filename))
+                    log.info("trying reader at usb port {0}:{1}"
+                             .format(bus.dirname, dev.filename))
                     try: return pn53x_usb(dev)
                     except usb.USBError: pass
 
@@ -189,9 +196,9 @@ class pn53x_tty(pn53x):
             log.debug("device at {0} doesn't provide firmware version"
                       .format(self.tty.name))
             raise
-        else:
-            self.ic = "PN5" + fw[0].encode("hex")
-            self.fw = "{0}.{1}".format(ord(fw[1]), fw[2].encode("hex"))
+        self.ic = "PN5" + fw[0].encode("hex")
+        self.fw = "{0}.{1}".format(ord(fw[1]), fw[2].encode("hex"))
+        log.info("chipset is a {0} version {1}".format(self.ic, self.fw))
         
     def __del__(self):
         log.debug("closing {0}".format(self.tty.name))
