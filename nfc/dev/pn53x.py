@@ -38,6 +38,7 @@ supported_devices = []
 supported_devices.append((0x054c,0x02e1)) # Sony RC-S330
 supported_devices.append((0x04cc,0x0531)) # Philips demo board
 supported_devices.append((0x054c,0x0193)) # Sony demo board
+supported_devices.append((0x04e6,0x5591)) # SCM SCL3711
 
 class pn53x(object):
     @staticmethod
@@ -143,14 +144,14 @@ class pn53x_usb(pn53x):
         self.usb_inp = intf[0].endpoints[1].address
 
         fw = self.get_firmware_version()
-        if ((dev.idVendor, dev.idProduct) == (0x04cc, 0x0531) or
-            (dev.idVendor, dev.idProduct) == (0x054c, 0x0193)):
+        if len(fw) == 2:
             self.ic = "PN531"
             self.fw = "{0}.{1}".format(ord(fw[0]), ord(fw[1]))
-        elif (dev.idVendor, dev.idProduct) == (0x054c, 0x02e1):
+        elif len(fw) == 4:
             self.ic = "PN5" + fw[0].encode("hex")
             self.fw = "{0}.{1}".format(ord(fw[1]), fw[2].encode("hex"))
-        else: raise RuntimeError("enumerated unknown (vendor,product) id")
+        else:
+            raise RuntimeError("unexpected firmware version response")
         log.info("chipset is a {0} version {1}".format(self.ic, self.fw))
         
     def __del__(self):
