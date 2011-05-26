@@ -149,7 +149,7 @@ class pn53x_usb(pn53x):
             self.fw = "{0}.{1}".format(ord(fw[0]), ord(fw[1]))
         elif len(fw) == 4:
             self.ic = "PN5" + fw[0].encode("hex")
-            self.fw = "{0}.{1}".format(ord(fw[1]), fw[2].encode("hex"))
+            self.fw = "{0}.{1}".format(ord(fw[1]), ord(fw[2]))
         else:
             raise RuntimeError("unexpected firmware version response")
         log.info("chipset is a {0} version {1}".format(self.ic, self.fw))
@@ -198,7 +198,7 @@ class pn53x_tty(pn53x):
                       .format(self.tty.name))
             raise
         self.ic = "PN5" + fw[0].encode("hex")
-        self.fw = "{0}.{1}".format(ord(fw[1]), fw[2].encode("hex"))
+        self.fw = "{0}.{1}".format(ord(fw[1]), ord(fw[2]))
         log.info("chipset is a {0} version {1}".format(self.ic, self.fw))
         
     def __del__(self):
