@@ -5,6 +5,7 @@
 import logging
 log = logging.getLogger(__name__)
 
+from nfc.npp import NPP_SERVICE_NAME
 from threading import Thread
 from struct import unpack
 
@@ -19,7 +20,7 @@ class NPPServer(Thread):
     def run(self):
         socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
         try:
-            nfc.llcp.bind(socket, "com.android.npp")
+            nfc.llcp.bind(socket, NPP_SERVICE_NAME)
             addr = nfc.llcp.getsockname(socket)
             log.info("npp server bound to port {0}".format(addr))
             nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
