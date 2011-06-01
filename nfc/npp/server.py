@@ -39,64 +39,63 @@ class NPPServer(Thread):
     def serve(socket, npp_server):
         peer_sap = nfc.llcp.getpeername(socket)
         log.info("serving npp client on remote sap {0}".format(peer_sap))
+        messages = []
         try:
-            while True:
-                data = nfc.llcp.recv(socket)
-                if not data:
-                    log.debug("no data")
-                    break # connection closed
+            data = nfc.llcp.recv(socket)
+            if not data:
+                log.debug("no data")
+                return # connection closed
 
-                log.debug("Got data with %d length" % len(data))
-                if len(data) < 10:
-                    log.debug("npp msg initial fragment too short")
-                    break # bail out, this is a bad client
+            log.debug("Got data with %d length" % len(data))
+            if len(data) < 10:
+                log.debug("npp msg initial fragment too short")
+                return # bail out, this is a bad client
 
-                version, num_entries = unpack(">BI", data[:5])
-                log.debug("Got version %d and %d entries" % (version, num_entries))
-                if (version >> 4) > 1:
-                    log.debug("unsupported version {}".format(version>>4))
-                    break
+            version, num_entries = unpack(">BI", data[:5])
+            log.debug("Got version %d and %d entries" % (version, num_entries))
+            if (version >> 4) > 1:
+                log.debug("unsupported version {}".format(version>>4))
+                return
 
-                if num_entries != 1:
-                    log.debug("npp msg has invalid length")
-                    break
+            if num_entries != 1:
+                log.debug("npp msg has invalid length")
+                return
 
-                remaining = data[5:]
-                messages = []
-                for i in range(num_entries):
-                    log.debug("Fetching NDEF %d" % i)
-                    if len(remaining) < 5:
-                        log.debug("Not enough data to fetch action code and NDEF length")
-                        while len(remaining) < 5:
-                            data = nfc.llcp.recv(socket)
-                            if data:
-                                remaining += data
-                            else:
-                                break # connection closed
-                    log.debug("Got everything: %d" % len(remaining))
-                    action_code, length = unpack(">BI", remaining[:5])
-                    log.debug("Action code %d NDEF length %d" % (action_code, length))
-                    if action_code != 1:
-                        log.debug("Unsuported action code")
-                        break
+            remaining = data[5:]
+            for i in range(num_entries):
+                log.debug("Fetching NDEF %d" % i)
+                if len(remaining) < 5:
+                    log.debug("Not enough data to fetch action code and NDEF length")
+                    while len(remaining) < 5:
+                        data = nfc.llcp.recv(socket)
+                        if data:
+                            remaining += data
+                        else:
+                            return # connection closed
+                log.debug("Got everything: %d" % len(remaining))
+                action_code, length = unpack(">BI", remaining[:5])
+                log.debug("Action code %d NDEF length %d" % (action_code, length))
+                if action_code != 1:
+                    log.debug("Unsuported action code")
+                    return
 
-                    remaining = remaining[5:]
-                    if len(remaining) < length:
-                        log.debug("Not enough data to read entry")
-                        while len(remaining) < length:
-                            data = nfc.llcp.recv(socket)
-                            if data:
-                                remaining += data
-                            else:
-                                break # connection closed
+                remaining = remaining[5:]
+                if len(remaining) < length:
+                    log.debug("Not enough data to read entry")
+                    while len(remaining) < length:
+                        data = nfc.llcp.recv(socket)
+                        if data:
+                            remaining += data
+                        else:
+                            return # connection closed
 
-                    # message complete, now handle the request
-                    ndef = nfc.ndef.Message(remaining[:length])
-                    log.debug("Got NDEF %s" % ndef)
-                    messages.append(ndef)
+                # message complete, now handle the request
+                ndef = nfc.ndef.Message(remaining[:length])
+                log.debug("Got NDEF %s" % ndef)
+                messages.append(ndef)
 
-                    # prepare for next
-                    remaining = remaining[length:]
+                # prepare for next
+                remaining = remaining[length:]
 
         except nfc.llcp.Error as e:
             log.debug("caught exception {0}".format(e))
