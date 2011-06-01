@@ -62,11 +62,11 @@ class NPPServer(Thread):
                     break
 
                 remaining = data[5:]
+                messages = []
                 for i in range(num_entries):
                     log.debug("Fetching NDEF %d" % i)
                     if len(remaining) < 5:
                         log.debug("Not enough data to fetch action code and NDEF length")
-                        nfc.llcp.send(socket, "\x10\x80\x00\x00\x00\x00")
                         while len(remaining) < 5:
                             data = nfc.llcp.recv(socket)
                             if data:
@@ -83,7 +83,6 @@ class NPPServer(Thread):
                     remaining = remaining[5:]
                     if len(remaining) < length:
                         log.debug("Not enough data to read entry")
-                        nfc.llcp.send(socket, "\x10\x80\x00\x00\x00\x00")
                         while len(remaining) < length:
                             data = nfc.llcp.recv(socket)
                             if data:
@@ -94,10 +93,14 @@ class NPPServer(Thread):
                     # message complete, now handle the request
                     ndef = nfc.ndef.Message(remaining[:length])
                     log.debug("Got NDEF %s" % ndef)
-                    npp_server.process(ndef)
+                    messages.append(ndef)
 
                     # prepare for next
                     remaining = remaining[length:]
+
+                # process fetched messages
+                for message in messages:
+                    npp_server.process(message)
 
         except nfc.llcp.Error as e:
             log.debug("caught exception {0}".format(e))

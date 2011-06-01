@@ -13,12 +13,11 @@ def send_request(socket, npp_request, send_miu):
         return nfc.llcp.send(socket, npp_request)
     else:
         if nfc.llcp.send(socket, npp_request[0:send_miu]):
-            if nfc.llcp.recv(socket) == "\x10\x80\x00\x00\x00\x00":
-                for offset in xrange(send_miu, len(npp_request), send_miu):
-                    fragment = npp_request[offset:offset+send_miu]
-                    if not nfc.llcp.send(socket, fragment):
-                        break
-                else: return True
+            for offset in xrange(send_miu, len(npp_request), send_miu):
+                fragment = npp_request[offset:offset+send_miu]
+                if not nfc.llcp.send(socket, fragment):
+                    break
+            else: return True
 
 class NPPClient(object):
     """ A NPP implementation - client side
