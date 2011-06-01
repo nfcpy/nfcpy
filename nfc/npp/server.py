@@ -98,10 +98,6 @@ class NPPServer(Thread):
                     # prepare for next
                     remaining = remaining[length:]
 
-                # process fetched messages
-                for message in messages:
-                    npp_server.process(message)
-
         except nfc.llcp.Error as e:
             log.debug("caught exception {0}".format(e))
         except Exception, e:
@@ -109,6 +105,10 @@ class NPPServer(Thread):
             raise
         finally:
             nfc.llcp.close(socket)
+
+        # process fetched messages
+        for message in messages:
+            npp_server.process(message)
 
     def process(self, ndef_message):
         """Processes NDEF messages. This method should be overwritten by a
