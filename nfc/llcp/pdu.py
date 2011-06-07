@@ -133,7 +133,7 @@ class ParameterExchange(ProtocolDataUnit):
                 self.version = "%d.%d" % (ord(v)/16, ord(v)%16)
             elif t == Parameter.MIUX and l == 2:
                 miux = struct.unpack("!H", v)[0]
-                self.miu = 128 + miux & 0x07FF
+                self.miu = 128 + (miux & 0x07FF)
             elif t == Parameter.WKS and l == 2:
                 self.wks = struct.unpack("!H", v)[0]
             elif t == Parameter.LTO and l == 1:
