@@ -39,9 +39,11 @@ class NPPServer(Thread):
     def serve(socket, npp_server):
         peer_sap = nfc.llcp.getpeername(socket)
         log.info("serving npp client on remote sap {0}".format(peer_sap))
-        messages = []
+
         try:
             data = nfc.llcp.recv(socket)
+            while nfc.llcp.poll(socket, "recv"):
+                data += nfc.llcp.recv(socket)
             if not data:
                 log.debug("no data")
                 return # connection closed
@@ -66,12 +68,8 @@ class NPPServer(Thread):
                 log.debug("Fetching NDEF %d" % i)
                 if len(remaining) < 5:
                     log.debug("Not enough data to fetch action code and NDEF length")
-                    while len(remaining) < 5:
-                        data = nfc.llcp.recv(socket)
-                        if data:
-                            remaining += data
-                        else:
-                            return # connection closed
+                    return
+
                 log.debug("Got everything: %d" % len(remaining))
                 action_code, length = unpack(">BI", remaining[:5])
                 log.debug("Action code %d NDEF length %d" % (action_code, length))
@@ -82,17 +80,12 @@ class NPPServer(Thread):
                 remaining = remaining[5:]
                 if len(remaining) < length:
                     log.debug("Not enough data to read entry")
-                    while len(remaining) < length:
-                        data = nfc.llcp.recv(socket)
-                        if data:
-                            remaining += data
-                        else:
-                            return # connection closed
+                    return
 
                 # message complete, now handle the request
                 ndef = nfc.ndef.Message(remaining[:length])
                 log.debug("Got NDEF %s" % ndef)
-                messages.append(ndef)
+                npp_server.process(ndef)
 
                 # prepare for next
                 remaining = remaining[length:]
@@ -104,10 +97,6 @@ class NPPServer(Thread):
             raise
         finally:
             nfc.llcp.close(socket)
-
-        # process fetched messages
-        for message in messages:
-            npp_server.process(message)
 
     def process(self, ndef_message):
         """Processes NDEF messages. This method should be overwritten by a
