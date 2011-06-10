@@ -10,6 +10,7 @@ from threading import Thread
 from struct import unpack
 
 import nfc.llcp
+import nfc.ndef
 
 class NPPServer(Thread):
     """ Simple NPP server
