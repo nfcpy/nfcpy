@@ -208,12 +208,13 @@ class ServiceDiscovery(object):
             self.resp.notify_all()
 
 class LogicalLinkControl(threading.Thread):
-    def __init__(self, miu=249, lto=100):
+    def __init__(self, config):
         super(LogicalLinkControl, self).__init__()
         self.lock = threading.RLock()
         self.cfg = dict()
-        self.cfg['recv-miu'] = miu
-        self.cfg['send-lto'] = lto
+        self.cfg['recv-miu'] = config.get('recv-miu', 248)
+        self.cfg['send-lto'] = config.get('send-lto', 500)
+        self.cfg['send-agf'] = config.get('send-agf', True)
         self.cfg['recv-wks'] = 0x0003
         self.snl = dict(wks_map)
         self.sap = 64 * [None]
@@ -343,8 +344,9 @@ class LogicalLinkControl(threading.Thread):
                 #          .format(sap, max_data))
                 pdu = sap.dequeue(max_data if max_data else 2179)
                 if not pdu is None:
+                    if self.cfg['send-agf'] == False:
+                        return pdu
                     pdu_list.append(pdu)
-                    #log.debug("got from sap {0}: {1}".format(sap, pdu))
                     if max_data is None:
                         max_data = self.cfg["send-miu"] + 2
                     max_data -= len(pdu)
@@ -356,6 +358,8 @@ class LogicalLinkControl(threading.Thread):
                 if sap.mode == DATA_LINK_CONNECTION:
                     pdu = sap.sendack(max_data)
                     if not pdu is None:
+                        if self.cfg['send-agf'] == False:
+                            return pdu
                         pdu_list.append(pdu)
                         max_data -= len(pdu)
                         if max_data < bool(len(pdu_list)==1) * 2 + 2 + 3:
@@ -458,7 +462,8 @@ class LogicalLinkControl(threading.Thread):
 
     def _bind_by_name(self, socket, name):
         if not (name.startswith("urn:nfc:sn") or
-                name.startswith("urn:nfc:xsn")):
+                name.startswith("urn:nfc:xsn") or
+                name == "com.android.npp"): # invalid name but legacy
             raise Error(errno.EFAULT)
         with self.lock:
             addr = self.snl.get(name)

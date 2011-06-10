@@ -54,7 +54,7 @@ class SonyStcSnepServer(nfc.snep.SnepServer):
         return nfc.snep.NotFound
 
 def main():
-    general_bytes = nfc.llcp.startup(lto=1000, miu=1024)
+    general_bytes = nfc.llcp.startup({'send-lto': 1000, 'recv-miu': 1024})
     clf = nfc.ContactlessFrontend(options.device)
 
     peer = llcp_connect(clf, general_bytes)
