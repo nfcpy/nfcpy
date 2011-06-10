@@ -57,9 +57,9 @@ def recv_response(socket, acceptable_length, timeout):
 class SnepClient(object):
     """ A simple NDEF exchange protocol - client side
     """
-    def __init__(self):
+    def __init__(self, max_ndef_msg_recv_size=1024):
         self.socket = None
-        self.acceptable_length = 1024
+        self.acceptable_length = max_ndef_msg_recv_size
 
     def connect(self, service_name):
         if self.socket: self.close()
@@ -72,15 +72,15 @@ class SnepClient(object):
             nfc.llcp.close(self.socket)
             self.socket = None
 
-    def get(self, ndef_message = ''):
+    def get(self, ndef_message=''):
         """Get an NDEF message from the server. Temporarily connects
         to the default SNEP server if the client is not yet connected.
         """
         if not self.socket:
             self.connect('urn:nfc:sn:snep')
-            self.release = True
+            self.release_connection = True
         else:
-            self.release = False
+            self.release_connection = False
         try:
             snep_request = '\x10\x01'
             snep_request += struct.pack('>L', 4 + len(ndef_message))
@@ -94,7 +94,7 @@ class SnepClient(object):
                     raise SnepError(response_code)
                 return snep_response[6:]
         finally:
-            if self.release:
+            if self.release_connection:
                 self.close()
 
     def put(self, ndef_message):
@@ -103,9 +103,9 @@ class SnepClient(object):
         """
         if not self.socket:
             self.connect('urn:nfc:sn:snep')
-            self.release = True
+            self.release_connection = True
         else:
-            self.release = False
+            self.release_connection = False
         try:
             ndef_msgsize = struct.pack('>L', len(ndef_message))
             snep_request = '\x10\x02' + ndef_msgsize + ndef_message
@@ -115,7 +115,7 @@ class SnepClient(object):
                 if response_code != 0x81:
                     raise SnepError(response_code)
         finally:
-            if self.release:
+            if self.release_connection:
                 self.close()
 
 class SnepError(Exception):

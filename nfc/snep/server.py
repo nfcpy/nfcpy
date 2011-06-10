@@ -31,10 +31,10 @@ import nfc.llcp
 class SnepServer(Thread):
     """ A simple NDEF exchange protocol - server side
     """
-    def __init__(self, service_name):
+    def __init__(self, service_name, max_ndef_msg_recv_size=1024):
         super(SnepServer, self).__init__()
         self.name = service_name
-        self.acceptable_length = 1024
+        self.acceptable_length = max_ndef_msg_recv_size
 
     def run(self):
         socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
