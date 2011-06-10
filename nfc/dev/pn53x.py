@@ -69,6 +69,12 @@ class pn53x(object):
             return data[2:]
         else: raise IOError(0, "could not read firmware version")
 
+    def reset_mode(self):
+        if self.ic == "PN533" and self.fw == "1.48":
+            self.write("\xD4\x18\x01")
+            self.read(timeout=100)
+            self.write('')
+        
     def in_list_passive_target(self, max_tg, br_ty, initiator_data):
         br_ty = ("106A", "212F", "424F", "106B", "106J").index(br_ty)
         if self.write("\xD4\x4A" + chr(max_tg) + chr(br_ty) + initiator_data):
@@ -119,6 +125,37 @@ class pn53x(object):
                                  ord(rsp[15]), ord(rsp[16]), ord(rsp[17]),
                                  ord(rsp[18]), rsp[19:].encode("hex")))
                 return rsp[4:]
+    
+    def tg_init_as_target(self, activation_mode, mifare_params,
+                          felica_params, nfcid3t=None, general_bytes="",
+                          historical_bytes="", timeout=None):
+        if not len(mifare_params) == 6:
+            raise ValueError("invalid length of mifare_params")
+        if not len(felica_params) == 18:
+            raise ValueError("invalid length of felica_params")
+        if nfcid3t is not None and not len(nfcid3t) == 10:
+            raise ValueError("invalid length of nfcid3t")
+        
+        cmd = "\xD4\x8C"
+        cmd += "\x02" if activation_mode == "DEP" else "\x00"
+        cmd += mifare_params + felica_params + nfcid3t
+        
+        if (self.ic == "PN531") or (self.ic == "PN533" and self.fw == "1.48"):
+            cmd += general_bytes
+            if historical_bytes:
+                s = "historical_bytes can't' be used with a {0} V{1}"
+                log.warning(s.format(self.ic, self.fw))
+        else:
+            cmd += chr(len(general_bytes)) + general_bytes
+            cmd += chr(len(historical_bytes)) + historical_bytes
+
+        if self.write(cmd) and timeout is not None:
+            rsp = self.read(timeout)
+            if rsp is None:
+                self.write("") # send ack to abort command
+            elif rsp.startswith("\xD5\x8D"):
+                return rsp[2], rsp[3:]
+        return None, None
     
     def _build_frame(self, data):
         if len(data) < 256:
@@ -259,7 +296,10 @@ class device(object):
         # retries for ATR_REQ, PSL_REQ, target activation
         self.dev.write("\xD4\x32\x05\xFF\xFF\x00")
 
-        if self.dev.ic == "PN533":
+        if self.dev.ic == "PN533" and self.dev.fw == "1.48":
+            self.dev.write("\xD4\x18\x01")
+            self.dev.read(timeout=100)
+            self.dev.write('')
             self._pn533_init()
 
     @property
@@ -271,6 +311,8 @@ class device(object):
         return self._mtu
 
     def _pn533_init(self):
+        self.dev.write("\xD4\x32\x01\x00") # RF off
+        self.dev.read(timeout=100)
         self.dev.write("\xD4\x32\x82"+chr(self._rwt)+chr(self._wtx)+"\x08")
         self.dev.read(timeout=100)
         self.dev.write("\xD4\x08\x63\x0d\x00")
@@ -288,15 +330,16 @@ class device(object):
         self.dev.read(timeout=100)
         self.dev.write('')
 
-    def poll_dep(self, gb):
+    def poll_dep(self, general_bytes):
         log.debug("polling for a dep target")
-        if self.dev.ic == "PN533":
-            self._pn533_reset_mode()
+        self.dev.reset_mode()
 
         pollrq = "\x00\xFF\xFF\x00\x03"
         nfcid3 = "\x01\xfe" + os.urandom(8)
 
-        atr_rsp = self.dev.in_jump_for_dep("active", "424", pollrq, nfcid3, gb)
+        atr_rsp = self.dev.in_jump_for_dep("active", "424", pollrq,
+                                           nfcid3, general_bytes)
+
         return atr_rsp[15:] if atr_rsp else None
 
     def poll_tt1(self):
@@ -307,8 +350,7 @@ class device(object):
 
     def poll_tt3(self):
         log.debug("polling for a type 3 tag")
-        if self.dev.ic == "PN533":
-            self._pn533_reset_mode()
+        self.dev.reset_mode()
 
         poll_ffff = "\x00\xFF\xFF\x01\x03"
         poll_12fc = "\x00\x12\xFC\x01\x03"
@@ -323,25 +365,27 @@ class device(object):
             
             log.debug("target found, bitrate is {0} kbps".format(br[0:3]))
             return rsp[2:]
+        else:
+            # no target found, shut off rf field
+            self.dev.write("\xD4\x32\x01\x00")
+            self.dev.read(timeout=100)
             
-    def listen(self, gb, timeout):
+    def listen(self, general_bytes, timeout):
         log.debug("listen: gb={0} timeout={1} ms"
-                  .format(gb.encode("hex"), timeout))
-        if self.dev.ic == "PN533":
-            self._pn533_reset_mode()
+                  .format(general_bytes.encode("hex"), timeout))
+        
+        mifare_params = "\x01\x01\x00\x00\x00\x40" # "\x08\x00\x12\x34\x56\x40"
+        felica_params = "\x01\xFE" + os.urandom(6) + 8*"\x00" + "\xFF\xFF"
+        nfcid3t = felica_params[0:8] + "\x00\x00"
 
-        mifare = "\x01\x01\x00\x00\x00\x40" # "\x08\x00\x12\x34\x56\x40"
-        felica = "\x01\xFE" + os.urandom(6) + 8*"\x00" + "\xFF\xFF"
-        nfcid3 = felica[0:8] + "\x00\x00"
+        self.dev.reset_mode()
+        mode, atr_req = self.dev.tg_init_as_target(
+            "DEP", mifare_params, felica_params, nfcid3t,
+            general_bytes, timeout=timeout)
 
-        if self.dev.ic == "PN532":
-            gb = chr(len(gb)) + gb + '\x00'
-
-        if self.dev.write("\xD4\x8C\x02" + mifare + felica + nfcid3 + gb):
-            data = self.dev.read(timeout)
-            if data and data.startswith("\xD5\x8D"):
-                return data[20:]
-
+        if atr_req is not None:
+            return atr_req[17:]
+        
     ##
     ## data exchange protocol
     ##
