@@ -29,6 +29,231 @@ import time
 sys.path.insert(1, os.path.split(sys.path[0])[0])
 import nfc
 import nfc.snep
+import nfc.ndef
+
+validation_server_name = "urn:nfc:xsn:nfc-forum.org:snep-validation"
+
+class TestError(Exception):
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return str(self.value)
+
+def info(message, prefix="   "):
+    log.info(prefix + message)
+    
+def test_01():
+    #info("Test 1: connect and terminate", prefix="")
+    snep = nfc.snep.SnepClient(max_ndef_msg_recv_size=1024)
+    info("1st connect to {0}".format(validation_server_name))
+    snep.connect(validation_server_name)
+    info("disconnect from {0}".format(validation_server_name))
+    snep.close()
+    info("2nd connect to {0}".format(validation_server_name))
+    snep.connect(validation_server_name)
+    info("disconnect from {0}".format(validation_server_name))
+    snep.close()
+
+def test_02():
+    info("Test 2: unfragmented message exchange", prefix="")
+    ndef_message_sent = list()
+    ndef_message_rcvd = list()
+
+    payload = ''.join([chr(x) for x in range(122-29)])
+    record = nfc.ndef.Record(("application/octet-stream", "1", payload))
+    ndef_message_sent.append(nfc.ndef.Message(record).tostring())
+
+    try:
+        snep = nfc.snep.SnepClient(max_ndef_msg_recv_size=1024)
+        info("connect to {0}".format(validation_server_name))
+        snep.connect(validation_server_name)
+        info("put short ndef message")
+        snep.put(ndef_message_sent[0])
+
+        info("get short ndef message")
+        identifier = nfc.ndef.Record(("application/octet-stream", "1", ""))
+        ndef_message = snep.get(nfc.ndef.Message(identifier).tostring())
+        ndef_message_rcvd.append(ndef_message)
+
+        for i in range(len(ndef_message_sent)):
+            if not ndef_message_rcvd == ndef_message_sent:
+                raise TestError("rcvd ndef message {0} differs".format(i))
+            else:
+                info("rcvd ndef message {0} is correct".format(i))
+
+    except Exception as e:
+        TestError("exception: " + str(e))
+    finally:
+        info("disconnect from {0}".format(validation_server_name))
+        snep.close()
+
+def test_03():
+    info("Test 3: fragmented message exchange", prefix="")
+    ndef_message_sent = list()
+    ndef_message_rcvd = list()
+
+    #payload = ''.join([chr(x%256) for x in range(2171-29)])
+    payload = ''.join([chr(x%256) for x in range(512)])
+    record = nfc.ndef.Record(("application/octet-stream", "1", payload))
+    ndef_message_sent.append(nfc.ndef.Message(record).tostring())
+
+    try:
+        snep = nfc.snep.SnepClient(max_ndef_msg_recv_size=10000)
+        info("connect to {0}".format(validation_server_name))
+        snep.connect(validation_server_name)
+        info("put large ndef message")
+        snep.put(ndef_message_sent[0])
+    
+        info("get large ndef message")
+        identifier = nfc.ndef.Record(("application/octet-stream", "1", ""))
+        ndef_message = snep.get(nfc.ndef.Message(identifier).tostring())
+        ndef_message_rcvd.append(ndef_message)
+
+        for i in range(len(ndef_message_sent)):
+            if not ndef_message_rcvd == ndef_message_sent:
+                info("rcvd ndef message {0} differs".format(i))
+                raise TestError("rcvd ndef message {0} differs".format(i))
+            else:
+                info("rcvd ndef message {0} is correct".format(i))
+                
+    except Exception as e:
+        raise TestError("exception " + str(e))
+    finally:
+        info("disconnect from {0}".format(validation_server_name))
+        snep.close()
+
+def test_04():
+    info("Test 4: multiple ndef messages", prefix="")
+    ndef_message_sent = list()
+    ndef_message_rcvd = list()
+
+    payload = ''.join([chr(x%256) for x in range(50)])
+    #record = nfc.ndef.Record(("application/octet-stream", "1", payload))
+    record = nfc.ndef.Record(("urn:nfc:wkt:U", "", payload))
+    ndef_message_sent.append(nfc.ndef.Message(record).tostring())
+    #record = nfc.ndef.Record(("application/octet-stream", "2", payload))
+    record = nfc.ndef.Record(("urn:nfc:wkt:T", "", payload))
+    ndef_message_sent.append(nfc.ndef.Message(record).tostring())
+
+    try:
+        snep = nfc.snep.SnepClient(max_ndef_msg_recv_size=10000)
+        info("connect to {0}".format(validation_server_name))
+        snep.connect(validation_server_name)
+
+        info("put 1st ndef message")
+        snep.put(ndef_message_sent[0])
+
+        info("put 2nd ndef message")
+        snep.put(ndef_message_sent[1])
+    
+        info("get 1st ndef message")
+        #identifier = nfc.ndef.Record(("application/octet-stream", "1", ""))
+        identifier = nfc.ndef.Record(("urn:nfc:wkt:U", "", ""))
+        ndef_message = snep.get(nfc.ndef.Message(identifier).tostring())
+        ndef_message_rcvd.append(ndef_message)
+
+        info("get 2nd ndef message")
+        #identifier = nfc.ndef.Record(("application/octet-stream", "2", ""))
+        identifier = nfc.ndef.Record(("urn:nfc:wkt:T", "", ""))
+        ndef_message = snep.get(nfc.ndef.Message(identifier).tostring())
+        ndef_message_rcvd.append(ndef_message)
+
+        for i in range(len(ndef_message_sent)):
+            if not ndef_message_rcvd == ndef_message_sent:
+                info("rcvd ndef message {0} differs".format(i))
+                raise TestError("rcvd ndef message {0} differs".format(i))
+            else:
+                info("rcvd ndef message {0} is correct".format(i))
+                
+    except Exception as e:
+        raise TestError("exception " + str(e))
+    finally:
+        info("disconnect from {0}".format(validation_server_name))
+        snep.close()
+
+def test_05():
+    info("Test 5: undeliverable resource", prefix="")
+
+    payload = ''.join([chr(x) for x in range(122-29)])
+    record = nfc.ndef.Record(("application/octet-stream", "1", payload))
+    ndef_message_sent = nfc.ndef.Message(record).tostring()
+
+    try:
+        max_ndef_msg_recv_size = len(ndef_message_sent) - 1
+        snep = nfc.snep.SnepClient(max_ndef_msg_recv_size)
+        info("connect to {0}".format(validation_server_name))
+        snep.connect(validation_server_name)
+        info("put {0} octets ndef message".format(len(ndef_message_sent)))
+        snep.put(ndef_message_sent)
+
+        info("request ndef message back with max acceptable lenght of " +
+             str(max_ndef_msg_recv_size))
+        identifier = nfc.ndef.Record(("application/octet-stream", "1", ""))
+        try:
+            ndef_message = snep.get(nfc.ndef.Message(identifier).tostring())
+        except nfc.snep.SnepError as e:
+            if e.errno == nfc.snep.ExcessData: return # PASS
+            raise TestError("received unexpected response code")
+        else:
+            raise TestError("received unexpected message from server")
+
+    except Exception:
+        raise
+    finally:
+        info("disconnect from {0}".format(validation_server_name))
+        snep.close()
+
+def test_06():
+    info("Test 6: unavailable resource", prefix="")
+    try:
+        snep = nfc.snep.SnepClient()
+        info("connect to {0}".format(validation_server_name))
+        snep.connect(validation_server_name)
+
+        identifier = nfc.ndef.Record(("application/octet-stream", "1", ""))
+        info("request ndef message " + str(identifier))
+        try:
+            ndef_message = snep.get(nfc.ndef.Message(identifier).tostring())
+        except nfc.snep.SnepError as e:
+            if e.errno == nfc.snep.NotFound: return # PASS
+            raise TestError("received unexpected response code")
+        else:
+            raise TestError("received unexpected message from server")
+
+    except Exception:
+        raise
+    finally:
+        info("disconnect from {0}".format(validation_server_name))
+        snep.close()
+
+def test_07():
+    info("Test 7: default server limits", prefix="")
+
+    payload = ''.join([chr(x%256) for x in range(1024-32)])
+    record = nfc.ndef.Record(("application/octet-stream", "1", payload))
+    ndef_message = nfc.ndef.Message(record).tostring()
+    
+    try:
+        snep = nfc.snep.SnepClient()
+        snep.connect("urn:nfc:sn:snep")
+
+        info("put {0} octets ndef message".format(len(ndef_message)))
+        snep.put(ndef_message)
+
+        identifier = nfc.ndef.Record(("application/octet-stream", "1", ""))
+        info("request ndef message " + str(identifier))
+        try:
+            ndef_message = snep.get(nfc.ndef.Message(identifier).tostring())
+        except nfc.snep.SnepError as e:
+            if e.errno == nfc.snep.NotImplemented: return # PASS
+            raise TestError("received unexpected response code")
+        else:
+            raise TestError("received unexpected message from server")
+
+    except Exception:
+        raise
+    finally:
+        snep.close()
 
 def main():
     general_bytes = nfc.llcp.startup({'send-lto': 1000, 'recv-miu': 1024})
@@ -40,13 +265,22 @@ def main():
     nfc.llcp.activate(peer)
     time.sleep(0.5)
 
+    if not options.run_test:
+        log.info("no test specified")
+
+    test_suite = [test_01, test_02, test_03, test_04,
+                  test_05, test_06, test_07]
+    
     try:
-        snep = nfc.snep.SnepClient()
-        snep.put(''.join([chr(x) for x in range(200)]))
-        snep.put(''.join([chr(x) for x in range(200)]))
-        snep.connect('urn:nfc:xsn:sony.de:snep')
-        snep.put(''.join([chr(x) for x in range(200)]))
-        time.sleep(2)
+        for test in options.run_test:
+            if test > 0 and test <= len(test_suite):
+                try:
+                    test_suite[test-1]()
+                    log.info("PASS")
+                except TestError as error:
+                    log.error("FAIL: {0}".format(error))
+            else:
+                log.info("invalid test number '{0}'".format(test))
     except KeyboardInterrupt:
         log.info("aborted by user")
         for thread in threading.enumerate():
@@ -54,6 +288,21 @@ def main():
     finally:
         nfc.llcp.shutdown()
         log.info("I was the " + peer.role)
+
+#    try:
+#        snep = nfc.snep.SnepClient()
+#        snep.put(''.join([chr(x) for x in range(200)]))
+#        snep.put(''.join([chr(x) for x in range(200)]))
+#        snep.connect('urn:nfc:xsn:sony.de:snep')
+#        snep.put(''.join([chr(x) for x in range(200)]))
+#        time.sleep(2)
+#    except KeyboardInterrupt:
+#        log.info("aborted by user")
+#        for thread in threading.enumerate():
+#            log.info(thread.name)
+#    finally:
+#        nfc.llcp.shutdown()
+#        log.info("I was the " + peer.role)
 
 def llcp_connect(clf, general_bytes):
     try:
@@ -75,6 +324,9 @@ def llcp_connect(clf, general_bytes):
 if __name__ == '__main__':
     from optparse import OptionParser, OptionGroup
     parser = OptionParser()
+    parser.add_option("-t", "--test", type="int", default=[],
+                      action="append", dest="run_test", metavar="N",
+                      help="run test number <N>")
     parser.add_option("-q", default=True,
                       action="store_false", dest="verbose",
                       help="be quiet, only print errors")
