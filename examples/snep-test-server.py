@@ -37,7 +37,9 @@ class DefaultServer(nfc.snep.SnepServer):
 
     def put(self, ndef_message):
         log.info("default snep server got put request")
-        print ndef_message.encode("hex")
+        log.info("ndef message length is {0} octets".format(len(ndef_message)))
+        ndef_message = nfc.ndef.Message(ndef_message)
+        log.info("type is '{m.type}', id is '{m.name}'".format(m=ndef_message))
         return nfc.snep.Success
 
 class ValidationServer(nfc.snep.SnepServer):

@@ -31,7 +31,7 @@ import nfc
 import nfc.snep
 import nfc.ndef
 
-validation_server_name = "urn:nfc:xsn:nfc-forum.org:snep-validation"
+validation_server = "urn:nfc:xsn:nfc-forum.org:snep-validation"
 
 class TestError(Exception):
     def __init__(self, value):
@@ -45,14 +45,22 @@ def info(message, prefix="   "):
 def test_01():
     #info("Test 1: connect and terminate", prefix="")
     snep = nfc.snep.SnepClient(max_ndef_msg_recv_size=1024)
-    info("1st connect to {0}".format(validation_server_name))
-    snep.connect(validation_server_name)
-    info("disconnect from {0}".format(validation_server_name))
-    snep.close()
-    info("2nd connect to {0}".format(validation_server_name))
-    snep.connect(validation_server_name)
-    info("disconnect from {0}".format(validation_server_name))
-    snep.close()
+    try:
+        info("1st connect to {0}".format(validation_server))
+        snep.connect(validation_server)
+    except nfc.llcp.ConnectRefused:
+        raise TestError("could not connect to validation server")
+    else:
+        info("disconnect from {0}".format(validation_server))
+        snep.close()
+    try:
+        info("2nd connect to {0}".format(validation_server))
+        snep.connect(validation_server)
+    except nfc.llcp.ConnectRefused:
+        raise TestError("could not connect to validation server")
+    else:
+        info("disconnect from {0}".format(validation_server))
+        snep.close()
 
 def test_02():
     info("Test 2: unfragmented message exchange", prefix="")
@@ -63,10 +71,14 @@ def test_02():
     record = nfc.ndef.Record(("application/octet-stream", "1", payload))
     ndef_message_sent.append(nfc.ndef.Message(record).tostring())
 
+    snep = nfc.snep.SnepClient(max_ndef_msg_recv_size=1024)
     try:
-        snep = nfc.snep.SnepClient(max_ndef_msg_recv_size=1024)
-        info("connect to {0}".format(validation_server_name))
-        snep.connect(validation_server_name)
+        info("connect to {0}".format(validation_server))
+        snep.connect(validation_server)
+    except nfc.llcp.ConnectRefused:
+        raise TestError("could not connect to validation server")
+
+    try:
         info("put short ndef message")
         snep.put(ndef_message_sent[0])
 
@@ -80,11 +92,10 @@ def test_02():
                 raise TestError("rcvd ndef message {0} differs".format(i))
             else:
                 info("rcvd ndef message {0} is correct".format(i))
-
     except Exception as e:
         TestError("exception: " + str(e))
     finally:
-        info("disconnect from {0}".format(validation_server_name))
+        info("disconnect from {0}".format(validation_server))
         snep.close()
 
 def test_03():
@@ -97,10 +108,14 @@ def test_03():
     record = nfc.ndef.Record(("application/octet-stream", "1", payload))
     ndef_message_sent.append(nfc.ndef.Message(record).tostring())
 
+    snep = nfc.snep.SnepClient(max_ndef_msg_recv_size=10000)
     try:
-        snep = nfc.snep.SnepClient(max_ndef_msg_recv_size=10000)
-        info("connect to {0}".format(validation_server_name))
-        snep.connect(validation_server_name)
+        info("connect to {0}".format(validation_server))
+        snep.connect(validation_server)
+    except nfc.llcp.ConnectRefused:
+        raise TestError("could not connect to validation server")
+
+    try:
         info("put large ndef message")
         snep.put(ndef_message_sent[0])
     
@@ -115,11 +130,10 @@ def test_03():
                 raise TestError("rcvd ndef message {0} differs".format(i))
             else:
                 info("rcvd ndef message {0} is correct".format(i))
-                
     except Exception as e:
         raise TestError("exception " + str(e))
     finally:
-        info("disconnect from {0}".format(validation_server_name))
+        info("disconnect from {0}".format(validation_server))
         snep.close()
 
 def test_04():
@@ -128,18 +142,19 @@ def test_04():
     ndef_message_rcvd = list()
 
     payload = ''.join([chr(x%256) for x in range(50)])
-    #record = nfc.ndef.Record(("application/octet-stream", "1", payload))
-    record = nfc.ndef.Record(("urn:nfc:wkt:U", "", payload))
+    record = nfc.ndef.Record(("application/octet-stream", "1", payload))
     ndef_message_sent.append(nfc.ndef.Message(record).tostring())
-    #record = nfc.ndef.Record(("application/octet-stream", "2", payload))
-    record = nfc.ndef.Record(("urn:nfc:wkt:T", "", payload))
+    record = nfc.ndef.Record(("application/octet-stream", "2", payload))
     ndef_message_sent.append(nfc.ndef.Message(record).tostring())
+
+    snep = nfc.snep.SnepClient(max_ndef_msg_recv_size=10000)    
+    try:
+        info("connect to {0}".format(validation_server))
+        snep.connect(validation_server)
+    except nfc.llcp.ConnectRefused:
+        raise TestError("could not connect to validation server")
 
     try:
-        snep = nfc.snep.SnepClient(max_ndef_msg_recv_size=10000)
-        info("connect to {0}".format(validation_server_name))
-        snep.connect(validation_server_name)
-
         info("put 1st ndef message")
         snep.put(ndef_message_sent[0])
 
@@ -147,14 +162,12 @@ def test_04():
         snep.put(ndef_message_sent[1])
     
         info("get 1st ndef message")
-        #identifier = nfc.ndef.Record(("application/octet-stream", "1", ""))
-        identifier = nfc.ndef.Record(("urn:nfc:wkt:U", "", ""))
+        identifier = nfc.ndef.Record(("application/octet-stream", "1", ""))
         ndef_message = snep.get(nfc.ndef.Message(identifier).tostring())
         ndef_message_rcvd.append(ndef_message)
 
         info("get 2nd ndef message")
-        #identifier = nfc.ndef.Record(("application/octet-stream", "2", ""))
-        identifier = nfc.ndef.Record(("urn:nfc:wkt:T", "", ""))
+        identifier = nfc.ndef.Record(("application/octet-stream", "2", ""))
         ndef_message = snep.get(nfc.ndef.Message(identifier).tostring())
         ndef_message_rcvd.append(ndef_message)
 
@@ -164,11 +177,10 @@ def test_04():
                 raise TestError("rcvd ndef message {0} differs".format(i))
             else:
                 info("rcvd ndef message {0} is correct".format(i))
-                
     except Exception as e:
         raise TestError("exception " + str(e))
     finally:
-        info("disconnect from {0}".format(validation_server_name))
+        info("disconnect from {0}".format(validation_server))
         snep.close()
 
 def test_05():
@@ -178,11 +190,15 @@ def test_05():
     record = nfc.ndef.Record(("application/octet-stream", "1", payload))
     ndef_message_sent = nfc.ndef.Message(record).tostring()
 
+    max_ndef_msg_recv_size = len(ndef_message_sent) - 1
+    snep = nfc.snep.SnepClient(max_ndef_msg_recv_size)
     try:
-        max_ndef_msg_recv_size = len(ndef_message_sent) - 1
-        snep = nfc.snep.SnepClient(max_ndef_msg_recv_size)
-        info("connect to {0}".format(validation_server_name))
-        snep.connect(validation_server_name)
+        info("connect to {0}".format(validation_server))
+        snep.connect(validation_server)
+    except nfc.llcp.ConnectRefused:
+        raise TestError("could not connect to validation server")
+
+    try:
         info("put {0} octets ndef message".format(len(ndef_message_sent)))
         snep.put(ndef_message_sent)
 
@@ -196,21 +212,24 @@ def test_05():
             raise TestError("received unexpected response code")
         else:
             raise TestError("received unexpected message from server")
-
     except Exception:
         raise
     finally:
-        info("disconnect from {0}".format(validation_server_name))
+        info("disconnect from {0}".format(validation_server))
         snep.close()
 
 def test_06():
     info("Test 6: unavailable resource", prefix="")
-    try:
-        snep = nfc.snep.SnepClient()
-        info("connect to {0}".format(validation_server_name))
-        snep.connect(validation_server_name)
 
-        identifier = nfc.ndef.Record(("application/octet-stream", "1", ""))
+    snep = nfc.snep.SnepClient()
+    try:
+        info("connect to {0}".format(validation_server))
+        snep.connect(validation_server)
+    except nfc.llcp.ConnectRefused:
+        raise TestError("could not connect to validation server")
+
+    try:
+        identifier = nfc.ndef.Record(("application/octet-stream", "0", ""))
         info("request ndef message " + str(identifier))
         try:
             ndef_message = snep.get(nfc.ndef.Message(identifier).tostring())
@@ -219,11 +238,10 @@ def test_06():
             raise TestError("received unexpected response code")
         else:
             raise TestError("received unexpected message from server")
-
     except Exception:
         raise
     finally:
-        info("disconnect from {0}".format(validation_server_name))
+        info("disconnect from {0}".format(validation_server))
         snep.close()
 
 def test_07():
@@ -233,10 +251,14 @@ def test_07():
     record = nfc.ndef.Record(("application/octet-stream", "1", payload))
     ndef_message = nfc.ndef.Message(record).tostring()
     
+    snep = nfc.snep.SnepClient()
     try:
-        snep = nfc.snep.SnepClient()
+        info("connect to {0}".format("urn:nfc:sn:snep"))
         snep.connect("urn:nfc:sn:snep")
+    except nfc.llcp.ConnectRefused:
+        raise TestError("could not connect to validation server")
 
+    try:
         info("put {0} octets ndef message".format(len(ndef_message)))
         snep.put(ndef_message)
 
@@ -249,7 +271,6 @@ def test_07():
             raise TestError("received unexpected response code")
         else:
             raise TestError("received unexpected message from server")
-
     except Exception:
         raise
     finally:
