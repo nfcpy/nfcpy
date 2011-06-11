@@ -78,3 +78,10 @@ class Message(list):
         else:
             return ""
 
+    @property
+    def name(self):
+        if len(self):
+            return self[0].name
+        else:
+            return ""
+
