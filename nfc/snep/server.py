@@ -24,7 +24,7 @@ import logging
 log = logging.getLogger(__name__)
 
 from threading import Thread
-from struct import unpack
+from struct import pack, unpack
 
 import nfc.llcp
 
@@ -116,7 +116,7 @@ class SnepServer(Thread):
             nfc.llcp.close(socket)
 
     def _get(self, snep_request):
-        acceptable_length = unpack(">L", snep_request[6:10])
+        acceptable_length = unpack(">L", snep_request[6:10])[0]
         response = self.get(acceptable_length, snep_request[10:])
         if type(response) == type(int()):
             response_code = chr(response)

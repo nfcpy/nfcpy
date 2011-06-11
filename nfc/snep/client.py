@@ -47,11 +47,13 @@ def recv_response(socket, acceptable_length, timeout):
         if length > acceptable_length:
             log.debug("snep response exceeds acceptable length")
             return None
-        # get remaining fragments, if any
-        while len(snep_response) - 6 < length:
-            if nfc.llcp.poll(socket, "recv", timeout):
-                snep_response += nfc.llcp.recv(socket)
-            else: return None
+        if len(snep_response) - 6 < length:
+            # request remaining fragments
+            nfc.llcp.send(socket, "\x10\x00\x00\x00\x00\x00")
+            while len(snep_response) - 6 < length:
+                if nfc.llcp.poll(socket, "recv", timeout):
+                    snep_response += nfc.llcp.recv(socket)
+                else: return None                
         return snep_response
 
 class SnepClient(object):
@@ -72,7 +74,7 @@ class SnepClient(object):
             nfc.llcp.close(self.socket)
             self.socket = None
 
-    def get(self, ndef_message=''):
+    def get(self, ndef_message='', timeout=1.0):
         """Get an NDEF message from the server. Temporarily connects
         to the default SNEP server if the client is not yet connected.
         """
@@ -87,17 +89,18 @@ class SnepClient(object):
             snep_request += struct.pack('>L', self.acceptable_length)
             snep_request += ndef_message
             if send_request(self.socket, snep_request, self.send_miu):
-                snep_response = recv_response(self.socket,
-                                              self.acceptable_length)
-                response_code = ord(snep_response[1])
-                if response_code != 0x81:
-                    raise SnepError(response_code)
-                return snep_response[6:]
+                snep_response = recv_response(
+                    self.socket, self.acceptable_length, timeout)
+                if snep_response is not None:
+                    response_code = ord(snep_response[1])
+                    if response_code != 0x81:
+                        raise SnepError(response_code)
+                    return snep_response[6:]
         finally:
             if self.release_connection:
                 self.close()
 
-    def put(self, ndef_message):
+    def put(self, ndef_message, timeout=1.0):
         """Send an NDEF message to the server. Temporarily connects to
         the default SNEP server if the client is not yet connected.
         """
@@ -110,10 +113,11 @@ class SnepClient(object):
             ndef_msgsize = struct.pack('>L', len(ndef_message))
             snep_request = '\x10\x02' + ndef_msgsize + ndef_message
             if send_request(self.socket, snep_request, self.send_miu):
-                snep_response = recv_response(self.socket, 0, timeout=1.0)
-                response_code = ord(snep_response[1])
-                if response_code != 0x81:
-                    raise SnepError(response_code)
+                snep_response = recv_response(self.socket, 0 timeout)
+                if snep_response is not None:
+                    response_code = ord(snep_response[1])
+                    if response_code != 0x81:
+                        raise SnepError(response_code)
         finally:
             if self.release_connection:
                 self.close()
@@ -126,8 +130,12 @@ class SnepError(Exception):
               0xE1: "unsupported protocol version"}
 
     def __init__(self, err):
-        self.args = (err, strerr.get(err, ""))
+        self.args = (err, SnepError.strerr.get(err, ""))
 
     def __str__(self):
         return "nfc.snep.SnepError: [{errno}] {info}".format(
             errno=self.args[0], info=self.args[1])
+
+    @property
+    def errno(self):
+        return self.args[0]
