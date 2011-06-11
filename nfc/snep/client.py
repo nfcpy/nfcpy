@@ -113,7 +113,7 @@ class SnepClient(object):
             ndef_msgsize = struct.pack('>L', len(ndef_message))
             snep_request = '\x10\x02' + ndef_msgsize + ndef_message
             if send_request(self.socket, snep_request, self.send_miu):
-                snep_response = recv_response(self.socket, 0 timeout)
+                snep_response = recv_response(self.socket, 0, timeout)
                 if snep_response is not None:
                     response_code = ord(snep_response[1])
                     if response_code != 0x81:
