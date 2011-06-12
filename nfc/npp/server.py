@@ -43,8 +43,6 @@ class NPPServer(Thread):
 
         try:
             data = nfc.llcp.recv(socket)
-            while nfc.llcp.poll(socket, "recv"):
-                data += nfc.llcp.recv(socket)
             if not data:
                 log.debug("no data")
                 return # connection closed
