@@ -310,21 +310,6 @@ def main():
         nfc.llcp.shutdown()
         log.info("I was the " + peer.role)
 
-#    try:
-#        snep = nfc.snep.SnepClient()
-#        snep.put(''.join([chr(x) for x in range(200)]))
-#        snep.put(''.join([chr(x) for x in range(200)]))
-#        snep.connect('urn:nfc:xsn:sony.de:snep')
-#        snep.put(''.join([chr(x) for x in range(200)]))
-#        time.sleep(2)
-#    except KeyboardInterrupt:
-#        log.info("aborted by user")
-#        for thread in threading.enumerate():
-#            log.info(thread.name)
-#    finally:
-#        nfc.llcp.shutdown()
-#        log.info("I was the " + peer.role)
-
 def llcp_connect(clf, general_bytes):
     try:
         while True:
