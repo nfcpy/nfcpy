@@ -13,10 +13,11 @@ import nfc.llcp
 import nfc.ndef
 
 class NPPServer(Thread):
-    """ Simple NPP server
+    """ Simple NPP server. If single_threaded is True then a new thread will not be spawned.
     """
-    def __init__(self):
+    def __init__(self, single_threaded=False):
         super(NPPServer, self).__init__()
+        self.single_threaded = single_threaded
 
     def run(self):
         socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
@@ -28,9 +29,15 @@ class NPPServer(Thread):
             nfc.llcp.listen(socket, backlog=2)
             while True:
                 client_socket = nfc.llcp.accept(socket)
-                client_thread = Thread(target=NPPServer.serve,
+                if self.single_threaded:
+                    log.debug("Got client in single_threaded mode.")
+                    if NPPServer.serve(client_socket, self):
+                        break
+                else:
+                    log.debug("Got client. Will spawn thread.")
+                    client_thread = Thread(target=NPPServer.serve,
                                        args=[client_socket, self])
-                client_thread.start()
+                    client_thread.start()
         except nfc.llcp.Error as e:
             log.error(str(e))
         finally:
@@ -84,10 +91,12 @@ class NPPServer(Thread):
                 # message complete, now handle the request
                 ndef = nfc.ndef.Message(remaining[:length])
                 log.debug("Got NDEF %s" % ndef)
-                npp_server.process(ndef)
+                if npp_server.process(ndef) and npp_server.single_threaded:
+                    return True
 
                 # prepare for next
                 remaining = remaining[length:]
+            return False
 
         except nfc.llcp.Error as e:
             log.debug("caught exception {0}".format(e))
@@ -100,7 +109,8 @@ class NPPServer(Thread):
     def process(self, ndef_message):
         """Processes NDEF messages. This method should be overwritten by a
         subclass of NPPServer to customize it's behavior. The default
-        implementation prints each record.
+        implementation prints each record. If NPP server is single threaded
+        and this method returns True, the server stops processing.
         """
         log.debug("get method called")
         log.debug(ndef_message.encode("hex"))
