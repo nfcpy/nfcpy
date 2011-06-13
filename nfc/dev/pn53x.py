@@ -65,7 +65,7 @@ class pn53x(object):
     def get_firmware_version(self):
         self.write("\xD4\x02")
         data = self.read(timeout=100)
-        if data.startswith("\xD5\x03"):
+        if data is not None and data.startswith("\xD5\x03"):
             return data[2:]
         else: raise IOError(0, "could not read firmware version")
 
@@ -172,14 +172,15 @@ class pn53x(object):
 class pn53x_usb(pn53x):
     def __init__(self, dev):
         self.dh = dev.open()
-        self.dh.setConfiguration(dev.configurations[0])
+        self.usb_out = None
+        self.usb_inp = None
         self.dh.claimInterface(0)
-        conf = dev.configurations[0]
-        intf = conf.interfaces[0]
-        self.ep = intf[0].endpoints[0].address
+        intf = dev.configurations[0].interfaces[0]
         self.usb_out = intf[0].endpoints[0].address
         self.usb_inp = intf[0].endpoints[1].address
 
+        self.write('') # abort outstanding command, kind of reset
+        
         fw = self.get_firmware_version()
         if len(fw) == 2:
             self.ic = "PN531"
@@ -192,8 +193,8 @@ class pn53x_usb(pn53x):
         log.info("chipset is a {0} version {1}".format(self.ic, self.fw))
         
     def __del__(self):
-        log.debug("closing usb device")
-        self.dh.reset()
+        if self.usb_out is not None:
+            self.write('') # abort cmd, if any
 
     def write(self, data):
         log.debug("write {0} byte".format(len(data)) + format_data(data))
