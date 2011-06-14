@@ -29,6 +29,46 @@ import time
 sys.path.insert(1, os.path.split(sys.path[0])[0])
 import nfc
 import nfc.snep
+import nfc.ndef
+
+class DefaultServer(nfc.snep.SnepServer):
+    def __init__(self):
+        super(DefaultServer, self).__init__('urn:nfc:sn:snep')
+
+    def put(self, ndef_message):
+        log.info("default snep server got put request")
+        log.info("ndef message length is {0} octets".format(len(ndef_message)))
+        ndef_message = nfc.ndef.Message(ndef_message)
+        log.info("type is '{m.type}', id is '{m.name}'".format(m=ndef_message))
+        return nfc.snep.Success
+
+class ValidationServer(nfc.snep.SnepServer):
+    def __init__(self):
+        service_name = "urn:nfc:xsn:nfc-forum.org:snep-validation"
+        super(ValidationServer, self).__init__(service_name, 10000)
+        self.ndef_message_store = dict()
+
+    def put(self, ndef_message):
+        log.info("validation snep server got put request")
+        ndef_message = nfc.ndef.Message(ndef_message)
+        key = (ndef_message.type, ndef_message.name)
+        log.info("store ndef message under key " + str(key))
+        self.ndef_message_store[key] = ndef_message
+        return nfc.snep.Success
+
+    def get(self, acceptable_length, ndef_message):
+        log.info("validation snep server got get request")
+        ndef_message = nfc.ndef.Message(ndef_message)
+        key = (ndef_message.type, ndef_message.name)
+        log.info("client requests ndef message with key " + str(key))
+        if key in self.ndef_message_store:
+            ndef_message = self.ndef_message_store[key].tostring()
+            info = "found matching ndef message, total length is {0} octets"
+            log.info(info.format(len(ndef_message)))
+            if len(ndef_message) <= acceptable_length:
+                return ndef_message
+            else: return nfc.snep.ExcessData
+        return nfc.snep.NotFound
 
 def main():
     general_bytes = nfc.llcp.startup({'send-lto': 1000, 'recv-miu': 1024})
@@ -38,19 +78,15 @@ def main():
     if peer is None: return
 
     nfc.llcp.activate(peer)
-    time.sleep(0.5)
-
     try:
-        snep = nfc.snep.SnepClient()
-        snep.put(''.join([chr(x) for x in range(200)]))
-        snep.put(''.join([chr(x) for x in range(200)]))
-        snep.connect('urn:nfc:xsn:sony.de:snep')
-        snep.put(''.join([chr(x) for x in range(200)]))
-        time.sleep(2)
+        default_snep_server = DefaultServer()
+        default_snep_server.start()
+        validation_snep_server = ValidationServer()
+        validation_snep_server.start()
+        while True:
+            time.sleep(1)
     except KeyboardInterrupt:
         log.info("aborted by user")
-        for thread in threading.enumerate():
-            log.info(thread.name)
     finally:
         nfc.llcp.shutdown()
         log.info("I was the " + peer.role)
