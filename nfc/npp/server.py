@@ -29,11 +29,11 @@ class NPPServer(Thread):
             while True:
                 client_socket = nfc.llcp.accept(socket)
                 if self.single_threaded:
-                    log.debug("Got client in single_threaded mode.")
+                    log.debug("got client in single_threaded mode")
                     if NPPServer.serve(client_socket, self):
                         break
                 else:
-                    log.debug("Got client. Will spawn thread.")
+                    log.debug("got client, will spawn thread")
                     client_thread = Thread(target=NPPServer.serve,
                                        args=[client_socket, self])
                     client_thread.start()
@@ -101,7 +101,7 @@ class NPPServer(Thread):
 
                 # prepare for next
                 remaining = remaining[length:]
-            return False
+            return
 
         except nfc.llcp.Error as e:
             log.debug("caught exception {0}".format(e))
