@@ -37,6 +37,20 @@ class Parameter:
     VERSION, MIUX, WKS, LTO, RW, SN, OPT, SDREQ, SDRES = range(1, 10)
 
 class ProtocolDataUnit(object):
+    Symmetry = 0b0000
+    ParameterExchange = 0b0001
+    AggregatedFrame = 0b0010
+    UnnumberedInformation = 0b0011
+    Connect = 0b0100
+    Disconnect = 0b0101
+    ConnectionComplete = 0b0110
+    DisconnectedMode = 0b0111
+    FrameReject = 0b1000
+    ServiceNameLookup = 0b1001
+    Information = 0b1100
+    ReceiveReady = 0b1101
+    ReceiveNotReady = 0b1110
+    
     def __init__(self, ptype, dsap, ssap):
         self.type = ptype
         self.dsap = dsap

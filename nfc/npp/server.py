@@ -10,7 +10,6 @@ from threading import Thread
 from struct import unpack
 
 import nfc.llcp
-import nfc.ndef
 
 class NPPServer(Thread):
     """ Simple NPP server. If single_threaded is True then a new thread will not be spawned.
@@ -50,21 +49,23 @@ class NPPServer(Thread):
 
         try:
             data = nfc.llcp.recv(socket)
+            if data is None:
+                log.debug("connection closed, no data")
+                return
+
             while nfc.llcp.poll(socket, "recv"):
                 data += nfc.llcp.recv(socket)
-            if not data:
-                log.debug("no data")
-                return # connection closed
 
-            log.debug("Got data with %d length" % len(data))
+            log.debug("got {:d} octets data".format(len(data)))
             if len(data) < 10:
                 log.debug("npp msg initial fragment too short")
                 return # bail out, this is a bad client
 
             version, num_entries = unpack(">BI", data[:5])
-            log.debug("Got version %d and %d entries" % (version, num_entries))
+            log.debug("version {:d}, {:d} entries"
+                      .format(version, num_entries))
             if (version >> 4) > 1:
-                log.debug("unsupported version {}".format(version>>4))
+                log.debug("unsupported version {:d}".format(version>>4))
                 return
 
             if num_entries != 1:
@@ -73,27 +74,29 @@ class NPPServer(Thread):
 
             remaining = data[5:]
             for i in range(num_entries):
-                log.debug("Fetching NDEF %d" % i)
+                log.debug("processing NDEF message #{:d}".format(i+1))
                 if len(remaining) < 5:
-                    log.debug("Not enough data to fetch action code and NDEF length")
+                    log.debug("insufficient data for action code and ndef size")
                     return
 
-                log.debug("Got everything: %d" % len(remaining))
                 action_code, length = unpack(">BI", remaining[:5])
-                log.debug("Action code %d NDEF length %d" % (action_code, length))
+                log.debug("action code {:d}, ndef length {:d}"
+                          .format(action_code, length))
+
                 if action_code != 1:
-                    log.debug("Unsuported action code")
+                    log.error("unknown action code")
                     return
 
                 remaining = remaining[5:]
                 if len(remaining) < length:
-                    log.debug("Not enough data to read entry")
+                    log.error("less data than entry size indicates")
                     return
 
                 # message complete, now handle the request
-                ndef = nfc.ndef.Message(remaining[:length])
-                log.debug("Got NDEF %s" % ndef)
-                if npp_server.process(ndef) and npp_server.single_threaded:
+                ndef_message_data = remaining[:length]
+                log.debug("have complete ndef message, {:d} octets"
+                          .format(len(ndef_message_data)))
+                if npp_server.process(ndef_message_data) and npp_server.single_threaded:
                     return True
 
                 # prepare for next
@@ -108,13 +111,11 @@ class NPPServer(Thread):
         finally:
             nfc.llcp.close(socket)
 
-    def process(self, ndef_message):
+    def process(self, ndef_message_data):
         """Processes NDEF messages. This method should be overwritten by a
         subclass of NPPServer to customize it's behavior. The default
         implementation prints each record. If NPP server is single threaded
         and this method returns True, the server stops processing.
         """
-        log.debug("get method called")
-        log.debug(ndef_message.encode("hex"))
-        for record in ndef_message:
-            log.debug(record)
+        log.debug("ndef push server process message")
+        log.debug(ndef_message_data.encode("hex"))

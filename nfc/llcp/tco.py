@@ -103,7 +103,9 @@ class TransmissionControlObject(object):
             with self.recv_ready:
                 if len(self.recv_queue) == 0:
                     self.recv_ready.wait(timeout)
-                return len(self.recv_queue) > 0
+                if len(self.recv_queue) > 0:
+                    return self.recv_queue[0].type
+                return None
         if event == "send":
             with self.send_ready:
                 if len(self.send_queue) >= self.send_buf:
@@ -183,7 +185,7 @@ class RawAccessPoint(TransmissionControlObject):
             raise Error(errno.EBADF)
         if not event in ("recv", "send"):
             raise Error(errno.EINVAL)
-        return super(RawAccessPoint, self).poll(event, timeout)
+        return super(RawAccessPoint, self).poll(event, timeout) is not None
         
     def send(self, pdu):
         if self.state.SHUTDOWN:
@@ -252,7 +254,7 @@ class LogicalDataLink(TransmissionControlObject):
             raise Error(errno.EBADF)
         if not event in ("recv", "send"):
             raise Error(errno.EINVAL)
-        return super(LogicalDataLink, self).poll(event, timeout)
+        return super(LogicalDataLink, self).poll(event, timeout) is not None
         
     def sendto(self, message, dest):
         if self.state.SHUTDOWN:
@@ -489,8 +491,10 @@ class DataLinkConnection(TransmissionControlObject):
             raise Error(errno.EINVAL)
         if event == "recv":
             if self.state.ESTABLISHED or self.state.CLOSE_WAIT:
-                if super(DataLinkConnection, self).poll(event, timeout):
-                    return self.state.ESTABLISHED or self.state.CLOSE_WAIT
+                ptype = super(DataLinkConnection, self).poll(event, timeout)
+                if self.state.ESTABLISHED or self.state.CLOSE_WAIT:
+                    return ptype == ProtocolDataUnit.Information
+                else: return False
         if event == "send":
             if self.state.ESTABLISHED:
                 if super(DataLinkConnection, self).poll(event, timeout):
