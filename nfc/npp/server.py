@@ -56,16 +56,16 @@ class NPPServer(Thread):
             while nfc.llcp.poll(socket, "recv"):
                 data += nfc.llcp.recv(socket)
 
-            log.debug("got {:d} octets data".format(len(data)))
+            log.debug("got {0:d} octets data".format(len(data)))
             if len(data) < 10:
                 log.debug("npp msg initial fragment too short")
                 return # bail out, this is a bad client
 
             version, num_entries = unpack(">BI", data[:5])
-            log.debug("version {:d}, {:d} entries"
+            log.debug("version {0:d}, {1:d} entries"
                       .format(version, num_entries))
             if (version >> 4) > 1:
-                log.debug("unsupported version {:d}".format(version>>4))
+                log.debug("unsupported version {0:d}".format(version>>4))
                 return
 
             if num_entries != 1:
@@ -74,13 +74,13 @@ class NPPServer(Thread):
 
             remaining = data[5:]
             for i in range(num_entries):
-                log.debug("processing NDEF message #{:d}".format(i+1))
+                log.debug("processing NDEF message #{0:d}".format(i+1))
                 if len(remaining) < 5:
                     log.debug("insufficient data for action code and ndef size")
                     return
 
                 action_code, length = unpack(">BI", remaining[:5])
-                log.debug("action code {:d}, ndef length {:d}"
+                log.debug("action code {0:d}, ndef length {1:d}"
                           .format(action_code, length))
 
                 if action_code != 1:
@@ -94,7 +94,7 @@ class NPPServer(Thread):
 
                 # message complete, now handle the request
                 ndef_message_data = remaining[:length]
-                log.debug("have complete ndef message, {:d} octets"
+                log.debug("have complete ndef message, {0:d} octets"
                           .format(len(ndef_message_data)))
                 if npp_server.process(ndef_message_data) and npp_server.single_threaded:
                     return True
