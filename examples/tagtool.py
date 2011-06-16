@@ -32,8 +32,8 @@ import nfc
 import nfc.ndef
 
 def make_printable(data):
-    printable = string.digits + string.letters + string.punctuation + ' '
-    return ''.join([c if c in printable else '.' for c in data])
+    from curses.ascii import isprint
+    return ''.join([c if isprint(c) else '.' for c in data])
 
 def format_data(data):
     s = []
@@ -198,7 +198,7 @@ def poll(clf):
 def main():
     # initialize the NFC reader, if installed
     clf = nfc.ContactlessFrontend()
-    if options.command == "print":
+    if options.command == "show":
         while True:
             tag = poll(clf)
             if tag:
@@ -226,7 +226,7 @@ if __name__ == '__main__':
              "Commands:",
              "  show   - pretty print NDEF data",
              "  dump   - print NDEF data to stdout",
-             "  load   - load NDEF data from stdin",
+             "  load   - write NDEF data from stdin",
              "  copy   - copy NDEF data between tags",
              "  format - format NDEF partition on tag"]
 
@@ -250,7 +250,7 @@ if __name__ == '__main__':
     global options
     options, args = parser.parse_args()
     if len(args) > 0: options.command = args[0]
-    else: options.command = "print"
+    else: options.command = "show"
 
     verbosity = logging.INFO if options.verbose else logging.ERROR
     verbosity = logging.DEBUG if options.debug else verbosity
