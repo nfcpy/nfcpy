@@ -14,7 +14,7 @@ import nfc.llcp
 class NPPServer(Thread):
     """ Simple NPP server. If single_threaded is True then a new thread will not be spawned.
     """
-    def __init__(self, single_threaded=False):
+    def __init__(self, single_threaded=True):
         super(NPPServer, self).__init__()
         self.single_threaded = single_threaded
 
