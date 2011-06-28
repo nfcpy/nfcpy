@@ -144,6 +144,8 @@ class pn53x(object):
                                  ord(rsp[15]), ord(rsp[16]), ord(rsp[17]),
                                  ord(rsp[18]), rsp[19:].encode("hex")))
                 return rsp[4:]
+            else:
+                self.write('') # send ack to abort command
     
     def tg_init_as_target(self, activation_mode, mifare_params,
                           felica_params, nfcid3t=None, general_bytes="",
