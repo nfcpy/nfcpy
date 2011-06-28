@@ -412,6 +412,11 @@ class device(object):
             general_bytes, timeout=timeout)
 
         if atr_req is not None:
+            speed = ("106", "212", "424")[(mode>>4) & 0x07]
+            cmode = ("passive", "active", "passive")[mode & 0x03]
+            ttype = ("card", "dep")[bool(mode & 0x04)]
+            log.debug("activated as {} target in {} kbps {} mode"
+                      .format(ttype, speed, cmode))
             return atr_req[17:]
         
     ##
