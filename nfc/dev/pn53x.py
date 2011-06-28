@@ -174,6 +174,7 @@ class pn53x_usb(pn53x):
         self.dh = dev.open()
         self.usb_out = None
         self.usb_inp = None
+        self.dh.setConfiguration(dev.configurations[0])
         self.dh.claimInterface(0)
         intf = dev.configurations[0].interfaces[0]
         self.usb_out = intf[0].endpoints[0].address
