@@ -29,6 +29,8 @@ log = logging.getLogger(__name__)
 import os
 import time
 import usb
+import sys
+from array import array
 
 if os.name == "posix":
     import serial
@@ -75,6 +77,23 @@ class pn53x(object):
             self.read(timeout=100)
             self.write('')
         
+    def read_register(self, addr):
+        if type(addr) == type(int):
+            addr = [addr]
+        addr = array("H", addr)
+        if sys.byteorder == "little":
+            addr.byteswap()
+        self.write("\xd4\x06" + addr.tostring())
+        data = self.read(timeout=100)
+        if data is not None and data.startswith("\xd5\x07"):
+            if self.ic == "PN533" and self.fw == "1.48":
+                return array("B", data[2:])
+            elif ord(data[2]) == 0:
+                return array("B", data[3:])
+            else:
+                log.error("chip error {} at read register"
+                          .format(ord(data[2])))
+
     def in_list_passive_target(self, max_tg, br_ty, initiator_data):
         br_ty = ("106A", "212F", "424F", "106B", "106J").index(br_ty)
         if self.write("\xD4\x4A" + chr(max_tg) + chr(br_ty) + initiator_data):
