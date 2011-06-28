@@ -32,8 +32,8 @@ import nfc
 import nfc.ndef
 
 def make_printable(data):
-    from curses.ascii import isprint
-    return ''.join([c if isprint(c) else '.' for c in data])
+    printable = string.digits + string.letters + string.punctuation + ' '
+    return ''.join([c if c in printable else '.' for c in data])
 
 def format_data(data):
     s = []
