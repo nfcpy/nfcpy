@@ -38,6 +38,9 @@ def activate(mac):
     _llc.activate(mac)
     _llc.start()
 
+def connected():
+    return _llc.is_alive()
+
 def deactivate():
     _llc.shutdown()
     _llc.join()
