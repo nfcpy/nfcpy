@@ -51,8 +51,8 @@ class ContactlessFrontend(object):
 
         log.debug("using driver " + repr(self.dev))
 
-    def __del__(self):
-        del self.dev
+    def close(self):
+        self.dev.close()
 
     def poll(self, general_bytes=None):
         """Search for a contactless target. Depending on the target

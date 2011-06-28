@@ -221,13 +221,18 @@ class pn53x_usb(pn53x):
         else:
             raise RuntimeError("unexpected firmware version response")
         log.info("chipset is a {0} version {1}".format(self.ic, self.fw))
-        
-    def __del__(self):
-        self.write("\xD4\x32\x01\x00") # RF off
-        self.read(timeout=100)
 
+    def close(self):
+        self.dh = None
+
+    def __del__(self):
+        if self.dh and self.usb_out and self.usb_inp:
+            rf_off = "\x00\x00\xff\x04\xfc\xd4\x32\x01\x00\xf9\x00"
+            self.dh.bulkWrite(self.usb_out, rf_off)
+            self.dh.bulkRead(self.usb_inp, 256, 100)
+        
     def write(self, data):
-        if self.usb_out is None:
+        if self.dh is None or self.usb_out is None:
             return None
         log.debug("write {0} byte".format(len(data)) + format_data(data))
         if len(data) == 0: # send an ack frame to pn53x
@@ -243,7 +248,7 @@ class pn53x_usb(pn53x):
         return ack == (0, 0, 255, 0, 255, 0)
 
     def read(self, timeout):
-        if self.usb_inp is None:
+        if self.dh is None or self.usb_inp is None:
             return None
         try: data = self.dh.bulkRead(self.usb_inp, 300, timeout)
         except usb.USBError: return None
@@ -273,12 +278,11 @@ class pn53x_tty(pn53x):
         self.fw = "{0}.{1}".format(ord(fw[1]), ord(fw[2]))
         log.info("chipset is a {0} version {1}".format(self.ic, self.fw))
         
-    def __del__(self):
-        self.write("\xD4\x32\x01\x00") # RF off
-        self.read(timeout=100)
+    def close(self):
         log.debug("closing {0}".format(self.tty.name))
         fcntl.flock(self.tty, fcntl.LOCK_UN)
         self.tty.close()
+        self.tty = None
 
     def write(self, data):
         self.tty.flushInput()
@@ -339,6 +343,11 @@ class device(object):
             self.dev.write('')
             self._pn533_init()
 
+    def close(self):
+        self.dev.write("\xD4\x32\x01\x00") # RF off
+        self.dev.read(timeout=100)
+        self.dev.close()
+    
     @property
     def rwt(self):
         return (256 * 16/13.56E6) * 2**self._rwt

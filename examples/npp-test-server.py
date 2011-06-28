@@ -83,13 +83,14 @@ def main():
         log.info("aborted by user")
     finally:
         nfc.llcp.shutdown()
+        clf.close()
         log.info("I was the " + peer.role)
 
 def llcp_connect(clf, general_bytes):
     try:
         while True:
             if options.mode == "target" or options.mode is None:
-                listen_time = 250 + ord(os.urandom(1))
+                listen_time = 500 + ord(os.urandom(1))
                 peer = clf.listen(listen_time, general_bytes)
                 if isinstance(peer, nfc.DEP):
                     if peer.general_bytes.startswith("Ffm"):

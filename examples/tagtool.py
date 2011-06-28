@@ -26,6 +26,7 @@ import os
 import sys
 import time
 import string
+import signal
 
 sys.path.insert(1, os.path.split(sys.path[0])[0])
 import nfc
@@ -194,30 +195,44 @@ def poll(clf):
     except KeyboardInterrupt:
         return None
 
+def sigint_handler(signum, frame):
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    raise KeyboardInterrupt
 
 def main():
-    # initialize the NFC reader, if installed
-    clf = nfc.ContactlessFrontend()
-    if options.command == "show":
-        while True:
-            tag = poll(clf)
-            if tag:
-                show(tag)
-                if options.loopmode:
-                    while tag.is_present:
-                        time.sleep(1)
+    signal.signal(signal.SIGINT, sigint_handler)
+    
+    # find and initialize an NFC reader
+    try: clf = nfc.ContactlessFrontend()
+    except LookupError as e:
+        print str(e)
+        return
+    
+    try:
+        if options.command == "show":
+            while True:
+                tag = poll(clf)
+                if tag:
+                    show(tag)
+                    if options.loopmode:
+                        while tag.is_present:
+                            time.sleep(1)
+                    else: break
                 else: break
-            else: break
-    elif options.command == "format":
-        format_tag(clf)
-    elif options.command == "copy":
-        copy_tag(clf)
-    elif options.command == "dump":
-        dump_tag(clf)
-    elif options.command == "load":
-        load_tag(clf)
-    else:
-        log.error("unknown command '{0}'".format(options.command))
+        elif options.command == "format":
+            format_tag(clf)
+        elif options.command == "copy":
+            copy_tag(clf)
+        elif options.command == "dump":
+            dump_tag(clf)
+        elif options.command == "load":
+            load_tag(clf)
+        else:
+            log.error("unknown command '{0}'".format(options.command))
+    except KeyboardInterrupt:
+        print
+    finally:
+        clf.close()
 
 if __name__ == '__main__':
     from optparse import OptionParser, OptionGroup
