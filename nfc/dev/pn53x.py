@@ -206,7 +206,10 @@ class pn53x_usb(pn53x):
         self.usb_out = intf[0].endpoints[0].address
         self.usb_inp = intf[0].endpoints[1].address
 
-        self.write('') # abort outstanding command, kind of reset
+        # get chip into good state
+        self.write('') # send ack
+        self.write("\xd4\x00\x00")
+        self.read(timeout=100)
         
         fw = self.get_firmware_version()
         if len(fw) == 2:
@@ -220,10 +223,12 @@ class pn53x_usb(pn53x):
         log.info("chipset is a {0} version {1}".format(self.ic, self.fw))
         
     def __del__(self):
-        if self.usb_out is not None:
-            self.write('') # abort cmd, if any
+        self.write("\xD4\x32\x01\x00") # RF off
+        self.read(timeout=100)
 
     def write(self, data):
+        if self.usb_out is None:
+            return None
         log.debug("write {0} byte".format(len(data)) + format_data(data))
         if len(data) == 0: # send an ack frame to pn53x
             cnt = self.dh.bulkWrite(self.usb_out, "\x00\x00\xFF\x00\xFF\x00")
@@ -238,6 +243,8 @@ class pn53x_usb(pn53x):
         return ack == (0, 0, 255, 0, 255, 0)
 
     def read(self, timeout):
+        if self.usb_inp is None:
+            return None
         try: data = self.dh.bulkRead(self.usb_inp, 300, timeout)
         except usb.USBError: return None
         if data:
@@ -267,6 +274,8 @@ class pn53x_tty(pn53x):
         log.info("chipset is a {0} version {1}".format(self.ic, self.fw))
         
     def __del__(self):
+        self.write("\xD4\x32\x01\x00") # RF off
+        self.read(timeout=100)
         log.debug("closing {0}".format(self.tty.name))
         fcntl.flock(self.tty, fcntl.LOCK_UN)
         self.tty.close()
