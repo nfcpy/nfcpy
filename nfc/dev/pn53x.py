@@ -175,7 +175,12 @@ class pn53x(object):
             if rsp is None:
                 self.write("") # send ack to abort command
             elif rsp.startswith("\xD5\x8D"):
-                return rsp[2], rsp[3:]
+                mode = ord(rsp[2])
+                if self.ic == "PN533" and self.fw == "1.48":
+                    self.write("\xd4\x04") # get general_status
+                    if self.read(timeout = 15)[6] == "\x03":
+                        mode = mode | 0x4 # operating as dep target
+                return mode, rsp[3:]
         return None, None
     
     def _build_frame(self, data):
