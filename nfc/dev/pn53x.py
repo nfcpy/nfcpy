@@ -383,10 +383,10 @@ class device(object):
         pollrq = "\x00\xFF\xFF\x00\x03"
         nfcid3 = "\x01\xfe" + os.urandom(8)
 
-        atr_rsp = self.dev.in_jump_for_dep("active", "424", pollrq,
+        atr_rsp = self.dev.in_jump_for_dep("passive", "424", pollrq,
                                            nfcid3, general_bytes)
-
-        return atr_rsp[15:] if atr_rsp else None
+        if atr_rsp is not None:
+            return atr_rsp[15:]
 
     def poll_tt1(self):
         pass
@@ -433,7 +433,7 @@ class device(object):
             speed = ("106", "212", "424")[(mode>>4) & 0x07]
             cmode = ("passive", "active", "passive")[mode & 0x03]
             ttype = ("card", "dep")[bool(mode & 0x04)]
-            log.debug("activated as {} target in {} kbps {} mode"
+            log.info("activated as {} target in {} kbps {} mode"
                       .format(ttype, speed, cmode))
             return atr_req[17:]
         
