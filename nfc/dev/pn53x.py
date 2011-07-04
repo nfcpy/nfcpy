@@ -349,6 +349,7 @@ class pn53x_usb(pn53x):
         self.reset_mode()
 
     def close(self):
+        self.dh.releaseInterface()
         self.dh = None
 
     def __del__(self):
