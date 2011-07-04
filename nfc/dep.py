@@ -51,11 +51,9 @@ class DEPInitiator(DEP):
         """Send *data* bytes to the remote NFCIP-1 target device. If a 
         response is received within *timeout* milliseconds, exchange()
         returns a byte string with the response data, otherwise IOError
-        exception is raised. The *mtu* parameter may be used to set a 
-        specific value for the maximum number of bytes sent within a
-        single DEP command, i.e. before NFCIP-1 chaining will be 
-        applied."""
-        return self._dev.dep_exchange(data, timeout, mtu)
+        exception is raised.
+        """
+        return self._dev.dep_exchange(data, timeout)
 
 class DEPTarget(DEP):
     def __init__(self, dev, general_bytes):
@@ -73,10 +71,8 @@ class DEPTarget(DEP):
 
     def send_response(self, data, timeout, mtu=None):
         """Send an NFCIP-1 DEP response with the byte string *data*
-        as the payload. The *mtu* parameter may be used to set a 
-        specifc value for the maximum number of bytes sent within a
-        single DEP command, i.e. before NFCIP-1 chaining will be 
-        applied."""
-        self._dev.dep_set_data(data, timeout, mtu)
+        as the payload.
+        """
+        self._dev.dep_set_data(data, timeout)
 
 
