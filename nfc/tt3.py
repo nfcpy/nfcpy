@@ -112,7 +112,7 @@ class Type3Tag(object):
         self._ndef = None
         if self.sc == "\x12\xFC":
             try: self._ndef = NDEF(self)
-            except Exception: pass
+            except Exception as e: log.error(str(e))
 
     def __str__(self):
         params = list()

@@ -42,6 +42,66 @@ supported_devices.append((0x04cc,0x0531)) # Philips demo board
 supported_devices.append((0x054c,0x0193)) # Sony demo board
 supported_devices.append((0x04e6,0x5591)) # SCM SCL3711
 
+pn53x_cmd = {
+    0x00: "Diagnose",
+    0x02: "GetFirmwareVersion",
+    0x04: "GetGeneralStatus",
+    0x06: "ReadRegister",
+    0x08: "WriteRegister",
+    0x0C: "ReadGPIO",
+    0x0E: "WriteGPIO",
+    0x10: "SetSerialBaudrate",
+    0x12: "SetParameters",
+    0x16: "PowerDown",
+    0x32: "RFConfiguration",
+    0x58: "RFRegulationTest",
+    0x18: "ResetMode",
+    0x56: "InJumpForDEP",
+    0x46: "InJumpForPSL",
+    0x4A: "InListPassiveTarget",
+    0x50: "InATR",
+    0x4E: "InPSL",
+    0x40: "InDataExchange",
+    0x42: "InCommunicateThru",
+    0x44: "InDeselect",
+    0x52: "InRelease",
+    0x54: "InSelect",
+    0x8C: "TgInitAsTarget",
+    0x92: "TgSetGeneralBytes",
+    0x86: "TgGetData",
+    0x8E: "TgSetData",
+    0x94: "TgSetMetaData",
+    0x88: "TgGetInitiatorCommand",
+    0x90: "TgResponseToInitiator",
+    0x8A: "TgGetTargetStatus",
+    }
+
+pn53x_err = {
+    0x01: "time out, the target has not answered",
+    0x02: "checksum error during rf communication",
+    0x03: "parity error during rf communication",
+    0x0b: "protocol error during rf communication",
+    0x0d: "overheated - antenna drivers deactivated",
+    0x13: "format error during rf communication",
+    0x25: "command invalid in current dep state",
+    0x29: "released by initiator while operating as target",
+    0x2f: "deselected by initiator while operating as target",
+    0x31: "initiator rf-off state detected in passive mode",
+    0x7F: "pn53x application level error"
+    }
+
+class CommandError(IOError):
+    def __init__(self, errno):
+        strerror = pn53x_err.get(errno, "PN53x error 0x{0:02x}".format(errno))
+        super(CommandError, self).__init__(errno, strerror)
+
+class FrameError(IOError):
+    def __init__(self, strerror):
+        super(FrameError, self).__init__(-1, strerror)
+
+class NoResponse(IOError):
+    pass
+
 class pn53x(object):
     @staticmethod
     def search():
@@ -64,59 +124,110 @@ class pn53x(object):
 
         raise LookupError("couldn't find any usable pn53x hardware module")
 
-    def get_firmware_version(self):
-        self.write("\xD4\x02")
-        data = self.read(timeout=100)
-        if data is not None and data.startswith("\xD5\x03"):
-            return data[2:]
-        else: raise IOError(0, "could not read firmware version")
+    def command(self, cmd_code, cmd_data=None, timeout=100):
+        """Send a chip command. Returns a byte array with the chip response.
+        """
+        log.debug(pn53x_cmd.get(cmd_code, "PN53x 0x{0:02X}".format(cmd_code)))
+        frame = array("B", [0, 0, 255])
+        LEN = 2 + len(cmd_data) if cmd_data is not None else 2
+        if LEN < 256:
+            frame.extend([LEN, 256 - LEN, 0xd4, cmd_code])
+        else:
+            LENmsb = LEN / 256
+            LENlsb = LEN % 256
+            LCS = (256 - (LENmsb + LENlsb)) % 256
+            frame.extend([255, 255, LENmsb, LENlsb, LCS, 0xd4, cmd_code])
+            pass
+        if cmd_data is not None:
+            frame = frame + array("B", cmd_data)
+        frame.extend([(256 - sum(frame[-LEN:])) % 256, 0])
+        
+        self.write(frame)
+        frame = self.read(timeout=100)
 
-    def reset_mode(self):
-        if self.ic == "PN533" and self.fw == "1.48":
-            self.write("\xD4\x18\x01")
-            self.read(timeout=100)
-            self.write('')
+        if frame is None:
+            raise FrameError("no response from pn53x")
+        if not (frame[0] == 0 and frame[1] == 0 and frame[2] == 255):
+            raise FrameError("invalid frame start")
+
+        if frame[3] == 0 and frame[4] == 255 and frame[5] == 0:
+            frame = self.read(timeout)
+            if frame is None:
+                raise NoResponse("no response from pn53x")
+            if not (frame[0] == 0 and frame[1] == 0 and frame[2] == 255):
+                raise FrameError("invalid frame start")
+        else: log.warning("missing ack frame from pn53x")
+
+        if frame[3] == 255 and frame[4] == 255:
+            # extended information frame
+            LEN, LCS = frame[5] * 256 + frame[6], frame[7]
+            TFI, PD0 = frame[8], frame[9]
+        else:
+            # normal information frame 
+            LEN, LCS = frame[3], frame[4]
+            TFI, PD0 = frame[5], frame[6]
+
+        if not (LEN + LCS) % 256 == 0:
+            raise FrameError("lenght checksum error")
+        if not TFI == 0xd5:
+            if not TFI == 0x7f:
+                raise FrameError("invalid frame identifier")
+            else:
+                raise CommandError(0x7f)
+        if not PD0 == cmd_code + 1:
+            raise FrameError("unexpected response code")
+    
+        if frame[3] == 255 and frame[4] == 255:
+            # extended information frame
+            if sum(frame[8:8+LEN+1]) % 256 == 0:
+                return frame[10:8+LEN]
+        else:
+            # normal information frame 
+            if sum(frame[5:5+LEN+1]) % 256 == 0:
+                return frame[7:5+LEN]
+            
+        raise FrameError("data checksum error")
+
+    def diagnose(self, num_tst, in_param=""):
+        rsp = self.command(0x00, chr(num_tst) + in_param)
+        return data if (self.ic, self.fw) == ("PN533", "1.48") else data[1:]
+
+    def get_firmware_version(self):
+        rsp = self.command(0x02)
+        if len(rsp) == 2:
+            ic, ver, rev, support = 0x31, rsp[0], rsp[1], 0x00
+        else: ic, ver, rev, support = rsp
+        return ic, ver, rev, support
+
+    def get_general_status(self):
+        return self.command(0x04)
         
     def read_register(self, addr):
-        if type(addr) == type(int):
-            addr = [addr]
-        addr = array("H", addr)
-        if sys.byteorder == "little":
-            addr.byteswap()
-        self.write("\xd4\x06" + addr.tostring())
-        data = self.read(timeout=100)
-        if data is not None and data.startswith("\xd5\x07"):
-            if self.ic == "PN533" and self.fw == "1.48":
-                return array("B", data[2:])
-            elif ord(data[2]) == 0:
-                return array("B", data[3:])
-            else:
-                log.error("chip error {} at read register"
-                          .format(ord(data[2])))
+        addr = array("H", list(addr) if type(addr) is type(int()) else addr)
+        if sys.byteorder == "little": addr.byteswap()
+        data = self.command(0x06, addr.tostring())
+        if (self.ic, self.fw) == ("PN533", "1.48"):
+            return data
+        elif data[0] == 0:
+            return data[1:]
+        else: raise CommandError(data[0])
 
-    def in_list_passive_target(self, max_tg, br_ty, initiator_data):
+    def reset_mode(self):
+        if (self.ic, self.fw) == ("PN533", "1.48"):
+            self.command(0x18, [1])
+            self.write(array("B", [0, 0, 255, 0, 255, 0])) # ack
+            time.sleep(0.010)
+
+    def rf_configuration(self, cfg_item, cfg_data):
+        cfg_data = array("B", cfg_data)
+        return self.command(0x32, array("B", [cfg_item]) + cfg_data)
+
+    def in_list_passive_target(self, br_ty, initiator_data):
         br_ty = ("106A", "212F", "424F", "106B", "106J").index(br_ty)
-        if self.write("\xD4\x4A" + chr(max_tg) + chr(br_ty) + initiator_data):
-            targets = list()
-            rsp = self.read(timeout=500)
-            if rsp and len(rsp) >= 3 and rsp.startswith("\xD5\x4B"):
-                nb_tg = ord(rsp[2])
-                rsp = rsp[3:]
-                for i in range(nb_tg):
-                    if br_ty == 0:
-                        nfcid_length = ord(rsp[4])
-                        ats_length = ord(rsp[5] + nfcid_length)
-                        targets.append(rsp[1:5+nfcid_length+ats_length])
-                    elif br_ty == 1 or br_ty == 2:
-                        pol_res_length = ord(rsp[1])
-                        targets.append(rsp[1:1+pol_res_length])
-                    elif br_ty == 3:
-                        attrib_res_length = ord(rsp[13])
-                        targets.append(rsp[1:14+pol_res_length])
-                    rsp = rsp[1+len(targets[-1]):]
-            return targets
-        raise IOError("in_list_passive_target")
-
+        cmd_data = chr(1) + chr(br_ty) + initiator_data
+        rsp_data = self.command(0x4A, cmd_data, timeout=100)
+        return rsp_data[2:] if rsp_data[0] == 1 else None
+            
     def in_jump_for_dep(self, communication_mode, baud_rate,
                         passive_initiator_data=None,
                         nfcid3=None, general_bytes=None):
@@ -134,19 +245,37 @@ class pn53x(object):
                 bool(nfcid3) << 1 |
                 bool(general_bytes) << 2)
 
-        if self.write("\xD4\x56" + chr(mode) + chr(baud) + chr(next) +
-                      passive_initiator_data + nfcid3 + general_bytes):
-            rsp = self.read(timeout=500)
-            if rsp and len(rsp) >= 19 and rsp.startswith("\xD5\x57\x00\x01"):
-                log.info("ATR_RES(nfcid3={0}, did={1:02x}, bs={2:02x},"
-                         " br={3:02x}, to={4:02x}, pp={5:02x}, gb={6})"
-                         .format(rsp[4:14].encode("hex"), ord(rsp[14]),
-                                 ord(rsp[15]), ord(rsp[16]), ord(rsp[17]),
-                                 ord(rsp[18]), rsp[19:].encode("hex")))
-                return rsp[4:]
-            else:
-                self.write('') # send ack to abort command
+        cmd_data = chr(mode) + chr(baud) + chr(next) \
+            + passive_initiator_data + nfcid3 + general_bytes
+        
+        rsp = self.command(0x56, cmd_data, timeout=1000)
+        if rsp[0] != 0:
+            raise CommandError(rsp[0])
+        return rsp[2:]
     
+    def in_data_exchange(self, tg, data_out, timeout):
+        rsp = self.command(0x40, chr(tg) + data_out, timeout)
+        status, data_in = rsp[0], rsp[1:]
+        if status & 0x3f:
+            raise CommandError(status & 0x3f)
+        return status, data_in
+    
+    def in_communicate_thru(self, data):
+        data = self.command(0x42, data)
+        status = data.pop(0) & 0x3f
+        if not status == 0:
+            raise CommandError(status)
+        return data
+    
+    def in_release(self, target=0):
+        if (self.ic, self.fw) == ("PN533", "1.48"):
+            rsp = self.command(0x52, "\x01\x01")
+        else:
+            rsp = self.command(0x52, chr(target))
+        if rsp[0] & 0x3f:
+            raise CommandError(rsp[0] & 0x3f)
+        return rsp
+        
     def tg_init_as_target(self, activation_mode, mifare_params,
                           felica_params, nfcid3t=None, general_bytes="",
                           historical_bytes="", timeout=None):
@@ -157,11 +286,10 @@ class pn53x(object):
         if nfcid3t is not None and not len(nfcid3t) == 10:
             raise ValueError("invalid length of nfcid3t")
         
-        cmd = "\xD4\x8C"
-        cmd += "\x02" if activation_mode == "DEP" else "\x00"
+        cmd = "\x02" if activation_mode == "DEP" else "\x00"
         cmd += mifare_params + felica_params + nfcid3t
         
-        if (self.ic == "PN531") or (self.ic == "PN533" and self.fw == "1.48"):
+        if (self.ic == "PN531") or ((self.ic, self.fw) == ("PN533", "1.48")):
             cmd += general_bytes
             if historical_bytes:
                 s = "historical_bytes can't' be used with a {0} V{1}"
@@ -170,30 +298,34 @@ class pn53x(object):
             cmd += chr(len(general_bytes)) + general_bytes
             cmd += chr(len(historical_bytes)) + historical_bytes
 
-        if self.write(cmd) and timeout is not None:
-            rsp = self.read(timeout)
-            if rsp is None:
-                self.write("") # send ack to abort command
-            elif rsp.startswith("\xD5\x8D"):
-                mode = ord(rsp[2])
-                if self.ic == "PN533" and self.fw == "1.48":
-                    self.write("\xd4\x04") # get general_status
-                    if self.read(timeout = 15)[6] == "\x03":
-                        mode = mode | 0x4 # operating as dep target
-                return mode, rsp[3:]
-        return None, None
-    
-    def _build_frame(self, data):
-        if len(data) < 256:
-            frame = [0, 0, 255, len(data), 256 - len(data)]
+        try:
+            rsp = self.command(0x8c, cmd, timeout)
+        except NoResponse:
+            # send ack to abort the command processing
+            self.write(array("B", [0, 0, 255, 0, 255, 0]))
         else:
-            len_msb = len(data) / 256
-            len_lsb = len(data) % 256
-            len_lcs = (256 - (len_msb + len_lsb)) % 256
-            frame = [0, 0, 255, 255, 255, len_msb, len_lsb, len_lcs]
-        frame += [ord(c) for c in data]
-        frame += [(256 - sum(frame[-len(data):])) % 256, 0]
-        return ''.join([chr(x) for x in frame])
+            return rsp
+
+    def tg_get_data(self, timeout):
+        rsp = self.command(0x86, None, timeout)
+        status, data_in = rsp[0], rsp[1:]
+        if status & 0x3f != 0:
+            raise CommandError(status & 0x3f)
+        return status, data_in
+
+    def tg_set_data(self, data_out, timeout):
+        rsp = self.command(0x8E, data_out, timeout)
+        status = rsp[0]
+        if status & 0x3f != 0:
+            raise CommandError(status & 0x3f)
+        return status
+
+    def tg_set_meta_data(self, data_out):
+        rsp = self.command(0x94, data_out, timeout=100)
+        status = rsp[0]
+        if status & 0x3f != 0:
+            raise CommandError(status & 0x3f)
+        return status
 
 class pn53x_usb(pn53x):
     def __init__(self, dev):
@@ -206,23 +338,18 @@ class pn53x_usb(pn53x):
         self.usb_out = intf[0].endpoints[0].address
         self.usb_inp = intf[0].endpoints[1].address
 
-        # get chip into good state
-        self.write('') # send ack
-        self.write("\xd4\x00\x00")
-        self.read(timeout=100)
-        
-        fw = self.get_firmware_version()
-        if len(fw) == 2:
-            self.ic = "PN531"
-            self.fw = "{0}.{1}".format(ord(fw[0]), ord(fw[1]))
-        elif len(fw) == 4:
-            self.ic = "PN5" + fw[0].encode("hex")
-            self.fw = "{0}.{1}".format(ord(fw[1]), ord(fw[2]))
-        else:
-            raise RuntimeError("unexpected firmware version response")
+        # try to get chip into a good state
+        self.write(array("B", [0, 0, 255, 0, 255, 0])) # ack
+
+        ic, ver, rev, support = self.get_firmware_version()
+        self.ic = "PN5{0:02x}".format(ic)
+        self.fw = "{0}.{1}".format(ver, rev)
         log.info("chipset is a {0} version {1}".format(self.ic, self.fw))
 
+        self.reset_mode()
+
     def close(self):
+        self.dh.releaseInterface()
         self.dh = None
 
     def __del__(self):
@@ -231,33 +358,23 @@ class pn53x_usb(pn53x):
             self.dh.bulkWrite(self.usb_out, rf_off)
             self.dh.bulkRead(self.usb_inp, 256, 100)
         
-    def write(self, data):
-        if self.dh is None or self.usb_out is None:
-            return None
-        log.debug("write {0} byte".format(len(data)) + format_data(data))
-        if len(data) == 0: # send an ack frame to pn53x
-            cnt = self.dh.bulkWrite(self.usb_out, "\x00\x00\xFF\x00\xFF\x00")
-            return cnt == 6
-        frame = self._build_frame(data)
-        #log.debug("cmd: " + frame.encode("hex"))
-        self.dh.bulkWrite(self.usb_out, frame)
-        if len(frame) % 64 == 0:
-            # send zero-length frame to end bulk transfer
-            self.dh.bulkWrite(self.usb_out, '')
-        ack = self.dh.bulkRead(self.usb_inp, 256, 100)
-        return ack == (0, 0, 255, 0, 255, 0)
+    def write(self, frame):
+        if self.dh is not None and self.usb_out is not None:
+            log.debug(">>> " + frame.tostring().encode("hex"))
+            self.dh.bulkWrite(self.usb_out, frame.tolist())
+            if len(frame) % 64 == 0:
+                # send zero-length frame to end bulk transfer
+                self.dh.bulkWrite(self.usb_out, '')
 
     def read(self, timeout):
-        if self.dh is None or self.usb_inp is None:
-            return None
-        try: data = self.dh.bulkRead(self.usb_inp, 300, timeout)
-        except usb.USBError: return None
-        if data:
-            #log.debug("rsp: " + ' '.join(["%02x" % x for x in data]))
-            index = 8 if data[3] == 255 and data[4] == 255 else 5
-            data = ''.join([chr(x) for x in data[index:-2]])
-        log.debug("read {0} byte".format(len(data)) + format_data(data))
-        return data if len(data) else None
+        if self.dh is not None and self.usb_inp is not None:
+            try: frame = self.dh.bulkRead(self.usb_inp, 300, timeout)
+            except usb.USBError as error:
+                if not error.message == "No error": raise
+            else:
+                frame = array("B", frame)
+                log.debug("<<< " + frame.tostring().encode("hex"))
+                return frame
 
 class pn53x_tty(pn53x):
     def __init__(self, tty):
@@ -265,55 +382,47 @@ class pn53x_tty(pn53x):
         try:
             fcntl.flock(self.tty, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except IOError:
-            log.debug("couldn't exclusively lock {0}"
-                      .format(self.tty.name))
+            log.debug("failed to exclusively lock {0}".format(self.tty.name))
             raise
         try:
-            fw = self.get_firmware_version()
+            ic, ver, rev, support = self.get_firmware_version()
         except IOError:
-            log.debug("device at {0} doesn't provide firmware version"
-                      .format(self.tty.name))
+            log.debug("no firmware version from {0}".format(self.tty.name))
             raise
-        self.ic = "PN5" + fw[0].encode("hex")
-        self.fw = "{0}.{1}".format(ord(fw[1]), ord(fw[2]))
+        self.ic = "PN5{0:02x}".format(ic)
+        self.fw = "{0}.{1}".format(ver, rev)
         log.info("chipset is a {0} version {1}".format(self.ic, self.fw))
-        
+
     def close(self):
         log.debug("closing {0}".format(self.tty.name))
         fcntl.flock(self.tty, fcntl.LOCK_UN)
         self.tty.close()
         self.tty = None
 
-    def write(self, data):
-        self.tty.flushInput()
-        log.debug("write {0} byte".format(len(data)) + format_data(data))
-        if len(data) == 0: # send an ack frame to pn53x
-            return self.tty.write("\x00\x00\xFF\x00\xFF\x00") == 6
-        frame = self._build_frame(data)
-        log.debug("cmd: " + frame.encode("hex"))
-        if self.tty.write(frame) == len(frame):
-            self.tty.timeout = 1
-            frame = self.tty.read(6)
-            log.debug("ack: " + frame.encode("hex"))
-            return frame == "\x00\x00\xFF\x00\xFF\x00"
+    def write(self, frame):
+        if self.tty is not None:
+            self.tty.flushInput()
+            log.debug(">>> " + frame.tostring().encode("hex"))
+            if self.tty.write(frame) != len(frame):
+                raise IOError("serial communication error")
 
     def read(self, timeout):
-        self.tty.timeout = max(timeout / 1000.0, 0.05)
-        log.debug("tty read timeout set to {0} sec".format(self.tty.timeout))
-        data = self.tty.read(1) # wait until timeout expires
-        if data:
-            self.tty.timeout = 0
-            data += self.tty.read(300) # remaining data
-            log.debug("rsp: " + data.encode("hex"))
-            index = 8 if data[3] == 255 and data[4] == 255 else 5
-            data = data[index:-2]
-        log.debug("read {0} byte".format(len(data)) + format_data(data))
-        return data if len(data) else None
+        if self.tty is not None:
+            self.tty.timeout = max(timeout / 1000.0, 0.05)
+            log.debug("tty timeout set to {0} sec".format(self.tty.timeout))
+            frame = self.tty.read(6) # wait until timeout expires
+            if frame:
+                if not frame == "\x00\x00\xff\x00\xff\x00":
+                    self.tty.timeout = 0
+                    frame += self.tty.read(300) # remaining data
+                frame = array("B", frame)
+                log.debug("<<< " + frame.tostring().encode("hex"))
+                return frame
 
 class device(object):
     def __init__(self):
         self.dev = pn53x.search()
-        self._mtu = 251
+        self.miu = 251
 
         if self.dev.ic == "PN533":
             self._rwt = 8
@@ -328,53 +437,33 @@ class device(object):
             self._wtx = 7
 
         # set ATR_RES timeout: 409.6 ms, Thru timeout: 204.8 ms)
-        atr_res_to = 13 # T = 100 * 2^(x-1) µs
+        atr_res_to = 11 # T = 100 * 2^(x-1) µs
         non_dep_to = 12 # T = 100 * 2^(x-1) µs
         log.debug("ATR_RES timeout: {0:7.1f} ms".format(0.1*2**(atr_res_to-1)))
         log.debug("non-DEP timeout: {0:7.1f} ms".format(0.1*2**(non_dep_to-1)))
         atr_res_to = chr(atr_res_to); non_dep_to = chr(non_dep_to)
-        self.dev.write("\xD4\x32\x02\x00" + atr_res_to + non_dep_to)
+        self.dev.rf_configuration(0x02, chr(0x0b) + atr_res_to + non_dep_to)
+        
         # retries for ATR_REQ, PSL_REQ, target activation
-        self.dev.write("\xD4\x32\x05\xFF\xFF\x00")
+        self.dev.rf_configuration(0x05, "\x02\x01\x00")
 
         if self.dev.ic == "PN533" and self.dev.fw == "1.48":
-            self.dev.write("\xD4\x18\x01")
-            self.dev.read(timeout=100)
-            self.dev.write('')
-            self._pn533_init()
+            self.dev.reset_mode()
+            cfg_data = chr(self._rwt) + chr(self._wtx) + "\x08"
+            self.dev.rf_configuration(0x82, cfg_data)
+            self.dev.command(0x08, "\x63\x0d\x00")
+            regs = self.dev.read_register(range(0xa01b, 0xa023))
+            self.dev.rf_configuration(0x0b, regs)
 
     def close(self):
-        self.dev.write("\xD4\x32\x01\x00") # RF off
-        self.dev.read(timeout=100)
+        self.dev.reset_mode()
+        try: self.dev.rf_configuration(0x01, "\x00") # RF off
+        except CommandError: pass
         self.dev.close()
     
     @property
     def rwt(self):
         return (256 * 16/13.56E6) * 2**self._rwt
-
-    @property
-    def mtu(self):
-        return self._mtu
-
-    def _pn533_init(self):
-        self.dev.write("\xD4\x32\x01\x00") # RF off
-        self.dev.read(timeout=100)
-        self.dev.write("\xD4\x32\x82"+chr(self._rwt)+chr(self._wtx)+"\x08")
-        self.dev.read(timeout=100)
-        self.dev.write("\xD4\x08\x63\x0d\x00")
-        self.dev.read(timeout=100)
-        regs = ''.join([chr(0xa0) + chr(reg) for reg in range(0x1b,0x23)])
-        self.dev.write("\xD4\x06" + regs)
-        data = self.dev.read(timeout=100)
-        if data.startswith("\xD5\x07") and len(data) == 10:
-            self.dev.write("\xD4\x32\x0B" + data[2:])
-
-    def _pn533_reset_mode(self):
-        self.dev.write("\xD4\x32\x01\x00") # RF off
-        self.dev.read(timeout=100)
-        self.dev.write("\xD4\x18\x01")
-        self.dev.read(timeout=100)
-        self.dev.write('')
 
     def poll_dep(self, general_bytes):
         log.debug("polling for a dep target")
@@ -383,10 +472,19 @@ class device(object):
         pollrq = "\x00\xFF\xFF\x00\x03"
         nfcid3 = "\x01\xfe" + os.urandom(8)
 
-        atr_rsp = self.dev.in_jump_for_dep("passive", "424", pollrq,
-                                           nfcid3, general_bytes)
-        if atr_rsp is not None:
-            return atr_rsp[15:]
+        try:
+            rsp = self.dev.in_jump_for_dep("active", "424", pollrq,
+                                               nfcid3, general_bytes)
+        except CommandError as (errno, strerror):
+            if errno != 1: raise
+            else: return None
+            
+        log.info("ATR_RES(nfcid3={0}, did={1:02x}, bs={2:02x},"
+                 " br={3:02x}, to={4:02x}, pp={5:02x}, gb={6})"
+                 .format(rsp[0:10].tostring().encode("hex"),
+                         rsp[10], rsp[11], rsp[12], rsp[13],
+                         rsp[14], rsp[15:].tostring().encode("hex")))
+        return rsp[15:].tostring()
 
     def poll_tt1(self):
         pass
@@ -400,21 +498,20 @@ class device(object):
 
         poll_ffff = "\x00\xFF\xFF\x01\x03"
         poll_12fc = "\x00\x12\xFC\x01\x03"
-        
-        for br in ("424F", "212F"):
-            try: rsp = self.dev.in_list_passive_target(1, br, poll_ffff)[0]
-            except IndexError: continue
 
-            if rsp[-2:] != "\x12\xFC":
-                try: rsp = self.dev.in_list_passive_target(1, br, poll_12fc)[0]
-                except IndexError: pass
+        for br in ("424F", "212F"):
+            rsp = self.dev.in_list_passive_target(br, poll_ffff)
+            if rsp is None: continue
+
+            if (rsp[-2], rsp[-1]) != (0x12, 0xFC):
+                tmp_rsp = self.dev.in_list_passive_target(br, poll_12fc)
+                if tmp_rsp is not None: rsp = tmp_rsp
             
-            log.debug("target found, bitrate is {0} kbps".format(br[0:3]))
-            return rsp[2:]
+            log.debug("type 3 target found at {0} kbps".format(br[0:3]))
+            return rsp[2:].tostring()
         else:
             # no target found, shut off rf field
-            self.dev.write("\xD4\x32\x01\x00")
-            self.dev.read(timeout=100)
+            self.dev.rf_configuration(0x01, "\x00")
             
     def listen(self, general_bytes, timeout):
         log.debug("listen: gb={0} timeout={1} ms"
@@ -425,89 +522,56 @@ class device(object):
         nfcid3t = felica_params[0:8] + "\x00\x00"
 
         self.dev.reset_mode()
-        mode, atr_req = self.dev.tg_init_as_target(
+        data = self.dev.tg_init_as_target(
             "DEP", mifare_params, felica_params, nfcid3t,
             general_bytes, timeout=timeout)
 
-        if atr_req is not None:
-            speed = ("106", "212", "424")[(mode>>4) & 0x07]
-            cmode = ("passive", "active", "passive")[mode & 0x03]
-            ttype = ("card", "dep")[bool(mode & 0x04)]
+        if data is not None:
+            if (self.dev.ic, self.dev.fw) == ("PN533", "1.48"):
+                if self.dev.get_general_status()[4] == 3:
+                    data[0] |= 0x4 # initialized as dep target
+                
+            speed = ("106", "212", "424")[(data[0]>>4) & 0x07]
+            cmode = ("passive", "active", "passive")[data[0] & 0x03]
+            ttype = ("card", "dep")[bool(data[0] & 0x04)]
             log.info("activated as {} target in {} kbps {} mode"
                       .format(ttype, speed, cmode))
-            return atr_req[17:]
+            return data[18:].tostring()
         
     ##
     ## data exchange protocol
     ##
-    def dep_exchange(self, cmd, timeout, mtu):
-        mtu = self.mtu
-        for i in range(0, len(cmd), mtu)[0:-1]:
-            self.dev.write("\xD4\x40\x41" + cmd[i:i+mtu])
-            self.dev.read(timeout)
-        self.dev.write("\xD4\x40\x01" + cmd[-(len(cmd)%mtu):])
-        resp = self.dev.read(timeout)
-        if not resp:
-            raise IOError(0, "no response data")
-        if not resp.startswith("\xD5\x41"):
-            raise IOError(0, "invalid response")
-        if not ord(resp[2]) & 0x3F == 0:
-            raise IOError(ord(resp[2]), "hardware error")
-        data = resp[3:]
-        while resp.startswith('\xD5\x41\x40'):
-            self.dev.write("\xD4\x40\x01")
-            resp = self.dev.read(timeout)
-            if not resp:
-                raise IOError(0, "no response data")
-            if not resp.startswith("\xD5\x41"):
-                raise IOError(0, "invalid response")
-            if not ord(resp[2]) & 0x3F == 0:
-                raise IOError(ord(resp[2]), "hardware error")
-            data = data + resp[3:]
+    def dep_exchange(self, data, timeout):
+        for i in range(0, len(data), self.miu)[0:-1]:            
+            self.dev.in_data_exchange(0x41, data[0:self.miu], timeout=100)
+            data = data[self.miu:]
+        status, data_in = self.dev.in_data_exchange(0x01, data, timeout)
+        data = data_in.tostring()
+        while bool(status & 0x40):
+            status, data_in = self.dev.in_data_exchange(0x01, "", timeout=100)
+            data = data + data_in.tostring()
         return data
 
     def dep_get_data(self, timeout):
-        if self.dev.write("\xD4\x86"):
-            resp = self.dev.read(timeout)
-            if resp is None:
-                raise IOError(0, "no response")
-            if not resp.startswith("\xD5\x87"):
-                raise IOError(0, "invalid response")
-            if not ord(resp[2]) & 0x3F == 0:
-                raise IOError(ord(resp[2]) & 0x3F, "hardware error")
-        data = resp[3:]
-        while resp.startswith('\xD5\x87\x40'):
-            self.dev.write("\xD4\x86")
-            resp = self.dev.read(timeout)
-            if resp is None:
-                raise IOError(0, "no response")
-            if not resp.startswith("\xD5\x87"):
-                raise IOError(0, "invalid response")
-            if not ord(resp[2]) & 0x3F == 0:
-                raise IOError(ord(resp[2]) & 0x3F, "hardware error")
-            data = data + resp[3:]
+        if (self.dev.ic, self.dev.fw) == ("PN533", "1.48"):
+            if self.dev.get_general_status()[4] == 4:
+                # initiator cmd was received in set data
+                timeout = 100
+        status, data_in = self.dev.tg_get_data(timeout)
+        data = data_in.tostring()
+        while status == 0x40:
+            status, data_in = self.dev.tg_get_data(timeout=100)
+            data = data + data_in.tostring()
         return data
-
-    def dep_set_data(self, data, timeout, mtu):
-        mtu = self.mtu
-        for i in range(0, len(data), mtu)[0:-1]:
-            if self.dev.write("\xD4\x94" + data[i:i+mtu]):
-                resp = self.dev.read(timeout)
-                if resp is None:
-                    raise IOError(0, "no response")
-                if not resp.startswith("\xD5\x95"):
-                    raise IOError(0, "invalid response")
-                if not ord(resp[2]) & 0x3F == 0:
-                    raise IOError(ord(resp[2]) & 0x3F, "hardware error")
-        if self.dev.write("\xD4\x8E" + data[-(len(data) % mtu):]):
-            resp = self.dev.read(timeout)
-            if resp is None:
-                raise IOError(0, "no response")
-            if not resp.startswith("\xD5\x8F"):
-                raise IOError(0, "invalid response")
-            if not ord(resp[2]) & 0x3F == 0:
-                raise IOError(ord(resp[2]) & 0x3F, "hardware error")
-
+    
+    def dep_set_data(self, data, timeout):
+        if (self.dev.ic, self.dev.fw) != ("PN533", "1.48"):
+            timeout = 100
+        for i in range(0, len(data), self.miu)[0:-1]:
+            self.dev.tg_set_meta_data(data[0:self.miu])
+            data = data[self.miu:]
+        self.dev.tg_set_data(data, timeout)
+        
     ##
     ## tag type (1|2|3) command/response exchange
     ##
@@ -519,26 +583,5 @@ class device(object):
 
     def tt3_exchange(self, cmd, timeout=500):
         log.debug("tt3_exchange")
-        if self.dev.write("\xD4\x42" + cmd):
-            resp = self.dev.read(timeout)
-            if resp is None:
-                raise IOError(0, "no response")
-            if not resp.startswith("\xD5\x43"):
-                raise IOError(0, "invalid response")
-            if not ord(resp[2]) & 0x3F == 0:
-                raise IOError(ord(resp[2]) & 0x3F, "hardware error")
-            return resp[3:]
-
-def format_data(data):
-    import string
-    if len(data) == 0:
-        return ''
-    printable = string.digits + string.letters + string.punctuation + ' '
-    s = []
-    for i in range(0, len(data), 16):
-        s.append("  %04x: " % i)
-        s[-1] += ' '.join(["%02x" % ord(c) for c in data[i:i+16]]) + ' '
-        s[-1] += (8 + 16*3 - len(s[-1])) * ' '
-        s[-1] += ''.join([c if c in printable else '.' for c in data[i:i+16]])
-    return '\n' + '\n'.join(s)
-
+        rsp = self.dev.in_communicate_thru(cmd)
+        return rsp.tostring()
