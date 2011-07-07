@@ -25,6 +25,7 @@ log = logging.getLogger(__name__)
 
 import dev
 from dep import DEPTarget, DEPInitiator
+from tt2 import Type2Tag
 from tt3 import Type3Tag
 
 class ContactlessFrontend(object):
@@ -71,11 +72,22 @@ class ContactlessFrontend(object):
                 log.debug("got dep target, general bytes " + data.encode("hex"))
                 return DEPInitiator(self.dev, data)
 
-        data = self.dev.poll_tt3()
-        if data and len(data) == 18:
-            idm = data[0:8]; pmm = data[8:16]; sc = data[16:18]
-            log.debug("got type 3 tag, service code " + sc.encode("hex"))
-            return Type3Tag(self.dev, idm, pmm, sc)
+        rsp = self.dev.poll_tag()
+        if rsp is not None:
+            log.debug("found tag {0}".format(rsp))
+            if rsp.get("type") == "T1T":
+                log.info("support for type 1 tag not yet implemented")
+                return None
+            if rsp.get("type") == "T2T":
+                return Type2Tag(self.dev, rsp)
+            if rsp.get("type") == "T3T":
+                data = rsp.get("data")
+                idm = data[0:8]; pmm = data[8:16]; sc = data[16:18]
+                log.debug("got type 3 tag, service code " + sc.encode("hex"))
+                return Type3Tag(self.dev, idm, pmm, sc)
+            if rsp.get("type") == "T4T":
+                log.info("support for type 4 tag not yet implemented")
+                return None
 
     def listen(self, timeout, general_bytes=str()):
         """Wait *timeout* milliseconds for becoming initialized by a
