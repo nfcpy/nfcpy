@@ -266,16 +266,33 @@ class pn53x(object):
         if not status == 0:
             raise CommandError(status)
         return data
-    
+
+    def in_deselect(self, target=0):
+        if (self.ic, self.fw) == ("PN533", "1.48"):
+            rsp = self.command(0x44, "\x01\x01")
+            status = rsp[1] & 0x3f
+        else:
+            rsp = self.command(0x44, chr(target))
+            status = rsp[0] & 0x3f
+        if status != 0:
+            raise CommandError(status)
+
     def in_release(self, target=0):
         if (self.ic, self.fw) == ("PN533", "1.48"):
             rsp = self.command(0x52, "\x01\x01")
+            status = rsp[1] & 0x3f
         else:
             rsp = self.command(0x52, chr(target))
-        if rsp[0] & 0x3f:
-            raise CommandError(rsp[0] & 0x3f)
-        return rsp
+            status = rsp[0] & 0x3f
+        if status != 0:
+            raise CommandError(status)
         
+    def in_select(self, target=1):
+        rsp = self.command(0x54, chr(target))
+        status = rsp[0] & 0x3f
+        if status != 0:
+            raise CommandError(status)
+
     def tg_init_as_target(self, activation_mode, mifare_params,
                           felica_params, nfcid3t=None, general_bytes="",
                           historical_bytes="", timeout=None):
