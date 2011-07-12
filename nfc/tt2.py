@@ -31,23 +31,66 @@ class NDEF(object):
             raise ValueError("wrong ndef magic number")
         if not self._cc[3] & 0xF0 == 0:
             raise ValueError("no read permissions for ndef container")
-        i = 16
-        while True:
-            if tag[i] == 0x03:
-                ndef_size = tag[i+1]
-                if ndef_size == 255:
-                    ndef_size = tag[i+2] * 256 + tag[i+3];
-                    if ndef_size < 256:
-                        raise ValueError("invalid ndef tlv lenght value")
-                    self._msg = tag[i+4:i+4+ndef_size]
-                else:
-                    self._msg = tag[i+2:i+2+ndef_size]
-                break
-            elif tag[i] == 0x00 or tag[i] == 0xFE: i += 1
-            elif tag[i] == 0x01 or tag[i] == 0x02: i += 5
-            elif tag[i] == 0xFD: i += 2 + tag[i+1]
-            else: raise ValueError("invalid tlv tag value detected")
-            
+        self._skip = set([])
+        offset = 16
+        while offset is not None:
+            offset = self._read_tlv(offset)
+
+    def _read_tlv(self, offset):
+        read_tlv = {
+            0x00: lambda x: x + 1,
+            0x01: self._read_lock_tlv,
+            0x02: self._read_memory_tlv,
+            0x03: self._read_ndef_tlv,
+            0xFE: lambda x: None
+            }.get(self._tag[offset], self._read_unknown_tlv)
+        return read_tlv(offset + 1)
+
+    def _read_unknown_tlv(self, offset):
+        length, offset = self._read_tlv_length(offset)
+        return offset + length
+        
+    def _read_ndef_tlv(self, offset):
+        length, offset = self._read_tlv_length(offset)
+        print "ndef length", length
+        self._msg = bytearray()
+        while length > 0:
+            if not offset in self._skip:
+                self._msg.append(self._tag[offset])
+            offset += 1; length -= 1
+        return None
+    
+    def _read_lock_tlv(self, offset):
+        length, offset = self._read_tlv_length(offset)
+        value = self._tag[offset:offset+length]
+        page_offs = value[0] >> 4
+        byte_offs = value[0] & 0x0F
+        resv_size = ((value[1] - 1) / 8) + 1
+        page_size = 2 ** (value[2] & 0x0F)
+        resv_start = page_offs * page_size + byte_offs
+        self._skip.update(range(resv_start, resv_start + resv_size))
+        return offset + length
+
+    def _read_memory_tlv(self, offset):
+        length, offset = self._read_tlv_length(offset)
+        value = self._tag[offset:offset+length]
+        page_offs = value[0] >> 4
+        byte_offs = value[0] & 0x0F
+        resv_size = value[1]
+        page_size = 2 ** (value[2] & 0x0F)
+        resv_start = page_offs * page_size + byte_offs
+        self._skip.update(range(resv_start, resv_start + resv_size))
+        return offset + length
+
+    def _read_tlv_length(self, offset):
+        length = self._tag[offset]
+        if length == 255:
+            length = self._tag[offset+1] * 256 + self._tag[offset+2];
+            offset = offset + 2
+            if length < 256 or length == 0xFFFF:
+                raise ValueError("invalid tlv lenght value")
+        return length, offset + 1
+        
     @property
     def version(self):
         """The version of the NDEF mapping."""
