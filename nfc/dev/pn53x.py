@@ -41,6 +41,7 @@ supported_devices.append((0x054c,0x02e1)) # Sony RC-S330
 supported_devices.append((0x04cc,0x0531)) # Philips demo board
 supported_devices.append((0x054c,0x0193)) # Sony demo board
 supported_devices.append((0x04e6,0x5591)) # SCM SCL3711
+supported_devices.append((0x04cc,0x2533)) # NXP PN533 demo board
 
 pn53x_cmd = {
     0x00: "Diagnose",
@@ -474,7 +475,7 @@ class device(object):
 
         try:
             rsp = self.dev.in_jump_for_dep("active", "424", pollrq,
-                                               nfcid3, general_bytes)
+                                           nfcid3, general_bytes)
         except CommandError as (errno, strerror):
             if errno != 1: raise
             else: return None
