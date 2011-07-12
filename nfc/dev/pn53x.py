@@ -490,7 +490,7 @@ class device(object):
         nfcid3 = "\x01\xfe" + os.urandom(8)
 
         try:
-            rsp = self.dev.in_jump_for_dep("active", "424", pollrq,
+            rsp = self.dev.in_jump_for_dep("passive", "424", pollrq,
                                                nfcid3, general_bytes)
         except CommandError as (errno, strerror):
             if errno != 1: raise
@@ -551,7 +551,7 @@ class device(object):
             speed = ("106", "212", "424")[(data[0]>>4) & 0x07]
             cmode = ("passive", "active", "passive")[data[0] & 0x03]
             ttype = ("card", "dep")[bool(data[0] & 0x04)]
-            log.info("activated as {} target in {} kbps {} mode"
+            log.info("activated as {0} target in {1} kbps {2} mode"
                       .format(ttype, speed, cmode))
             return data[18:].tostring()
         
