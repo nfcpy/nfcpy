@@ -26,11 +26,14 @@ import os
 import sys
 import time
 import string
+import threading
 
 sys.path.insert(1, os.path.split(sys.path[0])[0])
 import nfc
 import nfc.npp
 import nfc.ndef
+
+terminate = threading.Event()
 
 def make_printable(data):
     printable = string.digits + string.letters + string.punctuation + ' '
@@ -61,6 +64,8 @@ class NdefPushServer(nfc.npp.NPPServer):
             print "  [%d] type = %s" %(index, record_type)
             print "  [%d] name = %s" %(index, record_name)
             print "  [%d] data = %s" %(index, record_data)
+        if options.onemessage is True:
+            terminate.set()
 
 def main():
     llcp_config = {'recv-miu': options.link_miu, 'send-lto': 1000}
@@ -78,8 +83,8 @@ def main():
             try:
                 ndef_push_server = NdefPushServer()
                 ndef_push_server.start()
-                while nfc.llcp.connected():
-                    time.sleep(1)
+                while nfc.llcp.connected() and not terminate.is_set():
+                    terminate.wait(1)
             except KeyboardInterrupt:
                 log.info("aborted by user")
                 break
@@ -115,6 +120,9 @@ def llcp_connect(clf, general_bytes):
 if __name__ == '__main__':
     from optparse import OptionParser, OptionGroup
     parser = OptionParser()
+    parser.add_option("-1", default=False,
+                      action="store_true", dest="onemessage",
+                      help="terminate when an ndef message arrived")
     parser.add_option("-l", default=False,
                       action="store_true", dest="loopmode",
                       help="run in endless loop (Ctrl-C to abort)")

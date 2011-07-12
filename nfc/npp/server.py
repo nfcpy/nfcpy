@@ -12,10 +12,11 @@ from struct import unpack
 import nfc.llcp
 
 class NPPServer(Thread):
-    """ Simple NPP server
+    """ Simple NPP server. If single_threaded is True then a new thread will not be spawned.
     """
-    def __init__(self):
+    def __init__(self, threaded=False):
         super(NPPServer, self).__init__()
+        self.threaded = threaded
 
     def run(self):
         socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
@@ -24,12 +25,19 @@ class NPPServer(Thread):
             addr = nfc.llcp.getsockname(socket)
             log.info("npp server bound to port {0}".format(addr))
             nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
-            nfc.llcp.listen(socket, backlog=2)
+            nfc.llcp.listen(socket, backlog=2 if self.threaded else 0)
             while True:
                 client_socket = nfc.llcp.accept(socket)
-                client_thread = Thread(target=NPPServer.serve,
-                                       args=[client_socket, self])
-                client_thread.start()
+                if self.threaded:
+                    client_thread = Thread(target=NPPServer.serve,
+                                           args=[client_socket, self])
+                    log.debug("client connected, serving on thread {0}"
+                              .format(client_thread))
+                    client_thread.start()
+                else:
+                    log.debug("client connected, serving in main thread")
+                    if NPPServer.serve(client_socket, self):
+                        break
         except nfc.llcp.Error as e:
             log.error(str(e))
         finally:
@@ -45,20 +53,20 @@ class NPPServer(Thread):
             if data is None:
                 log.debug("connection closed, no data")
                 return
-            
+
             while nfc.llcp.poll(socket, "recv"):
                 data += nfc.llcp.recv(socket)
 
-            log.debug("got {:d} octets data".format(len(data)))
+            log.debug("got {0:d} octets data".format(len(data)))
             if len(data) < 10:
                 log.debug("npp msg initial fragment too short")
                 return # bail out, this is a bad client
 
             version, num_entries = unpack(">BI", data[:5])
-            log.debug("version {:d}, {:d} entries"
+            log.debug("version {0:d}, {1:d} entries"
                       .format(version, num_entries))
             if (version >> 4) > 1:
-                log.debug("unsupported version {:d}".format(version>>4))
+                log.debug("unsupported version {0:d}".format(version>>4))
                 return
 
             if num_entries != 1:
@@ -67,13 +75,13 @@ class NPPServer(Thread):
 
             remaining = data[5:]
             for i in range(num_entries):
-                log.debug("processing NDEF message #{:d}".format(i+1))
+                log.debug("processing NDEF message #{0:d}".format(i+1))
                 if len(remaining) < 5:
                     log.debug("insufficient data for action code and ndef size")
                     return
 
                 action_code, length = unpack(">BI", remaining[:5])
-                log.debug("action code {:d}, ndef length {:d}"
+                log.debug("action code {0:d}, ndef length {1:d} octet"
                           .format(action_code, length))
 
                 if action_code != 1:
@@ -87,12 +95,13 @@ class NPPServer(Thread):
 
                 # message complete, now handle the request
                 ndef_message_data = remaining[:length]
-                log.debug("have complete ndef message, {:d} octets"
+                log.debug("have complete ndef message, {0:d} octets"
                           .format(len(ndef_message_data)))
                 npp_server.process(ndef_message_data)
 
                 # prepare for next
                 remaining = remaining[length:]
+            return
 
         except nfc.llcp.Error as e:
             log.debug("caught exception {0}".format(e))
