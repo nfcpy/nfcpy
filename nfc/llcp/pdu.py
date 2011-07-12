@@ -144,7 +144,7 @@ class ParameterExchange(ProtocolDataUnit):
             t, l = [ord(x) for x in s[offset:offset+2]]
             v = s[offset+2:offset+2+l]
             if t == Parameter.VERSION and l == 1:
-                self.version = "%d.%d" % (ord(v)/16, ord(v)%16)
+                self.version = (ord(v)/16, ord(v)%16)
             elif t == Parameter.MIUX and l == 2:
                 miux = struct.unpack("!H", v)[0]
                 self.miu = 128 + (miux & 0x07FF)
@@ -268,7 +268,7 @@ class Connect(ProtocolDataUnit):
             t, l = [ord(x) for x in s[offset:offset+2]]
             if t == 2 and l == 2:
                 miux = struct.unpack("!H", s[offset+2:offset+4])[0]
-                self.miu = 128 + miux & 0x07FF
+                self.miu = 128 + (miux & 0x07FF)
             if t == 5 and l == 1:
                 self.rw = ord(s[offset+2]) & 0x0F
             if t == 6 and l > 0:
@@ -329,7 +329,7 @@ class ConnectionComplete(ProtocolDataUnit):
             t, l = [ord(x) for x in s[offset:offset+2]]
             if t == 2 and l == 2:
                 miux = struct.unpack("!H", s[offset+2:offset+4])[0]
-                self.miu = 128 + miux & 0x07FF
+                self.miu = 128 + (miux & 0x07FF)
             if t == 5 and l == 1:
                 self.rw = ord(s[offset+2]) & 0x0F
             offset += 2 + l

@@ -41,6 +41,7 @@ supported_devices.append((0x054c,0x02e1)) # Sony RC-S330
 supported_devices.append((0x04cc,0x0531)) # Philips demo board
 supported_devices.append((0x054c,0x0193)) # Sony demo board
 supported_devices.append((0x04e6,0x5591)) # SCM SCL3711
+supported_devices.append((0x04cc,0x2533)) # NXP PN533 demo board
 
 pn53x_cmd = {
     0x00: "Diagnose",
@@ -80,10 +81,22 @@ pn53x_err = {
     0x01: "time out, the target has not answered",
     0x02: "checksum error during rf communication",
     0x03: "parity error during rf communication",
+    0x04: "erroneous bit count in anticollision",
+    0x05: "framing error during mifare operation",
+    0x06: "abnormal bit collision in 106 kbps anticollision",
+    0x07: "insufficient communication buffer size",
+    0x09: "rf buffer overflow detected by ciu",
+    0x0a: "rf field not activated in time by active mode peer",
     0x0b: "protocol error during rf communication",
     0x0d: "overheated - antenna drivers deactivated",
+    0x0e: "internal buffer overflow",
+    0x10: "invalid command parameter",
+    0x12: "unsupported command from initiator",
     0x13: "format error during rf communication",
+    0x14: "mifare authentication error",
+    0x23: "wrong uid check byte (14443-3)",
     0x25: "command invalid in current dep state",
+    0x26: "operation not allowed in this configuration",
     0x29: "released by initiator while operating as target",
     0x2f: "deselected by initiator while operating as target",
     0x31: "initiator rf-off state detected in passive mode",
@@ -490,8 +503,8 @@ class device(object):
         nfcid3 = "\x01\xfe" + os.urandom(8)
 
         try:
-            rsp = self.dev.in_jump_for_dep("passive", "424", pollrq,
-                                               nfcid3, general_bytes)
+            rsp = self.dev.in_jump_for_dep("active", "424", pollrq,
+                                           nfcid3, general_bytes)
         except CommandError as (errno, strerror):
             if errno != 1: raise
             else: return None

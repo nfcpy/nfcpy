@@ -226,20 +226,36 @@ class LogicalLinkControl(threading.Thread):
         miu = self.cfg['recv-miu']
         lto = self.cfg['send-lto']
         wks = self.cfg["recv-wks"]
-        pax = ParameterExchange(miu=miu, lto=lto, wks=wks)
+        pax = ParameterExchange(version=(1,1), miu=miu, lto=lto, wks=wks)
         return "Ffm" + pax.to_string().lstrip("\x00\x40")
 
     def activate(self, mac):
-        log.info("running on " + mac.role)
+        info = ["LLCP Link established, I'm the the DEP {0}".format(mac.role)]
+
+        pax = "\x00\x40" + self.parameter_string.lstrip("Ffm")
+        pax = ProtocolDataUnit.from_string(pax)
+        info.append("Local LLCP Settings")
+        info.append("  LLCP Version: {0[0]}.{0[1]}".format(pax.version))
+        info.append("  Link Timeout: {0} ms".format(pax.lto))
+        info.append("  Max Inf Unit: {0} octet".format(pax.miu))
+        info.append("  Service List: {0:016b}".format(pax.wks))
+
         pax = "\x00\x40" + mac.general_bytes.lstrip("Ffm")
         pax = ProtocolDataUnit.from_string(pax)
+        info.append("Remote LLCP Settings")
+        info.append("  LLCP Version: {0[0]}.{0[1]}".format(pax.version))
+        info.append("  Link Timeout: {0} ms".format(pax.lto))
+        info.append("  Max Inf Unit: {0} octet".format(pax.miu))
+        info.append("  Service List: {0:016b}".format(pax.wks))
+
+        self.mac = mac
+        self.cfg['rcvd-ver'] = pax.version
         self.cfg['send-miu'] = pax.miu
         self.cfg['recv-lto'] = pax.lto
         self.cfg['send-wks'] = pax.wks
         self.cfg['send-lsc'] = pax.lsc
-        for key in sorted(self.cfg.keys()):
-            log.info("%s: %s" % (key, self.cfg[key]))
-        self.mac = mac
+        log.debug("llc cfg {0}".format(self.cfg))
+        log.info('\n'.join(info))
 
     def shutdown(self):
         log.debug("shutdown requested")
