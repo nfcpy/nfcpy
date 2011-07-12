@@ -72,7 +72,7 @@ class SnepServer(Thread):
 
                 version, opcode, length = unpack(">BBL", data[:6])
                 if (version >> 4) > 1:
-                    log.debug("unsupported version {}".format(version>>4))
+                    log.debug("unsupported version {0}".format(version>>4))
                     nfc.llcp.send(socket, "\x10\xE1\x00\x00\x00\x00")
                     continue
                 
@@ -96,7 +96,7 @@ class SnepServer(Thread):
                 elif opcode == 2:
                     snep_response = snep_server._put(snep_request)
                 else:
-                    log.debug("bad request {}".format(version & 0x0f))
+                    log.debug("bad request {0}".format(version & 0x0f))
                     snep_response = "\x10\xC2\x00\x00\x00\x00"
 
                 # send the snep response, fragment if needed
