@@ -66,26 +66,22 @@ class ContactlessFrontend(object):
         *general_bytes* is set to *None*, poll() will only search for
         contactless tags, i.e. not for NFCIP-1 devices."""
 
-        if not general_bytes is None:
-            data = self.dev.poll_dep(general_bytes)
-            if not data is None: 
-                log.debug("got dep target, general bytes " + data.encode("hex"))
-                return DEPInitiator(self.dev, data)
-
-        rsp = self.dev.poll_tag()
-        if rsp is not None:
-            log.debug("found tag {0}".format(rsp))
-            if rsp.get("type") == "T1T":
+        target = self.dev.poll(general_bytes)
+        if target is not None:
+            log.debug("found target {0}".format(target))
+            if target.get("type") == "DEP":
+                return DEPInitiator(self.dev, target['data'])
+            if target.get("type") == "T1T":
                 log.info("support for type 1 tag not yet implemented")
                 return None
-            if rsp.get("type") == "T2T":
-                return Type2Tag(self.dev, rsp)
-            if rsp.get("type") == "T3T":
-                data = rsp.get("data")
+            if target.get("type") == "T2T":
+                return Type2Tag(self.dev, target)
+            if target.get("type") == "T3T":
+                data = target.get("data")
                 idm = data[0:8]; pmm = data[8:16]; sc = data[16:18]
                 log.debug("got type 3 tag, service code " + sc.encode("hex"))
                 return Type3Tag(self.dev, idm, pmm, sc)
-            if rsp.get("type") == "T4T":
+            if target.get("type") == "T4T":
                 log.info("support for type 4 tag not yet implemented")
                 return None
 

@@ -495,32 +495,14 @@ class device(object):
     def rwt(self):
         return (256 * 16/13.56E6) * 2**self._rwt
 
-    def poll_dep(self, general_bytes):
-        log.debug("polling for a dep target")
-        self.dev.reset_mode()
-
-        pollrq = "\x00\xFF\xFF\x00\x03"
-        nfcid3 = "\x01\xfe" + os.urandom(8)
-
-        try:
-            rsp = self.dev.in_jump_for_dep("active", "424", pollrq,
-                                           nfcid3, general_bytes)
-        except CommandError as (errno, strerror):
-            if errno != 1: raise
-            else: return None
-            
-        log.info("ATR_RES(nfcid3={0}, did={1:02x}, bs={2:02x},"
-                 " br={3:02x}, to={4:02x}, pp={5:02x}, gb={6})"
-                 .format(rsp[0:10].tostring().encode("hex"),
-                         rsp[10], rsp[11], rsp[12], rsp[13],
-                         rsp[14], rsp[15:].tostring().encode("hex")))
-        return rsp[15:].tostring()
-
-    def poll_tag(self):
+    def poll(self, general_bytes=None):
         for poll in (self.poll_nfca, self.poll_nfcb, self.poll_nfcf):
-            rsp = poll()
-            if rsp is not None:
-                return rsp
+            target = poll()
+            if target is not None:
+                if general_bytes is not None:
+                    if target['type'] == DEP:
+                        return self.poll_dep(general_bytes)
+                return target
 
     def poll_nfca(self):
         log.debug("polling for NFC-A technology")
@@ -535,17 +517,21 @@ class device(object):
             uid = rsp[4:4+rsp[3]]
             platform = ("T2T", "T4T", "DEP", "DEP/TT4")[(sak >> 5) & 0b11]
             log.debug("configured for {0} platform".format(platform))
-            if sak & 0b01100000 == 0b00000000:
+            if sak == 0b00000000:
                 return {"type": "T2T", "ATQ": atq, "SAK": sak, "UID": uid}
-            
-        rsp = self.dev.in_list_passive_target("106J", "")
-        if rsp is not None:
-            log.debug("NFC-J tag found at 106 kbps")
-            print rsp.tostring().encode("hex")
-            atq = rsp[1] * 256 + rsp[0]
-            RALL = "\x00\x00" + rsp[2:].tostring()
-            self.dev.in_data_exchange(0x01, RALL , 100)
-            return {"type": "T1T", "ATQ": atq, "SAK": 0, "UID": rsp[2:]}
+            elif sak & 0b00100000 == 0b00100000:
+                return {"type": "T4T", "ATQ": atq, "SAK": sak, "UID": uid}
+            elif sak & 0b01000000 == 0b01000000:
+                return {"type": "DEP", "ATQ": atq, "SAK": sak, "UID": uid}
+        else:
+            rsp = self.dev.in_list_passive_target("106J", "")
+            if rsp is not None:
+                log.debug("NFC-J tag found at 106 kbps")
+                print rsp.tostring().encode("hex")
+                atq = rsp[1] * 256 + rsp[0]
+                RALL = "\x00\x00" + rsp[2:].tostring()
+                self.dev.in_data_exchange(0x01, RALL , 100)
+                return {"type": "T1T", "ATQ": atq, "SAK": 0, "UID": rsp[2:]}
 
         # no target found, shut off rf field
         self.dev.rf_configuration(0x01, "\x00")
@@ -564,6 +550,11 @@ class device(object):
             rsp = self.dev.in_list_passive_target(br, poll_ffff)
             if rsp is None: continue
 
+            # TODO: check compare is against IDm[0:2]
+            # TODO: check if rf needs to be switched off
+            if rsp[0:2] == "\x01\xFE":
+                return {"type": "DEP"}
+
             if (rsp[-2], rsp[-1]) != (0x12, 0xFC):
                 tmp_rsp = self.dev.in_list_passive_target(br, poll_12fc)
                 if tmp_rsp is not None: rsp = tmp_rsp
@@ -574,6 +565,26 @@ class device(object):
             # no target found, shut off rf field
             self.dev.rf_configuration(0x01, "\x00")
             
+    def poll_dep(self, general_bytes):
+        log.debug("polling for a dep target")
+        self.dev.reset_mode()
+
+        pollrq = "\x00\xFF\xFF\x00\x03"
+        nfcid3 = "\x01\xfe" + os.urandom(8)
+
+        try:
+            rsp = self.dev.in_jump_for_dep("active", "424", pollrq,
+                                           nfcid3, general_bytes)
+        except CommandError as (errno, strerror):
+            if errno != 1: raise
+            
+        log.info("ATR_RES(nfcid3={0}, did={1:02x}, bs={2:02x},"
+                 " br={3:02x}, to={4:02x}, pp={5:02x}, gb={6})"
+                 .format(rsp[0:10].tostring().encode("hex"),
+                         rsp[10], rsp[11], rsp[12], rsp[13],
+                         rsp[14], rsp[15:].tostring().encode("hex")))
+        return {"type": "DEP", "data": rsp[15:].tostring()}
+
     def listen(self, general_bytes, timeout):
         log.debug("listen: gb={0} timeout={1} ms"
                   .format(general_bytes.encode("hex"), timeout))
