@@ -41,6 +41,7 @@ supported_devices.append((0x054c,0x02e1)) # Sony RC-S330
 supported_devices.append((0x04cc,0x0531)) # Philips demo board
 supported_devices.append((0x054c,0x0193)) # Sony demo board
 supported_devices.append((0x04e6,0x5591)) # SCM SCL3711
+supported_devices.append((0x04cc,0x2533)) # NXP PN533 demo board
 
 pn53x_cmd = {
     0x00: "Diagnose",
@@ -80,10 +81,22 @@ pn53x_err = {
     0x01: "time out, the target has not answered",
     0x02: "checksum error during rf communication",
     0x03: "parity error during rf communication",
+    0x04: "erroneous bit count in anticollision",
+    0x05: "framing error during mifare operation",
+    0x06: "abnormal bit collision in 106 kbps anticollision",
+    0x07: "insufficient communication buffer size",
+    0x09: "rf buffer overflow detected by ciu",
+    0x0a: "rf field not activated in time by active mode peer",
     0x0b: "protocol error during rf communication",
     0x0d: "overheated - antenna drivers deactivated",
+    0x0e: "internal buffer overflow",
+    0x10: "invalid command parameter",
+    0x12: "unsupported command from initiator",
     0x13: "format error during rf communication",
+    0x14: "mifare authentication error",
+    0x23: "wrong uid check byte (14443-3)",
     0x25: "command invalid in current dep state",
+    0x26: "operation not allowed in this configuration",
     0x29: "released by initiator while operating as target",
     0x2f: "deselected by initiator while operating as target",
     0x31: "initiator rf-off state detected in passive mode",
@@ -266,16 +279,33 @@ class pn53x(object):
         if not status == 0:
             raise CommandError(status)
         return data
-    
+
+    def in_deselect(self, target=0):
+        if (self.ic, self.fw) == ("PN533", "1.48"):
+            rsp = self.command(0x44, "\x01\x01")
+            status = rsp[1] & 0x3f
+        else:
+            rsp = self.command(0x44, chr(target))
+            status = rsp[0] & 0x3f
+        if status != 0:
+            raise CommandError(status)
+
     def in_release(self, target=0):
         if (self.ic, self.fw) == ("PN533", "1.48"):
             rsp = self.command(0x52, "\x01\x01")
+            status = rsp[1] & 0x3f
         else:
             rsp = self.command(0x52, chr(target))
-        if rsp[0] & 0x3f:
-            raise CommandError(rsp[0] & 0x3f)
-        return rsp
+            status = rsp[0] & 0x3f
+        if status != 0:
+            raise CommandError(status)
         
+    def in_select(self, target=1):
+        rsp = self.command(0x54, chr(target))
+        status = rsp[0] & 0x3f
+        if status != 0:
+            raise CommandError(status)
+
     def tg_init_as_target(self, activation_mode, mifare_params,
                           felica_params, nfcid3t=None, general_bytes="",
                           historical_bytes="", timeout=None):
@@ -474,7 +504,7 @@ class device(object):
 
         try:
             rsp = self.dev.in_jump_for_dep("active", "424", pollrq,
-                                               nfcid3, general_bytes)
+                                           nfcid3, general_bytes)
         except CommandError as (errno, strerror):
             if errno != 1: raise
             else: return None
@@ -565,7 +595,7 @@ class device(object):
             speed = ("106", "212", "424")[(data[0]>>4) & 0x07]
             cmode = ("passive", "active", "passive")[data[0] & 0x03]
             ttype = ("card", "dep")[bool(data[0] & 0x04)]
-            log.info("activated as {} target in {} kbps {} mode"
+            log.info("activated as {0} target in {1} kbps {2} mode"
                       .format(ttype, speed, cmode))
             return data[18:].tostring()
         

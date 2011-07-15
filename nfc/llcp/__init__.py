@@ -39,11 +39,13 @@ def activate(mac):
     _llc.start()
 
 def connected():
-    return _llc.is_alive()
+    if _llc is not None:
+        return _llc.is_alive()
 
 def deactivate():
-    _llc.shutdown()
-    _llc.join()
+    if _llc is not None:
+        _llc.shutdown()
+        _llc.join()
 
 def shutdown():
     global _llc
@@ -59,7 +61,8 @@ def resolve(name):
     not known to the remote device. Link termination makes resolve() return
     None.
     """
-    return _llc.resolve(name)
+    if _llc is not None:
+        return _llc.resolve(name)
 
 def socket(type):
     """socket() creates an endpoint for communication.and returns a socket
@@ -70,13 +73,16 @@ def socket(type):
     DATA_LINK_CONNECTION - provides sequenced, reliable, two-way connection-
         based transmission of messages of a fixed maximum length
     """
-    return _llc.socket(type)
+    if _llc is not None:
+        return _llc.socket(type)
 
 def setsockopt(sid, option, value):
-    return _llc.setsockopt(sid, option, value)
+    if _llc is not None:
+        return _llc.setsockopt(sid, option, value)
 
 def getsockopt(sid, option):
-    return _llc.getsockopt(sid, option)
+    if _llc is not None:
+        return _llc.getsockopt(sid, option)
 
 def bind(sid, addr_or_name):
     """bind() assigns a local address for the socket referred to by sid.
@@ -88,7 +94,8 @@ def bind(sid, addr_or_name):
     If addr_or_name is an address, that address must be within the private
     address range (32-63).
     """
-    return _llc.bind(sid, addr_or_name)
+    if _llc is not None:
+        return _llc.bind(sid, addr_or_name)
 
 def listen(sid, backlog):
     """listen() marks the socket referred to by sid as a passive socket,
@@ -97,7 +104,8 @@ def listen(sid, backlog):
     length to which the queue of pending connections for the socket may
     grow. A backlog of zero disables queuing of connection requests.
     """
-    return _llc.listen(sid, backlog)
+    if _llc is not None:
+        return _llc.listen(sid, backlog)
 
 def accept(sid):
     """accept() is used with DATA_LINK_CONNECTION sockets. It extracts the
@@ -106,7 +114,8 @@ def accept(sid):
     returns the socket identifier referring to that socket. The original
     socket sid continues to be in the listening state.
     """
-    return _llc.accept(sid)
+    if _llc is not None:
+        return _llc.accept(sid)
 
 def connect(sid, dest):
     """connect() attempts to establish a data link connection with the
@@ -114,14 +123,16 @@ def connect(sid, dest):
     be specified as the service access point address value or as a service
     name string.
     """
-    return _llc.connect(sid, dest)
+    if _llc is not None:
+        return _llc.connect(sid, dest)
 
 def send(sid, message):
     """send() is used to transmit a message to a remote socket. It may be 
     used only if the socket is in a connected state (so that the intended
     recipient is known).
     """
-    return _llc.send(sid, message)
+    if _llc is not None:
+        return _llc.send(sid, message)
 
 def sendto(sid, message, dest):
     """sendto() is used to transmit a message to a remote socket. If sendto()
@@ -132,13 +143,16 @@ def sendto(sid, message, dest):
     return _llc.sendto(sid, message, dest)
 
 def recv(sid):
-    return _llc.recv(sid)
+    if _llc is not None:
+        return _llc.recv(sid)
 
 def recvfrom(sid):
-    return _llc.recvfrom(sid)
+    if _llc is not None:
+        return _llc.recvfrom(sid)
 
 def poll(sid, event, timeout=None):
-    return _llc.poll(sid, event, timeout)
+    if _llc is not None:
+        return _llc.poll(sid, event, timeout)
 
 def close(sid):
     """close() closes the socket referred to by *sid*. If the socket was of
@@ -146,7 +160,8 @@ def close(sid):
     link connection if one was established earlier and has not yet been 
     closed by the remote endpoint.
     """
-    return _llc.close(sid)
+    if _llc is not None:
+        return _llc.close(sid)
 
 def getsockname(sid):
     """getsockname() returns the address to which the socket *sid* is bound.
@@ -154,10 +169,12 @@ def getsockname(sid):
     calling bind() or implicitely by a send() or sendto() operation on a 
     logical data link socket or connect() on a data link connection socket.
     """
-    return _llc.getsockname(sid)
+    if _llc is not None:
+        return _llc.getsockname(sid)
 
 def getpeername(sid):
     """getpeername() returns the address of the peer connected to the
     socket *sid*, or None if the socket is presently not connected.
     """
-    return _llc.getpeername(sid)
+    if _llc is not None:
+        return _llc.getpeername(sid)
