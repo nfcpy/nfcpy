@@ -31,6 +31,7 @@ class NDEF(object):
             raise ValueError("wrong ndef magic number")
         if not self._cc[3] & 0xF0 == 0:
             raise ValueError("no read permissions for ndef container")
+        log.debug("tag memory dump:\n" + format_data(tag[0:self._cc[2]*8]))
         self._skip = set([])
         offset = 16
         while offset is not None:
@@ -52,6 +53,10 @@ class NDEF(object):
         
     def _read_ndef_tlv(self, offset):
         length, offset = self._read_tlv_length(offset)
+        self._capacity = 16 + self._cc[2] * 8 - offset - len(self._skip)
+        if self._capacity > 254:
+            # needs 2 more tlv length byte
+            self._capacity -= 2
         print "ndef length", length
         self._msg = bytearray()
         while length > 0:
@@ -99,7 +104,7 @@ class NDEF(object):
     @property
     def capacity(self):
         """The maximum number of user bytes on the NDEF tag."""
-        return self._cc[2] * 8
+        return self._capacity
 
     @property
     def writeable(self):
@@ -120,7 +125,7 @@ class Type2Tag(object):
         self.dev = dev
         self.atq = data["ATQ"]
         self.sak = data["SAK"]
-        self.uid = data["UID"]
+        self.uid = bytearray(data["UID"])
         self._mmap = dict()
         #self._ndef = None
         try: self._ndef = NDEF(self)
@@ -128,9 +133,8 @@ class Type2Tag(object):
             log.error("while reading ndef: " + str(e))
 
     def __str__(self):
-        s = "Type2Tag ATQ={atq:04x} SAK={sak:02x} UID={uid}"
-        uid = self.uid.tostring().encode("hex")
-        return s.format(atq=self.atq, sak=self.sak, uid=uid)
+        s = "Type2Tag ATQ={0:04x} SAK={1:02x} UID={2}"
+        return s.format(self.atq, self.sak, str(self.uid).encode("hex"))
 
     def __getitem__(self, key):
         if type(key) is type(int()):
@@ -172,3 +176,15 @@ class Type2Tag(object):
         log.debug("write block #{0}".format(block))
         raise NotImplemented
 
+def format_data(data):
+    if type(data) is not type(str()):
+        data = str(data)
+    import string
+    printable = string.digits + string.letters + string.punctuation + ' '
+    s = []
+    for i in range(0, len(data), 16):
+        s.append("  {offset:04x}: ".format(offset=i))
+        s[-1] += ' '.join(["%02x" % ord(c) for c in data[i:i+16]]) + ' '
+        s[-1] += (8 + 16*3 - len(s[-1])) * ' '
+        s[-1] += ''.join([c if c in printable else '.' for c in data[i:i+16]])
+    return '\n'.join(s)
