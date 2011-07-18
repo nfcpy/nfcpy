@@ -101,24 +101,24 @@ class NDEF(object):
         self.tag.write(''.join([chr(x) for x in self.attr]), [0])
 
 class Type3Tag(object):
-    def __init__(self, dev, idm, pmm, sc):
+    def __init__(self, dev, target):
         self.dev = dev
-        self.idm = idm
-        self.pmm = pmm
-        self.sc  = sc
-        rto, wto = ord(pmm[5]), ord(pmm[6])
+        self.idm = target["IDm"]
+        self.pmm = target["PMm"]
+        self.sys  = target["SYS"]
+        rto, wto = self.pmm[5], self.pmm[6]
         self.rto = ((rto&0x07)+1, (rto>>3&0x07)+1, 0.302 * 4**(rto >> 6))
         self.wto = ((wto&0x07)+1, (wto>>3&0x07)+1, 0.302 * 4**(wto >> 6))
         self._ndef = None
-        if self.sc == "\x12\xFC":
+        if self.sys == "\x12\xFC":
             try: self._ndef = NDEF(self)
             except Exception as e: log.error(str(e))
 
     def __str__(self):
         params = list()
-        params.append(self.idm.encode("hex"))
-        params.append(self.pmm.encode("hex"))
-        params.append(self.sc.encode("hex"))
+        params.append(str(self.idm).encode("hex"))
+        params.append(str(self.pmm).encode("hex"))
+        params.append(str(self.sys).encode("hex"))
         return "Type3Tag IDm=%s PMm=%s SC=%s" % tuple(params)
 
     @property

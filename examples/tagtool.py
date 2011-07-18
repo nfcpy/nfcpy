@@ -1,3 +1,5 @@
+#!/usr/bin/python
+# -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
 # Copyright 2009,2010 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
 #
@@ -54,7 +56,7 @@ def show(tag):
             "\x01\x20": "FeliCa Card RC-S976F [212/424kbps]",
             "\x03\x01": "FeliCa Card RC-S860 [212kbps, 4KB FEPROM]",
             }
-        print "  " + tt3_card_map.get(tag.pmm[0:2], "unknown card type")
+        print "  " + tt3_card_map.get(str(tag.pmm[0:2]), "unknown card type")
     if tag.ndef:
         print "NDEF content"
         print "  version   = %s" % tag.ndef.version

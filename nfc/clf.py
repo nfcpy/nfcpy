@@ -25,6 +25,7 @@ log = logging.getLogger(__name__)
 
 import dev
 from dep import DEPTarget, DEPInitiator
+from tt2 import Type2Tag
 from tt3 import Type3Tag
 
 class ContactlessFrontend(object):
@@ -65,17 +66,21 @@ class ContactlessFrontend(object):
         *general_bytes* is set to *None*, poll() will only search for
         contactless tags, i.e. not for NFCIP-1 devices."""
 
-        if not general_bytes is None:
-            data = self.dev.poll_dep(general_bytes)
-            if not data is None: 
-                log.debug("got dep target, general bytes " + data.encode("hex"))
-                return DEPInitiator(self.dev, data)
-
-        data = self.dev.poll_tt3()
-        if data and len(data) == 18:
-            idm = data[0:8]; pmm = data[8:16]; sc = data[16:18]
-            log.debug("got type 3 tag, service code " + sc.encode("hex"))
-            return Type3Tag(self.dev, idm, pmm, sc)
+        target = self.dev.poll(general_bytes)
+        if target is not None:
+            log.debug("found target {0}".format(target))
+            if target.get("type") == "DEP":
+                return DEPInitiator(self.dev, target['data'])
+            if target.get("type") == "TT1":
+                log.info("support for type 1 tag not yet implemented")
+                return None
+            if target.get("type") == "TT2":
+                return Type2Tag(self.dev, target)
+            if target.get("type") == "TT3":
+                return Type3Tag(self.dev, target)
+            if target.get("type") == "TT4":
+                log.info("support for type 4 tag not yet implemented")
+                return None
 
     def listen(self, timeout, general_bytes=str()):
         """Wait *timeout* milliseconds for becoming initialized by a

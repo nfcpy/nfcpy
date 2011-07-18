@@ -495,6 +495,77 @@ class device(object):
     def rwt(self):
         return (256 * 16/13.56E6) * 2**self._rwt
 
+    def poll(self, p2p_activation_data=None):
+        for poll in (self.poll_nfca, self.poll_nfcb, self.poll_nfcf):
+            target = poll()
+            if target is not None:
+                if target['type'] is not "DEP":
+                    return target
+                if p2p_activation_data is not None:
+                    return self.poll_dep(p2p_activation_data)
+
+    def poll_nfca(self):
+        log.debug("polling for NFC-A technology")
+        self.dev.reset_mode()
+
+        rsp = self.dev.in_list_passive_target("106A", "")        
+        if rsp is not None:
+            log.debug("NFC-A target found at 106 kbps")
+            atq = rsp[1] * 256 + rsp[0]
+            sak = rsp[2]
+            uid = bytearray(rsp[4:4+rsp[3]])
+            platform = ("T2T", "T4T", "DEP", "DEP/TT4")[(sak >> 5) & 0b11]
+            log.debug("NFC-A configured for {0}".format(platform))
+            if sak == 0b00000000:
+                return {"type": "TT2", "ATQ": atq, "SAK": sak, "UID": uid}
+            elif sak & 0b00100000 == 0b00100000:
+                return {"type": "TT4", "ATQ": atq, "SAK": sak, "UID": uid}
+            elif sak & 0b01000000 == 0b01000000:
+                return {"type": "DEP", "ATQ": atq, "SAK": sak, "UID": uid}
+        else:
+            rsp = self.dev.in_list_passive_target("106J", "")
+            if rsp is not None:
+                log.debug("NFC-J tag found at 106 kbps")
+                print rsp.tostring().encode("hex")
+                atq = rsp[1] * 256 + rsp[0]
+                uid = bytearray(rsp[2:])
+                RALL = "\x00\x00" + str(rsp[2:])
+                self.dev.in_data_exchange(0x01, RALL , 100)
+                return {"type": "TT1", "ATQ": atq, "SAK": 0, "UID": rsp[2:]}
+
+        # no target found, shut off rf field
+        self.dev.rf_configuration(0x01, "\x00")
+
+    def poll_nfcb(self):
+        return None
+    
+    def poll_nfcf(self):
+        log.debug("polling for NFC-F technology")
+        self.dev.reset_mode()
+
+        poll_ffff = "\x00\xFF\xFF\x01\x03"
+        poll_12fc = "\x00\x12\xFC\x01\x03"
+
+        for br in ("424F", "212F"):
+            rsp = self.dev.in_list_passive_target(br, poll_ffff)
+            if rsp is None: continue
+
+            if (rsp[2], rsp[3]) == (0x01, 0xFE):
+                return {"type": "DEP"}
+
+            if (rsp[-2], rsp[-1]) != (0x12, 0xFC):
+                tmp_rsp = self.dev.in_list_passive_target(br, poll_12fc)
+                if tmp_rsp is not None: rsp = tmp_rsp
+            
+            idm = bytearray(rsp[2:10])
+            pmm = bytearray(rsp[10:18])
+            sys = bytearray(rsp[18:20])
+            log.debug("NFC-F target found at {0} kbps".format(br[0:3]))
+            return {"type": "TT3", "IDm": idm, "PMm": pmm, "SYS": sys}
+        else:
+            # no target found, shut off rf field
+            self.dev.rf_configuration(0x01, "\x00")
+            
     def poll_dep(self, general_bytes):
         log.debug("polling for a dep target")
         self.dev.reset_mode()
@@ -507,42 +578,14 @@ class device(object):
                                            nfcid3, general_bytes)
         except CommandError as (errno, strerror):
             if errno != 1: raise
-            else: return None
             
         log.info("ATR_RES(nfcid3={0}, did={1:02x}, bs={2:02x},"
                  " br={3:02x}, to={4:02x}, pp={5:02x}, gb={6})"
                  .format(rsp[0:10].tostring().encode("hex"),
                          rsp[10], rsp[11], rsp[12], rsp[13],
                          rsp[14], rsp[15:].tostring().encode("hex")))
-        return rsp[15:].tostring()
+        return {"type": "DEP", "data": rsp[15:].tostring()}
 
-    def poll_tt1(self):
-        pass
-
-    def poll_tt2(self):
-        pass
-
-    def poll_tt3(self):
-        log.debug("polling for a type 3 tag")
-        self.dev.reset_mode()
-
-        poll_ffff = "\x00\xFF\xFF\x01\x03"
-        poll_12fc = "\x00\x12\xFC\x01\x03"
-
-        for br in ("424F", "212F"):
-            rsp = self.dev.in_list_passive_target(br, poll_ffff)
-            if rsp is None: continue
-
-            if (rsp[-2], rsp[-1]) != (0x12, 0xFC):
-                tmp_rsp = self.dev.in_list_passive_target(br, poll_12fc)
-                if tmp_rsp is not None: rsp = tmp_rsp
-            
-            log.debug("type 3 target found at {0} kbps".format(br[0:3]))
-            return rsp[2:].tostring()
-        else:
-            # no target found, shut off rf field
-            self.dev.rf_configuration(0x01, "\x00")
-            
     def listen(self, general_bytes, timeout):
         log.debug("listen: gb={0} timeout={1} ms"
                   .format(general_bytes.encode("hex"), timeout))
@@ -606,12 +649,18 @@ class device(object):
     ## tag type (1|2|3) command/response exchange
     ##
     def tt1_exchange(self, cmd):
-        raise NotImplemented
+        rsp = self.dev.in_data_exchange(0x01, cmd, timeout=100)
+        return rsp[1].tostring()
 
     def tt2_exchange(self, cmd):
-        raise NotImplemented
+        rsp = self.dev.in_data_exchange(0x01, cmd, timeout=100)
+        return rsp[1].tostring()
 
     def tt3_exchange(self, cmd, timeout=500):
         log.debug("tt3_exchange")
         rsp = self.dev.in_communicate_thru(cmd)
         return rsp.tostring()
+
+    def tt4_exchange(self, cmd):
+        raise NotImplemented
+
