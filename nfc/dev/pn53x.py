@@ -495,14 +495,14 @@ class device(object):
     def rwt(self):
         return (256 * 16/13.56E6) * 2**self._rwt
 
-    def poll(self, general_bytes=None):
+    def poll(self, p2p_activation_data=None):
         for poll in (self.poll_nfca, self.poll_nfcb, self.poll_nfcf):
             target = poll()
             if target is not None:
-                if general_bytes is not None:
-                    if target['type'] == DEP:
-                        return self.poll_dep(general_bytes)
-                return target
+                if target['type'] is not "DEP":
+                    return target
+                if p2p_activation_data is not None:
+                    return self.poll_dep(p2p_activation_data)
 
     def poll_nfca(self):
         log.debug("polling for NFC-A technology")
@@ -510,13 +510,12 @@ class device(object):
 
         rsp = self.dev.in_list_passive_target("106A", "")        
         if rsp is not None:
-            log.debug("NFC-A tag found at 106 kbps")
-            print rsp.tostring().encode("hex")
+            log.debug("NFC-A target found at 106 kbps")
             atq = rsp[1] * 256 + rsp[0]
             sak = rsp[2]
             uid = bytearray(rsp[4:4+rsp[3]])
             platform = ("T2T", "T4T", "DEP", "DEP/TT4")[(sak >> 5) & 0b11]
-            log.debug("configured for {0} platform".format(platform))
+            log.debug("NFC-A configured for {0}".format(platform))
             if sak == 0b00000000:
                 return {"type": "TT2", "ATQ": atq, "SAK": sak, "UID": uid}
             elif sak & 0b00100000 == 0b00100000:
@@ -551,9 +550,7 @@ class device(object):
             rsp = self.dev.in_list_passive_target(br, poll_ffff)
             if rsp is None: continue
 
-            # TODO: check compare is against IDm[0:2]
-            # TODO: check if rf needs to be switched off
-            if rsp[2:4] == "\x01\xFE":
+            if (rsp[2], rsp[3]) == (0x01, 0xFE):
                 return {"type": "DEP"}
 
             if (rsp[-2], rsp[-1]) != (0x12, 0xFC):
@@ -563,7 +560,7 @@ class device(object):
             idm = bytearray(rsp[2:10])
             pmm = bytearray(rsp[10:18])
             sys = bytearray(rsp[18:20])
-            log.debug("type 3 target found at {0} kbps".format(br[0:3]))
+            log.debug("NFC-F target found at {0} kbps".format(br[0:3]))
             return {"type": "TT3", "IDm": idm, "PMm": pmm, "SYS": sys}
         else:
             # no target found, shut off rf field
