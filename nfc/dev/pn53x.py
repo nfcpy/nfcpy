@@ -514,7 +514,7 @@ class device(object):
             print rsp.tostring().encode("hex")
             atq = rsp[1] * 256 + rsp[0]
             sak = rsp[2]
-            uid = rsp[4:4+rsp[3]]
+            uid = bytearray(rsp[4:4+rsp[3]])
             platform = ("T2T", "T4T", "DEP", "DEP/TT4")[(sak >> 5) & 0b11]
             log.debug("configured for {0} platform".format(platform))
             if sak == 0b00000000:
@@ -529,7 +529,8 @@ class device(object):
                 log.debug("NFC-J tag found at 106 kbps")
                 print rsp.tostring().encode("hex")
                 atq = rsp[1] * 256 + rsp[0]
-                RALL = "\x00\x00" + rsp[2:].tostring()
+                uid = bytearray(rsp[2:])
+                RALL = "\x00\x00" + str(rsp[2:])
                 self.dev.in_data_exchange(0x01, RALL , 100)
                 return {"type": "TT1", "ATQ": atq, "SAK": 0, "UID": rsp[2:]}
 
@@ -552,15 +553,18 @@ class device(object):
 
             # TODO: check compare is against IDm[0:2]
             # TODO: check if rf needs to be switched off
-            if rsp[0:2] == "\x01\xFE":
+            if rsp[2:4] == "\x01\xFE":
                 return {"type": "DEP"}
 
             if (rsp[-2], rsp[-1]) != (0x12, 0xFC):
                 tmp_rsp = self.dev.in_list_passive_target(br, poll_12fc)
                 if tmp_rsp is not None: rsp = tmp_rsp
             
+            idm = bytearray(rsp[2:10])
+            pmm = bytearray(rsp[10:18])
+            sys = bytearray(rsp[18:20])
             log.debug("type 3 target found at {0} kbps".format(br[0:3]))
-            return {"type": "TT3", "data": rsp[2:].tostring()}
+            return {"type": "TT3", "IDm": idm, "PMm": pmm, "SYS": sys}
         else:
             # no target found, shut off rf field
             self.dev.rf_configuration(0x01, "\x00")

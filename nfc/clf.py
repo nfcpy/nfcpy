@@ -77,10 +77,7 @@ class ContactlessFrontend(object):
             if target.get("type") == "TT2":
                 return Type2Tag(self.dev, target)
             if target.get("type") == "TT3":
-                data = target.get("data")
-                idm = data[0:8]; pmm = data[8:16]; sc = data[16:18]
-                log.debug("got type 3 tag, service code " + sc.encode("hex"))
-                return Type3Tag(self.dev, idm, pmm, sc)
+                return Type3Tag(self.dev, target)
             if target.get("type") == "TT4":
                 log.info("support for type 4 tag not yet implemented")
                 return None
