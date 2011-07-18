@@ -1,5 +1,7 @@
+#!/usr/bin/python
+# -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2009,2010 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2011 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -8,7 +10,7 @@
 # Licence.
 # You may obtain a copy of the Licence at:
 #
-# http://ec.europa.eu/idabc/eupl
+# http://www.osor.eu/eupl
 #
 # Unless required by applicable law or agreed to in
 # writing, software distributed under the Licence is
@@ -18,6 +20,7 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
+
 import os
 import sys
 import time
