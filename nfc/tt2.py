@@ -127,7 +127,7 @@ class Type2Tag(object):
         self.sak = data["SAK"]
         self.uid = bytearray(data["UID"])
         self._mmap = dict()
-        #self._ndef = None
+        self._page = 0
         try: self._ndef = NDEF(self)
         except Exception as e:
             log.error("while reading ndef: " + str(e))
@@ -167,8 +167,12 @@ class Type2Tag(object):
         returned as a byte string.
         """
         log.debug("read block #{0}".format(block))
-        cmd = "\x30" + chr(block)
-        return self.dev.tt2_exchange(cmd)
+        if not self._page == block / 256:
+            self._page = block / 256
+            self.dev.tt2_exchange("\xC2\xFF")
+            self.dev.tt2_exchange(chr(self._page) + 3 * "\x00")
+            block = block % 256
+        return self.dev.tt2_exchange("\x30" + chr(block))
 
     def write(self, data, block):
         """Write a 16-byte data block to the tag.
