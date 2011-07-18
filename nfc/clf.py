@@ -71,17 +71,17 @@ class ContactlessFrontend(object):
             log.debug("found target {0}".format(target))
             if target.get("type") == "DEP":
                 return DEPInitiator(self.dev, target['data'])
-            if target.get("type") == "T1T":
+            if target.get("type") == "TT1":
                 log.info("support for type 1 tag not yet implemented")
                 return None
-            if target.get("type") == "T2T":
+            if target.get("type") == "TT2":
                 return Type2Tag(self.dev, target)
-            if target.get("type") == "T3T":
+            if target.get("type") == "TT3":
                 data = target.get("data")
                 idm = data[0:8]; pmm = data[8:16]; sc = data[16:18]
                 log.debug("got type 3 tag, service code " + sc.encode("hex"))
                 return Type3Tag(self.dev, idm, pmm, sc)
-            if target.get("type") == "T4T":
+            if target.get("type") == "TT4":
                 log.info("support for type 4 tag not yet implemented")
                 return None
 

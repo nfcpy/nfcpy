@@ -518,9 +518,9 @@ class device(object):
             platform = ("T2T", "T4T", "DEP", "DEP/TT4")[(sak >> 5) & 0b11]
             log.debug("configured for {0} platform".format(platform))
             if sak == 0b00000000:
-                return {"type": "T2T", "ATQ": atq, "SAK": sak, "UID": uid}
+                return {"type": "TT2", "ATQ": atq, "SAK": sak, "UID": uid}
             elif sak & 0b00100000 == 0b00100000:
-                return {"type": "T4T", "ATQ": atq, "SAK": sak, "UID": uid}
+                return {"type": "TT4", "ATQ": atq, "SAK": sak, "UID": uid}
             elif sak & 0b01000000 == 0b01000000:
                 return {"type": "DEP", "ATQ": atq, "SAK": sak, "UID": uid}
         else:
@@ -531,7 +531,7 @@ class device(object):
                 atq = rsp[1] * 256 + rsp[0]
                 RALL = "\x00\x00" + rsp[2:].tostring()
                 self.dev.in_data_exchange(0x01, RALL , 100)
-                return {"type": "T1T", "ATQ": atq, "SAK": 0, "UID": rsp[2:]}
+                return {"type": "TT1", "ATQ": atq, "SAK": 0, "UID": rsp[2:]}
 
         # no target found, shut off rf field
         self.dev.rf_configuration(0x01, "\x00")
@@ -560,7 +560,7 @@ class device(object):
                 if tmp_rsp is not None: rsp = tmp_rsp
             
             log.debug("type 3 target found at {0} kbps".format(br[0:3]))
-            return {"type": "T3T", "data": rsp[2:].tostring()}
+            return {"type": "TT3", "data": rsp[2:].tostring()}
         else:
             # no target found, shut off rf field
             self.dev.rf_configuration(0x01, "\x00")
