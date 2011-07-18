@@ -52,6 +52,7 @@ class NDEF(object):
         return offset + length
         
     def _read_ndef_tlv(self, offset):
+        self._ndef_tlv_offset = offset - 1
         length, offset = self._read_tlv_length(offset)
         self._capacity = 16 + self._cc[2] * 8 - offset - len(self._skip)
         if self._capacity > 254:
@@ -117,7 +118,31 @@ class NDEF(object):
 
     @message.setter
     def message(self, data):
-        raise NotImplemented("type 4 tag writing is not yet implemented")
+        if not self.writeable:
+            raise IOError("tag writing disabled")
+        if len(data) > self.capacity:
+            raise IOError("ndef message beyond tag capacity")
+        self._msg = bytearray(data)
+        if len(data) < self.capacity:
+            data = data + "\xFE"
+        data = bytearray(data)       
+        with self._tag as tag:
+            offset = self._ndef_tlv_offset + 1
+            tag[offset] = 0
+            offset += 1 if len(self._msg) < 255 else 3
+            for octet in data:
+                while offset in self._skip:
+                    offset += 1
+                tag[offset] = octet
+                offset += 1
+        with self._tag as tag:
+            offset = self._ndef_tlv_offset + 1
+            if len(self._msg) < 255:
+                tag[offset] = len(self._msg)
+            else:
+                tag[offset] = 255
+                tag[offset+1] = len(self._msg) / 256
+                tag[offset+2] = len(self._msg) % 256
 
 class Type2Tag(object):
     def __init__(self, dev, data):
@@ -155,6 +180,10 @@ class Type2Tag(object):
             key = slice(key, key+1)
         if type(key) is not type(slice(1)):
             raise TypeError("key must be of type int or slice")
+        if type(value) == type(int()):
+            value = bytearray([value])
+        else:
+            value = bytearray(value)
         if len(value) != key.stop - key.start:
             raise ValueError("value and slice length must be equal")
         for i in xrange(key.start, key.stop):
@@ -166,12 +195,13 @@ class Type2Tag(object):
             self._sync.add(i/4)
 
     def __enter__(self):
-        return True
+        return self
 
     def __exit__(self, exc_type, exc_value, traceback):
         if exc_type is None:
-            for i in self._sync:
+            for i in sorted(self._sync):
                 self.write(i, self._mmap[i/4][(i*4)%16:(i*4)%16+4])
+            self._sync.clear()
         
     @property
     def ndef(self):
@@ -188,8 +218,8 @@ class Type2Tag(object):
     def read(self, block):
         """Read 16-byte of data from the tag. The *block* argument
         specifies the offset in multiples of 4 bytes (i.e. block
-        number 1 will return bytes 4 to 19). The data is returned as a
-        string of bytes.
+        number 1 will return bytes 4 to 19). The data returned is a
+        byte array of length 16.
         """
         log.debug("read block #{0}".format(block))
         if not self._page == block / 256:
@@ -197,7 +227,7 @@ class Type2Tag(object):
             self.dev.tt2_exchange("\xC2\xFF")
             self.dev.tt2_exchange(chr(self._page) + 3 * "\x00")
             block = block % 256
-        return self.dev.tt2_exchange("\x30" + chr(block))
+        return bytearray(self.dev.tt2_exchange("\x30" + chr(block)))
 
     def write(self, block, data):
         """Write 4-byte of data to the tag. The *block* argument
