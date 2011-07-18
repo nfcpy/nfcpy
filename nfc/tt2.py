@@ -31,7 +31,7 @@ class NDEF(object):
             raise ValueError("wrong ndef magic number")
         if not self._cc[3] & 0xF0 == 0:
             raise ValueError("no read permissions for ndef container")
-        log.debug("tag memory dump:\n" + format_data(tag[0:self._cc[2]*8]))
+        log.debug("tag memory dump:\n" + format_data(tag[0:16+self._cc[2]*8]))
         self._skip = set([])
         offset = 16
         while offset is not None:
@@ -57,7 +57,6 @@ class NDEF(object):
         if self._capacity > 254:
             # needs 2 more tlv length byte
             self._capacity -= 2
-        print "ndef length", length
         self._msg = bytearray()
         while length > 0:
             if not offset in self._skip:
@@ -127,6 +126,7 @@ class Type2Tag(object):
         self.sak = data["SAK"]
         self.uid = bytearray(data["UID"])
         self._mmap = dict()
+        self._sync = set()
         self._page = 0
         try: self._ndef = NDEF(self)
         except Exception as e:
@@ -139,6 +139,8 @@ class Type2Tag(object):
     def __getitem__(self, key):
         if type(key) is type(int()):
             key = slice(key, key+1)
+        if not type(key) is type(slice(1)):
+            raise TypeError("key must be of type int or slice")
         bytes = bytearray(key.stop - key.start)
         for i in xrange(key.start, key.stop):
             data = self._mmap.get(i/16, None)
@@ -147,6 +149,29 @@ class Type2Tag(object):
                 self._mmap[i/16] = data
             bytes[i-key.start] = data[i%16]
         return bytes if len(bytes) > 1 else bytes[0]
+        
+    def __setitem__(self, key, value):
+        if type(key) is type(int()):
+            key = slice(key, key+1)
+        if type(key) is not type(slice(1)):
+            raise TypeError("key must be of type int or slice")
+        if len(value) != key.stop - key.start:
+            raise ValueError("value and slice length must be equal")
+        for i in xrange(key.start, key.stop):
+            data = self._mmap.get(i/16, None)
+            if data is None:
+                data = self.read((i/16)*4)
+                self._mmap[i/16] = data
+            data[i%16] = value[i-key.start]
+            self._sync.add(i/4)
+
+    def __enter__(self):
+        return True
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if exc_type is None:
+            for i in self._sync:
+                self.write(i, self._mmap[i/4][(i*4)%16:(i*4)%16+4])
         
     @property
     def ndef(self):
@@ -161,10 +186,10 @@ class Type2Tag(object):
         except IOError: return False
 
     def read(self, block):
-        """Read a 16-byte data block from the tag. The *block*
-        argument specifies the offset in multiples of 4 bytes
-        (i.e. block number 1 will return bytes 4 to 19). The data is
-        returned as a byte string.
+        """Read 16-byte of data from the tag. The *block* argument
+        specifies the offset in multiples of 4 bytes (i.e. block
+        number 1 will return bytes 4 to 19). The data is returned as a
+        string of bytes.
         """
         log.debug("read block #{0}".format(block))
         if not self._page == block / 256:
@@ -174,11 +199,20 @@ class Type2Tag(object):
             block = block % 256
         return self.dev.tt2_exchange("\x30" + chr(block))
 
-    def write(self, data, block):
-        """Write a 16-byte data block to the tag.
+    def write(self, block, data):
+        """Write 4-byte of data to the tag. The *block* argument
+        specifies the offset in multiples of 4 bytes. The *data*
+        argument must be a string or bytearray of length 4.
         """
         log.debug("write block #{0}".format(block))
-        raise NotImplemented
+        assert(len(data) == 4)
+        assert(block > 3)
+        if not self._page == block / 256:
+            self._page = block / 256
+            self.dev.tt2_exchange("\xC2\xFF")
+            self.dev.tt2_exchange(chr(self._page) + 3 * "\x00")
+            block = block % 256
+        return self.dev.tt2_exchange("\xA2" + chr(block) + str(data))
 
 def format_data(data):
     if type(data) is not type(str()):
