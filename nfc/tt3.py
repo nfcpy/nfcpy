@@ -154,7 +154,9 @@ class Type3Tag(object):
         cmd  = "\x06" + self.idm # ReadWithoutEncryption
         cmd += "\x01" + ("%02X%02X" % (service%256,service/256)).decode("hex")
         cmd += chr(len(blocks))
-        cmd += ''.join(["\x00" + chr(b%256) + chr(b/256) for b in blocks])
+        for block in blocks:
+            if block < 256: cmd += "\x80" + chr(block)
+            else: cmd += "\x00" + chr(block%256) + chr(block/256)
         rto = int((self.rto[0] + self.rto[1] * len(blocks)) * self.rto[2]) + 5
         log.debug("read timeout is {0} ms".format(rto))
         resp = self.dev.tt3_exchange(chr(len(cmd)+1) + cmd, rto)
@@ -177,7 +179,9 @@ class Type3Tag(object):
         cmd  = "\x08" + self.idm # ReadWithoutEncryption
         cmd += "\x01" + ("%02X%02X" % (service%256,service/256)).decode("hex")
         cmd += chr(len(blocks))
-        cmd += ''.join(["\x00" + chr(b%256) + chr(b/256) for b in blocks])
+        for block in blocks:
+            if block < 256: cmd += "\x80" + chr(block)
+            else: cmd += "\x00" + chr(block%256) + chr(block/256)
         cmd += data
         wto = int((self.wto[0] + self.wto[1] * len(blocks)) * self.wto[2]) + 5
         log.debug("write timeout is {0} ms".format(wto))
