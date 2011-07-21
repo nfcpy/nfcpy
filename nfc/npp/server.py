@@ -34,7 +34,7 @@ from struct import unpack
 import nfc.llcp
 
 class NPPServer(Thread):
-    """ Simple NPP server. If single_threaded is True then a new thread will not be spawned.
+    """Simple NPP server. Can serve multiple requests in threaded mode.
     """
     def __init__(self, threaded=False):
         super(NPPServer, self).__init__()
