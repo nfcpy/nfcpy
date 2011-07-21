@@ -64,18 +64,17 @@ class NPPClient(object):
             self.socket = None
 
     def put(self, ndef_message):
-        """Send an NDEF message to the server. Temporarily connects to
-        the server if the client is not yet connected.
+        """Send an NDEF message to the NPP server.
         """
-        if not self.socket:
-            self.__connect()
+        npp_message = "\x01" # NPP version
+        npp_message += "\x00\x00\x00\x01" # sending one entry
+        npp_message += "\x01" # action code
+        npp_message += struct.pack('>I', len(ndef_message.tostring()))
+        npp_message += ndef_message.tostring()
+        log.debug("%d bytes to send" % len(npp_message))
+
+        self.__connect()
         try:
-            npp_message = "\x01" # NPP version
-            npp_message += "\x00\x00\x00\x01" # sending one entry
-            npp_message += "\x01" # action code
-            npp_message += struct.pack('>I', len(ndef_message.tostring()))
-            npp_message += ndef_message.tostring()
-            log.debug("%d bytes to send" % len(npp_message))
             if send_request(self.socket, npp_message, self.send_miu):
                 log.debug("Message sent")
         finally:
