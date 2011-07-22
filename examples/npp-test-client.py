@@ -94,11 +94,11 @@ def llcp_connect(clf, general_bytes):
 if __name__ == '__main__':
     from optparse import OptionParser, OptionGroup
 
-    usage = "Usage: %prog [options] < ndef_message"
+    usage = "Usage: %prog [options] < message.ndef"
     parser = OptionParser(usage)
     parser.add_option("-b", default=False,
                       action="store_true", dest="binary",
-                      help="read binary data from stdin")
+                      help="read binary ndef from stdin")
     parser.add_option("-l", default=False,
                       action="store_true", dest="loopmode",
                       help="run in endless loop (Ctrl-C to abort)")

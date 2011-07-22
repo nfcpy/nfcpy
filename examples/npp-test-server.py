@@ -56,16 +56,21 @@ class NdefPushServer(nfc.npp.NPPServer):
 
     def process(self, ndef_message_data):
         log.info("ndef push server got message")
-        print format_data(ndef_message_data)
+        if options.binary:
+            sys.stdout.write(ndef_message_data)
+            sys.stdout.flush()
+        else:
+            print ndef_message_data.encode("hex")
+        log.info(format_data(ndef_message_data))
         ndef_message = nfc.ndef.Message(ndef_message_data)
-        print "NDEF records:"
+        log.info("NDEF records:")
         for index, record in enumerate(ndef_message):
             record_type = record.type
             record_name = record.name
             record_data = make_printable(record.data)
-            print "  [%d] type = %s" %(index, record_type)
-            print "  [%d] name = %s" %(index, record_name)
-            print "  [%d] data = %s" %(index, record_data)
+            log.info("  [%d] type = %s" %(index, record_type))
+            log.info("  [%d] name = %s" %(index, record_name))
+            log.info("  [%d] data = %s" %(index, record_data))
         if options.onemessage is True:
             terminate.set()
 
@@ -121,7 +126,11 @@ def llcp_connect(clf, general_bytes):
 
 if __name__ == '__main__':
     from optparse import OptionParser, OptionGroup
-    parser = OptionParser()
+    usage = "Usage: %prog [options] > message.ndef"
+    parser = OptionParser(usage)
+    parser.add_option("-b", default=False,
+                      action="store_true", dest="binary",
+                      help="write binary ndef to stdout")
     parser.add_option("-1", default=False,
                       action="store_true", dest="onemessage",
                       help="terminate when an ndef message arrived")
