@@ -27,7 +27,6 @@ log = logging.getLogger()
 import os
 import sys
 import time
-import string
 import threading
 
 sys.path.insert(1, os.path.split(sys.path[0])[0])
@@ -35,66 +34,34 @@ import nfc
 import nfc.npp
 import nfc.ndef
 
-terminate = threading.Event()
-
-def make_printable(data):
-    printable = string.digits + string.letters + string.punctuation + ' '
-    return ''.join([c if c in printable else '.' for c in data])
-
-def format_data(data):
-    s = []
-    for i in range(0, len(data), 16):
-        s.append("  %04x: " % i)
-        s[-1] += ' '.join(["%02x" % ord(c) for c in data[i:i+16]]) + ' '
-        s[-1] += (8 + 16*3 - len(s[-1])) * ' '
-        s[-1] += make_printable(data[i:i+16])
-    return '\n'.join(s)
-
-class NdefPushServer(nfc.npp.NPPServer):
-    def __init__(self):
-        super(NdefPushServer, self).__init__()
-
-    def process(self, ndef_message_data):
-        log.info("ndef push server got message")
-        if options.binary:
-            sys.stdout.write(ndef_message_data)
-            sys.stdout.flush()
-        else:
-            print ndef_message_data.encode("hex")
-        log.info(format_data(ndef_message_data))
-        ndef_message = nfc.ndef.Message(ndef_message_data)
-        log.info("NDEF records:")
-        for index, record in enumerate(ndef_message):
-            record_type = record.type
-            record_name = record.name
-            record_data = make_printable(record.data)
-            log.info("  [%d] type = %s" %(index, record_type))
-            log.info("  [%d] name = %s" %(index, record_name))
-            log.info("  [%d] data = %s" %(index, record_data))
-        if options.onemessage is True:
-            terminate.set()
-
 def main():
     llcp_config = {'recv-miu': options.link_miu, 'send-lto': 1000}
     if options.quirks == "android":
         llcp_config['send-agf'] = False
 
     clf = nfc.ContactlessFrontend(options.device)
+
+    if not options.binary:
+        data = sys.stdin.readlines()
+        data = ''.join([l.strip() for l in data])
+        data = data.decode("hex")
+    else:
+        data = sys.stdin.read()
+
+    ndef_message = nfc.ndef.Message(data)
+
     try:
         while True:
-            general_bytes = nfc.llcp.startup(llcp_config)
-            peer = llcp_connect(clf, general_bytes)
+            peer = llcp_connect(clf, nfc.llcp.startup(llcp_config))
             if peer is None: break
 
             nfc.llcp.activate(peer)
             try:
-                ndef_push_server = NdefPushServer()
-                ndef_push_server.start()
-                while nfc.llcp.connected() and not terminate.is_set():
-                    terminate.wait(1)
-            except KeyboardInterrupt:
-                log.info("aborted by user")
-                break
+                nfc.npp.NPPClient().put(ndef_message)
+                while nfc.llcp.connected():
+                    time.sleep(1)
+            except Exception as e:
+                log.error("Exception: {0}".format(e))
             finally:
                 nfc.llcp.shutdown()
                 log.info("I was the " + peer.role)
@@ -119,21 +86,19 @@ def llcp_connect(clf, general_bytes):
                         if options.quirks == "android":
                             # Google Nexus S does not receive the first
                             # packet if we send immediately.
-                            time.sleep(0.1)
+                            time.sleep(0.15)
                         return peer
     except KeyboardInterrupt:
-        log.info("aborted by user")
+        log.debug("aborted by user")
 
 if __name__ == '__main__':
     from optparse import OptionParser, OptionGroup
-    usage = "Usage: %prog [options] > message.ndef"
+
+    usage = "Usage: %prog [options] < message.ndef"
     parser = OptionParser(usage)
     parser.add_option("-b", default=False,
                       action="store_true", dest="binary",
-                      help="write binary ndef to stdout")
-    parser.add_option("-1", default=False,
-                      action="store_true", dest="onemessage",
-                      help="terminate when an ndef message arrived")
+                      help="read binary ndef from stdin")
     parser.add_option("-l", default=False,
                       action="store_true", dest="loopmode",
                       help="run in endless loop (Ctrl-C to abort)")
