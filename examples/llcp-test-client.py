@@ -560,6 +560,7 @@ def main():
                         break
     except KeyboardInterrupt:
         log.info("aborted by user")
+        clf.close()
         return
 
     nfc.llcp.activate(peer)
@@ -586,6 +587,7 @@ def main():
             log.info(thread.name)
     finally:
         nfc.llcp.shutdown()
+        clf.close()
         log.info("I was the " + peer.role)
 
 
