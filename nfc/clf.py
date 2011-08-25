@@ -25,6 +25,7 @@ log = logging.getLogger(__name__)
 
 import dev
 from dep import DEPTarget, DEPInitiator
+from tt1 import Type1Tag
 from tt2 import Type2Tag
 from tt3 import Type3Tag
 
@@ -72,8 +73,7 @@ class ContactlessFrontend(object):
             if target.get("type") == "DEP":
                 return DEPInitiator(self.dev, target['data'])
             if target.get("type") == "TT1":
-                log.info("support for type 1 tag not yet implemented")
-                return None
+                return Type1Tag(self.dev, target)
             if target.get("type") == "TT2":
                 return Type2Tag(self.dev, target)
             if target.get("type") == "TT3":
