@@ -384,7 +384,7 @@ class DataLinkConnection(TransmissionControlObject):
             if self.state.SHUTDOWN:
                 raise Error(errno.EBADF)
             if not self.state.LISTEN:
-                self.err("accept() but socket state is %s", self.state)
+                self.err("accept() but socket state is {0}".format(self.state))
                 raise Error(errno.EINVAL)
             self.recv_buf += 1
             try: pdu = super(DataLinkConnection, self).recv()
