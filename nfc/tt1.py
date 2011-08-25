@@ -1,6 +1,8 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2011 Alexander Knaub <sanyok.og@googlemail.com>
+# Copyright 2009-2011 
+# Stephen Tiedemann <stephen.tiedemann@googlemail.com>, 
+# Alexander Knaub <sanyok.og@googlemail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -58,9 +60,11 @@ class NDEF(object):
         return offset + length
         
     def _read_ndef_tlv(self, offset):
+        print "Read NDEF TLV"
         self._ndef_tlv_offset = offset - 1
         length, offset = self._read_tlv_length(offset)
-        self._capacity = 16 + self._cc[2] * 8 - offset - len(self._skip)
+        self._capacity = (self._cc[2]+1) * 8 - 24 - len(self._skip)
+#        self._capacity = 16 + self._cc[2] * 8 - offset - len(self._skip)
         if self._capacity > 254:
             # needs 2 more tlv length byte
             self._capacity -= 2
@@ -134,7 +138,7 @@ class NDEF(object):
         data = bytearray(data)       
         with self._tag as tag:
             offset = self._ndef_tlv_offset + 1
-            tag[offset] = 0
+            tag[offset] = 0 # length will be written later
             offset += 1 if len(self._msg) < 255 else 3
             for octet in data:
                 while offset in self._skip:
