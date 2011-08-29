@@ -120,7 +120,7 @@ class Type3Tag(object):
         params.append(str(self.idm).encode("hex"))
         params.append(str(self.pmm).encode("hex"))
         params.append(str(self.sys).encode("hex"))
-        return "Type3Tag IDm=%s PMm=%s SC=%s" % tuple(params)
+        return "Type3Tag IDm=%s PMm=%s SYS=%s" % tuple(params)
 
     @property
     def ndef(self):
@@ -138,7 +138,7 @@ class Type3Tag(object):
         except IOError:
             pass
         try:
-            cmd = "\x00" + self.sc + "\x00\x00"
+            cmd = "\x00" + self.sys + "\x00\x00"
             rsp = self.dev.tt3_exchange(chr(len(cmd)+1) + cmd)
             return rsp.startswith(chr(len(rsp)) + "\x01" + self.idm)
         except IOError:
