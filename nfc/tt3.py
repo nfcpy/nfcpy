@@ -79,7 +79,7 @@ class NDEF(object):
         if len(data) > self.capacity:
             raise IOError("ndef message beyond tag capacity")
 
-        self.data = data
+        self.data = None
         self.attr[9] = 0x0F;
         self.attr[11:14] = split3(len(data))
         self.attr[14:16] = split2(sum(self.attr[0:14]))
