@@ -43,6 +43,8 @@ class Message(list):
                 if not isinstance(elem, Record):
                     raise ValueError("elements must be nfc.ndef.Records")
                 self.append(elem)
+        else:
+            raise ValueError("invalid message initializer")
 
     def tostring(self):
         if len(self) == 0:

@@ -93,6 +93,8 @@ class Record(object):
             header_flags = 4; record_type = record_type[12:]
         elif record_type.startswith("application/octet-stream"):
             header_flags = 5; record_type = record_type[24:]
+        else:
+            raise ValueError("unrecognized record type")
 
         type_length = len(record_type)
         data_length = len(record_data)
