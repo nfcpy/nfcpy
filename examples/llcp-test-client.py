@@ -20,7 +20,12 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-
+#
+# Client side implementation of an LLCP validation suite to verify
+# inter-operability of independent implementations. This suite was
+# primarily developed for the purpose of validating the LLCP
+# specification before final release by the NFC Forum.
+#
 import logging
 log = logging.getLogger()
 
@@ -46,11 +51,64 @@ def info(message, prefix="   "):
     log.info(prefix + message)
 
 def test_01():
+    """Link activation, symmetry and deactivation
+
+    Verify that the LLCP Link can be activated successfully, that the
+    symmetry procedure is performed and the link can be intentionally
+    deactivated.
+
+    1. Start the MAC link activation procedure on two implementations
+       and verify that the version number parameter is received and
+       version number agreement is achieved.
+
+    2. Verify for a duration of 5 seconds that SYMM PDUs are exchanged
+       within the Link Timout values provided by the implementations.
+
+    3. Perform intentional link deactivation by sending a DISC PDU to
+       the remote Link Management component. Verify that SYMM PDUs
+       are no longer exchanged.
+    """
     info("Test 1: link activation, symmetry and deactivation", prefix="")
     time.sleep(5)
     return
 
 def test_02():
+    """Connection-less information transfer
+
+    Verify that the source and destination access point address fields
+    are correctly interpreted, the content of the information field is
+    extracted as the service data unit and the service data unit can
+    take any length between zero and the announced Link MIU. The LLCP
+    Link must be activated prior to running this scenario and the Link
+    MIU of the peer implementation must have been determined. In this
+    scenario, sending of a service data unit (SDU) means that the SDU
+    is carried within the information field of a UI PDU.
+
+    1. Send a service data unit of 128 octets length to the
+       connection-less mode echo service and verify that the same SDU
+       is sent back after the echo delay time.
+
+    2. Send within echo delay time with a time interval of at least
+       0.5 second two consecutive service data units of 128 octets
+       length to the connection-less mode echo service and verify that
+       both SDUs are sent back correctly.
+
+    3. Send within echo delay time with a time interval of at least
+       0.5 second three consecutive service data units of 128 octets
+       length to the connection-less mode echo service and verify that
+       the first two SDUs are sent back correctly and the third SDU is
+       discarded.
+
+    4. Send a service data unit of zero octets length to the
+       connection-less mode echo service and verify that the same zero
+       length SDU is sent back after the echo delay time.
+
+    5. Send a service data unit of maximum octets length to the
+       connection-less mode echo service and verify that the same SDU
+       is sent back after the echo delay time. Note that the maximum
+       length here must be the smaller value of both implementations
+       Link MIU.
+    """
     TestData = namedtuple("TestData", "send recv")
 
     def send_and_receive(socket, send_count, packet_length):
@@ -173,6 +231,29 @@ def test_02():
         nfc.llcp.close(socket)
             
 def test_03():
+    """Connection-oriented information transfer
+
+    Verify that a data link connection can be established, a service
+    data unit is received and sent back correctly and the data link
+    connection can be terminated. The LLCP Link must be activated
+    prior to running this scenario and the connection-oriented mode
+    echo service must be in the unconnected state.  In this scenario,
+    sending of a service data unit (SDU) means that the SDU is carried
+    within the information field of an I PDU.
+
+    1. Send a CONNECT PDU to the connection-oriented mode echo service
+       and verify that the connection request is acknowledged with a
+       CC PDU. The CONNECT PDU shall encode the RW parameter with a
+       value of 2. Verify that the CC PDU encodes the RW parameter
+       with a value of 2 (as specified for the echo server).
+
+    2. Send a single service data unit of 128 octets length over the
+       data link connection and verify that the echo service sends an
+       RR PDU before returning the same SDU after the echo delay time.
+
+    3. Send a DISC PDU to terminate the data link connection and
+       verify that the echo service responds with a correct DM PDU.
+    """
     info("Test 3: connection-oriented information transfer", prefix="")
     socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
     nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
@@ -205,6 +286,29 @@ def test_03():
     nfc.llcp.close(socket)
 
 def test_04():
+    """Send and receive sequence number handling
+
+    Verify that a sequence of service data units that causes the send
+    and receive sequence numbers to take all possible values is
+    received and sent back correctly. The LLCP Link must be activated
+    prior to running this scenario and the connection-oriented mode
+    echo service must be in the unconnected state. In this scenario,
+    sending of a service data unit (SDU) means that the SDU is carried
+    within the information field of an I PDU.
+
+    1. Send a CONNECT PDU to the connection-oriented mode echo service
+       and verify that the connection request is acknowledged with a
+       CC PDU. The CONNECT PDU shall encode the RW parameter with a
+       value of 2. Verify that the CC PDU encodes the RW parameter
+       with a value of 2 (as specified for the echo server).
+
+    2. Send a sequence of at least 16 data units of each 128 octets
+       length over the data link connection and verify that all SDUs
+       are sent back correctly.
+
+    3. Send a DISC PDU to terminate the data link connection and
+       verify that the echo service responds with a correct DM PDU.
+    """
     sent_data = []
     rcvd_data = []
 
@@ -250,6 +354,28 @@ def test_04():
         nfc.llcp.close(socket)
 
 def test_05():
+    """Handling of receiver busy condition
+
+    Verify the handling of a busy condition. The LLCP Link must be
+    activated prior to running this scenario and the
+    connection-oriented mode echo service must be in the unconnected
+    state.  In this scenario, sending of a service data unit (SDU)
+    shall mean that the SDU is carried within the information field of
+    an I PDU.
+
+    1. Send a CONNECT PDU to the connection-oriented mode echo service
+       and verify that the connect request is acknowledged with a CC
+       PDU. The CONNECT PDU shall encode the RW parameter with a value
+       of 0. Verify that the CC PDU encodes the RW parameter with a
+       value of 2 (as specified for the echo server).
+
+    2. Send four service data units of 128 octets length over the data
+       link connection and verify that the echo service enters the
+       busy state when acknowledging the last packet.
+
+    3. Send a DISC PDU to terminate the data link connection and
+       verify that the echo service responds with a correct DM PDU.
+    """
     info("Test 5: handling of receiver busy condition", prefix="")
     socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
     nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVBUF, 0)
@@ -282,6 +408,28 @@ def test_05():
         nfc.llcp.close(socket)
 
 def test_06():
+    """Rejection of connect request
+
+    Verify that an attempt to establish a second connection with the
+    connection-oriented mode echo service is rejected. The LLCP Link
+    must be activated prior to running this scenario.
+
+    1. Send a first CONNECT PDU to the connection-oriented mode echo
+       service and verify that the connect request is acknowledged
+       with a CC PDU.
+
+    2. Send a second CONNECT PDU to the connection-oriented mode echo
+       service and verify that the connect request is rejected with a
+       DM PDU and appropriate reason code.
+
+    3. Send a service data unit of 128 octets length over the data
+       link connection and verify that the echo service returns the
+       same SDU after the echo delay time.
+
+    4. Send a DISC PDU to terminate the data link connection and
+       verify that the echo service responds with a correct DM PDU.
+
+    """
     info("Test 6: rejection of connect request", prefix="")
     socket1 = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
     socket2 = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
@@ -304,6 +452,24 @@ def test_06():
         nfc.llcp.close(socket1)
 
 def test_07():
+    """Connect by service name
+
+    Verify that a data link connection can be established by
+    specifying a service name. The LLCP Link must be activated prior
+    to running this scenario and the connection-oriented mode echo
+    service must be in the unconnected state.
+
+    1. Send a CONNECT PDU with an SN parameter that encodes the value
+       "urn:nfc:sn:co-echo" to the service discovery service access
+       point address and verify that the connect request is
+       acknowledged with a CC PDU.
+
+    2. Send a service data unit over the data link connection and
+       verify that it is sent back correctly.
+
+    3. Send a DISC PDU to terminate the data link connection and
+       verify that the echo service responds with a correct DM PDU.
+    """
     info("Test 7: connect by service name", prefix="")
     socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
     try:
@@ -313,11 +479,11 @@ def test_07():
         if peer_sap == 1:
             raise TestError("connection established with SDP port")
         info("connection established with sap {0}".format(peer_sap))
-        if nfc.llcp.send(socket, "here's stephen"):
+        if nfc.llcp.send(socket, "here's nfcpy"):
             t0 = time.time()
             info("sent test message")
             if nfc.llcp.poll(socket, "recv", timeout=5):
-                if nfc.llcp.recv(socket) == "here's stephen":
+                if nfc.llcp.recv(socket) == "here's nfcpy":
                     info("got echo after {0:.3f} sec".format(time.time()-t0))
                 else: raise TestError("received wrong data from echo server")
             else: raise TestError("no echo response within 5 seconds")
@@ -334,6 +500,25 @@ def test_07():
         nfc.llcp.close(socket)
 
 def test_08():
+    """Aggregation and disaggregation
+
+    Verify that the aggregation procedure is performed correctly. The
+    LLCP Link must be activated prior to running this scenario.  In
+    this scenario, sending of a service data unit (SDU) shall mean
+    that the SDU is carried within the information field of a UI PDU.
+
+    1. Send two service data units of 50 octets length to the
+       connection-less mode echo service such that the two resulting
+       UI PDUs will be aggregated into a single AGF PDU by the LLC
+       sublayer. Verify that both SDUs are sent back correctly and in
+       the same order.
+
+    2. Send three service data units of 50 octets length to the
+       connection-less mode echo service such that the three resulting
+       UI PDUs will be aggregated into a single AGF PDU by the LLC
+       sublayer. Verify that the two first SDUs are sent back
+       correctly and the third SDU is discarded.
+    """
     import nfc.llcp.pdu
     info("Test 8: aggregation and disaggregation", prefix="")
     try:
@@ -389,6 +574,42 @@ def test_08():
         nfc.llcp.close(socket)
 
 def test_09():
+    """Service name lookup
+
+    Verify that a service name is correctly resolved into a service
+    access point address by the remote LLC. The LLCP Link must be
+    activated prior to running this scenario.  In this scenario,
+    sending of a service data unit (SDU) shall mean that the SDU is
+    carried within the information field of a UI PDU.
+
+    1. Send an SNL PDU with an SDREQ parameter in the information
+       field that encodes the value "urn:nfc:sn:sdp" to the service
+       discovery service access point address and verify that the
+       request is responded with an SNL PDU that contains an SDRES
+       parameter with the SAP value '1' and a TID value that is the
+       same as the value encoded in the antecedently transmitted SDREQ
+       parameter.
+
+    2. Send an SNL PDU with an SDREQ parameter in the information
+       field that encodes the value "urn:nfc:sn:cl-echo" to the
+       service discovery service access point address and verify that
+       the request is responded with an SNL PDU that contains an SDRES
+       parameter with a SAP value other than '0' and a TID value that
+       is the same as the value encoded in the antecedently
+       transmitted SDREQ parameter.
+
+    3. Send a service data unit of 128 octets length to the service
+       access point address received in step 2 and verify that the
+       same SDU is sent back after the echo delay time.
+
+    4. Send an SNL PDU with an SDREQ parameter in the information
+       field that encodes the value "urn:nfc:sn:sdp-test" to the
+       service discovery service access point address and verify that
+       the request is responded with an SNL PDU that contains an SDRES
+       parameter with the SAP value '0' and a TID value that is the
+       same as the value encoded in the antecedently transmitted SDREQ
+       parameter.
+    """
     info("Test 9: service name lookup", prefix="")
     addr = nfc.llcp.resolve("urn:nfc:sn:sdp")
     if not addr:
@@ -533,7 +754,7 @@ def test_13():
 
 
 def main():
-    llcp_config = {'recv-miu': options.link_miu, 'send-lto': 1000}
+    llcp_config = {'recv-miu': options.link_miu, 'send-lto': 500}
     if options.quirks == "android":
         llcp_config['send-agf'] = False
 

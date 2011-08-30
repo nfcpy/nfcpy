@@ -20,7 +20,12 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-
+#
+# Server side implementation of an LLCP validation suite to verify
+# inter-operability of independent implementations. This suite was
+# primarily developed for the purpose of validating the LLCP
+# specification before final release by the NFC Forum.
+#
 import os
 import sys
 import time
@@ -35,6 +40,19 @@ import nfc
 import nfc.llcp
 
 class ConnectionLessEchoServer(Thread):
+    """The connection-less mode echo server accepts connection-less
+    transport mode PDUs. Service data units may have any size between
+    zero and the maximum information unit size announced with the LLCP
+    Link MIU parameter. Inbound service data units enter a linear
+    buffer of service data units. The buffer has a capacity of two
+    service data units. The first service data unit entering the
+    buffer starts a delay timer of 2 seconds (echo delay). Expiration
+    of the delay timer causes service data units in the buffer to be
+    sent back to the original sender, which may be different for each
+    service data unit, until the buffer is completely emptied. The
+    buffer empty condition then re-enables the delay timer start event
+    for the next service data unit.
+    """
     def __init__(self):
         super(ConnectionLessEchoServer, self).__init__()
         self.name = "ConnectionLessEchoServerThread"
@@ -66,6 +84,25 @@ class ConnectionLessEchoServer(Thread):
             nfc.llcp.close(socket)
 
 class ConnectionModeEchoServer(Thread):
+    """The connection-oriented mode echo server waits for a connect
+    request and then accepts and processes connection-oriented
+    transport mode PDUs. Further connect requests will be rejected
+    until termination of the data link connection. When accepting the
+    connect request, the receive window parameter is transmitted with
+    a value of 2.
+    
+    The connection-oriented mode echo service stores inbound service
+    data units in a linear buffer of service data units. The buffer
+    has a capacity of three service data units. The first service data
+    unit entering the buffer starts a delay timer of 2 seconds (echo
+    delay). Expiration of the delay timer causes service data units in
+    the buffer to be sent back to the orignal sender until the buffer
+    is completely emptied. The buffer empty condition then re-enables
+    the delay timer start event for the next service data unit.
+    
+    The echo service determines itself as busy if it is unable to
+    accept further incoming service data units.
+    """
     def __init__(self):
         super(ConnectionModeEchoServer, self).__init__()
         self.name = "ConnectionModeEchoServerThread"
@@ -181,7 +218,7 @@ class ConnectionModeDumpServer(Thread):
             nfc.llcp.close(socket)
 
 def main():
-    llcp_config = {'recv-miu': options.link_miu, 'send-lto': 1000}
+    llcp_config = {'recv-miu': options.link_miu, 'send-lto': 500}
     if options.quirks == "android":
         llcp_config['send-agf'] = False
 
