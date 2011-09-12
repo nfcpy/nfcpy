@@ -444,7 +444,8 @@ class pn53x_tty(pn53x):
     def write(self, frame):
         if self.tty is not None:
             self.tty.flushInput()
-            log.debug(">>> " + frame.tostring().encode("hex"))
+            frame = frame.tostring()
+            log.debug(">>> " + frame.encode("hex"))
             if self.tty.write(frame) != len(frame):
                 raise IOError("serial communication error")
 
