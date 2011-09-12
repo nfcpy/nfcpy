@@ -248,9 +248,12 @@ class pn53x(object):
             if baud_rate == "212" or baud_rate == "424":
                 if passive_initiator_data is None:
                     raise ValueError("missing passive initiator data")
-                if not nfcid3 is None:
-                    log.debug("nfcid3 not used in 212/424 kbps passive mode")
-                    nfcid3 = ''
+            if baud_rate == "106" and passive_initiator_data is not None:
+                log.debug("passive initiator data not used for 106 kbps")
+                passive_initiator_data = ''
+            if nfcid3 is not None:
+                log.debug("nfcid3 not used in passive mode")
+                nfcid3 = ''
         
         mode = ("passive", "active").index(communication_mode)
         baud = ("106", "212", "424").index(baud_rate)
@@ -404,8 +407,9 @@ class pn53x_usb(pn53x):
                     error.args[0] == "usb_reap: timeout error"):
                     # normal timeout condition on Linux (1) and Windows (2)
                     return None
-                if (error.args[0] == "could not set config 1: Device or resource busy"):
-                    # strangely happens as timeout error if 2 readers used at same device
+                usb_err = "could not set config 1: Device or resource busy"
+                if (error.args[0] == usb_err):
+                    # timeout error if two readers used on same computer
                     return None
                 log.error(error.args[0])
                 return None
@@ -575,23 +579,30 @@ class device(object):
             self.dev.rf_configuration(0x01, "\x00")
             
     def poll_dep(self, general_bytes):
-        log.debug("polling for a dep target")
+        log.debug("polling for a p2p target")
+        self.dev.rf_configuration(0x01, "\x00")
         self.dev.reset_mode()
 
         pollrq = "\x00\xFF\xFF\x00\x03"
         nfcid3 = "\x01\xfe" + os.urandom(8)
 
-        try:
-            rsp = self.dev.in_jump_for_dep("active", "424", pollrq,
-                                           nfcid3, general_bytes)
-        except CommandError as (errno, strerror):
-            if errno != 1: raise
-            
-        log.info("ATR_RES(nfcid3={0}, did={1:02x}, bs={2:02x},"
-                 " br={3:02x}, to={4:02x}, pp={5:02x}, gb={6})"
-                 .format(rsp[0:10].tostring().encode("hex"),
-                         rsp[10], rsp[11], rsp[12], rsp[13],
-                         rsp[14], rsp[15:].tostring().encode("hex")))
+        for mode, speed in (("active", "424"), ("passive", "424")):
+            try:
+                rsp = self.dev.in_jump_for_dep(mode, speed, pollrq,
+                                               nfcid3, general_bytes)
+                log.info("activated a p2p target in {0} kbps {1} mode"
+                         .format(speed, mode))
+                break
+            except CommandError as (errno, strerror):
+                if errno != 1: raise
+        else:
+            return None
+        
+        log.debug("ATR_RES(nfcid3={0}, did={1:02x}, bs={2:02x},"
+                  " br={3:02x}, to={4:02x}, pp={5:02x}, gb={6})"
+                  .format(rsp[0:10].tostring().encode("hex"),
+                          rsp[10], rsp[11], rsp[12], rsp[13],
+                          rsp[14], rsp[15:].tostring().encode("hex")))
         return {"type": "DEP", "data": rsp[15:].tostring()}
 
     def listen(self, general_bytes, timeout):
@@ -614,7 +625,7 @@ class device(object):
                 
             speed = ("106", "212", "424")[(data[0]>>4) & 0x07]
             cmode = ("passive", "active", "passive")[data[0] & 0x03]
-            ttype = ("card", "dep")[bool(data[0] & 0x04)]
+            ttype = ("card", "p2p")[bool(data[0] & 0x04)]
             log.info("activated as {0} target in {1} kbps {2} mode"
                       .format(ttype, speed, cmode))
             return data[18:].tostring()
