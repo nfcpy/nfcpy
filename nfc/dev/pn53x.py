@@ -437,7 +437,8 @@ class pn53x_tty(pn53x):
                     tty.readline().rstrip("\r\n")
                     time.sleep(0.1)
                 tty.close()
-                self.tty = serial.Serial(portstr, baudrate=230400, timeout=1)
+                self.tty = serial.Serial(portstr, baudrate=230400,
+                                         timeout=1, writeTimeout=1)
                 self.reader = "arygon"
                 break
             tty.close()
@@ -471,7 +472,8 @@ class pn53x_tty(pn53x):
             log.debug(">>> " + frame.encode("hex"))
             if self.reader is "arygon":
                 frame = "2" + frame
-            if self.tty.write(frame) != len(frame):
+            try: self.tty.write(frame)
+            except serial.SerialTimeoutException:
                 raise IOError("serial communication error")
 
     def read(self, timeout):
