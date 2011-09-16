@@ -163,13 +163,12 @@ class pn53x(object):
         frame = self.read(timeout=100)
         
         if frame is None: raise FrameError("no response from pn53x")
-        if frame[0:3] != pn53x.SOF: raise FrameError("invalid frame start")
+        if frame[0:3] != pn53x.SOF: raise FrameError("invalid start of frame")
         if frame != pn53x.ACK: log.warning("missing ack frame from pn53x")
 
         while frame == pn53x.ACK:
             frame = self.read(timeout)
             if frame is None:
-                print "No response"
                 raise NoResponse("no response from pn53x")
 
         if frame[3] == 255 and frame[4] == 255:
@@ -478,13 +477,14 @@ class pn53x_tty(pn53x):
     def write(self, frame):
         if self.tty is not None:
             if self.protocol is "arygon" and frame == pn53x.ACK:
-                # replace with diagnose, abort by ack fails with arygon proto
+                # replace with diagnose, abort by ack fails on arygon mcu
                 frame = "\x00\x00\xff\x08\xf8\xd4\x00\x00nfcpy\x0c\x00"
             else:
                 frame = frame.tostring()
             log.debug(">>> " + frame.encode("hex"))
             if self.protocol is "arygon":
                 frame = "2" + frame
+            self.tty.flushInput()
             try: self.tty.write(frame)
             except serial.SerialTimeoutException:
                 raise IOError("serial communication error")
@@ -492,7 +492,7 @@ class pn53x_tty(pn53x):
     def read(self, timeout):
         if self.tty is not None:
             self.tty.timeout = max(timeout / 1000.0, 0.05)
-            log.debug("tty timeout set to {0} sec".format(self.tty.timeout))
+            #log.debug("tty timeout set to {0} sec".format(self.tty.timeout))
             frame = self.tty.read(6) # wait until timeout expires
             if frame:
                 if not frame == "\x00\x00\xff\x00\xff\x00":
