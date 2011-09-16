@@ -116,6 +116,9 @@ class NoResponse(IOError):
     pass
 
 class pn53x(object):
+    SOF = array('B', '\x00\x00\xFF')
+    ACK = array('B', '\x00\x00\xFF\x00\xFF\x00')
+
     @staticmethod
     def search():
         if os.name == "posix":
@@ -156,20 +159,18 @@ class pn53x(object):
         frame.extend([(256 - sum(frame[-LEN:])) % 256, 0])
         
         self.write(frame)
+
         frame = self.read(timeout=100)
+        
+        if frame is None: raise FrameError("no response from pn53x")
+        if frame[0:3] != pn53x.SOF: raise FrameError("invalid frame start")
+        if frame != pn53x.ACK: log.warning("missing ack frame from pn53x")
 
-        if frame is None:
-            raise FrameError("no response from pn53x")
-        if not (frame[0] == 0 and frame[1] == 0 and frame[2] == 255):
-            raise FrameError("invalid frame start")
-
-        if frame[3] == 0 and frame[4] == 255 and frame[5] == 0:
+        while frame == pn53x.ACK:
             frame = self.read(timeout)
             if frame is None:
+                print "No response"
                 raise NoResponse("no response from pn53x")
-            if not (frame[0] == 0 and frame[1] == 0 and frame[2] == 255):
-                raise FrameError("invalid frame start")
-        else: log.warning("missing ack frame from pn53x")
 
         if frame[3] == 255 and frame[4] == 255:
             # extended information frame
@@ -331,14 +332,11 @@ class pn53x(object):
             cmd += chr(len(general_bytes)) + general_bytes
             cmd += chr(len(historical_bytes)) + historical_bytes
 
-        try:
-            rsp = self.command(0x8c, cmd, timeout)
+        try: return self.command(0x8c, cmd, timeout)
         except NoResponse:
-            # send a diagnose cmd to abort TgInitAsTarget
-            line_test = "\x00\x00\xff\x08\xf8\xd4\x00\x00nfcpy\x0c\x00"
-            self.write(array("B", line_test))
-        else:
-            return rsp
+            # send ack to abort the command processing
+            self.write(pn53x.ACK)
+            pass
 
     def tg_get_data(self, timeout):
         rsp = self.command(0x86, None, timeout)
@@ -439,22 +437,34 @@ class pn53x_tty(pn53x):
                 tty.close()
                 self.tty = serial.Serial(portstr, baudrate=230400,
                                          timeout=1, writeTimeout=1)
-                self.reader = "arygon"
+                self.protocol = "arygon"
                 break
             tty.close()
             continue
-        else:
+        
+        if self.tty is None:
+            tty = serial.Serial(portstr, baudrate=115200, timeout=0.05)
+            tty.write("\x00\x00\xff\x08\xf8\xd4\x00\x00nfcpy\x0c\x00")
+            ack = '\x00\x00\xff\x00\xff\x00'
+            rsp = '\x00\x00\xff\x08\xf8\xd5\x01\x00nfcpy\n\x00'
+            ans = tty.read(len(ack) + len(rsp))
+            if ans == ack + rsp or ans == rsp:
+                self.tty = tty
+                self.protocol = "direct"
+            
+        if self.tty is None:
             raise IOError
-        try:
-            fcntl.flock(self.tty, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        
+        try: fcntl.flock(self.tty, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except IOError:
             log.debug("failed to exclusively lock {0}".format(self.tty.port))
             raise
-        try:
-            ic, ver, rev, support = self.get_firmware_version()
+        
+        try: ic, ver, rev, support = self.get_firmware_version()
         except IOError:
             log.debug("no firmware version from {0}".format(self.tty.port))
             raise
+        
         self.ic = "PN5{0:02x}".format(ic)
         self.fw = "{0}.{1}".format(ver, rev)
         log.info("chipset is a {0} version {1}".format(self.ic, self.fw))
@@ -467,10 +477,13 @@ class pn53x_tty(pn53x):
 
     def write(self, frame):
         if self.tty is not None:
-            self.tty.flushInput()
-            frame = frame.tostring()
+            if self.protocol is "arygon" and frame == pn53x.ACK:
+                # replace with diagnose, abort by ack fails with arygon proto
+                frame = "\x00\x00\xff\x08\xf8\xd4\x00\x00nfcpy\x0c\x00"
+            else:
+                frame = frame.tostring()
             log.debug(">>> " + frame.encode("hex"))
-            if self.reader is "arygon":
+            if self.protocol is "arygon":
                 frame = "2" + frame
             try: self.tty.write(frame)
             except serial.SerialTimeoutException:
@@ -479,7 +492,7 @@ class pn53x_tty(pn53x):
     def read(self, timeout):
         if self.tty is not None:
             self.tty.timeout = max(timeout / 1000.0, 0.05)
-            #log.debug("tty timeout set to {0} sec".format(self.tty.timeout))
+            log.debug("tty timeout set to {0} sec".format(self.tty.timeout))
             frame = self.tty.read(6) # wait until timeout expires
             if frame:
                 if not frame == "\x00\x00\xff\x00\xff\x00":
