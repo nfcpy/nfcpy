@@ -116,6 +116,9 @@ class NoResponse(IOError):
     pass
 
 class pn53x(object):
+    SOF = array('B', '\x00\x00\xFF')
+    ACK = array('B', '\x00\x00\xFF\x00\xFF\x00')
+
     @staticmethod
     def search():
         if os.name == "posix":
@@ -156,20 +159,17 @@ class pn53x(object):
         frame.extend([(256 - sum(frame[-LEN:])) % 256, 0])
         
         self.write(frame)
+
         frame = self.read(timeout=100)
+        
+        if frame is None: raise FrameError("no response from pn53x")
+        if frame[0:3] != pn53x.SOF: raise FrameError("invalid start of frame")
+        if frame != pn53x.ACK: log.warning("missing ack frame from pn53x")
 
-        if frame is None:
-            raise FrameError("no response from pn53x")
-        if not (frame[0] == 0 and frame[1] == 0 and frame[2] == 255):
-            raise FrameError("invalid frame start")
-
-        if frame[3] == 0 and frame[4] == 255 and frame[5] == 0:
+        while frame == pn53x.ACK:
             frame = self.read(timeout)
             if frame is None:
                 raise NoResponse("no response from pn53x")
-            if not (frame[0] == 0 and frame[1] == 0 and frame[2] == 255):
-                raise FrameError("invalid frame start")
-        else: log.warning("missing ack frame from pn53x")
 
         if frame[3] == 255 and frame[4] == 255:
             # extended information frame
@@ -203,7 +203,7 @@ class pn53x(object):
 
     def diagnose(self, num_tst, in_param=""):
         rsp = self.command(0x00, chr(num_tst) + in_param)
-        return data if (self.ic, self.fw) == ("PN533", "1.48") else data[1:]
+        return rsp if (self.ic, self.fw) == ("PN533", "1.48") else rsp[1:]
 
     def get_firmware_version(self):
         rsp = self.command(0x02)
@@ -238,7 +238,7 @@ class pn53x(object):
     def in_list_passive_target(self, br_ty, initiator_data):
         br_ty = ("106A", "212F", "424F", "106B", "106J").index(br_ty)
         cmd_data = chr(1) + chr(br_ty) + initiator_data
-        rsp_data = self.command(0x4A, cmd_data, timeout=100)
+        rsp_data = self.command(0x4A, cmd_data, timeout=1000)
         return rsp_data[2:] if rsp_data[0] == 1 else None
             
     def in_jump_for_dep(self, communication_mode, baud_rate,
@@ -331,13 +331,15 @@ class pn53x(object):
             cmd += chr(len(general_bytes)) + general_bytes
             cmd += chr(len(historical_bytes)) + historical_bytes
 
-        try:
-            rsp = self.command(0x8c, cmd, timeout)
+        try: return self.command(0x8c, cmd, timeout)
         except NoResponse:
-            # send ack to abort the command processing
-            self.write(array("B", [0, 0, 255, 0, 255, 0]))
-        else:
-            return rsp
+            # abort tg_init_as_target command on pn53x
+            if isinstance(self, pn53x_tty) and self.protocol is "arygon":
+                try: self.diagnose(0, "")
+                except: pass
+            else:
+                self.write(pn53x.ACK)
+            return None
 
     def tg_get_data(self, timeout):
         rsp = self.command(0x86, None, timeout)
@@ -419,45 +421,87 @@ class pn53x_usb(pn53x):
                 return frame
 
 class pn53x_tty(pn53x):
-    def __init__(self, tty):
-        self.tty = serial.Serial(tty, 115200, 8, "N", 1)
-        try:
-            fcntl.flock(self.tty, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    def __init__(self, portstr):
+        self.tty = None
+        for speed in (9600, 19200, 38400, 57600, 115200, 230400):
+            tty = serial.Serial(portstr, baudrate=speed, timeout=0.05)
+            tty.write("0ar")
+            if tty.readline() == "FF000000\r\n":
+                tty.timeout = 1
+                tty.write("0av")
+                version = tty.readline().rstrip("\r\n")[-4:]
+                log.debug("Arygon Reader {0} at {1}".format(version, tty.port))
+                if tty.baudrate != 230400:
+                    tty.write("0at05") # set 230.4 kbps between MCU and TAMA
+                    tty.readline().rstrip("\r\n")
+                    tty.write("0ah05") # set 230.4 kbps between MCU and HOST
+                    tty.readline().rstrip("\r\n")
+                    time.sleep(0.1)
+                tty.close()
+                self.tty = serial.Serial(portstr, baudrate=230400,
+                                         timeout=1, writeTimeout=1)
+                self.protocol = "arygon"
+                break
+            tty.close()
+            continue
+        
+        if self.tty is None:
+            tty = serial.Serial(portstr, baudrate=115200, timeout=0.05)
+            tty.write("\x00\x00\xff\x08\xf8\xd4\x00\x00nfcpy\x0c\x00")
+            ack = '\x00\x00\xff\x00\xff\x00'
+            rsp = '\x00\x00\xff\x08\xf8\xd5\x01\x00nfcpy\n\x00'
+            ans = tty.read(len(ack) + len(rsp))
+            if ans == ack + rsp or ans == rsp:
+                self.tty = tty
+                self.protocol = "direct"
+            
+        if self.tty is None:
+            raise IOError
+        
+        try: fcntl.flock(self.tty, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except IOError:
-            log.debug("failed to exclusively lock {0}".format(self.tty.name))
+            log.debug("failed to exclusively lock {0}".format(self.tty.port))
             raise
-        try:
-            ic, ver, rev, support = self.get_firmware_version()
+        
+        try: ic, ver, rev, support = self.get_firmware_version()
         except IOError:
-            log.debug("no firmware version from {0}".format(self.tty.name))
+            log.debug("no firmware version from {0}".format(self.tty.port))
             raise
+        
         self.ic = "PN5{0:02x}".format(ic)
         self.fw = "{0}.{1}".format(ver, rev)
         log.info("chipset is a {0} version {1}".format(self.ic, self.fw))
 
     def close(self):
-        log.debug("closing {0}".format(self.tty.name))
+        log.debug("closing {0}".format(self.tty.port))
         fcntl.flock(self.tty, fcntl.LOCK_UN)
         self.tty.close()
         self.tty = None
 
     def write(self, frame):
         if self.tty is not None:
-            self.tty.flushInput()
             frame = frame.tostring()
             log.debug(">>> " + frame.encode("hex"))
-            if self.tty.write(frame) != len(frame):
+            if self.protocol is "arygon":
+                frame = "2" + frame
+            self.tty.flushInput()
+            try: self.tty.write(frame)
+            except serial.SerialTimeoutException:
                 raise IOError("serial communication error")
 
     def read(self, timeout):
         if self.tty is not None:
             self.tty.timeout = max(timeout / 1000.0, 0.05)
-            log.debug("tty timeout set to {0} sec".format(self.tty.timeout))
+            #log.debug("tty timeout set to {0} sec".format(self.tty.timeout))
             frame = self.tty.read(6) # wait until timeout expires
             if frame:
                 if not frame == "\x00\x00\xff\x00\xff\x00":
-                    self.tty.timeout = 0
-                    frame += self.tty.read(300) # remaining data
+                    self.tty.timeout = 1
+                    LEN = ord(frame[3])
+                    if LEN == 255:
+                        frame += self.tty.read(3)
+                        LEN = ord(frame[5]) * 256 + ord(frame[6])
+                    frame += self.tty.read(LEN + 1)
                 frame = array("B", frame)
                 log.debug("<<< " + frame.tostring().encode("hex"))
                 return frame
@@ -535,7 +579,7 @@ class device(object):
                 return {"type": "TT4", "ATQ": atq, "SAK": sak, "UID": uid}
             elif sak & 0b01000000 == 0b01000000:
                 return {"type": "DEP", "ATQ": atq, "SAK": sak, "UID": uid}
-        else:
+        elif self.dev.ic != "PN531":
             rsp = self.dev.in_list_passive_target("106J", "")
             if rsp is not None:
                 log.debug("NFC-J tag found at 106 kbps")
