@@ -238,7 +238,7 @@ class pn53x(object):
     def in_list_passive_target(self, br_ty, initiator_data):
         br_ty = ("106A", "212F", "424F", "106B", "106J").index(br_ty)
         cmd_data = chr(1) + chr(br_ty) + initiator_data
-        rsp_data = self.command(0x4A, cmd_data, timeout=100)
+        rsp_data = self.command(0x4A, cmd_data, timeout=1000)
         return rsp_data[2:] if rsp_data[0] == 1 else None
             
     def in_jump_for_dep(self, communication_mode, baud_rate,
@@ -333,9 +333,13 @@ class pn53x(object):
 
         try: return self.command(0x8c, cmd, timeout)
         except NoResponse:
-            # send ack to abort the command processing
-            self.write(pn53x.ACK)
-            pass
+            # abort tg_init_as_target command on pn53x
+            if isinstance(self, pn53x_tty) and self.protocol is "arygon":
+                try: self.diagnose(0, "")
+                except: pass
+            else:
+                self.write(pn53x.ACK)
+            return None
 
     def tg_get_data(self, timeout):
         rsp = self.command(0x86, None, timeout)
@@ -476,11 +480,7 @@ class pn53x_tty(pn53x):
 
     def write(self, frame):
         if self.tty is not None:
-            if self.protocol is "arygon" and frame == pn53x.ACK:
-                # replace with diagnose, abort by ack fails on arygon mcu
-                frame = "\x00\x00\xff\x08\xf8\xd4\x00\x00nfcpy\x0c\x00"
-            else:
-                frame = frame.tostring()
+            frame = frame.tostring()
             log.debug(">>> " + frame.encode("hex"))
             if self.protocol is "arygon":
                 frame = "2" + frame
