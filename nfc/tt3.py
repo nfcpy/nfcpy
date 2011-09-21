@@ -130,7 +130,7 @@ class Type3Tag(object):
 
     @property
     def is_present(self):
-        """Returns True if the tag is still within communication range."""
+        """True if the tag is still within communication range."""
         try:
             cmd = "\x04" + self.idm
             rsp = self.dev.tt3_exchange(chr(len(cmd)+1) + cmd)

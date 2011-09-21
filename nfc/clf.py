@@ -53,6 +53,7 @@ class ContactlessFrontend(object):
         log.debug("using driver " + repr(self.dev))
 
     def close(self):
+        """Close the contacless reader device."""
         self.dev.close()
 
     def poll(self, general_bytes=None):

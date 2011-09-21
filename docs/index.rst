@@ -16,8 +16,8 @@ Contents:
    :maxdepth: 2
 
    overview
-   examples
    interface
+   examples
 
 Indices and tables
 ==================
