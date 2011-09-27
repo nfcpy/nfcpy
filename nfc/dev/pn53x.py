@@ -28,20 +28,9 @@ log = logging.getLogger(__name__)
 
 import os
 import time
-import usb
 import sys
 from array import array
-
-if os.name == "posix":
-    import serial
-    import fcntl
-
-supported_devices = []
-supported_devices.append((0x054c,0x02e1)) # Sony RC-S330
-supported_devices.append((0x04cc,0x0531)) # Philips demo board
-supported_devices.append((0x054c,0x0193)) # Sony demo board
-supported_devices.append((0x04e6,0x5591)) # SCM SCL3711
-supported_devices.append((0x04cc,0x2533)) # NXP PN533 demo board
+import nfc.dev
 
 pn53x_cmd = {
     0x00: "Diagnose",
@@ -116,58 +105,47 @@ class NoResponse(IOError):
     pass
 
 class pn53x(object):
-    SOF = array('B', '\x00\x00\xFF')
-    ACK = array('B', '\x00\x00\xFF\x00\xFF\x00')
+    SOF = bytearray('\x00\x00\xFF')
+    ACK = bytearray('\x00\x00\xFF\x00\xFF\x00')
 
-    @staticmethod
-    def search():
-        if os.name == "posix":
-            log.info("searching for a usb tty reader")
-            import glob
-            for name in glob.glob("/dev/ttyUSB*"):
-                log.info("trying reader at {0}".format(name))
-                try: return pn53x_tty(name)
-                except IOError: pass
+    def __init__(self, bus):
+        self.bus = bus
+        ic, ver, rev, support = self.get_firmware_version()
+        self.ic = "PN5{0:02x}".format(ic)
+        self.fw = "{0}.{1}".format(ver, rev)
+        log.info("chipset is a {0} version {1}".format(self.ic, self.fw))
 
-        log.info("searching for a usb bus reader")
-        for bus in usb.busses():
-            for dev in bus.devices:
-                if (dev.idVendor, dev.idProduct) in supported_devices:
-                    log.info("trying reader at usb port {0}:{1}"
-                             .format(bus.dirname, dev.filename))
-                    try: return pn53x_usb(dev)
-                    except usb.USBError: pass
-
-        raise LookupError("couldn't find any usable pn53x hardware module")
+    def close(self):
+        self.bus.close()
+        self.bus = None
 
     def command(self, cmd_code, cmd_data=None, timeout=100):
         """Send a chip command. Returns a byte array with the chip response.
         """
         log.debug(pn53x_cmd.get(cmd_code, "PN53x 0x{0:02X}".format(cmd_code)))
-        frame = array("B", [0, 0, 255])
+        frame = bytearray([0, 0, 255])
         LEN = 2 + len(cmd_data) if cmd_data is not None else 2
         if LEN < 256:
-            frame.extend([LEN, 256 - LEN, 0xd4, cmd_code])
+            frame += bytearray([LEN, 256 - LEN, 0xd4, cmd_code])
         else:
             LENmsb = LEN / 256
             LENlsb = LEN % 256
             LCS = (256 - (LENmsb + LENlsb)) % 256
-            frame.extend([255, 255, LENmsb, LENlsb, LCS, 0xd4, cmd_code])
-            pass
+            frame += bytearray([255, 255, LENmsb, LENlsb, LCS, 0xd4, cmd_code])
         if cmd_data is not None:
-            frame = frame + array("B", cmd_data)
-        frame.extend([(256 - sum(frame[-LEN:])) % 256, 0])
+            frame += bytearray(cmd_data)
+        frame += bytearray([(256 - sum(frame[-LEN:])) % 256, 0])
         
-        self.write(frame)
+        self.bus.write(frame)
 
-        frame = self.read(timeout=100)
+        frame = self.bus.read(timeout=100)
         
         if frame is None: raise FrameError("no response from pn53x")
         if frame[0:3] != pn53x.SOF: raise FrameError("invalid start of frame")
         if frame != pn53x.ACK: log.warning("missing ack frame from pn53x")
 
         while frame == pn53x.ACK:
-            frame = self.read(timeout)
+            frame = self.bus.read(timeout)
             if frame is None:
                 raise NoResponse("no response from pn53x")
 
@@ -202,8 +180,7 @@ class pn53x(object):
         raise FrameError("data checksum error")
 
     def diagnose(self, num_tst, in_param=""):
-        rsp = self.command(0x00, chr(num_tst) + in_param)
-        return rsp if (self.ic, self.fw) == ("PN533", "1.48") else rsp[1:]
+        return self.command(0x00, chr(num_tst) + in_param)[1:]
 
     def get_firmware_version(self):
         rsp = self.command(0x02)
@@ -215,25 +192,8 @@ class pn53x(object):
     def get_general_status(self):
         return self.command(0x04)
         
-    def read_register(self, addr):
-        addr = array("H", list(addr) if type(addr) is type(int()) else addr)
-        if sys.byteorder == "little": addr.byteswap()
-        data = self.command(0x06, addr.tostring())
-        if (self.ic, self.fw) == ("PN533", "1.48"):
-            return data
-        elif data[0] == 0:
-            return data[1:]
-        else: raise CommandError(data[0])
-
-    def reset_mode(self):
-        if (self.ic, self.fw) == ("PN533", "1.48"):
-            self.command(0x18, [1])
-            self.write(array("B", [0, 0, 255, 0, 255, 0])) # ack
-            time.sleep(0.010)
-
     def rf_configuration(self, cfg_item, cfg_data):
-        cfg_data = array("B", cfg_data)
-        return self.command(0x32, array("B", [cfg_item]) + cfg_data)
+        return self.command(0x32, bytearray([cfg_item]) + bytearray(cfg_data))
 
     def in_list_passive_target(self, br_ty, initiator_data):
         br_ty = ("106A", "212F", "424F", "106B", "106J").index(br_ty)
@@ -277,37 +237,10 @@ class pn53x(object):
         return status, data_in
     
     def in_communicate_thru(self, data):
-        data = self.command(0x42, data)
-        status = data.pop(0) & 0x3f
-        if not status == 0:
-            raise CommandError(status)
-        return data
-
-    def in_deselect(self, target=0):
-        if (self.ic, self.fw) == ("PN533", "1.48"):
-            rsp = self.command(0x44, "\x01\x01")
-            status = rsp[1] & 0x3f
-        else:
-            rsp = self.command(0x44, chr(target))
-            status = rsp[0] & 0x3f
-        if status != 0:
-            raise CommandError(status)
-
-    def in_release(self, target=0):
-        if (self.ic, self.fw) == ("PN533", "1.48"):
-            rsp = self.command(0x52, "\x01\x01")
-            status = rsp[1] & 0x3f
-        else:
-            rsp = self.command(0x52, chr(target))
-            status = rsp[0] & 0x3f
-        if status != 0:
-            raise CommandError(status)
-        
-    def in_select(self, target=1):
-        rsp = self.command(0x54, chr(target))
-        status = rsp[0] & 0x3f
-        if status != 0:
-            raise CommandError(status)
+        rsp = self.command(0x42, data)
+        if (rsp[0] & 0x3f) != 0:
+            raise CommandError(rsp[0] & 0x3f)
+        return rsp[1:]
 
     def tg_init_as_target(self, activation_mode, mifare_params,
                           felica_params, nfcid3t=None, general_bytes="",
@@ -331,15 +264,7 @@ class pn53x(object):
             cmd += chr(len(general_bytes)) + general_bytes
             cmd += chr(len(historical_bytes)) + historical_bytes
 
-        try: return self.command(0x8c, cmd, timeout)
-        except NoResponse:
-            # abort tg_init_as_target command on pn53x
-            if isinstance(self, pn53x_tty) and self.protocol is "arygon":
-                try: self.diagnose(0, "")
-                except: pass
-            else:
-                self.write(pn53x.ACK)
-            return None
+        return self.command(0x8c, cmd, timeout)
 
     def tg_get_data(self, timeout):
         rsp = self.command(0x86, None, timeout)
@@ -362,153 +287,9 @@ class pn53x(object):
             raise CommandError(status & 0x3f)
         return status
 
-class pn53x_usb(pn53x):
+class Device(nfc.dev.Device):
     def __init__(self, dev):
-        self.dh = dev.open()
-        self.usb_out = None
-        self.usb_inp = None
-        self.dh.setConfiguration(dev.configurations[0])
-        self.dh.claimInterface(0)
-        intf = dev.configurations[0].interfaces[0]
-        self.usb_out = intf[0].endpoints[0].address
-        self.usb_inp = intf[0].endpoints[1].address
-
-        # try to get chip into a good state
-        self.write(array("B", [0, 0, 255, 0, 255, 0])) # ack
-
-        ic, ver, rev, support = self.get_firmware_version()
-        self.ic = "PN5{0:02x}".format(ic)
-        self.fw = "{0}.{1}".format(ver, rev)
-        log.info("chipset is a {0} version {1}".format(self.ic, self.fw))
-
-        self.reset_mode()
-
-    def close(self):
-        self.dh.releaseInterface()
-        self.dh = None
-
-    def __del__(self):
-        if self.dh and self.usb_out and self.usb_inp:
-            rf_off = "\x00\x00\xff\x04\xfc\xd4\x32\x01\x00\xf9\x00"
-            self.dh.bulkWrite(self.usb_out, rf_off)
-            self.dh.bulkRead(self.usb_inp, 256, 100)
-        
-    def write(self, frame):
-        if self.dh is not None and self.usb_out is not None:
-            log.debug(">>> " + frame.tostring().encode("hex"))
-            self.dh.bulkWrite(self.usb_out, frame.tolist())
-            if len(frame) % 64 == 0:
-                # send zero-length frame to end bulk transfer
-                self.dh.bulkWrite(self.usb_out, '')
-
-    def read(self, timeout):
-        if self.dh is not None and self.usb_inp is not None:
-            try: frame = self.dh.bulkRead(self.usb_inp, 300, timeout)
-            except usb.USBError as error:
-                if (error.args[0] == "No error" or
-                    error.args[0] == "usb_reap: timeout error"):
-                    # normal timeout condition on Linux (1) and Windows (2)
-                    return None
-                usb_err = "could not set config 1: Device or resource busy"
-                if (error.args[0] == usb_err):
-                    # timeout error if two readers used on same computer
-                    return None
-                log.error(error.args[0])
-                return None
-            else:
-                frame = array("B", frame)
-                log.debug("<<< " + frame.tostring().encode("hex"))
-                return frame
-
-class pn53x_tty(pn53x):
-    def __init__(self, portstr):
-        self.tty = None
-        for speed in (9600, 19200, 38400, 57600, 115200, 230400):
-            tty = serial.Serial(portstr, baudrate=speed, timeout=0.05)
-            tty.write("0ar")
-            if tty.readline() == "FF000000\r\n":
-                tty.timeout = 1
-                tty.write("0av")
-                version = tty.readline().rstrip("\r\n")[-4:]
-                log.debug("Arygon Reader {0} at {1}".format(version, tty.port))
-                if tty.baudrate != 230400:
-                    tty.write("0at05") # set 230.4 kbps between MCU and TAMA
-                    tty.readline().rstrip("\r\n")
-                    tty.write("0ah05") # set 230.4 kbps between MCU and HOST
-                    tty.readline().rstrip("\r\n")
-                    time.sleep(0.1)
-                tty.close()
-                self.tty = serial.Serial(portstr, baudrate=230400,
-                                         timeout=1, writeTimeout=1)
-                self.protocol = "arygon"
-                break
-            tty.close()
-            continue
-        
-        if self.tty is None:
-            tty = serial.Serial(portstr, baudrate=115200, timeout=0.05)
-            tty.write("\x00\x00\xff\x08\xf8\xd4\x00\x00nfcpy\x0c\x00")
-            ack = '\x00\x00\xff\x00\xff\x00'
-            rsp = '\x00\x00\xff\x08\xf8\xd5\x01\x00nfcpy\n\x00'
-            ans = tty.read(len(ack) + len(rsp))
-            if ans == ack + rsp or ans == rsp:
-                self.tty = tty
-                self.protocol = "direct"
-            
-        if self.tty is None:
-            raise IOError
-        
-        try: fcntl.flock(self.tty, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except IOError:
-            log.debug("failed to exclusively lock {0}".format(self.tty.port))
-            raise
-        
-        try: ic, ver, rev, support = self.get_firmware_version()
-        except IOError:
-            log.debug("no firmware version from {0}".format(self.tty.port))
-            raise
-        
-        self.ic = "PN5{0:02x}".format(ic)
-        self.fw = "{0}.{1}".format(ver, rev)
-        log.info("chipset is a {0} version {1}".format(self.ic, self.fw))
-
-    def close(self):
-        log.debug("closing {0}".format(self.tty.port))
-        fcntl.flock(self.tty, fcntl.LOCK_UN)
-        self.tty.close()
-        self.tty = None
-
-    def write(self, frame):
-        if self.tty is not None:
-            frame = frame.tostring()
-            log.debug(">>> " + frame.encode("hex"))
-            if self.protocol is "arygon":
-                frame = "2" + frame
-            self.tty.flushInput()
-            try: self.tty.write(frame)
-            except serial.SerialTimeoutException:
-                raise IOError("serial communication error")
-
-    def read(self, timeout):
-        if self.tty is not None:
-            self.tty.timeout = max(timeout / 1000.0, 0.05)
-            #log.debug("tty timeout set to {0} sec".format(self.tty.timeout))
-            frame = self.tty.read(6) # wait until timeout expires
-            if frame:
-                if not frame == "\x00\x00\xff\x00\xff\x00":
-                    self.tty.timeout = 1
-                    LEN = ord(frame[3])
-                    if LEN == 255:
-                        frame += self.tty.read(3)
-                        LEN = ord(frame[5]) * 256 + ord(frame[6])
-                    frame += self.tty.read(LEN + 1)
-                frame = array("B", frame)
-                log.debug("<<< " + frame.tostring().encode("hex"))
-                return frame
-
-class device(object):
-    def __init__(self):
-        self.dev = pn53x.search()
+        self.dev = dev
         self.miu = 251
 
         if self.dev.ic == "PN533":
@@ -534,16 +315,7 @@ class device(object):
         # retries for ATR_REQ, PSL_REQ, target activation
         self.dev.rf_configuration(0x05, "\x02\x01\x00")
 
-        if self.dev.ic == "PN533" and self.dev.fw == "1.48":
-            self.dev.reset_mode()
-            cfg_data = chr(self._rwt) + chr(self._wtx) + "\x08"
-            self.dev.rf_configuration(0x82, cfg_data)
-            self.dev.command(0x08, "\x63\x0d\x00")
-            regs = self.dev.read_register(range(0xa01b, 0xa023))
-            self.dev.rf_configuration(0x0b, regs)
-
     def close(self):
-        self.dev.reset_mode()
         try: self.dev.rf_configuration(0x01, "\x00") # RF off
         except CommandError: pass
         self.dev.close()
@@ -563,7 +335,6 @@ class device(object):
 
     def poll_nfca(self):
         log.debug("polling for NFC-A technology")
-        self.dev.reset_mode()
 
         rsp = self.dev.in_list_passive_target("106A", "")        
         if rsp is not None:
@@ -583,7 +354,7 @@ class device(object):
             rsp = self.dev.in_list_passive_target("106J", "")
             if rsp is not None:
                 log.debug("NFC-J tag found at 106 kbps")
-                print rsp.tostring().encode("hex")
+                print str(rsp).encode("hex")
                 atq = rsp[1] * 256 + rsp[0]
                 uid = bytearray(rsp[2:])
                 RALL = "\x00\x00" + str(rsp[2:])
@@ -598,7 +369,6 @@ class device(object):
     
     def poll_nfcf(self):
         log.debug("polling for NFC-F technology")
-        self.dev.reset_mode()
 
         poll_ffff = "\x00\xFF\xFF\x01\x03"
         poll_12fc = "\x00\x12\xFC\x01\x03"
@@ -626,7 +396,6 @@ class device(object):
     def poll_dep(self, general_bytes):
         log.debug("polling for a p2p target")
         self.dev.rf_configuration(0x01, "\x00")
-        self.dev.reset_mode()
 
         pollrq = "\x00\xFF\xFF\x00\x03"
         nfcid3 = "\x01\xfe" + os.urandom(8)
@@ -645,10 +414,10 @@ class device(object):
         
         log.debug("ATR_RES(nfcid3={0}, did={1:02x}, bs={2:02x},"
                   " br={3:02x}, to={4:02x}, pp={5:02x}, gb={6})"
-                  .format(rsp[0:10].tostring().encode("hex"),
+                  .format(str(rsp[0:10]).encode("hex"),
                           rsp[10], rsp[11], rsp[12], rsp[13],
-                          rsp[14], rsp[15:].tostring().encode("hex")))
-        return {"type": "DEP", "data": rsp[15:].tostring()}
+                          rsp[14], str(rsp[15:]).encode("hex")))
+        return {"type": "DEP", "data": str(rsp[15:])}
 
     def listen(self, general_bytes, timeout):
         log.debug("listen: gb={0} timeout={1} ms"
@@ -658,22 +427,9 @@ class device(object):
         felica_params = "\x01\xFE" + os.urandom(6) + 8*"\x00" + "\xFF\xFF"
         nfcid3t = felica_params[0:8] + "\x00\x00"
 
-        self.dev.reset_mode()
-        data = self.dev.tg_init_as_target(
+        return self.dev.tg_init_as_target(
             "DEP", mifare_params, felica_params, nfcid3t,
             general_bytes, timeout=timeout)
-
-        if data is not None:
-            if (self.dev.ic, self.dev.fw) == ("PN533", "1.48"):
-                if self.dev.get_general_status()[4] == 3:
-                    data[0] |= 0x4 # initialized as dep target
-                
-            speed = ("106", "212", "424")[(data[0]>>4) & 0x07]
-            cmode = ("passive", "active", "passive")[data[0] & 0x03]
-            ttype = ("card", "p2p")[bool(data[0] & 0x04)]
-            log.info("activated as {0} target in {1} kbps {2} mode"
-                      .format(ttype, speed, cmode))
-            return data[18:].tostring()
         
     ##
     ## data exchange protocol
@@ -683,27 +439,21 @@ class device(object):
             self.dev.in_data_exchange(0x41, data[0:self.miu], timeout=100)
             data = data[self.miu:]
         status, data_in = self.dev.in_data_exchange(0x01, data, timeout)
-        data = data_in.tostring()
+        data = str(data_in)
         while bool(status & 0x40):
             status, data_in = self.dev.in_data_exchange(0x01, "", timeout=100)
-            data = data + data_in.tostring()
+            data = data + str(data_in)
         return data
 
     def dep_get_data(self, timeout):
-        if (self.dev.ic, self.dev.fw) == ("PN533", "1.48"):
-            if self.dev.get_general_status()[4] == 4:
-                # initiator cmd was received in set data
-                timeout = 100
         status, data_in = self.dev.tg_get_data(timeout)
-        data = data_in.tostring()
+        data = str(data_in)
         while status == 0x40:
             status, data_in = self.dev.tg_get_data(timeout=100)
-            data = data + data_in.tostring()
+            data = data + str(data_in)
         return data
     
     def dep_set_data(self, data, timeout):
-        if (self.dev.ic, self.dev.fw) != ("PN533", "1.48"):
-            timeout = 100
         for i in range(0, len(data), self.miu)[0:-1]:
             self.dev.tg_set_meta_data(data[0:self.miu])
             data = data[self.miu:]
@@ -714,16 +464,16 @@ class device(object):
     ##
     def tt1_exchange(self, cmd):
         rsp = self.dev.in_data_exchange(0x01, cmd, timeout=100)
-        return rsp[1].tostring()
+        return str(rsp[1])
 
     def tt2_exchange(self, cmd):
         rsp = self.dev.in_data_exchange(0x01, cmd, timeout=100)
-        return rsp[1].tostring()
+        return str(rsp[1])
 
     def tt3_exchange(self, cmd, timeout=500):
         log.debug("tt3_exchange")
         rsp = self.dev.in_communicate_thru(cmd)
-        return rsp.tostring()
+        return str(rsp)
 
     def tt4_exchange(self, cmd):
         raise NotImplemented

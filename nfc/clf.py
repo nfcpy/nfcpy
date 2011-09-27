@@ -35,19 +35,15 @@ class ContactlessFrontend(object):
     first usable is claimed. Raises a LookupError exception if no
     reader was found."""
 
-    def __init__(self, probe=[]):
-        self.dev = None
-        if type(probe) is str:
-            probe = [probe]
-        if not probe:
-            probe = dev.__all__
-        for name in probe:
-            device = __import__("dev."+name, globals(), {}, ["device"]).device
-            try: self.dev = device()
-            except LookupError: pass
-            else: break
-
+    def __init__(self, path=None):
+        if not path: log.info("searching for a usable reader")
+        else: log.info("searching for reader with path '{0}'".format(path))
+        
+        self.dev = dev.connect(path)
         if self.dev is None:
+            msg = "no reader found"
+            msg = " ".join([msg, "at {0}".format(path) if path else ""])
+            log.error(msg)
             raise LookupError("couldn't find any usable nfc reader")
 
         log.debug("using driver " + repr(self.dev))
