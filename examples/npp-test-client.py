@@ -39,7 +39,10 @@ def main():
     if options.quirks == "android":
         llcp_config['send-agf'] = False
 
-    clf = nfc.ContactlessFrontend(options.device)
+    for device in options.device:
+        try: clf = nfc.ContactlessFrontend(device); break
+        except LookupError: pass
+    else: return
 
     if not options.binary:
         data = sys.stdin.readlines()
@@ -112,8 +115,11 @@ if __name__ == '__main__':
                       action="store", dest="logfile",
                       help="write log messages to LOGFILE")
     parser.add_option("--device", type="string", default=[],
-                      action="append", dest="device", metavar="NAME",
-                      help="use this device ('ipsim' for TCP/IP simulation)")
+                      action="append", dest="device", metavar="SPEC",
+                      help="use only device(s) according to SPEC: "\
+                          "usb[:vendor[:product]] (vendor and product in hex) "\
+                          "usb[:bus[:dev]] (bus and device number in decimal) "\
+                          "tty[:(usb|com)[:port]] (usb virtual or com port)")
     parser.add_option("--mode", type="choice", default=None,
                       choices=["target", "initiator"],
                       action="store", dest="mode",
@@ -153,4 +159,8 @@ if __name__ == '__main__':
             log.info("enable debug output for module '{0}'".format(module))
             logging.getLogger(module).setLevel(logging.DEBUG)
 
+    if len(options.device) == 0:
+        # search and use first
+        options.device = ["",]
+        
     main()

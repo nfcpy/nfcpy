@@ -230,7 +230,7 @@ class LogicalLinkControl(threading.Thread):
         return "Ffm" + pax.to_string().lstrip("\x00\x40")
 
     def activate(self, mac):
-        info = ["LLCP Link established, I'm the the DEP {0}".format(mac.role)]
+        info = ["LLCP Link established, I'm the DEP {0}".format(mac.role)]
 
         pax = "\x00\x40" + self.parameter_string.lstrip("Ffm")
         pax = ProtocolDataUnit.from_string(pax)

@@ -20,4 +20,160 @@
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
 
+import logging
+log = logging.getLogger("dev")
+
+import os
+import re
+import sys
+import glob
+
 __all__ = ["pn53x"]
+
+usb_device_map = {
+    (0x04cc, 0x0531) : "pn53x_usb", # Philips demo board
+    (0x054c, 0x0193) : "pn53x_usb", # Sony demo board
+    (0x04cc, 0x2533) : "pn53x_usb", # NXP PN533 demo board
+    (0x04e6, 0x5591) : "pn53x_usb", # SCM SCL3711
+    (0x054c, 0x02e1) : "rcs956_usb", # Sony RC-S330/360/370
+    (0x072f, 0x2200) : "acr122_usb", # Arygon ACR122U
+    }
+
+def connect(path=None):
+    def import_driver(name):
+        name = "nfc.dev.{0}".format(name)
+        log.debug("import {0}".format(name))
+        __import__(name)
+        return sys.modules[name]
+        
+    if path is None:
+        path = ""
+        
+    if path == "" or path.startswith("usb"):
+        log.info("searching for a usb bus reader")
+        import usb
+        #
+        # match "usb:vendor:[product]"
+        #
+        match = re.match(r"usb:([0-9a-fA-F]{4}):([0-9a-fA-F]{4})?$", path)
+        if match is not None:
+            log.debug("path match for 'usb:vendor:[product]'")
+            vendor, product = [int(x,16) if x else None for x in match.groups()]
+            for bus in usb.busses():
+                for dev in bus.devices:
+                    if dev.idVendor == vendor:
+                        if product is None or dev.idProduct == product:
+                            print "trying usb:{0:04x}:{1:04x}"\
+                                .format(dev.idVendor, dev.idProduct)
+                            if (vendor, dev.idProduct) in usb_device_map:
+                                product = dev.idProduct
+                                module = usb_device_map[(vendor, product)]
+                                driver = import_driver(module)
+                                return driver.init(dev)
+        #
+        # match "usb:[[bus]:][devnum]" or "usb" or None
+        #
+        match = re.match("usb:([0-9]{1,3})?[:]?([0-9]{1,3})?$", path)
+        if match is not None:
+            log.debug("path match for 'usb:[[bus]:][devnum]'")
+            busnum, devnum = [int(x) if x else None for x in match.groups()]
+            for bus in usb.busses():
+                if busnum is None or int(bus.dirname) == busnum:
+                    for dev in bus.devices:
+                        if devnum is None or int(dev.filename) == devnum:
+                            print "trying usb:"+bus.dirname+":"+dev.filename
+                            vendor, product = dev.idVendor, dev.idProduct
+                            if (vendor, product) in usb_device_map:
+                                module = usb_device_map[(vendor, product)]
+                                driver = import_driver(module)
+                                return driver.init(dev)
+        #
+        # match "usb" or ""
+        #
+        if path == "usb" or path == "":
+            log.debug("path match for 'usb' (or no path given)")
+            for bus in usb.busses():
+                for dev in bus.devices:
+                    log.debug("trying usb:"+bus.dirname+":"+dev.filename)
+                    vendor, product = dev.idVendor, dev.idProduct
+                    if (vendor, product) in usb_device_map:
+                        module = usb_device_map[(vendor, product)]
+                        driver = import_driver(module)
+                        return driver.init(dev)
+                    
+    if (path == "" or path.startswith("tty")) and os.name == "posix":
+        log.info("searching for a tty reader")
+        #
+        # match "tty[:(usb|com)][:port]"
+        #
+        match = re.match(r"tty(?:\:(usb|com))?(?:\:([0-9]{1,2}))?$", path)
+        if match is not None or path == "":
+            line, port = match.groups() if match else (None, None)
+            if line is None or line == "usb":
+                if port is not None:
+                    devname = "/dev/ttyUSB{0}".format(port)
+                    log.info("trying usb tty reader {0}".format(devname))
+                    for module in ("arygon_tty", "pn53x_tty"):
+                        driver = import_driver(module).init(devname)
+                        if driver is not None:
+                            return driver
+                else:
+                    log.info("searching for a usb tty reader")
+                    for devname in glob.glob("/dev/ttyUSB[0-9]"):
+                        log.info("trying usb tty reader {0}".format(devname))
+                        for module in ("arygon_tty", "pn53x_tty"):
+                            driver = import_driver(module).init(devname)
+                            if driver is not None:
+                                return driver
+    elif path.startswith("tty"):
+        log.info("sorry, tty readers are only supported on posix systems")
+
+class Device(object):
+    def __init__(self, dev):
+        raise NotImplemented
+    
+    def close(self):
+        raise NotImplemented
+    
+    def poll(self, p2p_activation_data=None):
+        raise NotImplemented
+
+    def listen(self, general_bytes, timeout):
+        raise NotImplemented
+        
+    ##
+    ## data exchange protocol
+    ##
+    def dep_exchange(self, data, timeout):
+        raise NotImplemented
+
+    def dep_get_data(self, timeout):
+        raise NotImplemented
+    
+    def dep_set_data(self, data, timeout):
+        raise NotImplemented
+        
+    ##
+    ## tag type (1|2|3) command/response exchange
+    ##
+    def tt1_exchange(self, cmd):
+        raise NotImplemented
+
+    def tt2_exchange(self, cmd):
+        raise NotImplemented
+
+    def tt3_exchange(self, cmd, timeout=500):
+        raise NotImplemented
+
+    def tt4_exchange(self, cmd):
+        raise NotImplemented
+
+if __name__ == '__main__':
+    logging.basicConfig(level=logging.DEBUG)
+#    print connect("usb:046d:c52f")
+#    print connect("usb:054c:02e1")
+#    print connect("usb:054c:")
+#    print connect("usb:")
+#    print connect("usb:3:2")
+#    print connect("usb")
+    print connect()
