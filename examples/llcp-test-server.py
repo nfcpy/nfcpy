@@ -223,7 +223,10 @@ def main():
         llcp_config['send-agf'] = False
 
     general_bytes = nfc.llcp.startup(llcp_config)
-    clf = nfc.ContactlessFrontend(options.device)
+    for device in options.device:
+        try: clf = nfc.ContactlessFrontend(device); break
+        except LookupError: pass
+    else: return
 
     peer = None
     try:
@@ -282,8 +285,11 @@ if __name__ == '__main__':
                       action="store", dest="link_miu", metavar="MIU",
                       help="set maximum information unit size to MIU")
     parser.add_option("--device", type="string", default=[],
-                      action="append", dest="device", metavar="NAME",
-                      help="use this device ('ipsim' for TCP/IP simulation)")
+                      action="append", dest="device", metavar="SPEC",
+                      help="use only device(s) according to SPEC: "\
+                          "usb[:vendor[:product]] (vendor and product in hex) "\
+                          "usb[:bus[:dev]] (bus and device number in decimal) "\
+                          "tty[:(usb|com)[:port]] (usb virtual or com port)")
     parser.add_option("--mode", type="choice", default=None,
                       choices=["target", "initiator"],
                       action="store", dest="mode",
@@ -320,4 +326,8 @@ if __name__ == '__main__':
             log.info("enable debug output for module '{0}'".format(module))
             logging.getLogger(module).setLevel(logging.DEBUG)
 
+    if len(options.device) == 0:
+        # search and use first
+        options.device = ["",]
+        
     main()

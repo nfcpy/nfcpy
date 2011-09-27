@@ -207,10 +207,10 @@ def main():
     signal.signal(signal.SIGINT, sigint_handler)
     
     # find and initialize an NFC reader
-    try: clf = nfc.ContactlessFrontend()
-    except LookupError as e:
-        print str(e)
-        return
+    for device in options.device:
+        try: clf = nfc.ContactlessFrontend(device); break
+        except LookupError: pass
+    else: return
     
     try:
         if options.command == "show":
@@ -265,6 +265,12 @@ if __name__ == '__main__':
     parser.add_option("-f", type="string",
                       action="store", dest="logfile",
                       help="write log messages to LOGFILE")
+    parser.add_option("--device", type="string", default=[],
+                      action="append", dest="device", metavar="SPEC",
+                      help="use only device(s) according to SPEC: "\
+                          "usb[:vendor[:product]] (vendor and product in hex) "\
+                          "usb[:bus[:dev]] (bus and device number in decimal) "\
+                          "tty[:(usb|com)[:port]] (usb virtual or com port)")
 
     global options
     options, args = parser.parse_args()
@@ -282,5 +288,9 @@ if __name__ == '__main__':
         logfile.setLevel(logging.DEBUG)
         logging.getLogger('').addHandler(logfile)
 
+    if len(options.device) == 0:
+        # search and use first
+        options.device = ["",]
+        
     main()
 
