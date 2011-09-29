@@ -38,4 +38,8 @@ class Device(rcs956.Device):
 def init(usb_dev):
     bus = rcs956_usb(usb_dev)
     dev = rcs956.rcs956(bus)
-    return Device(dev)
+    device = Device(dev)
+    device._vendor = "Sony"
+    device._product = "RC-S330" if usb_dev.iProduct == 0 else \
+        bus.dh.getString(usb_dev.iProduct, 100)
+    return device

@@ -106,4 +106,7 @@ class Device(pn53x.Device):
 def init(usb_dev):
     bus = acr122_usb(usb_dev)
     dev = acr122(bus)
-    return Device(dev)
+    device = Device(dev)
+    device._vendor = bus.dh.getString(usb_dev.iManufacturer, 100)
+    device._product = bus.dh.getString(usb_dev.iProduct, 100)
+    return device

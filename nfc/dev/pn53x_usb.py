@@ -98,7 +98,10 @@ class Device(pn53x.Device):
             log.info(info.format(ttype, speed, cmode))
             return str(data[18:])
             
-def init(dev):
-    bus = pn53x_usb(dev)
+def init(usb_dev):
+    bus = pn53x_usb(usb_dev)
     dev = pn53x.pn53x(bus)
-    return Device(dev)
+    device = Device(dev)
+    device._vendor = bus.dh.getString(usb_dev.iManufacturer, 100)
+    device._product = bus.dh.getString(usb_dev.iProduct, 100)
+    return device
