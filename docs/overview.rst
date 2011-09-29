@@ -3,19 +3,19 @@ Overview
 
 Requirements
 ------------
-* Python 2.6 or newer, but not Python 3.x
-* pyUSB with appropriate libusb
-* pySerial for USB serial readers under Linux
+* Python 2.6 or newer but not Python 3.x
+* pyUSB and libusb (for native USB readers)
+* pySerial (for serial readers on COM or USB)
 
 Hardware
 --------
-These readers work on Linux, Windows and Mac:
+These readers are supported on Linux, Windows and Mac:
 
-* Sony RC-S330
-* Sony RC-S360
+* Sony RC-S330/360/370
 * SCM SCL3711
+* ACS ACR122U (with limitations on listen period setting)
 
-These readers work on Linux only (maybe Mac) because USB virtual COM support for Windows is yet to be done:
+These readers are supported on Linux (and probably Mac):
 
 * Arygon ACS122U
 * Arygon APPB US
