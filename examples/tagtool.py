@@ -193,7 +193,7 @@ def load_tag(clf):
 def poll(clf):
     try:
         while True:
-            tag = clf.poll(general_bytes = None)
+            tag = clf.poll()
             if tag: return tag
             else: time.sleep(0.5)
     except KeyboardInterrupt:

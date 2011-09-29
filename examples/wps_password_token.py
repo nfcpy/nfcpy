@@ -69,7 +69,7 @@ def main():
     clf = ContactlessFrontend()
 
     while True:
-        tag = clf.poll(general_bytes = None)
+        tag = clf.poll()
 
         if tag is None:
             time.sleep(0.5)
