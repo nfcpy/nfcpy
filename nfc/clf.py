@@ -29,13 +29,21 @@ from tt2 import Type2Tag
 from tt3 import Type3Tag
 
 class ContactlessFrontend(object):
-    """Contactless frontend is an abstraction of nearfield
-    communication hardware, commonly called contactless readers. Upon
-    object instantiation, contactless readers are searched and the
-    first usable is claimed. Raises a LookupError exception if no
-    reader was found."""
+    """An object representing a nearfield communication device (reader)."""
 
     def __init__(self, path=None):
+        """Open contactless reader device identified by *path*. If
+        *path* is not :const:`None` (default) or an empty string, the
+        first available device is used. Otherwise *path* must match
+        one of the following expressions:
+
+        * **usb[:vendor[:product]]** with *vendor* and *product* id (hex)
+        * **usb[:bus[:device]]** with usb *bus* and *device* number (dec)
+        * **tty[:usb][:port]** with usb serial *port* number (dec)
+        * **tty[:com][:port]** with serial *port* number (dec)
+
+        Raises :exc:`LookupError` if no reader could be connected."""
+        
         if not path: log.info("searching for a usable reader")
         else: log.info("searching for reader with path '{0}'".format(path))
         
@@ -51,19 +59,20 @@ class ContactlessFrontend(object):
     def close(self):
         """Close the contacless reader device."""
         self.dev.close()
+        self.dev = None
 
-    def poll(self, general_bytes=None):
-        """Search for a contactless target. Depending on the target
-        found, poll returns an instance of :class:`nfc.DEPTarget`,
-        :class:`nfc.Type1Tag`, :class:`nfc.Type2Tag` or
-        :class:`nfc.Type3Tag`.  The parameter *general_bytes* may be
-        used to specify the string of bytes that shall be send to an
-        NFCIP-1 target device as part of the attribute request
-        command. The *general_bytes* may be an empty string. If
-        *general_bytes* is set to *None*, poll() will only search for
-        contactless tags, i.e. not for NFCIP-1 devices."""
+    def poll(self, protocol_data=None):
+        """Search for a contactless target in proximity of the
+        reader. The *protocol_data* argument determines if peer
+        devices shall be included in the search. Without
+        *protocol_data* only contactless tags will be considered. If
+        *protocol_data* is present it must be a string which is sent
+        to the peer device in the NFC-DEP initialization phase.
 
-        target = self.dev.poll(general_bytes)
+        If not :const:`None`, the returned target is a subtype
+        of :class:`nfc.TAG` or :class:`nfc.DEP`."""
+        
+        target = self.dev.poll(protocol_data)
         if target is not None:
             log.debug("found target {0}".format(target))
             if target.get("type") == "DEP":
@@ -80,8 +89,8 @@ class ContactlessFrontend(object):
                 return None
 
     def listen(self, timeout, general_bytes=str()):
-        """Wait *timeout* milliseconds for becoming initialized by a
-        remote peer.  Returns an instance of :class:`nfc.DEPInitiator`
+        """Listen for *timeout* milliseconds to become initialized by a
+        remote peer device.  Returns an instance of :class:`nfc.DEPInitiator`
         on success, else None.  The parameter *general_bytes*, if
         supplied, is a string of bytes which are send to an NFCIP-1
         initiator as part of the ATR response."""
@@ -91,4 +100,14 @@ class ContactlessFrontend(object):
             log.debug("got dep master, general bytes " + data.encode("hex"))
             return DEPTarget(self.dev, data)
 
+    def __enter__(self):
+        return self
 
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
+    def __str__(self):
+        if self.dev is not None:
+            s = "{dev.vendor} {dev.product} on {dev.path}"
+            return s.format(dev=self.dev)
+        else: return self.__repr__()
