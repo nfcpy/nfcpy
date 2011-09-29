@@ -22,5 +22,6 @@
 
 from clf import ContactlessFrontend
 from dep import DEP, DEPTarget, DEPInitiator
+from tag import TAG
 from tt2 import Type2Tag
 from tt3 import Type3Tag
