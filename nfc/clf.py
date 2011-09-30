@@ -69,8 +69,8 @@ class ContactlessFrontend(object):
         *protocol_data* is present it must be a string which is sent
         to the peer device in the NFC-DEP initialization phase.
 
-        If not :const:`None`, the returned target is a subtype
-        of :class:`nfc.TAG` or :class:`nfc.DEP`."""
+        Returns :class:`nfc.DEPInitiator` or a subtype of :class:`nfc.TAG` if
+        """
         
         target = self.dev.poll(protocol_data)
         if target is not None:
@@ -88,14 +88,16 @@ class ContactlessFrontend(object):
                 log.info("support for type 4 tag not yet implemented")
                 return None
 
-    def listen(self, timeout, general_bytes=str()):
-        """Listen for *timeout* milliseconds to become initialized by a
-        remote peer device.  Returns an instance of :class:`nfc.DEPInitiator`
-        on success, else None.  The parameter *general_bytes*, if
-        supplied, is a string of bytes which are send to an NFCIP-1
-        initiator as part of the ATR response."""
-
-        data = self.dev.listen(general_bytes, timeout)
+    def listen(self, timeout, protocol_data):
+        """Wait to become initialized by a peer device. The *timeout*
+        value is in milliseconds and determines the approximate time
+        the reader will stay discoverable. The *protocol_data*
+        parameter must be byte string that is sent to the remote
+        device during initialization.
+        
+        Returns :class:`nfc.DEPTarget` if initialized else :const:`None`."""
+        
+        data = self.dev.listen(protocol_data, timeout)
         if not data is None:
             log.debug("got dep master, general bytes " + data.encode("hex"))
             return DEPTarget(self.dev, data)
