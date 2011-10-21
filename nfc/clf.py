@@ -29,7 +29,7 @@ from tt2 import Type2Tag
 from tt3 import Type3Tag
 
 class ContactlessFrontend(object):
-    """An object representing a nearfield communication device (reader)."""
+    """Access a nearfield communication reader device."""
 
     def __init__(self, path=None):
         """Open contactless reader device identified by *path*. If
@@ -42,7 +42,8 @@ class ContactlessFrontend(object):
         * **tty[:usb][:port]** with usb serial *port* number (dec)
         * **tty[:com][:port]** with serial *port* number (dec)
 
-        Raises :exc:`LookupError` if no reader could be connected."""
+        Raises :exc:`LookupError` if no available reader device was
+        found."""
         
         if not path: log.info("searching for a usable reader")
         else: log.info("searching for reader with path '{0}'".format(path))
@@ -69,7 +70,8 @@ class ContactlessFrontend(object):
         *protocol_data* is present it must be a string which is sent
         to the peer device in the NFC-DEP initialization phase.
 
-        Returns :class:`nfc.DEPInitiator` or a subtype of :class:`nfc.TAG` if
+        Returns :class:`nfc.DEPInitiator` or a subtype of
+        :class:`nfc.TAG` if a target was found, else :const:`None`.
         """
         
         target = self.dev.poll(protocol_data)

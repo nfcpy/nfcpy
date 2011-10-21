@@ -4,6 +4,10 @@ Interface
 Contactless Frontend
 --------------------
 
+.. class:: nfc.ContactlessFrontend
+
+   ..method:: poll()
+
 .. autoclass:: nfc.ContactlessFrontend
    :members:
 
