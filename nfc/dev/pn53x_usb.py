@@ -66,12 +66,13 @@ class pn53x_usb(object):
         if self.dh is not None and self.usb_inp is not None:
             try: frame = self.dh.bulkRead(self.usb_inp, 300, timeout)
             except usb.USBError as error:
-                if (error.args[0] == "No error" or
-                    error.args[0] == "usb_reap: timeout error"):
-                    # normal timeout condition on Linux (1) and Windows (2)
+                timeout_messages = ("No error", "Connection timed out",
+                                    "usb_reap: timeout error")
+                if error.args[0] in timeout_messages:
+                    # normal timeout conditions (#1,2 Linux, #3 Windows)
                     return None
                 usb_err = "could not set config 1: Device or resource busy"
-                if (error.args[0] == usb_err):
+                if error.args[0] == usb_err:
                     # timeout error if two readers used on same computer
                     return None
                 log.error(error.args[0])
