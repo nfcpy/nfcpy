@@ -69,7 +69,10 @@ def connect(path=None):
                                 product = dev.idProduct
                                 module = usb_device_map[(vendor, product)]
                                 driver = import_driver(module)
-                                return driver.init(dev)
+                                device = driver.init(dev)
+                                device._path = "usb:{0}:{1}".format(
+                                    bus.dirname, dev.filename)
+                                return device
         #
         # match "usb:[[bus]:][devnum]" or "usb" or None
         #
@@ -86,7 +89,10 @@ def connect(path=None):
                             if (vendor, product) in usb_device_map:
                                 module = usb_device_map[(vendor, product)]
                                 driver = import_driver(module)
-                                return driver.init(dev)
+                                device = driver.init(dev)
+                                device._path = "usb:{0}:{1}".format(
+                                    bus.dirname, dev.filename)
+                                return device
         #
         # match "usb" or ""
         #
@@ -99,7 +105,10 @@ def connect(path=None):
                     if (vendor, product) in usb_device_map:
                         module = usb_device_map[(vendor, product)]
                         driver = import_driver(module)
-                        return driver.init(dev)
+                        device = driver.init(dev)
+                        device._path = "usb:{0}:{1}".format(
+                            bus.dirname, dev.filename)
+                        return device
                     
     if (path == "" or path.startswith("tty")) and os.name == "posix":
         log.info("searching for a tty reader")
@@ -114,17 +123,22 @@ def connect(path=None):
                     devname = "/dev/ttyUSB{0}".format(port)
                     log.info("trying usb tty reader {0}".format(devname))
                     for module in ("arygon_tty", "pn53x_tty"):
-                        driver = import_driver(module).init(devname)
-                        if driver is not None:
-                            return driver
+                        driver = import_driver(module)
+                        device = driver.init(devname)
+                        if device is not None:
+                            device._path = "tty:usb:{0}".format(port)
+                            return device
                 else:
                     log.info("searching for a usb tty reader")
                     for devname in glob.glob("/dev/ttyUSB[0-9]"):
                         log.info("trying usb tty reader {0}".format(devname))
                         for module in ("arygon_tty", "pn53x_tty"):
-                            driver = import_driver(module).init(devname)
-                            if driver is not None:
-                                return driver
+                            driver = import_driver(module)
+                            device = driver.init(devname)
+                            if device is not None:
+                                port = devname[-1]
+                                device._path = "tty:usb:{0}".format(port)
+                                return device
     elif path.startswith("tty"):
         log.info("sorry, tty readers are only supported on posix systems")
 
@@ -168,6 +182,21 @@ class Device(object):
     def tt4_exchange(self, cmd):
         raise NotImplemented
 
+    @property
+    def vendor(self):
+        return self._vendor
+        
+    @property
+    def product(self):
+        return self._product
+        
+    @property
+    def path(self):
+        return self._path
+
+    def __str__(self):
+        return "{dev.vendor} {dev.product} at {dev.path}".format(dev=self)
+        
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
 #    print connect("usb:046d:c52f")

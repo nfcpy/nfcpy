@@ -23,10 +23,12 @@
 import logging
 log = logging.getLogger(__name__)
 
+import tag
+
 ndef_read_service = 11 # service code for NDEF reading
 ndef_write_service = 9 # service code for NDEF writing
 
-class NDEF(object):
+class NDEF(tag.NDEF):
     def __init__(self, tag):
         self.tag = tag
         self.data = None
@@ -101,7 +103,7 @@ class NDEF(object):
         self.attr[14:16] = split2(sum(self.attr[0:14]))
         self.tag.write(''.join([chr(x) for x in self.attr]), [0])
 
-class Type3Tag(object):
+class Type3Tag(tag.TAG):
     def __init__(self, dev, target):
         self.dev = dev
         self.idm = target["IDm"]
@@ -123,14 +125,8 @@ class Type3Tag(object):
         return "Type3Tag IDm=%s PMm=%s SYS=%s" % tuple(params)
 
     @property
-    def ndef(self):
-        """For an NDEF tag this attribute holds an :class:`nfc.tt3.NDEF`
-        object."""
-        return self._ndef
-
-    @property
-    def is_present(self):
-        """Returns True if the tag is still within communication range."""
+    def _is_present(self):
+        """True if the tag is still within communication range."""
         try:
             cmd = "\x04" + self.idm
             rsp = self.dev.tt3_exchange(chr(len(cmd)+1) + cmd)

@@ -97,8 +97,11 @@ class Device(pn53x.Device):
             log.info(info.format(ttype, speed, cmode))
             return str(data[18:])
             
-def init(dev):
-    try: bus = pn53x_tty(dev)
+def init(tty):
+    try: bus = pn53x_tty(tty)
     except IOError: return None
     dev = pn53x.pn53x(bus)
-    return Device(dev)
+    device = Device(dev)
+    device._vendor = "NXP"
+    device._product = "PN53x"
+    return device

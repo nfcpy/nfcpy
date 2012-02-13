@@ -116,4 +116,7 @@ def init(devname):
     try: bus = arygon_tty(devname)
     except IOError: return None
     dev = pn53x.pn53x(bus)
-    return Device(dev)
+    device = Device(dev)
+    device._vendor = "Arygon"
+    device._product = "APPx-ADRx"
+    return device

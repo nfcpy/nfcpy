@@ -23,7 +23,9 @@
 import logging
 log = logging.getLogger(__name__)
 
-class NDEF(object):
+import tag
+
+class NDEF(tag.NDEF):
     def __init__(self, tag):
         self._tag = tag
         self._msg = None
@@ -145,7 +147,7 @@ class NDEF(object):
                 tag[offset+1] = len(self._msg) / 256
                 tag[offset+2] = len(self._msg) % 256
 
-class Type2Tag(object):
+class Type2Tag(tag.TAG):
     def __init__(self, dev, data):
         self.dev = dev
         self.atq = data["ATQ"]
@@ -205,13 +207,7 @@ class Type2Tag(object):
             self._sync.clear()
         
     @property
-    def ndef(self):
-        """For an NDEF tag this attribute holds an :class:`nfc.tt2.NDEF`
-        object."""
-        return self._ndef if hasattr(self, "_ndef") else None
-
-    @property
-    def is_present(self):
+    def _is_present(self):
         """Returns True if the tag is still within communication range."""
         try: return bool(self.read(0))
         except IOError: return False
