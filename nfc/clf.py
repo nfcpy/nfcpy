@@ -55,7 +55,7 @@ class ContactlessFrontend(object):
             log.error(msg)
             raise LookupError("couldn't find any usable nfc reader")
 
-        log.debug("using driver " + repr(self.dev))
+        log.info("using {0}".format(self.dev))
 
     def close(self):
         """Close the contacless reader device."""

@@ -102,6 +102,23 @@ def init(usb_dev):
     bus = pn53x_usb(usb_dev)
     dev = pn53x.pn53x(bus)
     device = Device(dev)
-    device._vendor = bus.dh.getString(usb_dev.iManufacturer, 100)
-    device._product = bus.dh.getString(usb_dev.iProduct, 100)
+    if dev.ic == "PN533":
+        # PN533 oddity (found with SCL3711): usb manufacturer and product
+        # strings disappear after first use, guess memory corruption; also
+        # happens when read_register with more than 16 addresses.
+        eeprom = bytearray()
+        for addr in range(0xA000, 0xA100, 16):
+            eeprom += dev.read_register(range(addr, addr+16))
+        index = 0
+        while index < len(eeprom) and eeprom[index] != 0xFF:
+            tlv_tag, tlv_len = eeprom[index], eeprom[index+1]
+            tlv_data = eeprom[index+2:index+2+tlv_len]
+            if tlv_tag == 3:
+                device._product = tlv_data[2:].decode("utf-16")
+            if tlv_tag == 4:
+                device._vendor = tlv_data[2:].decode("utf-16")
+            index += 2 + tlv_len
+    else:
+        device._vendor = bus.dh.getString(usb_dev.iManufacturer, 100)
+        device._product = bus.dh.getString(usb_dev.iProduct, 100)
     return device

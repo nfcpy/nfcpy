@@ -193,6 +193,9 @@ class Device(object):
     @property
     def path(self):
         return self._path
+
+    def __str__(self):
+        return "{dev.vendor} {dev.product} at {dev.path}".format(dev=self)
         
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)

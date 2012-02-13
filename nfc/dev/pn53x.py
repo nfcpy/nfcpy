@@ -191,17 +191,17 @@ class pn53x(object):
 
     def get_general_status(self):
         return self.command(0x04)
-        
-    def rf_configuration(self, cfg_item, cfg_data):
-        return self.command(0x32, bytearray([cfg_item]) + bytearray(cfg_data))
 
     def read_register(self, addr):
         if type(addr) is int: addr = [addr]
-        addr = ''.join([struct.pack(">H", a) for a in addr])
+        addr = ''.join([chr(x/256)+chr(x%256) for x in addr])
         data = self.command(0x06, addr)
         if data[0] != 0:
             raise CommandError(data[0])
         return data[1:]
+
+    def rf_configuration(self, cfg_item, cfg_data):
+        return self.command(0x32, bytearray([cfg_item]) + bytearray(cfg_data))
 
     def in_list_passive_target(self, br_ty, initiator_data):
         br_ty = ("106A", "212F", "424F", "106B", "106J").index(br_ty)
