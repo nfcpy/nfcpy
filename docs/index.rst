@@ -8,7 +8,7 @@ The *nfcpy* module implements NFC Forum specifications for wireless short-range 
 
 .. warning::
 
-   The documentation is work in progress and incomplete. It relates to the development branch https://launchpad.net/~stephen-tiedemann/nfcpy/dev-docs.
+   The documentation is work in progress and pretty much incomplete. Bear with me that this changes.
 
 Contents:
 
