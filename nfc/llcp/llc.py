@@ -215,8 +215,7 @@ class LogicalLinkControl(threading.Thread):
         self.cfg['recv-miu'] = config.get('recv-miu', 248)
         self.cfg['send-lto'] = config.get('send-lto', 500)
         self.cfg['send-agf'] = config.get('send-agf', True)
-        self.cfg['recv-wks'] = 0x0003
-        self.snl = dict(wks_map)
+        self.snl = dict({"urn:nfc:sn:sdp" : 1})
         self.sap = 64 * [None]
         self.sap[0] = ServiceAccessPoint(0, self)
         self.sap[1] = ServiceDiscovery(self)
@@ -225,7 +224,7 @@ class LogicalLinkControl(threading.Thread):
     def parameter_string(self):
         miu = self.cfg['recv-miu']
         lto = self.cfg['send-lto']
-        wks = self.cfg["recv-wks"]
+        wks = 1+sum(sorted([1<<sap for sap in self.snl.values() if sap < 15]))
         pax = ParameterExchange(version=(1,1), miu=miu, lto=lto, wks=wks)
         return "Ffm" + pax.to_string().lstrip("\x00\x40")
 
@@ -482,21 +481,16 @@ class LogicalLinkControl(threading.Thread):
                 name == "com.android.npp"): # invalid name but legacy
             raise Error(errno.EFAULT)
         with self.lock:
-            addr = self.snl.get(name)
-            if addr in range(0, 16):
-                if self.sap[addr] is None:
-                    socket.bind(addr)
-                    self.sap[addr] = ServiceAccessPoint(addr, self)
-                    self.sap[addr].insert_socket(socket)
-                else: raise Error(errno.EADDRINUSE)
-            elif addr is None:
+            if self.snl.get(name) != None:
+                raise Error(errno.EADDRINUSE)
+            addr = wks_map.get(name)
+            if addr is None:
                 try: addr = 16 + self.sap[16:32].index(None)
                 except ValueError: raise Error(errno.EADDRNOTAVAIL)
-                socket.bind(addr)
-                self.sap[addr] = ServiceAccessPoint(addr, self)
-                self.sap[addr].insert_socket(socket)
-                self.snl[name] = addr
-            else: raise Error(errno.EADDRINUSE)
+            socket.bind(addr)
+            self.sap[addr] = ServiceAccessPoint(addr, self)
+            self.sap[addr].insert_socket(socket)
+            self.snl[name] = addr
 
     def connect(self, socket, dest):
         if not isinstance(socket, TransmissionControlObject):

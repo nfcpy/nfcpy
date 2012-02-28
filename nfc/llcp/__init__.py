@@ -30,6 +30,14 @@ from opt import *
 
 _llc = None
 
+class Config(object):
+    def __getitem__(self, key):
+        return _llc.cfg.get(key)
+    def __str__(self):
+        return _llc.parameter_string
+
+config = Config()
+    
 def startup(config):
     global _llc
     _llc = llc.LogicalLinkControl(config)

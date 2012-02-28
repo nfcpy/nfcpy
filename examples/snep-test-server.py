@@ -73,28 +73,27 @@ class ValidationServer(nfc.snep.SnepServer):
         return nfc.snep.NotFound
 
 def main():
-    general_bytes = nfc.llcp.startup({'send-lto': 1000, 'recv-miu': 1024})
     for device in options.device:
         try: clf = nfc.ContactlessFrontend(device); break
         except LookupError: pass
     else: return
 
-    peer = llcp_connect(clf, general_bytes)
-    if peer is None: return
-
-    nfc.llcp.activate(peer)
-    try:
-        default_snep_server = DefaultServer()
-        default_snep_server.start()
-        validation_snep_server = ValidationServer()
-        validation_snep_server.start()
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        log.info("aborted by user")
-    finally:
-        nfc.llcp.shutdown()
-        log.info("I was the " + peer.role)
+    nfc.llcp.startup({'send-lto': 1000, 'recv-miu': 1024})
+    default_snep_server = DefaultServer()
+    validation_snep_server = ValidationServer()
+    peer = llcp_connect(clf, str(nfc.llcp.config))
+    if peer != None:
+        try:
+            nfc.llcp.activate(peer)
+            default_snep_server.start()
+            validation_snep_server.start()
+            while nfc.llcp.connected():
+                time.sleep(1)
+        except KeyboardInterrupt:
+            log.info("aborted by user")
+        finally:
+            nfc.llcp.shutdown()
+            log.info("I was the " + peer.role)
 
 def llcp_connect(clf, general_bytes):
     try:

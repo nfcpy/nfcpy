@@ -31,30 +31,29 @@ from struct import pack, unpack
 import nfc.llcp
 
 class SnepServer(Thread):
-    """ A simple NDEF exchange protocol - server side
+    """ NFC Forum Simple NDEF Exchange Protocol server
     """
     def __init__(self, service_name, max_ndef_msg_recv_size=1024):
-        super(SnepServer, self).__init__()
-        self.name = service_name
+        super(SnepServer, self).__init__(name=service_name)
         self.acceptable_length = max_ndef_msg_recv_size
+        self.socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
+        nfc.llcp.bind(self.socket, service_name)
 
     def run(self):
-        socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
         try:
-            nfc.llcp.bind(socket, self.name)
-            addr = nfc.llcp.getsockname(socket)
+            addr = nfc.llcp.getsockname(self.socket)
             log.info("snep server bound to port {0}".format(addr))
-            nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
-            nfc.llcp.listen(socket, backlog=2)
+            nfc.llcp.setsockopt(self.socket, nfc.llcp.SO_RCVBUF, 2)
+            nfc.llcp.listen(self.socket, backlog=2)
             while True:
-                client_socket = nfc.llcp.accept(socket)
+                client_socket = nfc.llcp.accept(self.socket)
                 client_thread = Thread(target=SnepServer.serve,
                                        args=[client_socket, self])
                 client_thread.start()
         except nfc.llcp.Error as e:
             log.error(str(e))
         finally:
-            nfc.llcp.close(socket)
+            nfc.llcp.close(self.socket)
         pass
 
     @staticmethod
