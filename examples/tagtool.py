@@ -77,16 +77,29 @@ def format_tag(clf):
     while True:
         tag = poll(clf)
         if tag:
+            if isinstance(tag, nfc.Type1Tag):
+                tt1_format(tag)
+            if isinstance(tag, nfc.Type2Tag):
+                print "unable to format {0}".format(str(tag))
             if isinstance(tag, nfc.Type3Tag):
                 tt3_format(tag)
-            else:
-                print "unable to format {0}".format(str(tag))
             if options.loopmode:
                 while tag.is_present:
                     time.sleep(1)
             else: break
         else: break
 
+def tt1_format(tag):
+    # fixme: this is only correct for 120 byte tags
+    # but there aren't any larger I know of
+    with tag:
+        tag[0x08] = 0xE1
+        tag[0x09] = 0x10
+        tag[0x0A] = 0x0E
+        tag[0x0B] = 0x00
+        tag[0x0C] = 0x03
+        tag[0x0D] = 0x00
+    
 def tt3_format(tag):
     def determine_block_count(tag):
         block = 0

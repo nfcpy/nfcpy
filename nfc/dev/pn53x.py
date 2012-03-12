@@ -362,12 +362,12 @@ class Device(nfc.dev.Device):
             rsp = self.dev.in_list_passive_target("106J", "")
             if rsp is not None:
                 log.debug("NFC-J tag found at 106 kbps")
-                print str(rsp).encode("hex")
                 atq = rsp[1] * 256 + rsp[0]
                 uid = bytearray(rsp[2:])
-                RALL = "\x00\x00" + str(rsp[2:])
-                self.dev.in_data_exchange(0x01, RALL , 100)
-                return {"type": "TT1", "ATQ": atq, "SAK": 0, "UID": rsp[2:]}
+                hdr = self.tt1_exchange("\x78\x00\x00" + str(uid))[0:2]
+                if hdr[0] & 0x10 == 0x10:
+                    return {"type": "TT1", "ATQ": atq, "SAK": 0,
+                            "UID": uid, "HDR": hdr}
 
         # no target found, shut off rf field
         self.dev.rf_configuration(0x01, "\x00")
@@ -471,10 +471,12 @@ class Device(nfc.dev.Device):
     ## tag type (1|2|3) command/response exchange
     ##
     def tt1_exchange(self, cmd):
+        log.debug("tt1_exchange")
         rsp = self.dev.in_data_exchange(0x01, cmd, timeout=100)
-        return str(rsp[1])
+        return rsp[1]
 
     def tt2_exchange(self, cmd):
+        log.debug("tt2_exchange")
         rsp = self.dev.in_data_exchange(0x01, cmd, timeout=100)
         return str(rsp[1])
 
