@@ -349,14 +349,16 @@ class Device(nfc.dev.Device):
             log.debug("NFC-A target found at 106 kbps")
             atq = rsp[1] * 256 + rsp[0]
             sak = rsp[2]
-            uid = bytearray(rsp[4:4+rsp[3]])
+            uid = rsp[4:4+rsp[3]]
             platform = ("T2T", "T4T", "DEP", "DEP/TT4")[(sak >> 5) & 0b11]
             log.debug("NFC-A configured for {0}".format(platform))
             if sak == 0b00000000:
                 return {"type": "TT2", "ATQ": atq, "SAK": sak, "UID": uid}
-            elif sak & 0b00100000 == 0b00100000:
+            elif sak & 0b00100000:
+                ats = rsp[4+len(uid):4+len(uid)+1+rsp[4+len(uid)]]
+                log.debug("ATS = " + str(ats).encode("hex"))
                 return {"type": "TT4", "ATQ": atq, "SAK": sak, "UID": uid}
-            elif sak & 0b01000000 == 0b01000000:
+            elif sak & 0b01000000:
                 return {"type": "DEP", "ATQ": atq, "SAK": sak, "UID": uid}
         elif self.dev.ic != "PN531":
             rsp = self.dev.in_list_passive_target("106J", "")
@@ -486,5 +488,7 @@ class Device(nfc.dev.Device):
         return str(rsp)
 
     def tt4_exchange(self, cmd):
-        raise NotImplemented
+        log.debug("tt4_exchange")
+        rsp = self.dev.in_data_exchange(0x01, cmd, timeout=100)
+        return rsp[1]
 

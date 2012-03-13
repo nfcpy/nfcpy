@@ -26,3 +26,4 @@ from tag import TAG
 from tt1 import Type1Tag
 from tt2 import Type2Tag
 from tt3 import Type3Tag
+from tt4 import Type4Tag

@@ -28,6 +28,7 @@ from dep import DEPTarget, DEPInitiator
 from tt1 import Type1Tag
 from tt2 import Type2Tag
 from tt3 import Type3Tag
+from tt4 import Type4Tag
 
 class ContactlessFrontend(object):
     """Access a nearfield communication reader device."""
@@ -87,8 +88,7 @@ class ContactlessFrontend(object):
             if target.get("type") == "TT3":
                 return Type3Tag(self.dev, target)
             if target.get("type") == "TT4":
-                log.info("support for type 4 tag not yet implemented")
-                return None
+                return Type4Tag(self.dev, target)
 
     def listen(self, timeout, protocol_data):
         """Wait to become initialized by a peer device. The *timeout*
