@@ -151,15 +151,15 @@ class pn53x(object):
 
         if frame[3] == 255 and frame[4] == 255:
             # extended information frame
-            LEN, LCS = frame[5] * 256 + frame[6], frame[7]
-            TFI, PD0 = frame[8], frame[9]
+            if sum(frame[5:8]) & 0xFF != 0:
+                raise FrameError("lenght checksum error")
+            LEN, TFI, PD0 = frame[5]*256+frame[6], frame[8], frame[9]
         else:
             # normal information frame 
-            LEN, LCS = frame[3], frame[4]
-            TFI, PD0 = frame[5], frame[6]
+            if sum(frame[3:5]) & 0xFF != 0:
+                raise FrameError("lenght checksum error")
+            LEN, TFI, PD0 = frame[3], frame[5], frame[6]
 
-        if not (LEN + LCS) % 256 == 0:
-            raise FrameError("lenght checksum error")
         if not TFI == 0xd5:
             if not TFI == 0x7f:
                 raise FrameError("invalid frame identifier")
