@@ -26,7 +26,7 @@ log = logging.getLogger(__name__)
 class NDEF(object):
     @property
     def version(self):
-        """The version of the NDEF mapping."""
+        """The version of the NDEF mapping as a "<major>.<minor>" number string."""
         raise NotImplemented
 
     @property
@@ -52,11 +52,12 @@ class NDEF(object):
 class TAG(object):
     @property
     def ndef(self):
-        """An :class:`~nfc.tag.NDEF` message object or :const:`None`."""
+        """Holds an :class:`~nfc.NDEF` object if the tag is appropriately formatted, else :const:`None`."""
         return self._ndef if hasattr(self, "_ndef") else None
 
     @property
     def is_present(self):
         """True if the tag is in communication range."""
         return self._is_present
+
 

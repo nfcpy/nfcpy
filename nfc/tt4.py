@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2009-2011 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2012 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -153,6 +153,7 @@ class Type4Tag(tag.TAG):
             return False
 
     def select_file(self, p1, p2, data, expected_response_length=None):
+        """Select a file or directory with parameters defined in ISO/IEC 7816-4"""
         cmd = bytearray([0x00, 0xA4, p1, p2])
         if not data is None:
             cmd += bytearray([len(data)]) + bytearray(data)
@@ -163,6 +164,7 @@ class Type4Tag(tag.TAG):
             raise Type4TagError(rsp[-2:])
 
     def read_binary(self, offset, count):
+        """Read *count* bytes from selected file starting at *offset*"""
         cmd = bytearray([0x00, 0xB0, offset/256, offset%256, count])
         rsp = self.dev.tt4_exchange(cmd)
         if rsp[-2:] != "\x90\x00":
@@ -170,6 +172,7 @@ class Type4Tag(tag.TAG):
         return rsp[0:-2]
 
     def update_binary(self, offset, data):
+        """Write *data* bytes to selected file starting at *offset*"""
         cmd = bytearray([0x00, 0xD6, offset/256, offset%256, len(data)])
         cmd = cmd + bytearray(data)
         rsp = self.dev.tt4_exchange(cmd)

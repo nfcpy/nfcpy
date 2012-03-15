@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2009-2011 
+# Copyright 2011-2012
 # Stephen Tiedemann <stephen.tiedemann@googlemail.com>, 
 # Alexander Knaub <sanyok.og@googlemail.com>
 #
@@ -28,7 +28,9 @@
 import logging
 log = logging.getLogger(__name__)
 
-class NDEF(object):
+import tag
+
+class NDEF(tag.NDEF):
     def __init__(self, tag):
         self._tag = tag
         self._msg = None
@@ -158,7 +160,7 @@ class NDEF(object):
         with self._tag as tag:
             tag[8] = 0xE1
 
-class Type1Tag(object):
+class Type1Tag(tag.TAG):
     def __init__(self, dev, data):
         self.dev = dev
         self.atq = data["ATQ"]
@@ -208,13 +210,7 @@ class Type1Tag(object):
             self._sync.clear()
         
     @property
-    def ndef(self):
-        """For an NDEF tag this attribute holds an :class:`nfc.tt1.NDEF`
-        object."""
-        return self._ndef if hasattr(self, "_ndef") else None
-
-    @property
-    def is_present(self):
+    def _is_present(self):
         """Returns True if the tag is still within communication range."""
         try: return bool(self.read_byte(0))
         except IOError: return False
