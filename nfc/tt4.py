@@ -25,9 +25,9 @@ log = logging.getLogger(__name__)
 
 import tag
 
-ndef_app_file_v1 = bytearray.fromhex("D2760000850100")
-ndef_app_file_v2 = bytearray.fromhex("D2760000850101")
-capability_container = bytearray.fromhex("E103")
+ndef_app_file_v1 = bytearray("\xD2\x76\x00\x00\x85\x01\x00")
+ndef_app_file_v2 = bytearray("\xD2\x76\x00\x00\x85\x01\x01")
+capability_container = bytearray("\xE1\x03")
 
 class Type4TagError(BaseException):
     errmsg = {
