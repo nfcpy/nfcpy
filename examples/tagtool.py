@@ -272,9 +272,9 @@ if __name__ == '__main__':
     parser.add_option("-q", default=True,
                       action="store_false", dest="verbose",
                       help="be quiet, only print errors")
-    parser.add_option("-d", default=False,
-                      action="store_true", dest="debug",
-                      help="print debug messages")
+    parser.add_option("-d", type="string", default=[],
+                      action="append", dest="debug", metavar="MODULE",
+                      help="print debug messages for MODULE")
     parser.add_option("-f", type="string",
                       action="store", dest="logfile",
                       help="write log messages to LOGFILE")
@@ -291,7 +291,6 @@ if __name__ == '__main__':
     else: options.command = "show"
 
     verbosity = logging.INFO if options.verbose else logging.ERROR
-    verbosity = logging.DEBUG if options.debug else verbosity
     logging.basicConfig(level=verbosity, format='%(message)s')
 
     if options.logfile:
@@ -300,6 +299,21 @@ if __name__ == '__main__':
         logfile.setFormatter(logging.Formatter(logfile_format))
         logfile.setLevel(logging.DEBUG)
         logging.getLogger('').addHandler(logfile)
+
+    import inspect, os, os.path
+    nfcpy_path = os.path.dirname(inspect.getfile(nfc))
+    for name in os.listdir(nfcpy_path):
+        if os.path.isdir(os.path.join(nfcpy_path, name)):
+            logging.getLogger("nfc."+name).setLevel(verbosity)
+        elif name.endswith(".py") and name != "__init__.py":
+            logging.getLogger("nfc."+name[:-3]).setLevel(verbosity)
+            
+    if options.debug:
+        logging.getLogger('').setLevel(logging.DEBUG)
+        logging.getLogger('nfc').setLevel(logging.DEBUG)
+        for module in options.debug:
+            log.info("enable debug output for module '{0}'".format(module))
+            logging.getLogger(module).setLevel(logging.DEBUG)
 
     if len(options.device) == 0:
         # search and use first

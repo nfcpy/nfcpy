@@ -6,7 +6,7 @@ Contactless Frontend
 
 .. class:: nfc.ContactlessFrontend
 
-   ..method:: poll()
+   .. method:: poll()
 
 .. autoclass:: nfc.ContactlessFrontend
    :members:
@@ -62,3 +62,11 @@ Data Exchange
 .. autoclass:: nfc.DEPTarget()
    :members: wait_command, send_response
 
+NFC Data Exchange Format
+------------------------
+
+.. autoclass:: nfc.ndef.Record
+   :members:
+
+.. autoclass:: nfc.ndef.Message
+   :members:

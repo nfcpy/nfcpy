@@ -20,11 +20,15 @@
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
 #
-# record.py -- contains the base class for NDEF records
-#
-# BUGS:
-#   - does not handle chunked records
+# NFC Data Exchange Format (NDEF) package
 #
 
-from nfc.ndef.Message import Message
-from nfc.ndef.Record import Record
+from nfc.ndef.message import Message
+from nfc.ndef.record import Record
+from nfc.ndef.text_record import TextRecord
+
+class FormatError(Exception):
+    pass
+
+class LengthError(Exception):
+    pass

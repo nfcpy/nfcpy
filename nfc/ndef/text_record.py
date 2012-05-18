@@ -20,14 +20,14 @@
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
 
-from nfc.ndef import Record
+import nfc.ndef
 
-class TextRecord(Record):
+class TextRecord(nfc.ndef.Record):
     def __init__(self, initializer=("en", "")):
-        if isinstance(initializer, Record):
-            Record.__init__(self, initializer)
+        if isinstance(initializer, nfc.ndef.Record):
+            nfc.ndef.Record.__init__(self, initializer)
         else:
-            Record.__init__(self)
+            nfc.ndef.Record.__init__(self)
             self.language, self.text = initializer
 
     @property
