@@ -31,22 +31,24 @@ log = logging.getLogger(__name__)
 
 import nfc.ndef
 import struct
-from struct import pack, unpack
 import io
 import re
 
+type_name_prefix = (
+    '', 'urn:nfc:wkt:', '', '', 'urn:nfc:ext:', 'unknown', 'unchanged')
+    
 class Record(object):
     """Represents an NDEF (NFC Data Exchange Format) record."""
     
-    type_name_prefix = (
-        '', 'urn:nfc:wkt:', '', '', 'urn:nfc:ext:', 'unknown', 'unchanged')
-    
     def __init__(self, record_type=None, record_name=None, data=None):
         self._message_begin = self._message_end = False
+        self._type = self._name = self._data = ''
         if not (record_type is None and record_name is None):
             self.type = record_type if record_type is not None else 'unknown'
-            self.name = record_name if record_name is not None else ''
-            self.data = '' if data is None else data
+            if record_name is not None:
+                self.name = record_name
+            if data is not None:
+                self.data = data
         elif data is not None:
             if isinstance(data, (bytearray, str)):
                 data = io.BytesIO(data)
@@ -54,8 +56,6 @@ class Record(object):
                 self._read(data)
             else:
                 raise TypeError("invalid data argument type")
-        else:
-            self.type = self.name = self.data = ''
 
     def _read(self, f):
         """Parse an NDEF record from a file-like object."""
@@ -76,8 +76,14 @@ class Record(object):
 
         try:
             type_length = ord(f.read(1))
-            data_length = ord(f.read(1)) if srf else unpack('>L', f.read(4))[0]
-            name_length = ord(f.read(1)) if ilf else 0
+            if srf: # short record
+                data_length = ord(f.read(1))
+            else: # 32-bit length
+                struct.unpack('>L', f.read(4))[0]
+            if ilf: # id length present
+                name_length = ord(f.read(1))
+            else:
+                name_length = 0
         except (TypeError, struct.error):
             log.error("buffer underflow at offset {0}".format(f.tell()))
             raise nfc.ndef.LengthError("insufficient data to parse")
@@ -94,7 +100,7 @@ class Record(object):
             raise nfc.ndef.LengthError("insufficient data to parse")
 
         self._message_begin, self._message_end = mbf, mef
-        self._type = bytearray(Record.type_name_prefix[tnf] + record_type)
+        self._type = bytearray(type_name_prefix[tnf] + record_type)
         self._name = bytearray(record_name)
         self._data = bytearray(record_data)
 
@@ -135,11 +141,11 @@ class Record(object):
             header_flags |= 0x08
 
         if data_length < 256:
-            f.write(pack(">BBB", header_flags, type_length, data_length))
+            f.write(struct.pack(">BBB", header_flags, type_length, data_length))
         else:
-            f.write(pack(">BBL", header_flags, type_length, data_length))
+            f.write(struct.pack(">BBL", header_flags, type_length, data_length))
         if name_length > 0:
-            f.write(pack(">B", name_length))
+            f.write(struct.pack(">B", name_length))
 
         f.write(record_type)
         f.write(record_name)
