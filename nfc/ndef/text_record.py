@@ -36,15 +36,26 @@ class TextRecord(record.Record):
         
     def __init__(self, *args, **kwargs):
         super(TextRecord, self).__init__('urn:nfc:wkt:T')
-        if args and isinstance(args[0], record.Record):
-            if not args[0].type == self.type:
-                raise ValueError("record type mismatch")
-            self.name = args[0].name
-            self.data = args[0].data
-        else:
-            self.text = unicode(kwargs.get('text', ''))
-            self.language = kwargs.get('language', 'en')
-            self.encoding = kwargs.get('encoding', 'UTF-8')
+        self.text = u''
+        self.language = 'en'
+        self.encoding = 'UTF-8'
+        
+        if len(args) > 0:
+            if isinstance(args[0], record.Record):
+                if not args[0].type == self.type:
+                    raise ValueError("record type mismatch")
+                self.name = args[0].name
+                self.data = args[0].data
+            else:
+                self.text = args[0]
+
+        if len(kwargs) > 0:
+            if 'text' in kwargs:
+                self.text = unicode(kwargs['text'])
+            if 'language' in kwargs:
+                self.language = kwargs['language']
+            if 'encoding' in kwargs:
+                self.encoding = kwargs['encoding']
 
     def __repr__(self):
         s = "nfc.ndef.TextRecord(text='{0}', language='{1}', encoding='{2}')"

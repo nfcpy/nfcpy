@@ -31,28 +31,35 @@ def test_init_args_none():
     assert record.language == 'en'
     assert record.encoding == 'UTF-8'
     
-def test_init_arg_text():
+def test_init_args_text():
+    record = nfc.ndef.TextRecord("Hello World")
+    assert record.text == "Hello World"
+    assert record.language == "en"
+    assert record.encoding == 'UTF-8'
+    assert str(record) == b'\x11\x01\x0ET\x02enHello World'
+    
+def test_init_kwargs_text():
     record = nfc.ndef.TextRecord(text="Hello World")
     assert record.text == "Hello World"
     assert record.language == "en"
     assert record.encoding == 'UTF-8'
     assert str(record) == b'\x11\x01\x0ET\x02enHello World'
     
-def test_init_arg_lang():
+def test_init_kwargs_lang():
     record = nfc.ndef.TextRecord(language="de")
     assert record.text == ""
     assert record.language == "de"
     assert record.encoding == 'UTF-8'
     assert str(record) == b'\x11\x01\x03T\x02de'
     
-def test_init_arg_text_lang():
-    record = nfc.ndef.TextRecord(text="Hallo Welt", language="de")
+def test_init_args_text_kwargs_lang():
+    record = nfc.ndef.TextRecord("Hallo Welt", language="de")
     assert record.text == "Hallo Welt"
     assert record.language == "de"
     assert record.encoding == 'UTF-8'
     assert str(record) == b'\x11\x01\x0DT\x02deHallo Welt'
     
-def test_init_arg_text_encoding():
+def test_init_kwargs_text_encoding():
     record = nfc.ndef.TextRecord(text="text", encoding="UTF-16")
     assert record.text == "text"
     assert record.language == "en"
