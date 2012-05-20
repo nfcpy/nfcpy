@@ -90,8 +90,8 @@ class Message(object):
         del self._records[key]
 
     def append(self, record):
-        """Add an NDEF Record to the end of the message; equivalent to
-        message[len(message):] = [record]."""
+        """Add a record to the end of the message. The *record*
+        argument must be an instance of :class:`nfc.ndef.Record`."""
         
         if not isinstance(record, nfc.ndef.Record):
             raise TypeError("an nfc.ndef.Record object is required")
@@ -99,7 +99,8 @@ class Message(object):
 
     def extend(self, records):
         """Extend the message by appending all the records in the
-        given list; equivalent to message[len(message):] = [r1,r2]."""
+        given list. The *records* argument must be a sequence of
+        :class:`nfc.ndef.Record` elements."""
 
         for record in records:
             if not isinstance(record, nfc.ndef.Record):
@@ -107,31 +108,36 @@ class Message(object):
             self._records.append(copy.copy(record))
         
     def insert(self, i, record):
-        """Insert an NDEF Record at the given position. The first
-        argument is the index of the record before which to insert, so
+        """Insert a record at the given position. The first argument
+        *i* is the index of the record before which to insert, so
         message.insert(0, record) inserts at the front of the message,
         and message.insert(len(message), record) is equivalent to
-        message.append(record)."""
+        message.append(record). The second argument *record* must be
+        an instance of :class:`nfc.ndef.Record`."""
         
         if not isinstance(record, nfc.ndef.Record):
             raise TypeError("an nfc.ndef.Record object is required")
         self._records.append(copy.copy(record))
 
     def pop(self, i=-1):
-        """Remove the record at the given position in the message, and
-        return it. If no index is specified, message.pop() removes and
-        returns the last item."""
+        """Remove the record at the given position *i* in the message,
+        and return it. If no position is specified, message.pop()
+        removes and returns the last item."""
 
         return self._records.pop(i)
 
     @property
     def type(self):
-        "The type of the first record or :const:`None` if len is zero."
+        """The type of the first record or :const:`None` if the
+        message has no records."""
+        
         return self._records[0].type if len(self._records) else None
 
     @property
     def name(self):
-        "The name of the first record or :const:`None` if len is zero."
+        """The name of the first record or :const:`None` if the
+        message has no records."""
+        
         return self._records[0].name if len(self._records) else None
 
     # **************

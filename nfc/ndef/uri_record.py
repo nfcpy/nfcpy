@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2009-2011 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2009-2012 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -19,37 +19,50 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
+#
+# uri_record.py -- NDEF URI Record
+#
+import logging
+log = logging.getLogger(__name__)
 
-from nfc.ndef import Record
+import record
 
-class UriRecord(Record):
-    def __init__(self, initializer=None):
-        if isinstance(initializer, Record):
-            Record.__init__(self, initializer)
-        else:
-            Record.__init__(self)
-            self.uri = initializer
+class UriRecord(record.Record):
+    """NDEF URI Record representation."""
+    
+    def __init__(self, *args, **kwargs):
+        super(UriRecord, self).__init__('urn:nfc:wkt:U')
+        self._uri = ''
+        if len(args) > 0:
+            if isinstance(args[0], record.Record):
+                if not args[0].type == self.type:
+                    raise ValueError("record type mismatch")
+                self.name = args[0].name
+                self.data = args[0].data
+            else:
+                self.uri = args[0]
+        if 'uri' in kwargs:
+            self.uri = kwargs['uri']
 
+    def __repr__(self):
+        s = "nfc.ndef.UriRecord(uri='{0}')"
+        return s.format(self.uri)
+        
     @property
     def data(self):
-        for i in range(1, len(protocol_strings)):
-            if self._uri.startswith(protocol_strings[i]):
-                return chr(i) + self._uri[len(protocol_strings[i]):]
-        return "\x00"
+        for i, p in enumerate(protocol_strings):
+            if i > 0 and self.uri.startswith(p):
+                return chr(i) + self.uri[len(p):]
+        else:
+            return "\x00"
 
     @data.setter
     def data(self, string):
-        if not string: return
-        protocol = min(ord(string[0]), len(protocol_strings)-1)
-        self._uri = protocol_strings[protocol] + string[1:]
-
-    @property
-    def type(self):
-        return "urn:nfc:wkt:U"
-
-    @type.setter
-    def type(self, value):
-        pass
+        log.debug("decode uri record " + repr(string))
+        if len(string) > 0:
+            p = min(ord(string[0]), len(protocol_strings)-1)
+            self.uri = protocol_strings[p] + string[1:]
+        else: log.error("nothing to parse")
 
     @property
     def uri(self):
@@ -59,7 +72,8 @@ class UriRecord(Record):
     def uri(self, value):
         self._uri = value.encode("ascii")
 
-protocol_strings = ("",
+protocol_strings = (
+    "",
     "http://www.",
     "https://www.",
     "http://",

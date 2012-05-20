@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2009-2011 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2009-2012 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -28,21 +28,16 @@ log = logging.getLogger(__name__)
 import record
 
 class TextRecord(record.Record):
-    """NDEF Text Record representation class.
+    """NDEF Text Record representation.
 
-    nfc.ndef.TextRecord(nfc.ndef.Record())    
-    nfc.ndef.TextRecord(text="", language="en", encoding="utf8")
+    An NDEF Text Record contains a text string, an IANA language code
+    and a text encoding.
     """
         
     def __init__(self, *args, **kwargs):
-        """
-        
-        nfc.ndef.TextRecord(nfc.ndef.Record())
-        nfc.ndef.TextRecord(text="", language="en", encoding="UTF16")
-        """
         super(TextRecord, self).__init__('urn:nfc:wkt:T')
         if args and isinstance(args[0], record.Record):
-            if not args[0].type == 'urn:nfc:wkt:T':
+            if not args[0].type == self.type:
                 raise ValueError("record type mismatch")
             self.name = args[0].name
             self.data = args[0].data
@@ -74,8 +69,7 @@ class TextRecord(record.Record):
             self._utfx = "UTF-16" if status_byte >> 7 else "UTF-8"
             self._lang = string[1:1+(status_byte & 0x3F)]
             self._text = string[1+len(self._lang):].decode(self._utfx)
-        else:
-            log.error("no payload to parse text record")
+        else: log.error("nothing to parse")
 
     @property
     def text(self):

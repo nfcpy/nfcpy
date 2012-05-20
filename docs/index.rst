@@ -13,11 +13,10 @@ The *nfcpy* module implements NFC Forum specifications for wireless short-range 
 Contents:
 
 .. toctree::
-   :maxdepth: 2
 
    overview
    tutorial
-   interface
+   reference
    examples
 
 Indices and tables
