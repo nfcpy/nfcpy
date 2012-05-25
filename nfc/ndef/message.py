@@ -54,7 +54,7 @@ class Message(object):
         self._records.append(record)
         while self._records[-1]._message_end == False:
             self._records.append(nfc.ndef.Record(data=f))
-        log.debug("done ndef message at offset {0}".format(f.tell()))
+        log.debug("ndef message complete at offset {0}".format(f.tell()))
 
     def _write(self, f):
         if len(self._records) > 0:

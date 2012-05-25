@@ -59,7 +59,6 @@ class Record(object):
 
     def _read(self, f):
         """Parse an NDEF record from a file-like object."""
-        log.debug("reading ndef record at offset {0}".format(f.tell()))
         
         try:
             self.header = ord(f.read(1))
@@ -103,6 +102,7 @@ class Record(object):
         self._type = bytearray(type_name_prefix[tnf] + record_type)
         self._name = bytearray(record_name)
         self._data = bytearray(record_data)
+        log.debug("parsed {0}".format(repr(self)))
 
     def _write(self, f):
         """Serialize an NDEF record to a file-like object."""
