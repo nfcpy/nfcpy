@@ -78,6 +78,9 @@ class NDEF(tag.NDEF):
         self._ndef_file_size = self._cc[11] * 256 + self._cc[12]
         ndef_file_id = self._cc[9:11]
 
+        log.debug("Capabilities: Ver={0}.{1}, MLe={2}, MLc={3}".format(
+                self._vmajor, self._vminor, self._max_le, self._max_lc))
+        
         if self._max_le > 255:
             log.warning("MLe > 255 conflicts with READ_BINARY Le encoding")
             self._max_le = 255
