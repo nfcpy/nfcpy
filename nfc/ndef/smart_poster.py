@@ -20,6 +20,7 @@
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
 
+import io
 import struct
 from record import Record
 from message import Message
