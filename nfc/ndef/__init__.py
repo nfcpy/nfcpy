@@ -35,3 +35,5 @@ from nfc.ndef.uri_record import UriRecord
 from nfc.ndef.smart_poster import SmartPosterRecord
 from nfc.ndef.handover import HandoverRequestMessage
 from nfc.ndef.handover import HandoverSelectMessage
+from nfc.ndef.handover import HandoverCarrierRecord
+from nfc.ndef.bt_record import BluetoothConfigRecord

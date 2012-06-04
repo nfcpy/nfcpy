@@ -26,6 +26,8 @@ sys.path.insert(1, os.path.split(sys.path[0])[0])
 import nfc.ndef
 import nfc.ndef.handover
 
+from nose.tools import raises
+
 # --------------------------------------------------- nfc.ndef.handover.Version
 def test_version_args_none():
     version = nfc.ndef.handover.Version()
@@ -38,9 +40,7 @@ def test_version_decode():
     assert version.minor == 2
 
 def test_version_encode():
-    version = nfc.ndef.handover.Version()
-    version.major = 1
-    version.minor = 2
+    version = nfc.ndef.handover.Version('\x12')
     assert str(version) == '\x12'
     
 def test_version_equal():
@@ -59,29 +59,34 @@ def test_version_higher():
 
 # --------------------------------------------- nfc.ndef.handover.HandoverError
 def test_handover_error_decode():
-    for p in [("\x01\x10", 1, 16),
-              ("\x02\x00\x00\x04\x00", 2, 1024),
-              ("\x03\x0C", 3, 12)]:
-        yield check_handover_error_decode, p[0], p[1], p[2]
-
-def check_handover_error_decode(payload, reason, data):
-    error = nfc.ndef.handover.HandoverError(payload)
-    assert error.reason == reason
-    assert error.data == data
+    def check((payload, reason, data)):
+        error = nfc.ndef.handover.HandoverError(payload)
+        assert error.reason == reason
+        assert error.data == data
+    for params in [("\x01\x10", 1, 16),
+                   ("\x02\x00\x00\x04\x00", 2, 1024),
+                   ("\x03\x0C", 3, 12)]:
+        yield check, params
 
 def test_handover_error_encode():
-    for p in [("\x01\x10", 1, 16),
-              ("\x02\x00\x00\x04\x00", 2, 1024),
-              ("\x03\x0C", 3, 12),
-              ("\x04reserved", 4, "reserved"),
-              ]:
-        yield check_handover_error_encode, p[0], p[1], p[2]
+    def check((payload, reason, data)):
+        error = nfc.ndef.handover.HandoverError()
+        error.reason = reason
+        error.data = data
+        assert str(error) == payload
+    for params in [("\x01\x10", 1, 16),
+                   ("\x02\x00\x00\x04\x00", 2, 1024),
+                   ("\x03\x0C", 3, 12)]:
+        yield check, params
 
-def check_handover_error_encode(payload, reason, data):
-    error = nfc.ndef.handover.HandoverError()
-    error.reason = reason
-    error.data = data
-    assert error.encode() == payload
+def test_handover_error_encode_invalid_reason():
+    @raises(nfc.ndef.EncodeError)
+    def check(reason):
+        error = nfc.ndef.handover.HandoverError()
+        error.reason = reason
+        error.encode()
+    for params in [0] + range(4, 256):
+        yield check, params
 
 # ------------------------------------- nfc.ndef.handover.HandoverCarrierRecord
 def test_hc_message_args_none():
@@ -131,16 +136,107 @@ def check_hc_message_encode(carrier_type, carrier_data, binary_data):
     assert str(record) == binary_data
 
 # --------------------------------------------- nfc.ndef.HandoverRequestMessage
-def test_hr_message_args_none():
-    message = nfc.ndef.HandoverRequestMessage()
+def test_hr_message_init_arg_message():
+    message = nfc.ndef.Message("d10201487210".decode("hex"))
+    message = nfc.ndef.HandoverRequestMessage(message=message)
     assert message.type == 'urn:nfc:wkt:Hr'
     assert message.name == ''
-    assert message.version.major == 0
+    assert message.version.major == 1
     assert message.version.minor == 0
     assert message.nonce == None
     assert message.carriers == list()
+    assert str(message).encode("hex") == "d10201487210"
     
-def test_hr_message_decode():
+def test_hr_message_init_arg_version():
+    message = nfc.ndef.HandoverRequestMessage(version="1.0")
+    assert message.type == 'urn:nfc:wkt:Hr'
+    assert message.name == ''
+    assert message.version.major == 1
+    assert message.version.minor == 0
+    assert message.nonce == None
+    assert message.carriers == list()
+    assert str(message).encode("hex") == "d10201487210"
+    
+def test_hr_message_init_arg_version_range():
+    def check_valid(version):
+        nfc.ndef.HandoverRequestMessage(version=version)
+    for minor in range(16):
+        yield check_valid, "{0}.{1}".format(1, minor)
+        
+    @raises(ValueError)
+    def check_invalid(version_string):
+        nfc.ndef.HandoverRequestMessage(version=version_string)
+    for major, minor in [(0,0), (0,1), (2,0), (2,15), (1,16), (16,0)]:
+        yield check_invalid, "{0}.{1}".format(major, minor)
+    
+def test_hr_message_encode_version_1_1():
+    message = nfc.ndef.HandoverRequestMessage(version="1.1")
+    assert str(message).encode("hex") == "d10201487211"
+
+@raises(nfc.ndef.EncodeError)
+def test_hr_message_encode_version_1_2_missing_nonce():
+    message = nfc.ndef.HandoverRequestMessage(version="1.2")
+    assert str(message).encode("hex") == "d10201487212"
+    
+def test_hr_message_encode_version_1_2_with_nonce():
+    message = nfc.ndef.HandoverRequestMessage(version="1.2")
+    message.nonce = 1025
+    assert str(message).encode("hex") == "d10208487212d1020263720401"
+    
+def test_hr_message_encode_one_carrier_record():
+    message = nfc.ndef.HandoverRequestMessage(version="1.1")
+    carrier = nfc.ndef.HandoverCarrierRecord()
+    carrier.carrier_type = "urn:nfc:wkt:x-test"
+    carrier.carrier_data = "data"
+    message.add_carrier(carrier, "active")
+    assert message.carriers[0].record.type == "urn:nfc:wkt:Hc"
+    assert message.carriers[0].record.carrier_type == "urn:nfc:wkt:x-test"
+    assert message.carriers[0].record.carrier_data == "data"
+    binary = "91020a487211d10204616301013000" + \
+        "59020c014863300106782d7465737464617461"
+    assert str(message).encode("hex") == binary
+    
+def test_hr_message_encode_two_carrier_record():
+    message = nfc.ndef.HandoverRequestMessage(version="1.1")
+    carrier = nfc.ndef.HandoverCarrierRecord()
+    carrier.carrier_type = "urn:nfc:wkt:x-test"
+    carrier.carrier_data = "data1"
+    message.add_carrier(carrier, "active")
+    carrier = nfc.ndef.HandoverCarrierRecord()
+    carrier.carrier_type = "urn:nfc:wkt:x-test"
+    carrier.carrier_data = "data2"
+    message.add_carrier(carrier, "active")
+    assert message.carriers[0].record.type == "urn:nfc:wkt:Hc"
+    assert message.carriers[0].record.carrier_type == "urn:nfc:wkt:x-test"
+    assert message.carriers[0].record.carrier_data == "data1"
+    assert message.carriers[1].record.type == "urn:nfc:wkt:Hc"
+    assert message.carriers[1].record.carrier_type == "urn:nfc:wkt:x-test"
+    assert message.carriers[1].record.carrier_data == "data2"
+    binary = "910213487211910204616301013000510204616301013100" + \
+        "19020d014863300106782d746573746461746131" + \
+        "59020d014863310106782d746573746461746132"
+    assert str(message).encode("hex") == binary
+    
+def test_hr_message_encode_auxiliary_data_records():
+    message = nfc.ndef.HandoverRequestMessage(version="1.1")
+    carrier = nfc.ndef.HandoverCarrierRecord()
+    carrier.carrier_type = "urn:nfc:wkt:x-test"
+    text1 = nfc.ndef.TextRecord("nfcpy")
+    text2 = nfc.ndef.TextRecord("ypcfn")
+    message.add_carrier(carrier, "active", [text1, text2])
+    assert len(message.carriers[0].auxiliary_data_records) == 2
+    assert message.carriers[0].auxiliary_data_records[0].type == "urn:nfc:wkt:T"
+    assert message.carriers[0].auxiliary_data_records[1].type == "urn:nfc:wkt:T"
+    assert message.carriers[0].auxiliary_data_records[0].text == "nfcpy"
+    assert message.carriers[0].auxiliary_data_records[1].text == "ypcfn"
+    binary = \
+        "910214487211d1020e61630101300204617578300461757831" + \
+        "190208014863300106782d74657374" + \
+        "19010804546175783002656e6e66637079" + \
+        "59010804546175783102656e797063666e"
+    assert str(message).encode("hex") == binary
+    
+def test_hr_message_decode_bt_example():
     message = nfc.ndef.Message(bluetooth_handover_request_message)
     message = nfc.ndef.HandoverRequestMessage(message)
     assert message.type == 'urn:nfc:wkt:Hr'
@@ -148,15 +244,11 @@ def test_hr_message_decode():
     assert message.version.major == 1
     assert message.version.minor == 2
     assert message.nonce == 0x0102
-    assert message.carriers[0].get('carrier-type') \
+    assert message.carriers[0].record.type \
         == 'application/vnd.bluetooth.ep.oob'
-    assert message.carriers[0].get('power-state') == 'active'
-    assert len(message.carriers[0].get('config-data')) == 67
-
-def test_hr_message_encode():
-    message = nfc.ndef.Message(bluetooth_handover_request_message)
-    message = nfc.ndef.HandoverRequestMessage(message)
-    assert str(message) == str(bluetooth_handover_request_message)
+    assert message.carriers[0].record.name == "0"
+    assert message.carriers[0].power_state == 'active'
+    assert message.carriers[0].auxiliary_data_records == list()
 
 bluetooth_handover_request_message = bytearray([
         0x91, # NDEF Header: MB=1b, ME=0b, CF=0b, SR=1b, IL=0b, TNF=001b
@@ -224,16 +316,119 @@ bluetooth_handover_request_message = bytearray([
         0x44, 0x65, 0x76, 0x69, 0x63, 0x65, 0x4e, 0x61, 0x6d, 0x65])
 
 # ---------------------------------------------- nfc.ndef.HandoverSelectMessage
-def test_hs_message_args_none():
-    message = nfc.ndef.HandoverSelectMessage()
+def test_hs_message_init_arg_message():
+    message = nfc.ndef.Message("d10201487310".decode("hex"))
+    message = nfc.ndef.HandoverSelectMessage(message=message)
     assert message.type == 'urn:nfc:wkt:Hs'
     assert message.name == ''
-    assert message.version.major == 0
+    assert message.version.major == 1
     assert message.version.minor == 0
-    assert message.error == None
+    assert message.error.reason == None
     assert message.carriers == list()
     
-def test_hs_message_decode():
+def test_hs_message_init_arg_version():
+    message = nfc.ndef.HandoverSelectMessage(version="1.0")
+    assert message.type == 'urn:nfc:wkt:Hs'
+    assert message.name == ''
+    assert message.version.major == 1
+    assert message.version.minor == 0
+    assert message.error.reason == None
+    assert message.carriers == list()
+    
+def test_hs_message_init_arg_version_range():
+    def check_valid(version_string):
+        nfc.ndef.HandoverSelectMessage(version=version_string)
+    for minor in range(16):
+        yield check_valid, "{0}.{1}".format(1, minor)
+        
+    @raises(ValueError)
+    def check_invalid(version_string):
+        nfc.ndef.HandoverSelectMessage(version=version_string)
+    for major, minor in [(0,0), (0,1), (2,0), (2,15), (1,16), (16,0)]:
+        yield check_invalid, "{0}.{1}".format(major, minor)
+    
+def test_hs_message_encode_empty():
+    message = nfc.ndef.HandoverSelectMessage(version="1.0")
+    assert str(message).encode("hex") == "d10201487310"
+    
+def test_hs_message_encode_version():
+    message = nfc.ndef.HandoverSelectMessage(version="1.1")
+    assert str(message).encode("hex") == "d10201487311"
+
+def test_hs_message_encode_error_reason_no_data():
+    @raises(nfc.ndef.EncodeError)
+    def check(reason):
+        message = nfc.ndef.HandoverSelectMessage(version="1.0")
+        message.error.reason = reason
+        str(message).encode("hex")
+    for reason in (1, 2, 3):
+        yield check, reason
+        
+def test_hs_message_encode_error_reason_and_valid_data():
+    def check((reason, data, result)):
+        message = nfc.ndef.HandoverSelectMessage(version="1.2")
+        message.error.reason = reason
+        message.error.data = data
+        assert str(message).encode("hex") == result
+    for params in [(1, 100, "d10209487312d103026572720164"),
+                   (2, 100, "d1020c487312d103056572720200000064"),
+                   (3, 100, "d10209487312d103026572720364")]:
+        yield check, params
+        
+def test_hs_message_encode_one_carrier_record():
+    message = nfc.ndef.HandoverSelectMessage(version="1.1")
+    carrier = nfc.ndef.HandoverCarrierRecord()
+    carrier.carrier_type = "urn:nfc:wkt:x-test"
+    carrier.carrier_data = "data"
+    message.add_carrier(carrier, "active")
+    assert message.carriers[0].record.type == "urn:nfc:wkt:Hc"
+    assert message.carriers[0].record.carrier_type == "urn:nfc:wkt:x-test"
+    assert message.carriers[0].record.carrier_data == "data"
+    binary = "91020a487311d10204616301013000" + \
+        "59020c014863300106782d7465737464617461"
+    assert str(message).encode("hex") == binary
+    
+def test_hs_message_encode_two_carrier_record():
+    message = nfc.ndef.HandoverSelectMessage(version="1.1")
+    carrier = nfc.ndef.HandoverCarrierRecord()
+    carrier.carrier_type = "urn:nfc:wkt:x-test"
+    carrier.carrier_data = "data1"
+    message.add_carrier(carrier, "active")
+    carrier = nfc.ndef.HandoverCarrierRecord()
+    carrier.carrier_type = "urn:nfc:wkt:x-test"
+    carrier.carrier_data = "data2"
+    message.add_carrier(carrier, "active")
+    assert message.carriers[0].record.type == "urn:nfc:wkt:Hc"
+    assert message.carriers[0].record.carrier_type == "urn:nfc:wkt:x-test"
+    assert message.carriers[0].record.carrier_data == "data1"
+    assert message.carriers[1].record.type == "urn:nfc:wkt:Hc"
+    assert message.carriers[1].record.carrier_type == "urn:nfc:wkt:x-test"
+    assert message.carriers[1].record.carrier_data == "data2"
+    binary = "910213487311910204616301013000510204616301013100" + \
+        "19020d014863300106782d746573746461746131" + \
+        "59020d014863310106782d746573746461746132"
+    assert str(message).encode("hex") == binary
+    
+def test_hs_message_encode_auxiliary_data_records():
+    message = nfc.ndef.HandoverSelectMessage(version="1.1")
+    carrier = nfc.ndef.HandoverCarrierRecord()
+    carrier.carrier_type = "urn:nfc:wkt:x-test"
+    text1 = nfc.ndef.TextRecord("nfcpy")
+    text2 = nfc.ndef.TextRecord("ypcfn")
+    message.add_carrier(carrier, "active", [text1, text2])
+    assert len(message.carriers[0].auxiliary_data_records) == 2
+    assert message.carriers[0].auxiliary_data_records[0].type == "urn:nfc:wkt:T"
+    assert message.carriers[0].auxiliary_data_records[1].type == "urn:nfc:wkt:T"
+    assert message.carriers[0].auxiliary_data_records[0].text == "nfcpy"
+    assert message.carriers[0].auxiliary_data_records[1].text == "ypcfn"
+    binary = \
+        "910214487311d1020e61630101300204617578300461757831" + \
+        "190208014863300106782d74657374" + \
+        "19010804546175783002656e6e66637079" + \
+        "59010804546175783102656e797063666e"
+    assert str(message).encode("hex") == binary
+    
+def test_hs_message_decode_bt_example():
     message = nfc.ndef.Message(bluetooth_handover_select_message)
     message = nfc.ndef.HandoverSelectMessage(message)
     assert message.type == 'urn:nfc:wkt:Hs'
@@ -241,15 +436,11 @@ def test_hs_message_decode():
     assert message.version.major == 1
     assert message.version.minor == 2
     assert len(message.carriers) == 1
-    assert message.carriers[0].get('carrier-type') \
+    assert message.carriers[0].record.type \
         == 'application/vnd.bluetooth.ep.oob'
-    assert message.carriers[0].get('power-state') == 'active'
-    assert len(message.carriers[0].get('config-data')) == 67
-
-def test_hs_message_encode():
-    message = nfc.ndef.Message(bluetooth_handover_select_message)
-    message = nfc.ndef.HandoverSelectMessage(message)
-    assert str(message) == str(bluetooth_handover_select_message)
+    assert message.carriers[0].record.name == "0"
+    assert message.carriers[0].power_state == 'active'
+    assert message.carriers[0].auxiliary_data_records == list()
 
 bluetooth_handover_select_message = bytearray([
         0x91, # NDEF Record Header: MB=1b, ME=0b, CF=0b, SR=1b, IL=0b, TNF=001b
