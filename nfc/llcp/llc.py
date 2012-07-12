@@ -307,7 +307,7 @@ class LogicalLinkControl(threading.Thread):
                     recv_symm_count += 1
                 else:
                     recv_symm_count = 0
-                    self._dispatch(pdu)
+                self._dispatch(pdu)
                 pdu = self._collect()
                 if pdu is None and recv_symm_count >= recv_symm_level:
                     time.sleep(0.001 * send_timeout)
@@ -327,11 +327,12 @@ class LogicalLinkControl(threading.Thread):
                     else: log.info("shutdown on link disruption")
                     shutdown_clients(self.sap)
                     break
-                if pdu == link_symmetry_pdu:
-                    recv_symm_count += 1
-                else:
-                    recv_symm_count = 0
-                    self._dispatch(pdu)
+                #FIXME: must be coordinated with DEP RWT
+                #if pdu == link_symmetry_pdu:
+                #    recv_symm_count += 1
+                #else:
+                #    recv_symm_count = 0
+                self._dispatch(pdu)
                 pdu = self._collect()
                 if pdu is None and recv_symm_count >= recv_symm_level:
                     time.sleep(0.001 * send_timeout)
