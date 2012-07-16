@@ -37,3 +37,5 @@ from nfc.ndef.handover import HandoverRequestMessage
 from nfc.ndef.handover import HandoverSelectMessage
 from nfc.ndef.handover import HandoverCarrierRecord
 from nfc.ndef.bt_record import BluetoothConfigRecord
+from nfc.ndef.wifi_record import WifiConfigRecord
+from nfc.ndef.wifi_record import WifiPasswordRecord
