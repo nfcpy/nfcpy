@@ -113,7 +113,7 @@ class Record(object):
         record_data = self.data
         
         if record_type == '':
-            header_flags = 0
+            header_flags = 0; record_name = ''; record_data = ''
         elif record_type.startswith("urn:nfc:wkt:"):
             header_flags = 1; record_type = record_type[12:]
         elif re.match(r'[a-zA-Z0-9-]+/[a-zA-Z0-9-+.]+', record_type):
