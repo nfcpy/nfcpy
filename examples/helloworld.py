@@ -42,10 +42,9 @@ def main():
     text_en = nfc.ndef.TextRecord(language="en", text="Hello World")
     text_de = nfc.ndef.TextRecord(language="de", text="Hallo Welt")
     text_fr = nfc.ndef.TextRecord(language="fr", text="Bonjour tout le monde")
-    
     message = nfc.ndef.Message( [text_en, text_de, text_fr] )
-
-    tag.ndef.message = message.tostring()
+    
+    tag.ndef.message = str(message)
     
     print "Remove this tag"
     while tag.is_present:
