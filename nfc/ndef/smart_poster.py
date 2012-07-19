@@ -94,6 +94,7 @@ class SmartPosterRecord(Record):
 
     @property
     def uri(self):
+        """The smart poster URI."""
         return self._uri
 
     @uri.setter
@@ -102,6 +103,7 @@ class SmartPosterRecord(Record):
 
     @property
     def title(self):
+        """Title of the smart poster service."""
         return self._title
 
     @title.setter
