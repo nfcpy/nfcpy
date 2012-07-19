@@ -29,10 +29,12 @@
 import logging
 log = logging.getLogger(__name__)
 
-import nfc.ndef
 import struct
 import io
 import re
+
+import nfc.ndef
+from error import LengthError, FormatError
 
 type_name_prefix = (
     '', 'urn:nfc:wkt:', '', '', 'urn:nfc:ext:', 'unknown', 'unchanged')
@@ -64,7 +66,7 @@ class Record(object):
             self.header = ord(f.read(1))
         except TypeError:
             log.error("buffer underflow at offset {0}".format(f.tell()))
-            raise nfc.ndef.LengthError("insufficient data to parse")
+            raise LengthError("insufficient data to parse")
         
         mbf = bool(self.header & 0x80)
         mef = bool(self.header & 0x40)
@@ -85,7 +87,7 @@ class Record(object):
                 name_length = 0
         except (TypeError, struct.error):
             log.error("buffer underflow at offset {0}".format(f.tell()))
-            raise nfc.ndef.LengthError("insufficient data to parse")
+            raise LengthError("insufficient data to parse")
 
         try:
             record_type = f.read(type_length)
@@ -96,8 +98,18 @@ class Record(object):
             assert len(record_data) == data_length
         except AssertionError:
             log.error("buffer underflow at offset {0}".format(f.tell()))
-            raise nfc.ndef.LengthError("insufficient data to parse")
+            raise LengthError("insufficient data to parse")
 
+        if tnf in (0, 5, 6) and len(record_type) > 0:
+            s = "ndef type name format {0} doesn't allow a type string"
+            raise FormatError( s.format(tnf) )
+        if tnf in (1, 2, 3, 4) and len(record_type) == 0:
+            s = "ndef type name format {0} requires a type string"
+            raise FormatError( s.format(tnf) )
+        if tnf == 0 and len(record_data) > 0:
+            s = "ndef type name format {0} doesn't allow a payload"
+            raise FormatError( s.format(tnf) )
+            
         self._message_begin, self._message_end = mbf, mef
         self._type = bytearray(type_name_prefix[tnf] + record_type)
         self._name = bytearray(record_name)
