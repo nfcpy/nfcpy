@@ -1,5 +1,3 @@
-.. module:: nfc.ndef
-
 ========================
 NFC Data Exchange Format
 ========================
