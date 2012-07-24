@@ -39,7 +39,37 @@ type_name_prefix = (
     '', 'urn:nfc:wkt:', '', '', 'urn:nfc:ext:', 'unknown', 'unchanged')
     
 class Record(object):
-    """Represents an NDEF (NFC Data Exchange Format) record."""
+    """Wraps an NDEF record and provides getting and setting of the
+    record type name (:attr:`type`), record identifier (:attr:`name`)
+    and record payload (:attr:`data`).
+    
+    :param record_type: NDEF record type name
+    :param record_name: NDEF record identifier
+    :param data: NDEF record payload or NDEF record data
+
+    All arguments accept a :class:`str` or :class:`bytearray` object.
+    
+    Interpretation of the `data` argument depends on the presence of
+    `record_type` and `record_name`. If any of the `record_type` or
+    `record_name` argument is present, the `data` argument is
+    interpreted as the record payload and copied to :attr:`data`. If
+    none of the `record_type` or `record_name` argument are present,
+    the `data` argument is interpreted as a NDEF record bytes (NDEF
+    header and payload) and parsed.
+    
+    The `record_type` argument combines the NDEF TNF (Type Name
+    Format) and NDEF TYPE information into a single string. The TNF
+    values 0, 5 and 6 are expressed by the strings '', 'unknown' and
+    'unchanged'. For TNF values 2 and 4 the `record_type` is the
+    prefix 'urn:nfc:wkt:' and 'urn:nfc:ext:', respectively, followed
+    by the NDEF TYPE string. TNF values 2 and 3 are not distinguished
+    by regular expressions matching the either the media-type format
+    'type-name/subtype-name' or absolute URI format 'scheme:hier-part'
+
+    >>> nfc.ndef.Record('urn:nfc:wkt:T', 'id', b'\x02enHello World')
+    >>> nfc.ndef.Record('urn:nfc:wkt:T', data=b'\x02enHello World')
+    >>> nfc.ndef.Record(data=b'\xd1\x01\x0eT\x02enHello World')
+    """
     
     def __init__(self, record_type=None, record_name=None, data=None):
         self._message_begin = self._message_end = False
@@ -164,7 +194,10 @@ class Record(object):
 
     @property
     def type(self):
-        """NDEF record type."""
+        """The record type. A string that matches the empty string '',
+        or the string 'unknown', or the string 'unchanged', or starts
+        with 'urn:nfc:wkt:', or starts with 'urn:nfc:ext:', or matches
+        the mime-type format, or matches the absolute-URI format."""
         return str(self._type)
 
     @type.setter
@@ -182,7 +215,9 @@ class Record(object):
 
     @property
     def name(self):
-        """NDEF record identifier."""
+        """The record identifier as an octet string. Any type that can
+        be coverted into a sequence of characters in range(0,256) can
+        be assigned."""
         return str(self._name)
 
     @name.setter
@@ -191,7 +226,9 @@ class Record(object):
 
     @property
     def data(self):
-        """NDEF record payload."""
+        """The record payload as an octet string. Any type that can be
+        coverted into a sequence of characters in range(0,256) can be
+        assigned."""
         return str(self._data)
 
     @data.setter

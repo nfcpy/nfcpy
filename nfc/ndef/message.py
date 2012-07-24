@@ -30,6 +30,21 @@ import copy
 import nfc.ndef
 
 class Message(object):
+    """Wraps a sequence of NDEF records and provides methods for
+    appending, inserting and indexing. Instantiation accepts a
+    variable number of positional arguments. A call without argument
+    produces a Message object with no records. A single str or
+    bytearray argument is parsed as NDEF message bytes. A single list
+    or tuple of :class:`nfc.ndef.Record` objects produces a Message
+    with those records in order. One or more :class:`nfc.ndef.Record`
+    arguments produce a Message with those records in order.
+
+    >>> nfc.ndef.Message(b'\\x10\\x00\\x00')     # NDEF data bytes
+    >>> nfc.ndef.Message(bytearray([16,0,0])) # NDEF data bytes
+    >>> nfc.ndef.Message([record1, record2])  # list of records
+    >>> nfc.ndef.Message(record1, record2)    # two record args
+    """
+    
     def __init__(self, *args):
         self._records = list()
         if len(args) == 1:
@@ -128,16 +143,16 @@ class Message(object):
 
     @property
     def type(self):
-        """The type of the first record or :const:`None` if the
-        message has no records."""
-        
+        """The message type. Corresponds to the record type of the
+        first record in the message. None if the message has no
+        records. This attribute is read-only."""
         return self._records[0].type if len(self._records) else None
 
     @property
     def name(self):
-        """The name of the first record or :const:`None` if the
-        message has no records."""
-        
+        """The message name. Corresponds to the record name of the
+        first record in the message. None if the message has no
+        records. This attribute is read-only."""
         return self._records[0].name if len(self._records) else None
 
     # **************
