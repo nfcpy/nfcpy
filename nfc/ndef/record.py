@@ -24,7 +24,6 @@
 #
 # BUGS:
 #   - does not handle chunked records
-#   - does not control validity of parsed string
 
 import logging
 log = logging.getLogger(__name__)
@@ -80,7 +79,7 @@ class Record(object):
             if srf: # short record
                 data_length = ord(f.read(1))
             else: # 32-bit length
-                struct.unpack('>L', f.read(4))[0]
+                data_length = struct.unpack('>L', f.read(4))[0]
             if ilf: # id length present
                 name_length = ord(f.read(1))
             else:

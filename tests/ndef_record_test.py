@@ -25,6 +25,7 @@ sys.path.insert(1, os.path.split(sys.path[0])[0])
 
 import io
 import nfc.ndef
+from nose.tools import raises
 
 def test_init_args_none():
     record = nfc.ndef.Record()
@@ -182,7 +183,82 @@ def test_generate_record_type_name_data():
     record = nfc.ndef.Record('urn:nfc:wkt:T', 'identifier', 'payload')
     assert str(record) == '\x19\x01\x07\x0ATidentifierpayload'
 
-def test_generate_record_long_data():
+def test_generate_record_long_payload():
     record = nfc.ndef.Record('urn:nfc:wkt:T', 'id', bytearray(256))
     assert str(record) == '\x09\x01\x00\x00\x01\x00\x02Tid' + 256 * '\x00'
+
+def test_decode_record_long_payload():
+    data = '\x09\x01\x00\x00\x01\x00\x02Tid' + str(bytearray(256))
+    record = nfc.ndef.Record(data=data)
+    assert record.type == 'urn:nfc:wkt:T'
+    assert record.name == 'id'
+    assert record.data == str(bytearray(256))
+
+@raises(nfc.ndef.LengthError)
+def test_decode_invalid_length_01():
+    nfc.ndef.Record(data='\x00')
+    
+@raises(nfc.ndef.LengthError)
+def test_decode_invalid_length_02():
+    nfc.ndef.Record(data='\x00\x00')
+
+@raises(nfc.ndef.LengthError)
+def test_decode_invalid_length_03():
+    nfc.ndef.Record(data='\x00\x00\x00')
+
+@raises(nfc.ndef.LengthError)
+def test_decode_invalid_length_04():
+    nfc.ndef.Record(data='\x00\x00\x00\x00')
+
+@raises(nfc.ndef.LengthError)
+def test_decode_invalid_length_05():
+    nfc.ndef.Record(data='\x00\x00\x00\x00\x00')
+
+@raises(nfc.ndef.LengthError)
+def test_decode_invalid_length_06():
+    nfc.ndef.Record(data='\x10\x04\x00\x00\x00\x00')
+
+@raises(nfc.ndef.LengthError)
+def test_decode_invalid_length_07():
+    nfc.ndef.Record(data='\x10\x00\x04\x00\x00\x00')
+
+@raises(nfc.ndef.LengthError)
+def test_decode_invalid_length_08():
+    nfc.ndef.Record(data='\x00\x00\x00\x00\x01\x00')
+
+@raises(nfc.ndef.LengthError)
+def test_decode_invalid_length_09():
+    nfc.ndef.Record(data='\x00\x00\x00\x00\x00\x01')
+
+@raises(nfc.ndef.FormatError)
+def test_decode_invalid_format_01():
+    nfc.ndef.Record(data='\x10\x01\x00\x00')
+
+@raises(nfc.ndef.FormatError)
+def test_decode_invalid_format_02():
+    nfc.ndef.Record(data='\x15\x01\x00\x00')
+
+@raises(nfc.ndef.FormatError)
+def test_decode_invalid_format_03():
+    nfc.ndef.Record(data='\x16\x01\x00\x00')
+
+@raises(nfc.ndef.FormatError)
+def test_decode_invalid_format_04():
+    nfc.ndef.Record(data='\x11\x00\x00')
+
+@raises(nfc.ndef.FormatError)
+def test_decode_invalid_format_05():
+    nfc.ndef.Record(data='\x12\x00\x00')
+
+@raises(nfc.ndef.FormatError)
+def test_decode_invalid_format_06():
+    nfc.ndef.Record(data='\x13\x00\x00')
+
+@raises(nfc.ndef.FormatError)
+def test_decode_invalid_format_07():
+    nfc.ndef.Record(data='\x14\x00\x00')
+
+@raises(nfc.ndef.FormatError)
+def test_decode_invalid_format_08():
+    nfc.ndef.Record(data='\x10\x00\x01\x00')
 
