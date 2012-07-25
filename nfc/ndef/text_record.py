@@ -25,9 +25,9 @@
 import logging
 log = logging.getLogger(__name__)
 
-import record
+from record import Record
 
-class TextRecord(record.Record):
+class TextRecord(Record):
     """Wraps an NDEF Text record and provides access to the
     :attr:`encoding`, :attr:`language` and actual :attr:`text`
     content.
@@ -49,7 +49,7 @@ class TextRecord(record.Record):
     
     def __init__(self, text='', language='en', encoding='UTF-8'):
         super(TextRecord, self).__init__('urn:nfc:wkt:T')
-        if isinstance(text, record.Record):
+        if isinstance(text, Record):
             record = text
             if not record.type == self.type:
                 raise ValueError("record type mismatch")
