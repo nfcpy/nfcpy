@@ -94,16 +94,27 @@ class SmartPosterRecord(Record):
 
     @property
     def uri(self):
-        """The smart poster URI."""
+        """The smart poster URI, a string of ascii characters. A
+        :exc:`ValueError` exception is raised if non ascii characters
+        are contained."""
         return self._uri
 
     @uri.setter
     def uri(self, value):
-        self._uri = value
+        try:
+            self._uri = value.encode("ascii")
+        except UnicodeDecodeError:
+            raise ValueError("uri value must be an ascii string")
+        except AttributeError:
+            raise TypeError("uri value must be a str type")
 
     @property
     def title(self):
-        """Title of the smart poster service."""
+        """A dictionary of smart poster titles with ISO/IANA language
+        codes as keys and title strings as values. Set specific title
+        strings with ``obj.title['en']=title``. Assigning a string
+        value is equivalent to setting the title for language code
+        'en'."""
         return self._title
 
     @title.setter

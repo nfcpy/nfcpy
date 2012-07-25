@@ -88,7 +88,8 @@ class UriRecord(Record):
 
     @uri.setter
     def uri(self, value):
-        try: self._uri = value.encode("ascii")
+        try:
+            self._uri = value.encode("ascii")
         except UnicodeDecodeError:
             raise ValueError("uri value must be an ascii string")
         except AttributeError:
