@@ -27,29 +27,46 @@ from message import Message
 from uri_record import UriRecord
 from text_record import TextRecord
 
-actions = ("exec", "save", "open")
+actions = ('default', "exec", "save", "open")
 
 class SmartPosterRecord(Record):
-    def __init__(self, *args, **kwargs):
-        super(SmartPosterRecord, self).__init__('urn:nfc:wkt:Sp')
-        self._uri = ''
-        self._title = dict()
-        self._image = dict()
-        self._action = ''
-        self._res_size = 0
-        self._res_type = ''
-        
-        if len(args) > 0:
-            if isinstance(args[0], Record):
-                if not args[0].type == self.type:
-                    raise ValueError("record type mismatch")
-                self.name = args[0].name
-                self.data = args[0].data
-            else:
-                self.uri = args[0]
+    """Wraps an NDEF SmartPoster record and provides access to the
+    :attr:`encoding`, :attr:`language` and actual :attr:`text`
+    content.
 
-        if 'title' in kwargs:
-            self.title['en'] = unicode(kwargs['title'])
+    :param uri: URI string or :class:`nfc.ndef.Record` object
+    :param title: Smart poster title(s), assigned to :attr:`title`
+    :param icons: Smart poster icons, assigned to :attr:`icons`
+    :param action: Recommended action, assigned to :attr:`action`
+    :param resource_size: Size of the referenced resource
+    :param resource_type: Type of the referenced resource
+
+    The `uri` argument may alternatively supply an instance of class
+    :class:`nfc.ndef.Record`. Initialization is then done by parsing
+    the record payload. If the record type does not match
+    'urn:nfc:wkt:Sp' a :exc:`ValueError` exception is raised.
+
+    >>> nfc.ndef.SmartPosterRecord(nfc.ndef.Record())
+    >>> nfc.ndef.TextRecord("http://nfcpy.org", "nfcpy")
+    >>> nfc.ndef.TextRecord("http://nfcpy.org", "nfcpy", action="save")
+    """
+    def __init__(self, uri, title={}, icons={}, action='default',
+                 resource_size=None, resource_type=None):
+        super(SmartPosterRecord, self).__init__('urn:nfc:wkt:Sp')
+        self.title = title
+        self.icons = icons
+        self.action = action
+        self.resource_size = resource_size
+        self.resource_type = resource_type
+        if isinstance(uri, Record):
+            record = uri
+            if record.type == self.type:
+                self.name = record.name
+                self.data = record.data
+            else:
+                raise ValueError("record type mismatch")
+        else:
+            self.uri = uri
 
     @property
     def data(self):
@@ -57,12 +74,10 @@ class SmartPosterRecord(Record):
         message = Message(UriRecord(self._uri))
         for lang, text in self.title.iteritems():
             message.append(TextRecord(text=text, language=lang))
-        for image_type, image_data in self.image.iteritems():
+        for image_type, image_data in self.icons.iteritems():
             message.append(Record("image/"+image_type, data=image_data))
-        if self.action:
-            try: action = actions.index(self.action)
-            except ValueError: action = int(self.action)
-            message.append(Record("urn:nfc:wkt:act", data=chr(action)))
+        if self._action >= 0:
+            message.append(Record("urn:nfc:wkt:act", data=chr(self._action)))
         if self._res_size:
             size = struct.pack('>L', self._res_size)
             message.append(Record("urn:nfc:wkt:s", data=size))
@@ -81,14 +96,14 @@ class SmartPosterRecord(Record):
                     record = TextRecord(record)
                     self.title[record.language] = record.text
                 elif record.type == "urn:nfc:wkt:act":
-                    self.action = ord(record.data)
+                    self._action = ord(record.data)
                 elif record.type == "urn:nfc:wkt:s":
                     self._res_size = struct.unpack('>L', record.data)
                 elif record.type == "urn:nfc:wkt:t":
                     self._res_type = record.data
                 elif record.type.startswith("image/"):
                     image_type = record.type.replace("image/", "", 1)
-                    self._image[image_type] = record.data
+                    self.icons[image_type] = record.data
         else:
             log.error("nothing to parse")
 
@@ -114,50 +129,73 @@ class SmartPosterRecord(Record):
         codes as keys and title strings as values. Set specific title
         strings with ``obj.title['en']=title``. Assigning a string
         value is equivalent to setting the title for language code
-        'en'."""
+        'en'. Titles are optional for a smart poster record"""
         return self._title
 
     @title.setter
     def title(self, value):
-        self._title["en"] = value
+        if isinstance(value, dict):
+            self._title = value
+        else:
+            self._title["en"] = value
 
     @property
-    def image(self):
-        return self._image
+    def icons(self):
+        """A dictionary of smart poster icon images. The keys specify
+        the image mime sub-type and the values are strings of image
+        data. Icons are optional for a smart poster record."""
+        return self._icons
 
-    @image.setter
-    def image(self, value):
-        pass
+    @icons.setter
+    def icons(self, value):
+        if not isinstance(value, dict):
+            raise TypeError("icons must be assigned a dict of images")
+        self._icons = value
 
     @property
     def action(self):
-        return self._action
+        """The recommended action for the receiver of the smart
+        poster. Reads as 'default', 'exec', 'save', 'open' or a number
+        string if RFU values were decoded. Can be set to 'exec',
+        'save', 'open' or :const:`None`. The action is optional in a
+        smart poster record."""
+        try:
+            return actions[self._action + 1]
+        except IndexError:
+            return str(self._action)
 
     @action.setter
     def action(self, value):
-        if value in actions:
-            self._action = value
-        else:
-            value = int(value)
-            if value in range(len(actions)):
-                self._action = actions[value]
-            else:
-                self._action = str(min(abs(value), 255))
+        try:
+            self._action = actions.index(value) - 1
+        except ValueError:
+            raise ValueError("action value not in " + repr(actions))
 
     @property
     def resource_size(self):
+        """The size of the resource referred by the URI. A 32 bit
+        unsigned integer value or :const:`None`. The resource size is
+        optional in a smart poster record."""
         return self._res_size
 
     @resource_size.setter
     def resource_size(self, value):
-        self._res_size = int(value)
+        if value is not None:
+            value = int(value)
+            if value < 0 or value > 0xffffffff:
+                raise ValueError("expected a 32-bit unsigned integer")
+        self._res_size = value
 
     @property
     def resource_type(self):
+        """The type of the resource referred by the URI. A UTF-8
+        formatted string that describes an Internet media type (MIME
+        type) or :const:`None`. The resource type is optional in a
+        smart poster record."""
         return self._res_type
 
     @resource_type.setter
     def resource_type(self, value):
-        self._res_type = str(value)
+        self._res_type = value
 
 
