@@ -28,35 +28,38 @@ log = logging.getLogger(__name__)
 import record
 
 class TextRecord(record.Record):
-    """NDEF Text Record representation.
+    """Wraps an NDEF Text record and provides access to the
+    :attr:`encoding`, :attr:`language` and actual :attr:`text`
+    content.
 
-    An NDEF Text Record contains a text string, an IANA language code
-    and a text encoding.
+    :param text: Text string or :class:`nfc.ndef.Record` object
+    :param language: ISO/IANA language code string
+    :param encoding: Text encoding in binary NDEF
+
+    The `text` argument may alternatively supply an instance of class
+    :class:`nfc.ndef.Record`. Initialization is then done by parsing
+    the record payload. If the record type does not match
+    'urn:nfc:wkt:T' a :exc:`ValueError` exception is raised.
+
+    >>> nfc.ndef.TextRecord(nfc.ndef.Record())
+    >>> nfc.ndef.TextRecord("English UTF-8 encoded")
+    >>> nfc.ndef.TextRecord("Deutsch UTF-8", language="de")
+    >>> nfc.ndef.TextRecord("English UTF-16", encoding="UTF-16")
     """
-        
-    def __init__(self, *args, **kwargs):
+    
+    def __init__(self, text='', language='en', encoding='UTF-8'):
         super(TextRecord, self).__init__('urn:nfc:wkt:T')
-        self.text = u''
-        self.language = 'en'
-        self.encoding = 'UTF-8'
+        if isinstance(text, record.Record):
+            record = text
+            if not record.type == self.type:
+                raise ValueError("record type mismatch")
+            self.name = record.name
+            self.data = record.data
+        else:
+            self.text = text
+            self.language = language
+            self.encoding = encoding
         
-        if len(args) > 0:
-            if isinstance(args[0], record.Record):
-                if not args[0].type == self.type:
-                    raise ValueError("record type mismatch")
-                self.name = args[0].name
-                self.data = args[0].data
-            else:
-                self.text = args[0]
-
-        if len(kwargs) > 0:
-            if 'text' in kwargs:
-                self.text = unicode(kwargs['text'])
-            if 'language' in kwargs:
-                self.language = kwargs['language']
-            if 'encoding' in kwargs:
-                self.encoding = kwargs['encoding']
-
     def __repr__(self):
         s = "nfc.ndef.TextRecord(text='{0}', language='{1}', encoding='{2}')"
         return s.format(self.text, self.language, self.encoding)
@@ -84,7 +87,8 @@ class TextRecord(record.Record):
 
     @property
     def text(self):
-        """Text content."""
+        """The text content. A unicode string that specifies the TEXT
+        record text field. Coerced into unicode when set."""
         return self._text
 
     @text.setter
@@ -93,21 +97,30 @@ class TextRecord(record.Record):
 
     @property
     def language(self):
-        """ISO/IANA language code."""
+        """The text language. A string that specifies the ISO/IANA
+        language code coded into the TEXT record. The value is not
+        verified except that a :exc:`ValueError` exception is raised
+        if the assigned value string exceeds 64 characters."""
         return self._lang
 
     @language.setter
     def language(self, value):
-        assert len(value) <= 64
+        if not isinstance(value, str):
+            raise TypeError("language must be specified as string")
+        if len(value) > 64:
+            raise ValueError('maximum string length is 64')
         self._lang = value.encode('ascii')
 
     @property
     def encoding(self):
-        """Text encoding 'UTF-8' or 'UTF-16'."""
+        """The text encoding, given as a string. May be 'UTF-8' or
+        'UTF-16'. A :exc:`ValueError` exception is raised for
+        anythinge else."""
         return self._utfx
 
     @encoding.setter
     def encoding(self, value):
-        assert value in ("UTF-8", "UTF-16")
+        if not value in ("UTF-8", "UTF-16"):
+            raise ValueError('value not in ("UTF-8", "UTF-16")')
         self._utfx = value
 
