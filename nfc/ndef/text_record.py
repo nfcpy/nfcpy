@@ -47,16 +47,17 @@ class TextRecord(Record):
     >>> nfc.ndef.TextRecord("English UTF-16", encoding="UTF-16")
     """
     
-    def __init__(self, text='', language='en', encoding='UTF-8'):
+    def __init__(self, text=None, language='en', encoding='UTF-8'):
         super(TextRecord, self).__init__('urn:nfc:wkt:T')
         if isinstance(text, Record):
             record = text
-            if not record.type == self.type:
+            if record.type == self.type:
+                self.name = record.name
+                self.data = record.data
+            else:
                 raise ValueError("record type mismatch")
-            self.name = record.name
-            self.data = record.data
         else:
-            self.text = text
+            self.text = text if text else ''
             self.language = language
             self.encoding = encoding
         
