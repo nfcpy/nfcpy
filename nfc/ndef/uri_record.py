@@ -25,24 +25,39 @@
 import logging
 log = logging.getLogger(__name__)
 
-import record
+from record import Record
 
-class UriRecord(record.Record):
-    """NDEF URI Record representation."""
+class UriRecord(Record):
+    """Wraps an NDEF URI record and provides access to the :attr:`uri`
+    content. The URI RTD specification defines the payload of the URI
+    record as a URI identifier code byte followed by a URI string. The
+    URI identifier code provides one byte code points for
+    abbreviations of commonly used URI protocol names. The
+    :class:`UriRecord` class handles abbreviations transparently by
+    expanding and compressing when decoding and encoding.
+
+    :param uri: URI string or :class:`nfc.ndef.Record` object
+
+    The `uri` argument may alternatively supply an instance of class
+    :class:`nfc.ndef.Record`. Initialization is then done by parsing
+    the record payload. If the record type does not match
+    'urn:nfc:wkt:U' a :exc:`ValueError` exception is raised.
+
+    >>> nfc.ndef.UriRecord(nfc.ndef.Record())
+    >>> nfc.ndef.UriRecord("http://nfcpy.org")
+    """
     
-    def __init__(self, *args, **kwargs):
+    def __init__(self, uri=None):
         super(UriRecord, self).__init__('urn:nfc:wkt:U')
-        self._uri = ''
-        if len(args) > 0:
-            if isinstance(args[0], record.Record):
-                if not args[0].type == self.type:
-                    raise ValueError("record type mismatch")
-                self.name = args[0].name
-                self.data = args[0].data
+        if isinstance(uri, Record):
+            record = uri
+            if record.type == self.type:
+                self.name = record.name
+                self.data = record.data
             else:
-                self.uri = args[0]
-        if 'uri' in kwargs:
-            self.uri = kwargs['uri']
+                raise ValueError("record type mismatch")
+        else:
+            self.uri = uri if uri else ''
 
     def __repr__(self):
         s = "nfc.ndef.UriRecord(uri='{0}')"
@@ -66,11 +81,18 @@ class UriRecord(record.Record):
 
     @property
     def uri(self):
+        """The URI string, including any abbreviation that is possibly
+        available. A :exc:`ValueError` exception is raised if the
+        string contains non ascii characters."""
         return self._uri
 
     @uri.setter
     def uri(self, value):
-        self._uri = value.encode("ascii")
+        try: self._uri = value.encode("ascii")
+        except UnicodeDecodeError:
+            raise ValueError("uri value must be an ascii string")
+        except AttributeError:
+            raise TypeError("uri value must be a str type")
 
 protocol_strings = (
     "",
