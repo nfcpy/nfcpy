@@ -262,3 +262,42 @@ def test_decode_invalid_format_07():
 def test_decode_invalid_format_08():
     nfc.ndef.Record(data='\x10\x00\x01\x00')
 
+#------------------------------------------------------------------- RecordList
+
+def test_bv_record_list_init():
+    rl = nfc.ndef.record.RecordList([nfc.ndef.Record()])
+
+@raises(TypeError)
+def test_bi_record_list_init():
+    rl = nfc.ndef.record.RecordList(["invalid"])
+
+def test_bv_record_list_append():
+    rl = nfc.ndef.record.RecordList()
+    rl.append(nfc.ndef.Record())
+    assert len(rl) == 1
+
+@raises(TypeError)
+def test_bi_record_list_append():
+    rl = nfc.ndef.record.RecordList()
+    rl.append("invalid")
+
+def test_bv_record_list_extend():
+    rl = nfc.ndef.record.RecordList()
+    rl.extend([nfc.ndef.Record(), nfc.ndef.Record()])
+    assert len(rl) == 2
+
+@raises(TypeError)
+def test_bi_record_list_extend():
+    rl = nfc.ndef.record.RecordList()
+    rl.extend(["invalid", "invalid"])
+
+def test_bv_record_list_setitem():
+    rl = nfc.ndef.record.RecordList([nfc.ndef.Record()])
+    rl[0] = nfc.ndef.Record()
+    assert len(rl) == 1
+
+@raises(TypeError)
+def test_bi_record_list_setitem():
+    rl = nfc.ndef.record.RecordList([nfc.ndef.Record()])
+    rl[0] = "invalid"
+
