@@ -90,7 +90,7 @@ def test_handover_error_encode_invalid_reason():
 
 # ------------------------------------- nfc.ndef.handover.HandoverCarrierRecord
 def test_hc_message_args_none():
-    record = nfc.ndef.handover.HandoverCarrierRecord()
+    record = nfc.ndef.handover.HandoverCarrierRecord('')
     assert record.type == 'urn:nfc:wkt:Hc'
     assert record.carrier_type == ''
     assert record.carrier_data == ''
@@ -130,8 +130,7 @@ def test_hc_message_encode():
         yield check_hc_message_encode, p[0], p[1], p[2]
 
 def check_hc_message_encode(carrier_type, carrier_data, binary_data):
-    record = nfc.ndef.handover.HandoverCarrierRecord()
-    record.carrier_type = carrier_type
+    record = nfc.ndef.handover.HandoverCarrierRecord(carrier_type)
     record.carrier_data = carrier_data
     assert str(record) == binary_data
 
@@ -185,8 +184,7 @@ def test_hr_message_encode_version_1_2_with_nonce():
     
 def test_hr_message_encode_one_carrier_record():
     message = nfc.ndef.HandoverRequestMessage(version="1.1")
-    carrier = nfc.ndef.HandoverCarrierRecord()
-    carrier.carrier_type = "urn:nfc:wkt:x-test"
+    carrier = nfc.ndef.HandoverCarrierRecord("urn:nfc:wkt:x-test")
     carrier.carrier_data = "data"
     message.add_carrier(carrier, "active")
     assert message.carriers[0].record.type == "urn:nfc:wkt:Hc"
@@ -198,12 +196,10 @@ def test_hr_message_encode_one_carrier_record():
     
 def test_hr_message_encode_two_carrier_record():
     message = nfc.ndef.HandoverRequestMessage(version="1.1")
-    carrier = nfc.ndef.HandoverCarrierRecord()
-    carrier.carrier_type = "urn:nfc:wkt:x-test"
+    carrier = nfc.ndef.HandoverCarrierRecord("urn:nfc:wkt:x-test")
     carrier.carrier_data = "data1"
     message.add_carrier(carrier, "active")
-    carrier = nfc.ndef.HandoverCarrierRecord()
-    carrier.carrier_type = "urn:nfc:wkt:x-test"
+    carrier = nfc.ndef.HandoverCarrierRecord("urn:nfc:wkt:x-test")
     carrier.carrier_data = "data2"
     message.add_carrier(carrier, "active")
     assert message.carriers[0].record.type == "urn:nfc:wkt:Hc"
@@ -219,8 +215,7 @@ def test_hr_message_encode_two_carrier_record():
     
 def test_hr_message_encode_auxiliary_data_records():
     message = nfc.ndef.HandoverRequestMessage(version="1.1")
-    carrier = nfc.ndef.HandoverCarrierRecord()
-    carrier.carrier_type = "urn:nfc:wkt:x-test"
+    carrier = nfc.ndef.HandoverCarrierRecord("urn:nfc:wkt:x-test")
     text1 = nfc.ndef.TextRecord("nfcpy")
     text2 = nfc.ndef.TextRecord("ypcfn")
     message.add_carrier(carrier, "active", [text1, text2])
@@ -377,8 +372,7 @@ def test_hs_message_encode_error_reason_and_valid_data():
         
 def test_hs_message_encode_one_carrier_record():
     message = nfc.ndef.HandoverSelectMessage(version="1.1")
-    carrier = nfc.ndef.HandoverCarrierRecord()
-    carrier.carrier_type = "urn:nfc:wkt:x-test"
+    carrier = nfc.ndef.HandoverCarrierRecord("urn:nfc:wkt:x-test")
     carrier.carrier_data = "data"
     message.add_carrier(carrier, "active")
     assert message.carriers[0].record.type == "urn:nfc:wkt:Hc"
@@ -390,12 +384,10 @@ def test_hs_message_encode_one_carrier_record():
     
 def test_hs_message_encode_two_carrier_record():
     message = nfc.ndef.HandoverSelectMessage(version="1.1")
-    carrier = nfc.ndef.HandoverCarrierRecord()
-    carrier.carrier_type = "urn:nfc:wkt:x-test"
+    carrier = nfc.ndef.HandoverCarrierRecord("urn:nfc:wkt:x-test")
     carrier.carrier_data = "data1"
     message.add_carrier(carrier, "active")
-    carrier = nfc.ndef.HandoverCarrierRecord()
-    carrier.carrier_type = "urn:nfc:wkt:x-test"
+    carrier = nfc.ndef.HandoverCarrierRecord("urn:nfc:wkt:x-test")
     carrier.carrier_data = "data2"
     message.add_carrier(carrier, "active")
     assert message.carriers[0].record.type == "urn:nfc:wkt:Hc"
@@ -411,8 +403,7 @@ def test_hs_message_encode_two_carrier_record():
     
 def test_hs_message_encode_auxiliary_data_records():
     message = nfc.ndef.HandoverSelectMessage(version="1.1")
-    carrier = nfc.ndef.HandoverCarrierRecord()
-    carrier.carrier_type = "urn:nfc:wkt:x-test"
+    carrier = nfc.ndef.HandoverCarrierRecord("urn:nfc:wkt:x-test")
     text1 = nfc.ndef.TextRecord("nfcpy")
     text2 = nfc.ndef.TextRecord("ypcfn")
     message.add_carrier(carrier, "active", [text1, text2])

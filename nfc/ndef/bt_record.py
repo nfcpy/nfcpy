@@ -70,6 +70,10 @@ class BluetoothConfigRecord(Record):
     
     @property
     def device_address(self):
+        """Bluetooth device address. A string of hexadecimal
+        characters with 8-bit quantities spearated by colons and the
+        most significant byte first. For example, the device address
+        ``'01:23:45:67:89:AB'`` corresponds to ``ox0123456789AB``."""
         return ':'.join(["{0:02X}".format(x) for x in self._bdaddr])
 
     @device_address.setter

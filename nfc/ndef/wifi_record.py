@@ -126,7 +126,8 @@ class WifiConfigRecord(Record):
 
     @property
     def version(self):
-        """wifi simple config version, coded as 'major.minor' string"""
+        """The WiFi Simple Configuration version, coded as a
+        'major.minor' string"""
         version = ord(self._version)
         return "{0}.{1}".format(version >> 4, version & 0xF)
 
@@ -145,15 +146,15 @@ class WifiConfigRecord(Record):
     @property
     def credentials(self):
         """A list of WiFi credentials. Each credential is a dictionary
-        with any of the possible keys 'network-name', 'network-key',
-        'sharable', 'authentication', 'encryption', 'mac-address',
-        'other'."""
+        with any of the possible keys ``'network-name'``,
+        ``'network-key'``, ``'sharable'``, ``'authentication'``,
+        ``'encryption'``, ``'mac-address'``, and ``'other'``."""
         return self._credentials
         
     @property
     def credential(self):
-        """The first WiFi credential, equivalent to
-        self.credentials[0] and always present."""
+        """The first WiFi credential. Same as
+        ``WifiConfigRecord().credentials[0]``."""
         return self.credentials[0]
         
     @property
@@ -282,7 +283,8 @@ class WifiPasswordRecord(Record):
 
     @property
     def version(self):
-        """wifi simple config version, coded as 'major.minor' string"""
+        """The WiFi Simple Configuration version, coded as a
+        'major.minor' string"""
         version = ord(self._version)
         return "{0}.{1}".format(version >> 4, version & 0xF)
 
@@ -301,14 +303,14 @@ class WifiPasswordRecord(Record):
     @property
     def passwords(self):
         """A list of WiFi out-of-band device passwords. Each password
-        is a dictionary with the keys 'public-key-hash', 'password-id',
-        'password'."""
+        is a dictionary with the keys ``'public-key-hash'``,
+        ``'password-id'``, and ``'password'``."""
         return self._passwords
         
     @property
     def password(self):
-        """The first WiFi out-of-band device password. Equivalent to
-        self.passwords[0] and always present."""
+        """The first WiFi device password. Same as
+        ``WifiPasswordRecord().passwords[0]``."""
         return self.passwords[0]
         
     @property
