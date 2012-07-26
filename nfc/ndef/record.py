@@ -263,3 +263,25 @@ class Record(object):
         self._message_end = message_end
         return str(self)
 
+class RecordList(list):
+    """A specialized list type that only accepts :class:`Record` objects."""
+
+    def __init__(self, iterable=tuple()):
+        super(RecordList, self).__init__()
+        for item in iterable:
+            self.append(item)
+        
+    def __setitem__(self, key, value):
+        if not isinstance(value, Record):
+            raise TypeError("RecordList only accepts Record objects")
+        super(RecordList, self).__setitem__(key, value)
+
+    def append(self, value):
+        if not isinstance(value, Record):
+            raise TypeError("RecordList only accepts Record objects")
+        super(RecordList, self).append(value)
+
+    def extend(self, iterable):
+        for item in iterable:
+            self.append(item)
+
