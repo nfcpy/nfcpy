@@ -56,7 +56,9 @@ class DEPInitiator(DEP):
         data = self._dev.dep_exchange(data, timeout)
         duration = int((time.time() - t0) * 1000)
         log.debug("exchange() completed in {0} ms".format(duration))
-        log.debug("dep recv {0} byte\n{1}".format(len(data), format_data(data)))
+#        log.debug("dep recv {0} byte\n{1}".format(len(data), format_data(data)))
+        s="".join([str('{0:02x}'.format(ord(data[i]))) for i in range(0, len(data))])
+        log.debug("dep raw << "+s)
         return data
 
 class DEPTarget(DEP):
@@ -76,6 +78,7 @@ class DEPTarget(DEP):
         duration = int((time.time() - t0) * 1000)
         log.debug("wait_command() completed in {0} ms".format(duration))
         log.debug("dep recv {0} byte\n{1}".format(len(data), format_data(data)))
+        
         return data
 
     def send_response(self, data, timeout):
@@ -83,6 +86,9 @@ class DEPTarget(DEP):
         as the payload.
         """
         log.debug("dep send {0} byte\n{1}".format(len(data), format_data(data)))
+        s="".join([str('{0:02x}'.format(ord(data[i]))) for i in range(0, len(data))])
+        log.debug("dep raw << "+s)
+
         t0 = time.time()
         self._dev.dep_set_data(data, timeout)
         duration = int((time.time() - t0) * 1000)
