@@ -9,74 +9,11 @@ length and an optional identifer encoded in an NDEF record
 structure. An NDEF message is a sequence of NDEF records with a begin
 marker in the first and an end marker in the last record.
 
-::
-
-  +------------+------------+--------+------------+
-  |                   NDEF Message                |
-  +------------+------------+--------+------------+
-  |  Record 1  |  Record 2  |  ....  |  Record n  |
-  | MB=1, ME=0 |            |        | MB=0, ME=1 |
-  +------------+------------+--------+------------+
+.. image:: ../images/ndefmsg.png
 
 NDEF decoding and encoding is provided by the :mod:`nfc.ndef` module.
 
 >>> import nfc.ndef
-
-.. class:: Record([record_type , record_name , data])
-
-   :param record_type: This is the record type.  It is assigned
-                       to the :attr:`type` attribute and the same
-                       limitations apply.
-   :type record_type: str, bytearray
-   :param record_name: This is the record identifier. It is assigned
-                       to the :attr:`name` attribute and the same
-                       conversion rules are applied.
-   :type record_name: str, bytearray
-   :param data: This is the record payload if any of `record_type` or
-                `record_name` are present; if only `data` is present
-                it must be the complete NDEF record data sequence.
-   :type data: str, bytearray
-
-   .. attribute:: type
-
-      The record type. A string that matches either the empty string
-      '', or 'unknown', or 'unchanged', or starts with 'urn:nfc:wkt:',
-      or 'urn:nfc:ext:', or matches the mime-type format, or matches
-      the absolute-URI format.
-
-   .. attribute:: name
-
-      The record identifier as an octet string. Any type that can be
-      coverted into a sequence of characters in range(0,256) can be
-      assigned.
-
-   .. attribute:: data
-
-      The record payload as an octet string. Any type that can be
-      coverted into a sequence of characters in range(0,256) can be
-      assigned.
-
-.. class:: Message(record)
-.. class:: Message(*args)
-
-   The :class:`Message` class 
-   :param data: The `args` parameter 
-   :type data: str, bytearray, :class:`io.Bytes`,
-               :class:`nfc.ndef.Record`, :class:`list`
-
-   .. attribute:: type
-
-      The message type. If the :obj:`message` has at least one record,
-      this is the :attr:`Record.type` attribute of the first record,
-      otherwise it is :const:`None`. This attribute can only be read.
-
-   .. attribute:: name
-
-      The message name. If the :obj:`message` has at least one record,
-      this is the :attr:`Record.name` attribute of the first record,
-      otherwise it is :const:`None`. This attribute can only be read.
-
-
 
 Parsing NDEF
 ============
