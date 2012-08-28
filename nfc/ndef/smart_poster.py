@@ -20,6 +20,9 @@
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
 
+import logging
+log = logging.getLogger(__name__)
+
 import io
 import struct
 from record import Record
