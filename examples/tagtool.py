@@ -34,7 +34,7 @@ sys.path.insert(1, os.path.split(sys.path[0])[0])
 import nfc
 import nfc.ndef
 
-def make_printable(data):
+def printable(data):
     printable = string.digits + string.letters + string.punctuation + ' '
     return ''.join([c if c in printable else '.' for c in data])
 
@@ -44,7 +44,7 @@ def format_data(data):
         s.append("  %04x: " % i)
         s[-1] += ' '.join(["%02x" % ord(c) for c in data[i:i+16]]) + ' '
         s[-1] += (8 + 16*3 - len(s[-1])) * ' '
-        s[-1] += make_printable(data[i:i+16])
+        s[-1] += printable(data[i:i+16])
     return '\n'.join(s)
 
 def show(tag):
@@ -66,12 +66,20 @@ def show(tag):
         if len(tag.ndef.message):
             print format_data(tag.ndef.message)
             message = nfc.ndef.Message(tag.ndef.message)
-            print "NDEF records"
+            print "Records"
             for index, record in enumerate(message):
-                record.data = make_printable(record.data)
-                print "  [%d] type = %s" %(index, record.type)
-                print "  [%d] name = %s" %(index, record.name)
-                print "  [%d] data = %s" %(index, record.data)
+                if record.type == "urn:nfc:wkt:T":
+                    print "[{0}] Text Record".format(index)
+                    print nfc.ndef.TextRecord(record).pretty(indent=4)
+                elif record.type == "urn:nfc:wkt:U":
+                    print "[{0}] URI Record".format(index)
+                    print nfc.ndef.UriRecord(record).pretty(indent=4)
+                elif message.type == "urn:nfc:wkt:Sp":
+                    print "[{0}] Smartposter Record".format(index)
+                    print nfc.ndef.SmartPosterRecord(record).pretty(indent=4)
+                else:
+                    print "[{0}] Record".format(index)
+                    print record.pretty(indent=4)
 
 def format_tag(clf):
     while True:

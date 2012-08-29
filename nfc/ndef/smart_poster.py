@@ -201,4 +201,20 @@ class SmartPosterRecord(Record):
     def resource_type(self, value):
         self._res_type = value
 
-
+    def pretty(self, indent=2, prefix=''):
+        lines = list()
+        lines.append(("resource", self.uri))
+        if self.resource_type:
+            lines.append(("resource type", self.resource_type))
+        if self.resource_size:
+            lines.append(("resource size", str(self.resource_size)))
+        for lang in sorted(self.title):
+            lines.append(("title[%s]" % lang, self.title[lang]))
+        for icon in sorted(self.icons):
+            lines.append(("icon[%s]"%icon, str(len(self.icons[icon])))+" byte")
+        lines.append(("action", self.action))
+        
+        indent = indent * ' '
+        lwidth = max([len(line[0]) for line in lines])
+        lines = [line[0].ljust(lwidth) + " = " + line[1] for line in lines]
+        return ("\n").join([indent + prefix + line for line in lines])
