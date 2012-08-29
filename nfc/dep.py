@@ -49,14 +49,15 @@ class DEPInitiator(DEP):
         """Send *data* bytes to the remote NFCIP-1 target device. If a 
         response is received within *timeout* milliseconds, exchange()
         returns a byte string with the response data, otherwise IOError
-        exception is raised.
-        """
-        log.debug("dep send {0} byte\n{1}".format(len(data), format_data(data)))
+        exception is raised."""
+        
+        log.debug("send {0} byte dep cmd".format(len(data)))
+        log.debug("dep raw >> " + str(data).encode("hex"))
         t0 = time.time()
         data = self._dev.dep_exchange(data, timeout)
-        duration = int((time.time() - t0) * 1000)
-        log.debug("exchange() completed in {0} ms".format(duration))
-        log.debug("dep recv {0} byte\n{1}".format(len(data), format_data(data)))
+        elapsed = int((time.time() - t0) * 1000)
+        log.debug("rcvd {0} byte dep rsp in {0} ms".format(len(data), elapsed))
+        log.debug("dep raw << " + str(data).encode("hex"))
         return data
 
 class DEPTarget(DEP):
@@ -71,31 +72,23 @@ class DEPTarget(DEP):
         """Receive an NFCIP-1 DEP command. If a command is received within
         *timeout* milliseconds the data portion is returned as a byte 
         string, otherwise an IOError exception is raised."""
+        
+        log.debug("waiting for a dep command")
         t0 = time.time()
         data = self._dev.dep_get_data(timeout)
-        duration = int((time.time() - t0) * 1000)
-        log.debug("wait_command() completed in {0} ms".format(duration))
-        log.debug("dep recv {0} byte\n{1}".format(len(data), format_data(data)))
+        elapsed = int((time.time() - t0) * 1000)
+        log.debug("rcvd {0} byte cmd after {0} ms".format(len(data), elapsed))
+        log.debug("dep raw << " + str(data).encode("hex"))
         return data
 
     def send_response(self, data, timeout):
-        """Send an NFCIP-1 DEP response with the byte string *data*
-        as the payload.
-        """
-        log.debug("dep send {0} byte\n{1}".format(len(data), format_data(data)))
+        """Send an NFCIP-1 DEP response with the byte string *data* as
+        the payload."""
+        
+        log.debug("send dep response ({0} byte)".format(len(data)))
+        log.debug("dep raw >> " + str(data).encode("hex"))
         t0 = time.time()
         self._dev.dep_set_data(data, timeout)
-        duration = int((time.time() - t0) * 1000)
-        log.debug("send_response() completed in {0} ms".format(duration))
-
-def format_data(data):
-    import string
-    printable = string.digits + string.letters + string.punctuation + ' '
-    s = []
-    for i in range(0, len(data), 16):
-        s.append("  {offset:04x}: ".format(offset=i))
-        s[-1] += ' '.join(["%02x" % ord(c) for c in data[i:i+16]]) + ' '
-        s[-1] += (8 + 16*3 - len(s[-1])) * ' '
-        s[-1] += ''.join([c if c in printable else '.' for c in data[i:i+16]])
-    return '\n'.join(s)
+        elapsed = int((time.time() - t0) * 1000)
+        log.debug("sent {0} byte dep rsp in {0} ms".format(len(data), elapsed))
 
