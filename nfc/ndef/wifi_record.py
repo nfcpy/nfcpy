@@ -43,7 +43,7 @@ OOB_PASSWORD = "\x10\x2C"
 VENDOR_EXT   = "\x10\x49"
 VENDOR_WFA   = "\x00\x37\x2A"
 VERSION2     = "\x00"
-KEY_SHARABLE = "\x02"
+KEY_SHAREABLE = "\x02"
 
 auth_type_names = {
     '\x00\x01': 'Open',
@@ -149,7 +149,7 @@ class WifiConfigRecord(Record):
     def credentials(self):
         """A list of WiFi credentials. Each credential is a dictionary
         with any of the possible keys ``'network-name'``,
-        ``'network-key'``, ``'sharable'``, ``'authentication'``,
+        ``'network-key'``, ``'shareable'``, ``'authentication'``,
         ``'encryption'``, ``'mac-address'``, and ``'other'``."""
         return self._credentials
         
@@ -178,7 +178,7 @@ class WifiConfigRecord(Record):
                 credential["network-name"] = v
             elif k == NETWORK_KEY:
                 credential["network-key"] = v
-            elif k == KEY_SHARABLE:
+            elif k == KEY_SHAREABLE:
                 credential['shareable'] = bool(ord(v))
             elif k == AUTH_TYPE:
                 credential['authentication'] = \
@@ -201,7 +201,7 @@ class WifiConfigRecord(Record):
             crypt_type = credential['encryption']
             network_key = credential['network-key']
             mac_address = credential['mac-address']
-            sharable = credential.get('shareable', None)
+            shareable = credential.get('shareable', None)
             other = credential.get('other', list())
         except KeyError:
             raise EncodeError("missing required credential attribute")
@@ -220,8 +220,8 @@ class WifiConfigRecord(Record):
         write_attribute(f, MAC_ADDRESS, mac_address)
 
         vendor_wfa = [(k, v) for k, v in other if len(k) == 1]
-        if sharable is not None:
-            vendor_wfa = [(KEY_SHARABLE, chr(int(sharable)))] + vendor_wfa
+        if shareable is not None:
+            vendor_wfa = [(KEY_SHAREABLE, chr(int(shareable)))] + vendor_wfa
         if len(vendor_wfa) > 0:
             write_attribute(f, VENDOR_EXT, VENDOR_WFA + 
                             write_elements(vendor_wfa))
@@ -232,6 +232,25 @@ class WifiConfigRecord(Record):
         f.seek(0, 0)
         return f.read()
 
+    def pretty(self, indent=0, prefix=''):
+        lines = list()
+        lines.append(("version", self.version))
+        for credential in self.credentials:
+            shareable = str(credential.get('shareable', False))
+            lines.append(("network name", credential['network-name']))
+            lines.append(("network key", credential['network-key']))
+            lines.append(("authentication", credential['authentication']))
+            lines.append(("encryption", credential['encryption']))
+            lines.append(("mac address", credential['mac-address']))
+            lines.append(("key shareable", shareable))
+        for key, value in self.other:
+            lines.append((key, value))
+        
+        indent = indent * ' '
+        lwidth = max([len(line[0]) for line in lines])
+        lines = [line[0].ljust(lwidth) + " = " + line[1] for line in lines]
+        return ("\n").join([indent + prefix + line for line in lines])
+    
 class WifiPasswordRecord(Record):
     def __init__(self, record=None):
         Record.__init__(self, 'application/vnd.wfa.wsc')
