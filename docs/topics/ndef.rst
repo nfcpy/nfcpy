@@ -153,29 +153,61 @@ ndef type name format 0 doesn't allow a type string
 Creating NDEF
 =============
 
-Creating NDEF starts with creating records, which is done with the
-:class:`nfc.ndef.Record` class. The three optional keyword arguments
-`record_type`, `record_name` and `data` take the three three parts of
-an NDEF record - type, identifier and payload.
+An :class:`nfc.ndef.Record` class can be initialized with an NDEF
 
->>> nfc.ndef.Record("urn:nfc:wkt:T", "id", "\x02enHello World")
-nfc.ndef.Record('urn:nfc:wkt:T', 'id', '\x02enHello World')
+To build NDEF messages use the :class:`nfc.ndef.Record` class to
+create records and instantiate an :class:`nfc.ndef.Message` object
+with the records as arguments.
+
+>>> import nfc.ndef
+>>> record1 = nfc.ndef.Record("urn:nfc:wkt:T", "id1", "\x02enHello World!")
+>>> record2 = nfc.ndef.Record("urn:nfc:wkt:T", "id2", "\x02deHallo Welt!")
+>>> message = nfc.ndef.Message(record1, record2)
+
+The :class:`nfc.ndef.Message` class also accepts a list of records as a single argument and it is possible to :meth:`nfc.ndef.Message.append` records or :meth:`nfc.ndef.Message.extend` a message with a list of records.
+
+>>> message = nfc.ndef.Message()
+>>> message.append(record1)
+>>> message.extend([record2, record3])
+
+The serialized form of an :class:`nfc.ndef.Message` object is produced with :func:`str`.
+
+>>> message = nfc.ndef.Message(record1, record2)
+>>> str(message)
+'\x99\x01\x0f\x03Tid1\x02enHello World!Y\x01\x0e\x03Tid2\x02deHallo Welt!'
 
 
-Special Records
-===============
+Specialized Records
+===================
 
 Text Record
 -----------
+
+>>> import nfc.ndef
+>>> record = nfc.ndef.TextRecord("Hello World!")
+>>> print record.pretty()
+text     = Hello World!
+language = en
+encoding = UTF-8
 
 Uri Record
 ----------
 
 >>> import nfc.ndef
 >>> record = nfc.ndef.UriRecord("http://nfcpy.org")
->>> record.type, record.name, record.data
-('urn:nfc:wkt:U', '', '\x03nfcpy.org')
+>>> print record.pretty()
+uri = http://nfcpy.org
 
 Smart Poster Record
 -------------------
 
+>>> import nfc.ndef
+>>> uri = "https://launchpad.net/nfcpy"
+>>> record = nfc.ndef.SmartPosterRecord(uri)
+>>> record.title = "Python module for near field communication"
+>>> record.title['de'] = "Python Modul für Nahfeldkommunikation"
+>>> print record.pretty()
+resource  = https://launchpad.net/nfcpy
+title[de] = Python Modul für Nahfeldkommunikation
+title[en] = Python module for near field communication
+action    = default

@@ -21,6 +21,9 @@ The *nfcpy* module implements NFC Forum specifications for wireless short-range 
 :doc:`overview`
    Hardware and software requirements, implementation status and references.
 
+Tutorials
+=========
+
 :doc:`topics/clf`
     Find and use NFC contactless readers.
 
@@ -30,10 +33,11 @@ The *nfcpy* module implements NFC Forum specifications for wireless short-range 
 :doc:`topics/ndef`
     How to parse or generate NDEF records and messages.
 
+Examples
+========
+
 :doc:`examples/helloworld`
    A straightforward example of NDEF encoding and decoding with NFC tags.
-
-.. :doc:`api/api`
 
 Reference
 =========
