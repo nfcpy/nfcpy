@@ -95,7 +95,7 @@ class UriRecord(Record):
         except AttributeError:
             raise TypeError("uri value must be a str type")
 
-    def pretty(self, indent=2, prefix=''):        
+    def pretty(self, indent=0, prefix=''):        
         lines = list()
         lines.append(("uri", self.uri))
         

@@ -125,7 +125,7 @@ class TextRecord(Record):
             raise ValueError('value not in ("UTF-8", "UTF-16")')
         self._utfx = value
 
-    def pretty(self, indent=2, prefix=''):        
+    def pretty(self, indent=0, prefix=''):        
         lines = list()
         lines.append(("text", self.text))
         lines.append(("language", self.language))

@@ -201,7 +201,7 @@ class SmartPosterRecord(Record):
     def resource_type(self, value):
         self._res_type = value
 
-    def pretty(self, indent=2, prefix=''):
+    def pretty(self, indent=0, prefix=''):
         lines = list()
         lines.append(("resource", self.uri))
         if self.resource_type:
