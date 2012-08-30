@@ -123,6 +123,8 @@ class WifiConfigRecord(Record):
                     self._credentials.append(self._parse_credential(v))
                 else:
                     self._other.append((k, v))
+            if len(self._credentials) == 0:
+                raise DecodeError("missing credential attribute")
 
     @property
     def version(self):
@@ -277,9 +279,10 @@ class WifiPasswordRecord(Record):
                     self._version = v
                 elif k == OOB_PASSWORD:
                     self._passwords.append(self._parse_password(v))
-                    print self.passwords
                 else:
                     self._other.append((k, v))
+            if len(self._passwords) == 0:
+                raise DecodeError("missing password attribute")
 
     @property
     def version(self):
@@ -319,7 +322,7 @@ class WifiPasswordRecord(Record):
         version and device password. Keys are two character strings
         for standard WiFi attributes, one character strings for
         subelements within a WFA vendor extension attribute, and three
-        character strings for other vendor ecxtension attributes."""
+        character strings for other vendor extension attributes."""
         return self._other
 
     def _parse_password(self, s):
@@ -345,6 +348,22 @@ class WifiPasswordRecord(Record):
         f.seek(0, 0)
         return f.read()
         
+    def pretty(self, indent=0, prefix=''):
+        lines = list()
+        lines.append(("version", self.version))
+        for password in self.passwords:
+            public_key_hash = password['public-key-hash'].encode("hex")
+            lines.append(("public key hash", public_key_hash))
+            lines.append(("password id", str(password['password-id'])))
+            lines.append(("device password", password['password']))
+        for key, value in self.other:
+            lines.append((key, value))
+        
+        indent = indent * ' '
+        lwidth = max([len(line[0]) for line in lines])
+        lines = [line[0].ljust(lwidth) + " = " + line[1] for line in lines]
+        return ("\n").join([indent + prefix + line for line in lines])
+    
 # -------------------------------------- helper functions for attribute parsing
 def parse_attribute(f):
     k, l = struct.unpack('>2sH', f.read(4))
