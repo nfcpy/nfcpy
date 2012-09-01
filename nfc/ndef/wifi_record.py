@@ -242,7 +242,7 @@ class WifiConfigRecord(Record):
             lines.append(("authentication", credential['authentication']))
             lines.append(("encryption", credential['encryption']))
             lines.append(("mac address", credential['mac-address']))
-            lines.append(("key shareable", shareable))
+            lines.append(("shareable", shareable))
         for key, value in self.other:
             lines.append((key, value))
         

@@ -31,7 +31,43 @@ sys.path.insert(1, os.path.split(sys.path[0])[0])
 import nfc
 import nfc.ndef
 
-def apps_parser(parser):
+def add_print_parser(parser):
+    parser.description = """Parse and print NDEF messages."""
+    parser.set_defaults(func=print_command)
+    parser.add_argument(
+        "message", type=argparse.FileType('r'), default="-", nargs="?",
+        help="message data file ('-' for stdin)")
+
+def print_command(args):
+    data = args.message.read()
+    try: data = data.decode("hex")
+    except TypeError: pass
+    
+    message = nfc.ndef.Message(data)
+    for index, record in enumerate(message):
+        indent = 4
+        if record.type == "urn:nfc:wkt:T":
+            print "[{0}] Text Record".format(index)
+            print nfc.ndef.TextRecord(record).pretty(indent)
+        elif record.type == "urn:nfc:wkt:U":
+            print "[{0}] URI Record".format(index)
+            print nfc.ndef.UriRecord(record).pretty(indent)
+        elif record.type == "urn:nfc:wkt:Sp":
+            print "[{0}] Smartposter Record".format(index)
+            print nfc.ndef.SmartPosterRecord(record).pretty(indent)
+        elif record.type == "application/vnd.wfa.wsc":
+            try:
+                record = nfc.ndef.WifiPasswordRecord(record)
+                print "[{0}] WiFi Password Record".format(index)
+            except nfc.ndef.DecodeError:
+                record = nfc.ndef.WifiConfigRecord(record)
+                print "[{0}] WiFi Configuration Record".format(index)
+            print record.pretty(indent)
+        else:
+            print "[{0}] Record".format(index)
+            print record.pretty(indent=4)
+    
+def add_make_parser(parser):
     parser.description = """The make command creates ndef
     messages."""
     
@@ -42,13 +78,11 @@ def apps_parser(parser):
     make_wifipassword_parser(subparsers.add_parser(
             'wifipassword',
             help='create a wifi password token'))
+    make_wificonfig_parser(subparsers.add_parser(
+            'wificonfig',
+            help='create a wifi config record'))
     
 def make_smartposter_parser(parser):
-    parser.description = """The pack command creates an NDEF record
-    for FILE. The record type is determined by the file type if
-    possible, it may be explicitely set with the -t option. The record
-    name (payload identifier) is set to the file name."""    
-    
     parser.set_defaults(func=make_smartposter)
     parser.add_argument(
         "resource",
@@ -94,11 +128,6 @@ def make_smartposter(args):
         args.outfile.write(str(message))
 
 def make_wifipassword_parser(parser):
-    parser.description = """The pack command creates an NDEF record
-    for FILE. The record type is determined by the file type if
-    possible, it may be explicitely set with the -t option. The record
-    name (payload identifier) is set to the file name."""    
-    
     parser.set_defaults(func=make_wifipassword)
     parser.add_argument(
         "pubkey", type=argparse.FileType('r'),
@@ -133,8 +162,54 @@ def make_wifipassword(args):
     else:
         args.outfile.write(str(message))
     
+def make_wificonfig_parser(parser):    
+    parser.set_defaults(func=make_wificonfig)
+    parser.add_argument(
+        "-o", dest="outfile", metavar="FILE",
+        type=argparse.FileType('w'), default="-",
+        help="write message to file (writes binary data) ")
+    parser.add_argument(
+        "ssid", metavar="network-name", nargs="?",
+        help="network name (SSID)")
+    parser.add_argument(
+        "--key", default="",
+        help="network key (default: open network)")
+    parser.add_argument(
+        "--mac", default="ff:ff:ff:ff:ff:ff",
+        help="mac address (default: 'ff:ff:ff:ff:ff:ff')")
+    parser.add_argument(
+        "--mixed-mode", action="store_true",
+        help="access point supports WPA2 and WPA")
+    parser.add_argument(
+        "--shareable", action="store_true",
+        help="network key may be shared with other devices")
+    
+def make_wificonfig(args):
+    import uuid
+    if args.ssid is None:
+        args.ssid = str(uuid.uuid1())
+    authentication, encryption = "Open", "None"
+    if args.key:
+        if not args.mixed_mode:
+            authentication, encryption = "WPA2-Personal", "AES"
+        else:
+            authentication, encryption = "WPA/WPA2-Personal", "AES/TKIP"
+        
+    record = nfc.ndef.WifiConfigRecord()
+    record.credential['network-name'] = args.ssid
+    record.credential['network-key'] = args.key
+    record.credential['authentication'] = authentication
+    record.credential['encryption'] = encryption
+    record.credential['mac-address'] = args.mac
+    log.info(record.pretty())
+    
+    message = nfc.ndef.Message(record)
+    if args.outfile.name == "<stdout>":
+        args.outfile.write(str(message).encode("hex"))
+    else:
+        args.outfile.write(str(message))
 
-def pack_parser(parser):
+def add_pack_parser(parser):
     parser.description = """The pack command creates an NDEF record
     for FILE. The record type is determined by the file type if
     possible, it may be explicitely set with the -t option. The record
@@ -166,7 +241,7 @@ def pack(args):
     else:
         args.outfile.write(str(record))
 
-def split_parser(parser):
+def add_split_parser(parser):
     parser.description = """The split command separates an an NDEF
     message into individual records. If data is read from a file,
     records are written as binary data into individual files with file
@@ -213,12 +288,14 @@ if __name__ == '__main__':
         help="print debug messages to stderr")
 
     subparsers = parser.add_subparsers(title="commands")
-    apps_parser(subparsers.add_parser(
-            'make', help='create an ndef message'))
-    pack_parser(subparsers.add_parser(
+    add_print_parser(subparsers.add_parser(
+            'print', help='parse and print messages'))
+    add_make_parser(subparsers.add_parser(
+            'make', help='create ndef messages'))
+    add_pack_parser(subparsers.add_parser(
             'pack', help='pack data into an ndef record'))
-    split_parser(subparsers.add_parser(
-            'split', help='split a message into records'))
+    add_split_parser(subparsers.add_parser(
+            'split', help='split messages into records'))
 
     args = parser.parse_args()
 
