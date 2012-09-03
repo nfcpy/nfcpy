@@ -186,3 +186,264 @@ class BluetoothConfigRecord(Record):
     def class_of_device(self, value):        
         self.eir[0x0D] = struct.pack('<L', value)[0:3]
         
+    def pretty(self, indent=0, prefix=''):
+        lines = list()
+        if len(self.name) > 0:
+            lines.append(("reference", repr(self.name)))
+        lines.append(("device address", self.device_address))
+        if self.local_device_name:
+            lines.append(("device name", self.local_device_name))
+        if self.class_of_device:
+            cod = self.class_of_device
+            if cod & 0x003 == 0:
+                lines.append(("device class", decode_class_of_device(cod)))
+                msc = [major_service_class[mask]
+                       for mask in major_service_class
+                       if self.class_of_device >> 13 & mask]
+                lines.append(("major service", ", ".join(msc)))
+            else:
+                lines.append(("class of device", "{0:b}".format(cod)))
+
+        if self.simple_pairing_hash:
+            lines.append(("pubkey hash", self.simple_pairing_hash))
+        if self.simple_pairing_rand:
+            lines.append(("randomizer", self.simple_pairing_rand))
+        for service_class_uuid in self.service_class_uuid_list:
+            try: service_class = service_class_uuid_map[service_class_uuid]
+            except KeyError: service_class = service_class_uuid
+            lines.append(("service class", service_class))
+        for key, value in self.eir.items():
+            if key not in (3, 5, 7, 8, 9, 13, 14, 15):
+                lines.append(("EIR 0x%02x" % key, repr(value)))
+        
+        indent = indent * ' '
+        lwidth = max([len(line[0]) for line in lines])
+        lines = [line[0].ljust(lwidth) + " = " + line[1] for line in lines]
+        return ("\n").join([indent + prefix + line for line in lines])
+
+def decode_class_of_device(cod):
+    mdc, sdc = cod >> 8 & 0x1f, cod >> 2 & 0x3f
+    if mdc == 0:
+        mdc, sdc = "Miscellaneous", "{0:06b}".format(sdc)
+    elif mdc == 1:
+        minor_device_class = (
+            "Uncategorized",
+            "Desktop workstation",
+            "Server-class computer",
+            "Laptop",
+            "Handheld PC/PDA (clam shell)",
+            "Palm sized PC/PDA",
+            "Wearable computer (Watch sized)")
+        mdc = "Computer"
+        try: sdc = minor_device_class[sdc]
+        except IndexError: sdc = "{0:06b}".format(sdc)
+    elif mdc == 2:
+        minor_device_class = (
+            "Uncategorized",
+            "Cellular",
+            "Cordless",
+            "Smart phone",
+            "Wired modem or voice gateway",
+            "Common ISDN Access")
+        mdc = "Phone"
+        try: sdc = minor_device_class[sdc]
+        except IndexError: sdc = "{0:06b}".format(sdc)
+    elif mdc == 3:
+        minor_device_class = (
+            "Fully available",
+            "1 - 17% utilized",
+            "17 - 33% utilized",
+            "33 - 50% utilized",
+            "50 - 67% utilized",
+            "67 - 83% utilized",
+            "83 - 99% utilized",
+            "No service available")
+        mdc = "Access Point"
+        try: sdc = minor_device_class[sdc]
+        except IndexError: sdc = "{0:06b}".format(sdc)
+    elif mdc == 4:
+        minor_device_class = (
+            "Uncategorized",
+            "Wearable Headset Device",
+            "Hands-free Device",
+            "Reserved",
+            "Microphone",
+            "Loudspeaker",
+            "Headphones",
+            "Portable Audio",
+            "Car audio",
+            "Set-top box",
+            "HiFi Audio Device",
+            "VCR",
+            "Video Camera",
+            "Camcorder",
+            "Video Monitor",
+            "Video Display and Loudspeaker",
+            "Video Conferencing",
+            "Reserved",
+            "Gaming/Toy")
+        mdc = "Audio/Video"
+        try: sdc = minor_device_class[sdc]
+        except IndexError: sdc = "{0:06b}".format(sdc)
+    elif mdc == 5:
+        minor_device_class = (
+            "Uncategorized",
+            "Joystick",
+            "Gamepad",
+            "Remote control",
+            "Sensing device",
+            "Digitizer tablet",
+            "Card reader",
+            "Digital pen",
+            "Handheld scanner",
+            "Handheld pointer")
+        kbd_mouse_class = (
+            "",
+            "keyboard",
+            "mouse",
+            "keyboard/mouse")
+        mdc = "Peripheral"
+        try: sdc = minor_device_class[sdc & 0x0f]
+        except IndexError: sdc = "{0:06b}".format(sdc)
+        sdc = sdc + kbd_mouse_class[sdc >> 4]
+    elif mdc == 6:
+        minor_device_class = {
+            0b0001: "Display",
+            0b0010: "Camera",
+            0b0100: "Scanner",
+            0b1000: "Printer"}
+        mdc = "Imaging"
+        sdc = ', '.join([minor_device_class[mask]
+                         for mask in minor_device_class
+                         if sdc >> 2 & mask])
+    elif mdc == 7:
+        minor_device_class = (
+            "Wrist Watch",
+            "Pager",
+            "Jacket",
+            "Helmet",
+            "Glasses")
+        mdc = "Wearable"
+        try: sdc = minor_device_class[sdc & 0x0f]
+        except IndexError: sdc = "{0:06b}".format(sdc)
+    elif mdc == 8:
+        minor_device_class = (
+            "Robot",
+            "Vehicle",
+            "Doll / Action Figure",
+            "Controller",
+            "Game")
+        mdc = "Toy"
+        try: sdc = minor_device_class[sdc & 0x0f]
+        except IndexError: sdc = "{0:06b}".format(sdc)
+    elif mdc == 9:
+        minor_device_class = (
+            "Undefined",
+            "Blood Pressure Monitor",
+            "Thermometer",
+            "Weighing Scale",
+            "Glucose Meter",
+            "Pulse Oximeter",
+            "Heart/Pulse Rate Monitor",
+            "Health Data Display",
+            "Step Counter",
+            "Body Composition Analyzer",
+            "Peak Flow Monitor",
+            "Medication Monitor",
+            "Knee Prosthesis",
+            "Ankle Prosthesis",
+            "Generic Health Manager",
+            "Personal Mobility Device")
+        mdc = "Health"
+        try: sdc = minor_device_class[sdc & 0x0f]
+        except IndexError: sdc = "{0:06b}".format(sdc)
+    elif mdc == 31:
+        mdc, sdc = "Uncategorized", "{0:06b}".format(sdc)
+    else:
+        mdc, sdc = "{0:05b}".format(mdc), "{0:06b}".format(sdc)
+    return "{0} ({1})".format(mdc, sdc)
+
+major_service_class = {
+    0b00000000001: "Limited Discoverable Mode",
+    0b00000000010: "reserved",
+    0b00000000100: "reserved",
+    0b00000001000: "Positioning",
+    0b00000010000: "Networking",
+    0b00000100000: "Rendering",
+    0b00001000000: "Capturing",
+    0b00010000000: "Object Transfer",
+    0b00100000000: "Audio",
+    0b01000000000: "Telephony",
+    0b10000000000: "Information"}
+
+service_class_uuid_map = {
+    "00001000-0000-1000-8000-00805f9b34fb": "Service Discovery Server",
+    "00001001-0000-1000-8000-00805f9b34fb": "Browse Group Descriptor",
+    "00001101-0000-1000-8000-00805f9b34fb": "Serial Port",
+    "00001102-0000-1000-8000-00805f9b34fb": "LAN Access Using PPP",
+    "00001103-0000-1000-8000-00805f9b34fb": "Dialup Networking",
+    "00001104-0000-1000-8000-00805f9b34fb": "IrMC Sync",
+    "00001105-0000-1000-8000-00805f9b34fb": "OBEX Object Push",
+    "00001106-0000-1000-8000-00805f9b34fb": "OBEX File Transfer",
+    "00001107-0000-1000-8000-00805f9b34fb": "IrMC Sync Command",
+    "00001108-0000-1000-8000-00805f9b34fb": "Headset",
+    "00001109-0000-1000-8000-00805f9b34fb": "Cordless Telephony",
+    "0000110a-0000-1000-8000-00805f9b34fb": "Audio Source",
+    "0000110b-0000-1000-8000-00805f9b34fb": "Audio Sink",
+    "0000110c-0000-1000-8000-00805f9b34fb": "A/V Remote Control Target",
+    "0000110d-0000-1000-8000-00805f9b34fb": "Advanced Audio Distribution",
+    "0000110e-0000-1000-8000-00805f9b34fb": "A/V Remote Control",
+    "0000110f-0000-1000-8000-00805f9b34fb": "A/V Remote Control Controller",
+    "00001110-0000-1000-8000-00805f9b34fb": "Intercom",
+    "00001111-0000-1000-8000-00805f9b34fb": "Fax",
+    "00001112-0000-1000-8000-00805f9b34fb": "Headset - Audio Gateway (AG)",
+    "00001113-0000-1000-8000-00805f9b34fb": "WAP",
+    "00001114-0000-1000-8000-00805f9b34fb": "WAP Client",
+    "00001115-0000-1000-8000-00805f9b34fb": "PANU",
+    "00001116-0000-1000-8000-00805f9b34fb": "NAP",
+    "00001117-0000-1000-8000-00805f9b34fb": "GN",
+    "00001118-0000-1000-8000-00805f9b34fb": "Direct Printing",
+    "00001119-0000-1000-8000-00805f9b34fb": "Reference Printing",
+    "0000111a-0000-1000-8000-00805f9b34fb": "Basic Imaging Profile",
+    "0000111b-0000-1000-8000-00805f9b34fb": "Imaging Responder",
+    "0000111c-0000-1000-8000-00805f9b34fb": "Imaging Automatic Archive",
+    "0000111d-0000-1000-8000-00805f9b34fb": "Imaging Referenced Objects",
+    "0000111e-0000-1000-8000-00805f9b34fb": "Handsfree",
+    "0000111f-0000-1000-8000-00805f9b34fb": "Handsfree Audio Gateway",
+    "00001120-0000-1000-8000-00805f9b34fb": "Direct Printing Reference",
+    "00001121-0000-1000-8000-00805f9b34fb": "Reflected UI",
+    "00001122-0000-1000-8000-00805f9b34fb": "Basic Printing",
+    "00001123-0000-1000-8000-00805f9b34fb": "Printing Status",
+    "00001124-0000-1000-8000-00805f9b34fb": "Human Interface Device",
+    "00001125-0000-1000-8000-00805f9b34fb": "Hardcopy Cable Replacement",
+    "00001126-0000-1000-8000-00805f9b34fb": "HCR Print",
+    "00001127-0000-1000-8000-00805f9b34fb": "HCR Scan",
+    "00001128-0000-1000-8000-00805f9b34fb": "Common ISDN Access",
+    "0000112d-0000-1000-8000-00805f9b34fb": "SIM Access",
+    "0000112e-0000-1000-8000-00805f9b34fb": "Phonebook Access - PCE",
+    "0000112f-0000-1000-8000-00805f9b34fb": "Phonebook Access - PSE",
+    "00001130-0000-1000-8000-00805f9b34fb": "Phonebook Access",
+    "00001131-0000-1000-8000-00805f9b34fb": "Headset - HS",
+    "00001132-0000-1000-8000-00805f9b34fb": "Message Access Server",
+    "00001133-0000-1000-8000-00805f9b34fb": "Message Notification Server",
+    "00001134-0000-1000-8000-00805f9b34fb": "Message Access Profile",
+    "00001135-0000-1000-8000-00805f9b34fb": "GNSS",
+    "00001136-0000-1000-8000-00805f9b34fb": "GNSS Server",
+    "00001200-0000-1000-8000-00805f9b34fb": "PnP Information",
+    "00001201-0000-1000-8000-00805f9b34fb": "Generic Networking",
+    "00001202-0000-1000-8000-00805f9b34fb": "Generic File Transfer",
+    "00001203-0000-1000-8000-00805f9b34fb": "Generic Audio",
+    "00001204-0000-1000-8000-00805f9b34fb": "Generic Telephony",
+    "00001205-0000-1000-8000-00805f9b34fb": "UPNP Service",
+    "00001206-0000-1000-8000-00805f9b34fb": "UPNP IP Service",
+    "00001300-0000-1000-8000-00805f9b34fb": "ESDP UPNP IP PAN",
+    "00001301-0000-1000-8000-00805f9b34fb": "ESDP UPNP IP LAP",
+    "00001302-0000-1000-8000-00805f9b34fb": "ESDP UPNP L2CAP",
+    "00001303-0000-1000-8000-00805f9b34fb": "Video Source",
+    "00001304-0000-1000-8000-00805f9b34fb": "Video Sink",
+    "00001305-0000-1000-8000-00805f9b34fb": "Video Distribution",
+    "00001400-0000-1000-8000-00805f9b34fb": "HDP",
+    "00001401-0000-1000-8000-00805f9b34fb": "HDP Source",
+    "00001402-0000-1000-8000-00805f9b34fb": "HDP Sink",
+    }
+
