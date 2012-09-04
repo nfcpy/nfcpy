@@ -45,27 +45,34 @@ def print_command(args):
     
     message = nfc.ndef.Message(data)
     for index, record in enumerate(message):
-        indent = 4
+        rcount = " [record {0}]".format(index+1) if len(message) > 1 else ""
+        indent = 2
         if record.type == "urn:nfc:wkt:T":
-            print "[{0}] Text Record".format(index)
+            print "Text Record" + rcount
             print nfc.ndef.TextRecord(record).pretty(indent)
         elif record.type == "urn:nfc:wkt:U":
-            print "[{0}] URI Record".format(index)
+            print "URI Record" + rcount
             print nfc.ndef.UriRecord(record).pretty(indent)
         elif record.type == "urn:nfc:wkt:Sp":
-            print "[{0}] Smartposter Record".format(index)
+            print "Smartposter Record" + rcount
             print nfc.ndef.SmartPosterRecord(record).pretty(indent)
+        elif record.type == "application/vnd.bluetooth.ep.oob":
+            print "Bluetooth Configuration Record" + rcount
+            print nfc.ndef.BluetoothConfigRecord(record).pretty(indent)
         elif record.type == "application/vnd.wfa.wsc":
             try:
                 record = nfc.ndef.WifiPasswordRecord(record)
-                print "[{0}] WiFi Password Record".format(index)
+                print "WiFi Password Record" + rcount
             except nfc.ndef.DecodeError:
                 record = nfc.ndef.WifiConfigRecord(record)
-                print "[{0}] WiFi Configuration Record".format(index)
+                print "WiFi Configuration Record" + rcount
             print record.pretty(indent)
+        elif record.type == "urn:nfc:wkt:Hs":
+            print "Handover Select Record" + rcount
+            print nfc.ndef.handover.HandoverSelectRecord(record).pretty(indent)
         else:
-            print "[{0}] Record".format(index)
-            print record.pretty(indent=4)
+            print "Unknown Record" + rcount
+            print record.pretty(indent)
     
 def add_make_parser(parser):
     parser.description = """The make command creates ndef
@@ -76,20 +83,21 @@ def add_make_parser(parser):
             'smartposter',
             help='create a smartposter message'))
     make_wifipassword_parser(subparsers.add_parser(
-            'wifipassword',
+            'wifipwd',
             help='create a wifi password token'))
     make_wificonfig_parser(subparsers.add_parser(
-            'wificonfig',
+            'wificfg',
             help='create a wifi config record'))
+    make_bluetoothcfg_parser(subparsers.add_parser(
+            'btcfg',
+            help='create bluetooth out-of-band record'))
     
 def make_smartposter_parser(parser):
     parser.set_defaults(func=make_smartposter)
     parser.add_argument(
-        "resource",
-        help="record data file (or '-' for stdin)")
-    parser.add_argument(
-        "outfile", default="-", nargs="?", type=argparse.FileType('w'),
-        help="output file (default: stdout)")
+        "-o", dest="outfile", metavar="FILE",
+        type=argparse.FileType('w'), default="-",
+        help="write message to file (writes binary data) ")
     parser.add_argument(
         "-T", metavar="TITLE", dest="titles", action="append", default=list(),
         help="smartposter title as '[language:]titlestring'")
@@ -100,6 +108,9 @@ def make_smartposter_parser(parser):
     parser.add_argument(
         "-A", dest="action", default="default",
         help="smartposter action 'exec', 'save' or 'open'")
+    parser.add_argument(
+        "resource",
+        help="record data file (or '-' for stdin)")
     
 def make_smartposter(args):
     record = nfc.ndef.SmartPosterRecord(args.resource)
@@ -130,11 +141,12 @@ def make_smartposter(args):
 def make_wifipassword_parser(parser):
     parser.set_defaults(func=make_wifipassword)
     parser.add_argument(
+        "-o", dest="outfile", metavar="FILE",
+        type=argparse.FileType('w'), default="-",
+        help="write message to file (writes binary data) ")
+    parser.add_argument(
         "pubkey", type=argparse.FileType('r'),
         help="enrollee's public key file ('-' reads from stdin)")
-    parser.add_argument(
-        "outfile", default="-", nargs="?", type=argparse.FileType('w'),
-        help="output file (default: stdout)")
     parser.add_argument(
         "password", nargs="?",
         help="device password (default: 32 octet random string)")
@@ -201,6 +213,53 @@ def make_wificonfig(args):
     record.credential['authentication'] = authentication
     record.credential['encryption'] = encryption
     record.credential['mac-address'] = args.mac
+    log.info(record.pretty())
+    
+    message = nfc.ndef.Message(record)
+    if args.outfile.name == "<stdout>":
+        args.outfile.write(str(message).encode("hex"))
+    else:
+        args.outfile.write(str(message))
+
+def make_bluetoothcfg_parser(parser):    
+    parser.set_defaults(func=make_bluetoothcfg)
+    parser.add_argument(
+        "-o", dest="outfile", metavar="FILE",
+        type=argparse.FileType('w'), default="-",
+        help="write message to file (writes binary data) ")
+    parser.add_argument(
+        "bdaddr", metavar="device-address",
+        help="Bluetooth device address")
+    parser.add_argument(
+        "--cod", metavar="BITSTR",
+        help="class of device/service")
+    parser.add_argument(
+        "--name", metavar="STRING",
+        help="user friendly device name")
+    parser.add_argument(
+        "--service", metavar="UUID", action="append", default=list(),
+        help="service class uuid ()")
+    
+def make_bluetoothcfg(args):
+    record = nfc.ndef.BluetoothConfigRecord()
+    record.device_address = args.bdaddr
+    if args.cod:
+        record.class_of_device = int(args.cod.replace(' ', ''), 2)
+    if args.name:
+        record.local_device_name = args.name
+    for index, service in enumerate(args.service):
+        for key, value in nfc.ndef.bt_record.service_class_uuid_map.items():
+            if service.lower() == value.lower():
+                args.service[index] = key
+                break
+        else:
+            try: record.service_class_uuid_list = [service,]
+            except ValueError:
+                log.error("unrecognized service class '{0}', expected a "
+                          "128-bit UUID string or one of:".format(service))
+                log.error(nfc.ndef.bt_record.service_class_uuid_map.values())
+                sys.exit(1)
+    record.service_class_uuid_list = args.service
     log.info(record.pretty())
     
     message = nfc.ndef.Message(record)
