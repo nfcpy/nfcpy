@@ -30,7 +30,7 @@ from message import Message
 from uri_record import UriRecord
 from text_record import TextRecord
 
-actions = ('default', "exec", "save", "open")
+actions = ('default', "exec", "save", "edit")
 
 class SmartPosterRecord(Record):
     """Wraps an NDEF SmartPoster record and provides access to the
@@ -158,9 +158,9 @@ class SmartPosterRecord(Record):
     @property
     def action(self):
         """The recommended action for the receiver of the smart
-        poster. Reads as 'default', 'exec', 'save', 'open' or a number
+        poster. Reads as 'default', 'exec', 'save', 'edit' or a number
         string if RFU values were decoded. Can be set to 'exec',
-        'save', 'open' or :const:`None`. The action is optional in a
+        'save', 'edit' or :const:`None`. The action is optional in a
         smart poster record."""
         try:
             return actions[self._action + 1]

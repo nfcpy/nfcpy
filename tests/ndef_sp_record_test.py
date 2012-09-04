@@ -69,8 +69,8 @@ def test_bv_attr_action():
     assert record.action == "exec"
     record.action = "save"
     assert record.action == "save"
-    record.action = "open"
-    assert record.action == "open"
+    record.action = "edit"
+    assert record.action == "edit"
 
 @raises(ValueError)
 def test_bi_attr_action_set_none():
