@@ -48,7 +48,7 @@ def format_data(data):
     return '\n'.join(s)
 
 def show(tag):
-    print tag
+    print(tag)
     if isinstance(tag, nfc.Type3Tag):
         tt3_card_map = {
             "\x00\xF0": "FeliCa Lite RC-S965",
@@ -57,30 +57,20 @@ def show(tag):
             "\x01\x20": "FeliCa Card RC-S976F [212/424kbps]",
             "\x03\x01": "FeliCa Card RC-S860 [212kbps, 4KB FEPROM]",
             }
-        print "  " + tt3_card_map.get(str(tag.pmm[0:2]), "unknown card type")
+        print("  " + tt3_card_map.get(str(tag.pmm[0:2]), "unknown card type"))
     if tag.ndef:
-        print "NDEF content"
-        print "  version   = %s" % tag.ndef.version
-        print "  writeable = %s" % ("no", "yes")[tag.ndef.writeable]
-        print "  capacity  = %d byte" % tag.ndef.capacity
-        print "  data size = %d byte" % len(tag.ndef.message)
+        print("NDEF attribute data:")
+        print("  version   = %s" % tag.ndef.version)
+        print("  writeable = %s" % ("no", "yes")[tag.ndef.writeable])
+        print("  capacity  = %d byte" % tag.ndef.capacity)
+        print("  data size = %d byte" % len(tag.ndef.message))
         if len(tag.ndef.message):
-            print format_data(tag.ndef.message)
+            print("NDEF message dump:")
+            print(format_data(tag.ndef.message))
             message = nfc.ndef.Message(tag.ndef.message)
-            print "Records:"
+            print("NDEF record list:")
             for index, record in enumerate(message):
-                if record.type == "urn:nfc:wkt:T":
-                    print "[{0}] Text Record".format(index)
-                    print nfc.ndef.TextRecord(record).pretty(indent=4)
-                elif record.type == "urn:nfc:wkt:U":
-                    print "[{0}] URI Record".format(index)
-                    print nfc.ndef.UriRecord(record).pretty(indent=4)
-                elif message.type == "urn:nfc:wkt:Sp":
-                    print "[{0}] Smartposter Record".format(index)
-                    print nfc.ndef.SmartPosterRecord(record).pretty(indent=4)
-                else:
-                    print "[{0}] Record".format(index)
-                    print record.pretty(indent=4)
+                print(record.pretty(indent=2, prefix="[{0}] ".format(index+1)))
 
 def format_tag(clf):
     while True:
@@ -89,7 +79,7 @@ def format_tag(clf):
             if isinstance(tag, nfc.Type1Tag):
                 tt1_format(tag)
             if isinstance(tag, nfc.Type2Tag):
-                print "unable to format {0}".format(str(tag))
+                print("unable to format {0}".format(str(tag)))
             if isinstance(tag, nfc.Type3Tag):
                 tt3_format(tag)
             if options.loopmode:
@@ -135,13 +125,13 @@ def tt3_format(tag):
         except Exception: return i
 
     block_count = determine_block_count(tag)
-    print "tag has %d user data blocks" % block_count
+    print("tag has %d user data blocks" % block_count)
 
     nbr = determine_block_read_count(tag, block_count)
-    print "%d block(s) can be read at once" % nbr
+    print("%d block(s) can be read at once" % nbr)
 
     nbw = determine_block_write_count(tag, block_count)
-    print "%d block(s) can be written at once" % nbw
+    print("%d block(s) can be written at once" % nbw)
 
     nmaxb_msb = (block_count - 1) / 256
     nmaxb_lsb = (block_count - 1) % 256
@@ -151,8 +141,8 @@ def tt3_format(tag):
     attr[14] = csum / 256
     attr[15] = csum % 256
 
-    print "writing attribute data block:"
-    print " ".join(["%02x" % x for x in attr])
+    print("writing attribute data block:")
+    print(" ".join(["%02x" % x for x in attr]))
 
     attr = ''.join([chr(b) for b in attr])
     tag.write(attr, [0])
@@ -161,7 +151,7 @@ def copy_tag(clf):
     tag = poll(clf)
     if tag and tag.ndef:
         data = tag.ndef.message
-        print "copied {0} byte <= {1}".format(len(data), tag)
+        print("copied {0} byte <= {1}".format(len(data), tag))
         while True:
             while tag.is_present:
                 time.sleep(1)
@@ -170,9 +160,9 @@ def copy_tag(clf):
                 return
             if tag.ndef:
                 tag.ndef.message = data
-                print "copied {0} byte => {1}".format(len(data), tag)
+                print("copied {0} byte => {1}".format(len(data), tag))
             else:
-                print "not an ndef tag: {0}".format(tag)
+                print("not an ndef tag: {0}".format(tag))
             if not options.loopmode:
                 break
 
@@ -186,7 +176,7 @@ def dump_tag(clf):
                     sys.stdout.write(data)
                     sys.stdout.flush()
                 else:
-                    print data.encode("hex")
+                    print(data.encode("hex"))
                 if not options.loopmode:
                     break
             while tag.is_present:
@@ -205,7 +195,7 @@ def load_tag(clf):
         if tag:
             if tag.ndef:
                 tag.ndef.message = data
-                print data.encode("hex")
+                print(data.encode("hex"))
                 if not options.loopmode:
                     break
             while tag.is_present:
@@ -256,7 +246,7 @@ def main():
         else:
             log.error("unknown command '{0}'".format(options.command))
     except KeyboardInterrupt:
-        print
+        print()
     finally:
         clf.close()
 
