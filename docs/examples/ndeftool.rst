@@ -1,0 +1,225 @@
+===========
+ndeftool.py
+===========
+
+::
+
+   usage: ndeftool.py [-h] [-v] [-d] {print,make,pack,split} ...
+
+   optional arguments:
+     -h, --help            show this help message and exit
+     -v                    print info messages to stderr
+     -d                    print debug messages to stderr
+
+   commands:
+     {print,make,pack,split}
+       print               parse and print messages
+       make                create ndef messages
+       pack                pack data into an ndef record
+       split               split messages into records
+
+print
+=====
+
+The **print** command decodes and prints the content of an NDEF
+message. The message data may be in raw binary or hexadecimal string
+format and is read from *message-file* or standard input if
+*message-file* is not provided.::
+
+  $ ndeftool.py print [-h|--help] [message]
+
+make
+====
+
+The **make** command allows generating specific NDEF messages. The type of message is determined by a further sub-command:
+
+* **make smartposter** - creates a smartposter record
+* **make wificfg** - creates a WiFi Configuration record
+* **make wifipwd** - creates a WiFi Password record
+* **make btcfg** - creates a Bluetooth out-of-band record
+
+make smartposter
+----------------
+
+The **make smartposter** command creates a smartposter message for the
+uniform resource identifier *reference*::
+
+  $ ndeftool.py make smartposter [-h|--help] [options] reference
+
+Options:
+
+.. program:: ndeftool.py make smartposter
+
+.. option:: -t titlespec
+
+   Add a smart poster title. The *titlespec* consists of an ISO/IANA
+   language code, a ":" as separator, and the title string. The
+   language code is optional and defaults to "en". The separator may
+   then also be omitted unless the title string itself contains a
+   colon. Multiple ``-t`` options may be present for different languages.
+
+.. option:: -i iconfile
+
+   Add a smart poster icon. The *iconfile* must be an existing and
+   readable image file for which a mime type is registered. Multiple
+   ``-i`` options may be present for different image types.
+
+.. option:: -a actionstring
+
+   Set the smart poster action. Valid action strings are "default"
+   (default action of the receiving device), "exec" (send SMS, launch
+   browser, call phone number), "save" (store SMS in INBOX, bookmark
+   hyperlink, save phone number in contacts), and "edit".
+
+make wificfg
+------------
+
+The **make wificfg** command creates a configuration token for the WiFi network with SSID *network-name*. Without further options this command creates configuration data for an open network::
+
+  $ ndeftool.py make wificfg [-h|--help] [options] network-name
+
+Options:
+
+.. program:: ndeftool.py make wificfg
+
+.. option:: --key network-key
+
+   Set the *network-key* for a secured WiFi network. The security
+   method is set to WPA2-Personal.
+
+.. option:: --mixed-mode
+
+   With this option set the security method is set to also include the
+   older WPA-Personal standard.
+
+.. option:: --mac mac-address
+
+   The MAC address of the device for which the credential was
+   generated. Without the ``--mac`` option the broadcast MAC
+   "ff:ff:ff:ff:ff:ff" is used to indicate that the credential is
+   not device specific.
+
+.. option:: --shareable
+
+   Set this option if the network configuration may be shared with
+   other devices.
+
+make wifipwd
+------------
+
+The **make wifipwd** command creates a password token for the WiFi Protected Setup registration protocol, signed with the first 160 bits of SHA-256 hash of the enrollee's public key in *public-key-file*.::
+
+  $ ndeftool.py make wificfg [-h|--help] [options] public-key-file
+
+Options:
+
+.. program:: ndeftool.py make wifipwd
+
+.. option:: -p device-password
+
+   A 16 - 32 octet long device password. If the ``-p`` option is not
+   given a 32 octet long random device password is generated.
+
+.. option:: -i password-id
+
+   An arbitrary value between 0x0010 and 0xFFFF that serves as an
+   identifier for the device password. If the ``-i`` option is not
+   given a random password identifier is generated.
+
+make btcfg
+----------
+
+The **make btcfg** command creates an out-of-band configuration record for a Bluetooth device.::
+
+  $ ndeftool.py make btcfg [-h|--help] [options] device-address
+
+Options:
+
+.. program:: ndeftool.py make btcfg
+
+.. option:: -c class-of-device
+
+   The 24 class of device/service bits as a string of '0' and '1'
+   characters, with the most significant bit left.
+
+.. option:: -n name-of-device
+
+   The user friendly name of the device.
+
+.. option:: -s service-class
+
+   A service class implemented by the device. A service class may be
+   specified by description or as a 128-bit UUID string (for example,
+   "00001108-0000-1000-8000-00805f9b34fb" would indicate
+   "Printing"). Textual descriptions are evaluated case insensitive
+   and must then match one of the following:
+
+   'Handsfree Audio Gateway', 'PnP Information', 'Message Access
+   Server', 'ESDP UPNP IP PAN', 'HDP Source', 'Generic Networking',
+   'Message Notification Server', 'Browse Group Descriptor', 'NAP',
+   'A/V Remote Control Target', 'Basic Imaging Profile', 'Generic File
+   Transfer', 'Message Access Profile', 'Generic Telephony', 'Basic
+   Printing', 'Intercom', 'HCR Print', 'Dialup Networking', 'Advanced
+   Audio Distribution', 'Printing Status', 'OBEX File Transfer',
+   'Handsfree', 'Hardcopy Cable Replacement', 'Imaging Responder',
+   'Phonebook Access - PSE', 'ESDP UPNP IP LAP', 'IrMC Sync',
+   'Cordless Telephony', 'LAN Access Using PPP', 'OBEX Object Push',
+   'Video Source', 'Audio Source', 'Human Interface Device', 'Video
+   Sink', 'Reflected UI', 'ESDP UPNP L2CAP', 'Service Discovery
+   Server', 'HDP Sink', 'Direct Printing Reference', 'Serial Port',
+   'SIM Access', 'Imaging Referenced Objects', 'UPNP Service', 'A/V
+   Remote Control Controller', 'HCR Scan', 'Headset - HS', 'UPNP IP
+   Service', 'IrMC Sync Command', 'GNSS', 'Headset', 'WAP Client',
+   'Imaging Automatic Archive', 'Phonebook Access', 'Fax', 'Generic
+   Audio', 'Audio Sink', 'GNSS Server', 'A/V Remote Control', 'Video
+   Distribution', 'WAP', 'Common ISDN Access', 'Direct Printing',
+   'GN', 'PANU', 'Phonebook Access - PCE', 'Headset - Audio Gateway
+   (AG)', 'Reference Printing', 'HDP'
+
+pack
+====
+
+The **pack** command converts a file into an NDEF record with both
+message begin and end flag set to 1. If the ``-t`` option is not given
+the record type is guessed from the file content using the mimetypes
+module. The record name is by default set to the name of the file
+being converted, unless data is read from stdin in which case the
+record name is not encoded. ::
+
+  usage: ndeftool.py pack [-h] [-o FILE] [-t STRING] [-n STRING] FILE
+
+  The pack command creates an NDEF record encapsulating the contents of FILE.
+  The record type is determined by the file type if possible, it may be
+  explicitely set with the -t option. The record name (payload identifier) is
+  set to the file name.
+
+  positional arguments:
+    FILE        record data file ('-' to read from stdin)
+
+  optional arguments:
+    -h, --help  show this help message and exit
+    -o FILE     save to file (writes binary data)
+    -t STRING   record type (default: mimetype)
+    -n STRING   record name (default: pathname)
+
+split
+=====
+
+The **split** command writes each record of an NDEF message into a
+separate file. ::
+
+  usage: ndeftool.py split [-h] [--keep-message-flags] message
+
+  The split command separates an an NDEF message into individual records. If
+  data is read from a file, records are written as binary data into individual
+  files with file names constructed from the input file base name, a hyphen
+  followed by a three digit number and the input file name extension. If data
+  is read from stdin, records are written to stdout as individual lines of
+  hexadecimal strings.
+
+  positional arguments:
+    message               message file ('-' to read from stdin)
+
+  optional arguments:
+    -h, --help            show this help message and exit
+    --keep-message-flags  do not reset message begin and end flags
