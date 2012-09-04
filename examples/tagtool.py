@@ -52,6 +52,7 @@ def show(tag):
     if isinstance(tag, nfc.Type3Tag):
         tt3_card_map = {
             "\x00\xF0": "FeliCa Lite RC-S965",
+            "\x00\xF1": "FeliCa Lite-S RC-S966",
             "\x01\xE0": "FeliCa Plug RC-S801/RC-S802",
             "\x01\x20": "FeliCa Card RC-S976F [212/424kbps]",
             "\x03\x01": "FeliCa Card RC-S860 [212kbps, 4KB FEPROM]",
@@ -66,7 +67,7 @@ def show(tag):
         if len(tag.ndef.message):
             print format_data(tag.ndef.message)
             message = nfc.ndef.Message(tag.ndef.message)
-            print "Records"
+            print "Records:"
             for index, record in enumerate(message):
                 if record.type == "urn:nfc:wkt:T":
                     print "[{0}] Text Record".format(index)
