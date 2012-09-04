@@ -48,31 +48,31 @@ def print_command(args):
         rcount = " [record {0}]".format(index+1) if len(message) > 1 else ""
         indent = 2
         if record.type == "urn:nfc:wkt:T":
-            print "Text Record" + rcount
-            print nfc.ndef.TextRecord(record).pretty(indent)
+            print("Text Record" + rcount)
+            print(nfc.ndef.TextRecord(record).pretty(indent))
         elif record.type == "urn:nfc:wkt:U":
-            print "URI Record" + rcount
-            print nfc.ndef.UriRecord(record).pretty(indent)
+            print("URI Record" + rcount)
+            print(nfc.ndef.UriRecord(record).pretty(indent))
         elif record.type == "urn:nfc:wkt:Sp":
-            print "Smartposter Record" + rcount
-            print nfc.ndef.SmartPosterRecord(record).pretty(indent)
+            print("Smartposter Record" + rcount)
+            print(nfc.ndef.SmartPosterRecord(record).pretty(indent))
         elif record.type == "application/vnd.bluetooth.ep.oob":
-            print "Bluetooth Configuration Record" + rcount
-            print nfc.ndef.BluetoothConfigRecord(record).pretty(indent)
+            print("Bluetooth Configuration Record" + rcount)
+            print(nfc.ndef.BluetoothConfigRecord(record).pretty(indent))
         elif record.type == "application/vnd.wfa.wsc":
             try:
                 record = nfc.ndef.WifiPasswordRecord(record)
-                print "WiFi Password Record" + rcount
+                print("WiFi Password Record" + rcount)
             except nfc.ndef.DecodeError:
                 record = nfc.ndef.WifiConfigRecord(record)
-                print "WiFi Configuration Record" + rcount
-            print record.pretty(indent)
+                print("WiFi Configuration Record" + rcount)
+            print(record.pretty(indent))
         elif record.type == "urn:nfc:wkt:Hs":
-            print "Handover Select Record" + rcount
-            print nfc.ndef.handover.HandoverSelectRecord(record).pretty(indent)
+            print("Handover Select Record" + rcount)
+            print(nfc.ndef.handover.HandoverSelectRecord(record).pretty(indent))
         else:
-            print "Unknown Record" + rcount
-            print record.pretty(indent)
+            print("Unknown Record" + rcount)
+            print(record.pretty(indent))
     
 def add_make_parser(parser):
     parser.description = """The make command creates ndef
@@ -99,18 +99,18 @@ def make_smartposter_parser(parser):
         type=argparse.FileType('w'), default="-",
         help="write message to file (writes binary data) ")
     parser.add_argument(
-        "-T", metavar="TITLE", dest="titles", action="append", default=list(),
+        "-t", metavar="TITLE", dest="titles", action="append", default=list(),
         help="smartposter title as '[language:]titlestring'")
     parser.add_argument(
-        "-I", metavar="ICON", dest="icons", action="append", default=list(),
+        "-i", metavar="ICON", dest="icons", action="append", default=list(),
         type=argparse.FileType('r'),
         help="smartposter icon file")
     parser.add_argument(
-        "-A", dest="action", default="default",
-        help="smartposter action 'exec', 'save' or 'open'")
+        "-a", dest="action", default="default",
+        help="smartposter action 'exec', 'save' or 'edit'")
     parser.add_argument(
         "resource",
-        help="record data file (or '-' for stdin)")
+        help="uniform resource identifier")
     
 def make_smartposter(args):
     record = nfc.ndef.SmartPosterRecord(args.resource)
@@ -127,8 +127,8 @@ def make_smartposter(args):
             log.error("file '%s' is not an image mime type" % icon.name)
             return
         record.icon[subtype] = icon.read()
-    if not args.action in ('default', 'exec', 'save', 'open'):
-        log.error("action must be one of 'default', 'exec', 'save', 'open'")
+        if not args.action in ('default', 'exec', 'save', 'edit'):
+            log.error("action not one of 'default', 'exec', 'save', 'edit'")
         return
     record.action = args.action
 
@@ -148,10 +148,10 @@ def make_wifipassword_parser(parser):
         "pubkey", type=argparse.FileType('r'),
         help="enrollee's public key file ('-' reads from stdin)")
     parser.add_argument(
-        "password", nargs="?",
+        "-p", dest="password", metavar="STRING",
         help="device password (default: 32 octet random string)")
     parser.add_argument(
-        "--password-id", metavar="INT", default=None,
+        "-i", dest="password_id", metavar="INT",
         help="password identifier (default: random number)")
     
 def make_wifipassword(args):
@@ -231,14 +231,14 @@ def make_bluetoothcfg_parser(parser):
         "bdaddr", metavar="device-address",
         help="Bluetooth device address")
     parser.add_argument(
-        "--cod", metavar="BITSTR",
+        "-c", dest="cod", metavar="BITSTR",
         help="class of device/service")
     parser.add_argument(
-        "--name", metavar="STRING",
+        "-n", dest="name", metavar="STRING",
         help="user friendly device name")
     parser.add_argument(
-        "--service", metavar="UUID", action="append", default=list(),
-        help="service class uuid ()")
+        "-s", dest="service", metavar="STRING", action="append", default=[],
+        help="a service class uuid")
     
 def make_bluetoothcfg(args):
     record = nfc.ndef.BluetoothConfigRecord()
@@ -270,23 +270,25 @@ def make_bluetoothcfg(args):
 
 def add_pack_parser(parser):
     parser.description = """The pack command creates an NDEF record
-    for FILE. The record type is determined by the file type if
-    possible, it may be explicitely set with the -t option. The record
-    name (payload identifier) is set to the file name."""
+    encapsulating the contents of FILE. The record type is determined
+    by the file type if possible, it may be explicitely set with the
+    -t option. The record name (payload identifier) is set to the file
+    name."""
 
     parser.set_defaults(func=pack)
     parser.add_argument(
-        "-t", metavar="type", dest="type", default="unknown",
-        help="record type (default: %(default)s)")
+        "-o", dest="outfile", metavar="FILE",
+        type=argparse.FileType('w'), default="-",
+        help="save to file (writes binary data)")
     parser.add_argument(
-        "-n", metavar="name", dest="name", default=None,
-        help="record name (default: file name)")
+        "-t", metavar="STRING", dest="type", default="unknown",
+        help="record type (default: mimetype)")
+    parser.add_argument(
+        "-n", metavar="STRING", dest="name", default=None,
+        help="record name (default: pathname)")
     parser.add_argument(
         "file", metavar="FILE", type=argparse.FileType('r'),
-        help="record data file ('-' for stdin)")
-    parser.add_argument(
-        "outfile", default="-", nargs="?", type=argparse.FileType('w'),
-        help="output file (default: stdout)")
+        help="record data file ('-' to read from stdin)")
     
 def pack(args):
     if args.type == 'unknown':
@@ -295,10 +297,11 @@ def pack(args):
     if args.name is None:
         args.name = args.file.name if args.file.name != "<stdin>" else ""
     record = nfc.ndef.Record(args.type, args.name, args.file.read())
+    message = nfc.ndef.Message(record)
     if args.outfile.name == "<stdout>":
-        args.outfile.write(str(record).encode("hex"))
+        args.outfile.write(str(message).encode("hex"))
     else:
-        args.outfile.write(str(record))
+        args.outfile.write(str(message))
 
 def add_split_parser(parser):
     parser.description = """The split command separates an an NDEF
@@ -312,7 +315,7 @@ def add_split_parser(parser):
     parser.set_defaults(func=split)
     parser.add_argument(
         "input", metavar="message", type=argparse.FileType('r'),
-        help="message file ('-' to read stdin)")
+        help="message file ('-' to read from stdin)")
     parser.add_argument(
         "--keep-message-flags", dest="keepmf", action="store_true",
         help="do not reset message begin and end flags")
@@ -329,7 +332,7 @@ def split(args):
         if not args.keepmf:
             record._message_begin = record._message_end = False
         if args.input.name == "<stdin>":
-            print str(record).encode("hex")
+            print(str(record).encode("hex"))
         else:
             fn = os.path.splitext(os.path.split(args.input.name)[1])
             fn = fn[0] + "-{0:03d}".format(index+1) + fn[1]
@@ -338,7 +341,7 @@ def split(args):
 
 if __name__ == '__main__':
     import argparse
-    parser = argparse.ArgumentParser(prog="ndeftool")
+    parser = argparse.ArgumentParser()
     parser.add_argument(
         "-v", dest="verbose", action="store_true",
         help="print info messages to stderr")

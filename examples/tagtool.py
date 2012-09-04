@@ -172,11 +172,10 @@ def dump_tag(clf):
         if tag:
             if tag.ndef:
                 data = tag.ndef.message
-                if options.binary:
-                    sys.stdout.write(data)
-                    sys.stdout.flush()
-                else:
-                    print(data.encode("hex"))
+                if not options.binary:
+                    data = data.encode("hex")
+                sys.stdout.write(data)
+                sys.stdout.flush()
                 if not options.loopmode:
                     break
             while tag.is_present:

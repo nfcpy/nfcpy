@@ -11,12 +11,11 @@ The *nfcpy* module implements NFC Forum specifications for wireless short-range 
 
 .. toctree::
    :hidden:
+   :glob:
 
    overview
-   topics/clf
-   topics/tag
-   topics/ndef
-   examples/helloworld
+   topics/*
+   examples/*
 
 :doc:`overview`
    Hardware and software requirements, implementation status and references.
@@ -38,6 +37,9 @@ Examples
 
 :doc:`examples/helloworld`
    A straightforward example of NDEF encoding and decoding with NFC tags.
+
+:doc:`examples/ndeftool` 
+   Generate or inspect NDEF data. More a tool than an example.
 
 Reference
 =========
