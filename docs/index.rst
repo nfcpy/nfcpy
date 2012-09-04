@@ -1,27 +1,58 @@
-.. nfcpy documentation master file, created by
-   sphinx-quickstart on Mon Sep 19 18:10:55 2011.
+===================
+nfcpy documentation
+===================
 
-Welcome to nfcpy's documentation!
-=================================
-
-The *nfcpy* module implements NFC Forum specifications for wireless short-range data exchange with NFC devices and tags. It is written in Python and aims to provide an easy-to-use, yet powerful NFC API for Python applications.
+The *nfcpy* module implements NFC Forum specifications for wireless short-range data exchange with NFC devices and tags. It is written in Python and aims to provide an easy-to-use, yet powerful API for Python applications.
 
 .. warning::
 
-   The documentation is work in progress and pretty much incomplete. Bear with me that this changes.
-
-Contents:
+   The documentation is work in progress and pretty much
+   incomplete. Bear with me that this changes.
 
 .. toctree::
-   :maxdepth: 2
+   :hidden:
+   :glob:
 
    overview
-   tutorial
-   interface
-   examples
+   topics/*
+   examples/*
 
-Indices and tables
-==================
+:doc:`overview`
+   Hardware and software requirements, implementation status and references.
+
+Tutorials
+=========
+
+:doc:`topics/clf`
+    Find and use NFC contactless readers.
+
+:doc:`topics/tag`
+    Supported tag types and how to use them.
+
+:doc:`topics/ndef`
+    How to parse or generate NDEF records and messages.
+
+Examples
+========
+
+:doc:`examples/helloworld`
+   A straightforward example of NDEF encoding and decoding with NFC tags.
+
+:doc:`examples/ndeftool` 
+   Generate or inspect NDEF data. More a tool than an example.
+
+Reference
+=========
+
+.. toctree::
+    :glob:
+    :maxdepth: 1
+
+    api/nfc
+    api/*
+
+Indices
+=======
 
 * :ref:`genindex`
 * :ref:`modindex`

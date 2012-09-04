@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2011 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2011,2012 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -29,7 +29,6 @@ sys.path.insert(1, os.path.split(sys.path[0])[0])
 
 import nfc
 import nfc.ndef
-import nfc.ndef.Text
 
 def main():
     clf = nfc.ContactlessFrontend()
@@ -40,13 +39,12 @@ def main():
         if tag and tag.ndef:
             break
 
-    text_en = nfc.ndef.Text.TextRecord( ("en", "Hello World") )
-    text_de = nfc.ndef.Text.TextRecord( ("de", "Hallo Welt") )
-    text_fr = nfc.ndef.Text.TextRecord( ("fr", "Bonjour tout le monde") )
-    
+    text_en = nfc.ndef.TextRecord(language="en", text="Hello World")
+    text_de = nfc.ndef.TextRecord(language="de", text="Hallo Welt")
+    text_fr = nfc.ndef.TextRecord(language="fr", text="Bonjour tout le monde")
     message = nfc.ndef.Message( [text_en, text_de, text_fr] )
-
-    tag.ndef.message = message.tostring()
+    
+    tag.ndef.message = str(message)
     
     print "Remove this tag"
     while tag.is_present:
@@ -61,7 +59,7 @@ def main():
     message = nfc.ndef.Message( tag.ndef.message )
     for record in message:
         if record.type == "urn:nfc:wkt:T":
-            text = nfc.ndef.Text.TextRecord( record )
+            text = nfc.ndef.TextRecord( record )
             print text.language + ": " + text.text
 
 if __name__ == '__main__':

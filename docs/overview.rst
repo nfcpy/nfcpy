@@ -51,3 +51,9 @@ NXP Semiconductors  AN130511 Mifare Std NDEF mapping    on wishlist
 References
 ----------
 * NFC Forum Specifications: http://www.nfc-forum.org/specs/
+
+.. [RTD] NFC Record Type Definition (RTD) Technical Specification,
+         Version 1.0, NFC Forum
+
+.. [NDEF] NFC Data Exchange Format (NDEF)Technical Specification,
+          Version 1.0, NFC Forum

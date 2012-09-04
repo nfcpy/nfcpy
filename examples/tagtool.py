@@ -34,7 +34,7 @@ sys.path.insert(1, os.path.split(sys.path[0])[0])
 import nfc
 import nfc.ndef
 
-def make_printable(data):
+def printable(data):
     printable = string.digits + string.letters + string.punctuation + ' '
     return ''.join([c if c in printable else '.' for c in data])
 
@@ -44,34 +44,33 @@ def format_data(data):
         s.append("  %04x: " % i)
         s[-1] += ' '.join(["%02x" % ord(c) for c in data[i:i+16]]) + ' '
         s[-1] += (8 + 16*3 - len(s[-1])) * ' '
-        s[-1] += make_printable(data[i:i+16])
+        s[-1] += printable(data[i:i+16])
     return '\n'.join(s)
 
 def show(tag):
-    print tag
+    print(tag)
     if isinstance(tag, nfc.Type3Tag):
         tt3_card_map = {
             "\x00\xF0": "FeliCa Lite RC-S965",
+            "\x00\xF1": "FeliCa Lite-S RC-S966",
             "\x01\xE0": "FeliCa Plug RC-S801/RC-S802",
             "\x01\x20": "FeliCa Card RC-S976F [212/424kbps]",
             "\x03\x01": "FeliCa Card RC-S860 [212kbps, 4KB FEPROM]",
             }
-        print "  " + tt3_card_map.get(str(tag.pmm[0:2]), "unknown card type")
+        print("  " + tt3_card_map.get(str(tag.pmm[0:2]), "unknown card type"))
     if tag.ndef:
-        print "NDEF content"
-        print "  version   = %s" % tag.ndef.version
-        print "  writeable = %s" % ("no", "yes")[tag.ndef.writeable]
-        print "  capacity  = %d byte" % tag.ndef.capacity
-        print "  data size = %d byte" % len(tag.ndef.message)
+        print("NDEF attribute data:")
+        print("  version   = %s" % tag.ndef.version)
+        print("  writeable = %s" % ("no", "yes")[tag.ndef.writeable])
+        print("  capacity  = %d byte" % tag.ndef.capacity)
+        print("  data size = %d byte" % len(tag.ndef.message))
         if len(tag.ndef.message):
-            print format_data(tag.ndef.message)
+            print("NDEF message dump:")
+            print(format_data(tag.ndef.message))
             message = nfc.ndef.Message(tag.ndef.message)
-            print "NDEF records"
+            print("NDEF record list:")
             for index, record in enumerate(message):
-                record.data = make_printable(record.data)
-                print "  [%d] type = %s" %(index, record.type)
-                print "  [%d] name = %s" %(index, record.name)
-                print "  [%d] data = %s" %(index, record.data)
+                print(record.pretty(indent=2, prefix="[{0}] ".format(index+1)))
 
 def format_tag(clf):
     while True:
@@ -80,7 +79,7 @@ def format_tag(clf):
             if isinstance(tag, nfc.Type1Tag):
                 tt1_format(tag)
             if isinstance(tag, nfc.Type2Tag):
-                print "unable to format {0}".format(str(tag))
+                print("unable to format {0}".format(str(tag)))
             if isinstance(tag, nfc.Type3Tag):
                 tt3_format(tag)
             if options.loopmode:
@@ -126,13 +125,13 @@ def tt3_format(tag):
         except Exception: return i
 
     block_count = determine_block_count(tag)
-    print "tag has %d user data blocks" % block_count
+    print("tag has %d user data blocks" % block_count)
 
     nbr = determine_block_read_count(tag, block_count)
-    print "%d block(s) can be read at once" % nbr
+    print("%d block(s) can be read at once" % nbr)
 
     nbw = determine_block_write_count(tag, block_count)
-    print "%d block(s) can be written at once" % nbw
+    print("%d block(s) can be written at once" % nbw)
 
     nmaxb_msb = (block_count - 1) / 256
     nmaxb_lsb = (block_count - 1) % 256
@@ -142,8 +141,8 @@ def tt3_format(tag):
     attr[14] = csum / 256
     attr[15] = csum % 256
 
-    print "writing attribute data block:"
-    print " ".join(["%02x" % x for x in attr])
+    print("writing attribute data block:")
+    print(" ".join(["%02x" % x for x in attr]))
 
     attr = ''.join([chr(b) for b in attr])
     tag.write(attr, [0])
@@ -152,7 +151,7 @@ def copy_tag(clf):
     tag = poll(clf)
     if tag and tag.ndef:
         data = tag.ndef.message
-        print "copied {0} byte <= {1}".format(len(data), tag)
+        print("copied {0} byte <= {1}".format(len(data), tag))
         while True:
             while tag.is_present:
                 time.sleep(1)
@@ -161,9 +160,9 @@ def copy_tag(clf):
                 return
             if tag.ndef:
                 tag.ndef.message = data
-                print "copied {0} byte => {1}".format(len(data), tag)
+                print("copied {0} byte => {1}".format(len(data), tag))
             else:
-                print "not an ndef tag: {0}".format(tag)
+                print("not an ndef tag: {0}".format(tag))
             if not options.loopmode:
                 break
 
@@ -173,11 +172,10 @@ def dump_tag(clf):
         if tag:
             if tag.ndef:
                 data = tag.ndef.message
-                if options.binary:
-                    sys.stdout.write(data)
-                    sys.stdout.flush()
-                else:
-                    print data.encode("hex")
+                if not options.binary:
+                    data = data.encode("hex")
+                sys.stdout.write(data)
+                sys.stdout.flush()
                 if not options.loopmode:
                     break
             while tag.is_present:
@@ -196,7 +194,7 @@ def load_tag(clf):
         if tag:
             if tag.ndef:
                 tag.ndef.message = data
-                print data.encode("hex")
+                print(data.encode("hex"))
                 if not options.loopmode:
                     break
             while tag.is_present:
@@ -247,7 +245,7 @@ def main():
         else:
             log.error("unknown command '{0}'".format(options.command))
     except KeyboardInterrupt:
-        print
+        print()
     finally:
         clf.close()
 
@@ -272,9 +270,9 @@ if __name__ == '__main__':
     parser.add_option("-q", default=True,
                       action="store_false", dest="verbose",
                       help="be quiet, only print errors")
-    parser.add_option("-d", default=False,
-                      action="store_true", dest="debug",
-                      help="print debug messages")
+    parser.add_option("-d", type="string", default=[],
+                      action="append", dest="debug", metavar="MODULE",
+                      help="print debug messages for MODULE")
     parser.add_option("-f", type="string",
                       action="store", dest="logfile",
                       help="write log messages to LOGFILE")
@@ -291,7 +289,6 @@ if __name__ == '__main__':
     else: options.command = "show"
 
     verbosity = logging.INFO if options.verbose else logging.ERROR
-    verbosity = logging.DEBUG if options.debug else verbosity
     logging.basicConfig(level=verbosity, format='%(message)s')
 
     if options.logfile:
@@ -300,6 +297,21 @@ if __name__ == '__main__':
         logfile.setFormatter(logging.Formatter(logfile_format))
         logfile.setLevel(logging.DEBUG)
         logging.getLogger('').addHandler(logfile)
+
+    import inspect, os, os.path
+    nfcpy_path = os.path.dirname(inspect.getfile(nfc))
+    for name in os.listdir(nfcpy_path):
+        if os.path.isdir(os.path.join(nfcpy_path, name)):
+            logging.getLogger("nfc."+name).setLevel(verbosity)
+        elif name.endswith(".py") and name != "__init__.py":
+            logging.getLogger("nfc."+name[:-3]).setLevel(verbosity)
+            
+    if options.debug:
+        logging.getLogger('').setLevel(logging.DEBUG)
+        logging.getLogger('nfc').setLevel(logging.DEBUG)
+        for module in options.debug:
+            log.info("enable debug output for module '{0}'".format(module))
+            logging.getLogger(module).setLevel(logging.DEBUG)
 
     if len(options.device) == 0:
         # search and use first

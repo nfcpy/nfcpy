@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2009-2012 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2012 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -19,23 +19,19 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-#
-# NFC Data Exchange Format (NDEF) package
-#
-"""
-Support for decoding and encoding of NFC Data Exchange Format (NDEF)
-records and messages.
-"""
 
-from nfc.ndef.error import *
-from nfc.ndef.message import Message
-from nfc.ndef.record import Record
-from nfc.ndef.text_record import TextRecord
-from nfc.ndef.uri_record import UriRecord
-from nfc.ndef.smart_poster import SmartPosterRecord
-from nfc.ndef.handover import HandoverRequestMessage
-from nfc.ndef.handover import HandoverSelectMessage
-from nfc.ndef.handover import HandoverCarrierRecord
-from nfc.ndef.bt_record import BluetoothConfigRecord
-from nfc.ndef.wifi_record import WifiConfigRecord
-from nfc.ndef.wifi_record import WifiPasswordRecord
+class FormatError(Exception):
+    """NDEF Record structure error"""
+    pass
+
+class LengthError(Exception):
+    """NDEF structure length error"""
+    pass
+
+class DecodeError(Exception):
+    """NDEF payload decode error"""
+    pass
+
+class EncodeError(Exception):
+    """NDEF payload encode error"""
+    pass

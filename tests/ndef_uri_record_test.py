@@ -1,6 +1,7 @@
+#!/usr/bin/python
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2009-2012 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2012 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -19,23 +20,20 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-#
-# NFC Data Exchange Format (NDEF) package
-#
-"""
-Support for decoding and encoding of NFC Data Exchange Format (NDEF)
-records and messages.
-"""
+import sys, os
+sys.path.insert(1, os.path.split(sys.path[0])[0])
 
-from nfc.ndef.error import *
-from nfc.ndef.message import Message
-from nfc.ndef.record import Record
-from nfc.ndef.text_record import TextRecord
-from nfc.ndef.uri_record import UriRecord
-from nfc.ndef.smart_poster import SmartPosterRecord
-from nfc.ndef.handover import HandoverRequestMessage
-from nfc.ndef.handover import HandoverSelectMessage
-from nfc.ndef.handover import HandoverCarrierRecord
-from nfc.ndef.bt_record import BluetoothConfigRecord
-from nfc.ndef.wifi_record import WifiConfigRecord
-from nfc.ndef.wifi_record import WifiPasswordRecord
+import nfc.ndef
+
+def test_init_args_none():
+    record = nfc.ndef.UriRecord()
+    assert record.uri == ''
+    
+def test_init_args_uri():
+    record = nfc.ndef.UriRecord("http://nfcpy.org")
+    assert record.uri == "http://nfcpy.org"
+    
+def test_init_kwargs_uri():
+    record = nfc.ndef.UriRecord(uri="http://nfcpy.org")
+    assert record.uri == "http://nfcpy.org"
+    
