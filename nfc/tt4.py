@@ -77,6 +77,17 @@ class NDEF(tag.NDEF):
         self._max_lc = self._cc[5] * 256 + self._cc[6]
         self._ndef_file_size = self._cc[11] * 256 + self._cc[12]
         ndef_file_id = self._cc[9:11]
+
+        log.debug("Capabilities: Ver={0}.{1}, MLe={2}, MLc={3}".format(
+                self._vmajor, self._vminor, self._max_le, self._max_lc))
+        
+        if self._max_le > 255:
+            log.warning("MLe > 255 conflicts with READ_BINARY Le encoding")
+            self._max_le = 255
+        
+        if self._max_lc > 255:
+            log.warning("MLc > 255 conflicts with READ_BINARY Le encoding")
+            self._max_lc = 255
         
         p2 = 0 if self._vmajor == 1 else 12
         try: tag.select_file(0, p2, ndef_file_id)
@@ -108,7 +119,7 @@ class NDEF(tag.NDEF):
             size = data[0] * 256 + data[1] + 2
             tail = max(0, size - len(data))
             while len(data) < size:
-                count = min(self._max_le, size - len(data))
+                count = min(self._max_lc, size - len(data))
                 data += self.tag.read_binary(len(data), count)
             print str(data).encode("hex"), len(data)
             self.data = str(data[2:size])
@@ -154,6 +165,7 @@ class Type4Tag(tag.TAG):
 
     def select_file(self, p1, p2, data, expected_response_length=None):
         """Select a file or directory with parameters defined in ISO/IEC 7816-4"""
+        log.debug("select file")
         cmd = bytearray([0x00, 0xA4, p1, p2])
         if not data is None:
             cmd += bytearray([len(data)]) + bytearray(data)
@@ -165,6 +177,7 @@ class Type4Tag(tag.TAG):
 
     def read_binary(self, offset, count):
         """Read *count* bytes from selected file starting at *offset*"""
+        log.debug("read binary from {0} to {1}".format(offset, offset+count))
         cmd = bytearray([0x00, 0xB0, offset/256, offset%256, count])
         rsp = self.dev.tt4_exchange(cmd)
         if rsp[-2:] != "\x90\x00":

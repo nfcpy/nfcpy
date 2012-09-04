@@ -244,8 +244,8 @@ class pn53x(object):
             raise CommandError(status & 0x3f)
         return status, data_in
     
-    def in_communicate_thru(self, data):
-        rsp = self.command(0x42, data)
+    def in_communicate_thru(self, data, timeout):
+        rsp = self.command(0x42, data, timeout)
         if (rsp[0] & 0x3f) != 0:
             raise CommandError(rsp[0] & 0x3f)
         return rsp[1:]
@@ -350,7 +350,7 @@ class Device(nfc.dev.Device):
             atq = rsp[1] * 256 + rsp[0]
             sak = rsp[2]
             uid = rsp[4:4+rsp[3]]
-            platform = ("T2T", "T4T", "DEP", "DEP/TT4")[(sak >> 5) & 0b11]
+            platform = ("TT2", "TT4", "DEP", "DEP/TT4")[(sak >> 5) & 0b11]
             log.debug("NFC-A configured for {0}".format(platform))
             if sak == 0b00000000:
                 return {"type": "TT2", "ATQ": atq, "SAK": sak, "UID": uid}
@@ -482,9 +482,9 @@ class Device(nfc.dev.Device):
         rsp = self.dev.in_data_exchange(0x01, cmd, timeout=100)
         return str(rsp[1])
 
-    def tt3_exchange(self, cmd, timeout=500):
+    def tt3_exchange(self, cmd, timeout):
         log.debug("tt3_exchange")
-        rsp = self.dev.in_communicate_thru(cmd)
+        rsp = self.dev.in_communicate_thru(cmd, timeout)
         return str(rsp)
 
     def tt4_exchange(self, cmd):
