@@ -198,12 +198,11 @@ class BluetoothConfigRecord(Record):
             if cod & 0x003 == 0:
                 lines.append(("device class", decode_class_of_device(cod)))
                 msc = [major_service_class[mask]
-                       for mask in major_service_class
+                       for mask in sorted(major_service_class)
                        if self.class_of_device >> 13 & mask]
                 lines.append(("major service", ", ".join(msc)))
             else:
                 lines.append(("class of device", "{0:b}".format(cod)))
-
         if self.simple_pairing_hash:
             lines.append(("pubkey hash", self.simple_pairing_hash))
         if self.simple_pairing_rand:
@@ -224,8 +223,10 @@ class BluetoothConfigRecord(Record):
 def decode_class_of_device(cod):
     mdc, sdc = cod >> 8 & 0x1f, cod >> 2 & 0x3f
     if mdc == 0:
-        mdc, sdc = "Miscellaneous", "{0:06b}".format(sdc)
+        mdc = "Miscellaneous"
+        sdc = "{0:06b}".format(sdc)
     elif mdc == 1:
+        mdc = "Computer"
         minor_device_class = (
             "Uncategorized",
             "Desktop workstation",
@@ -234,10 +235,10 @@ def decode_class_of_device(cod):
             "Handheld PC/PDA (clam shell)",
             "Palm sized PC/PDA",
             "Wearable computer (Watch sized)")
-        mdc = "Computer"
         try: sdc = minor_device_class[sdc]
         except IndexError: sdc = "{0:06b}".format(sdc)
     elif mdc == 2:
+        mdc = "Phone"
         minor_device_class = (
             "Uncategorized",
             "Cellular",
@@ -245,23 +246,23 @@ def decode_class_of_device(cod):
             "Smart phone",
             "Wired modem or voice gateway",
             "Common ISDN Access")
-        mdc = "Phone"
         try: sdc = minor_device_class[sdc]
         except IndexError: sdc = "{0:06b}".format(sdc)
     elif mdc == 3:
+        mdc = "Access Point"
         minor_device_class = (
-            "Fully available",
+            "fully available",
             "1 - 17% utilized",
             "17 - 33% utilized",
             "33 - 50% utilized",
             "50 - 67% utilized",
             "67 - 83% utilized",
             "83 - 99% utilized",
-            "No service available")
-        mdc = "Access Point"
-        try: sdc = minor_device_class[sdc]
+            "no service available")
+        try: sdc = minor_device_class[sdc >> 3]
         except IndexError: sdc = "{0:06b}".format(sdc)
     elif mdc == 4:
+        mdc = "Audio/Video"
         minor_device_class = (
             "Uncategorized",
             "Wearable Headset Device",
@@ -282,61 +283,57 @@ def decode_class_of_device(cod):
             "Video Conferencing",
             "Reserved",
             "Gaming/Toy")
-        mdc = "Audio/Video"
         try: sdc = minor_device_class[sdc]
         except IndexError: sdc = "{0:06b}".format(sdc)
     elif mdc == 5:
-        minor_device_class = (
-            "Uncategorized",
-            "Joystick",
-            "Gamepad",
-            "Remote control",
-            "Sensing device",
-            "Digitizer tablet",
-            "Card reader",
-            "Digital pen",
-            "Handheld scanner",
-            "Handheld pointer")
-        kbd_mouse_class = (
-            "",
-            "keyboard",
-            "mouse",
-            "keyboard/mouse")
         mdc = "Peripheral"
+        minor_device_class = (
+            "uncategorized",
+            "joystick",
+            "gamepad",
+            "remote control",
+            "sensing device",
+            "digitizer tablet",
+            "card reader",
+            "digital pen",
+            "handheld scanner",
+            "handheld pointer")
+        kbd_mouse = ("", " keyboard", " mouse", " keyboard/mouse")[sdc >> 4]
         try: sdc = minor_device_class[sdc & 0x0f]
         except IndexError: sdc = "{0:06b}".format(sdc)
-        sdc = sdc + kbd_mouse_class[sdc >> 4]
+        sdc = sdc + kbd_mouse
     elif mdc == 6:
-        minor_device_class = {
-            0b0001: "Display",
-            0b0010: "Camera",
-            0b0100: "Scanner",
-            0b1000: "Printer"}
         mdc = "Imaging"
+        minor_device_class = {
+            0b0001: "display",
+            0b0010: "camera",
+            0b0100: "scanner",
+            0b1000: "printer"}
         sdc = ', '.join([minor_device_class[mask]
                          for mask in minor_device_class
                          if sdc >> 2 & mask])
     elif mdc == 7:
+        mdc = "Wearable"
         minor_device_class = (
             "Wrist Watch",
             "Pager",
             "Jacket",
             "Helmet",
             "Glasses")
-        mdc = "Wearable"
         try: sdc = minor_device_class[sdc & 0x0f]
         except IndexError: sdc = "{0:06b}".format(sdc)
     elif mdc == 8:
+        mdc = "Toy"
         minor_device_class = (
             "Robot",
             "Vehicle",
             "Doll / Action Figure",
             "Controller",
             "Game")
-        mdc = "Toy"
         try: sdc = minor_device_class[sdc & 0x0f]
         except IndexError: sdc = "{0:06b}".format(sdc)
     elif mdc == 9:
+        mdc = "Health"
         minor_device_class = (
             "Undefined",
             "Blood Pressure Monitor",
@@ -354,19 +351,21 @@ def decode_class_of_device(cod):
             "Ankle Prosthesis",
             "Generic Health Manager",
             "Personal Mobility Device")
-        mdc = "Health"
         try: sdc = minor_device_class[sdc & 0x0f]
         except IndexError: sdc = "{0:06b}".format(sdc)
     elif mdc == 31:
-        mdc, sdc = "Uncategorized", "{0:06b}".format(sdc)
+        mdc = "Uncategorized"
+        sdc = "{0:06b}".format(sdc)
     else:
-        mdc, sdc = "{0:05b}".format(mdc), "{0:06b}".format(sdc)
+        mdc = "{0:05b}".format(mdc)
+        sdc = "{0:06b}".format(sdc)
+        
     return "{0} ({1})".format(mdc, sdc)
 
 major_service_class = {
     0b00000000001: "Limited Discoverable Mode",
-    0b00000000010: "reserved",
-    0b00000000100: "reserved",
+    0b00000000010: "reserved (bit 14)",
+    0b00000000100: "reserved (bit 15)",
     0b00000001000: "Positioning",
     0b00000010000: "Networking",
     0b00000100000: "Rendering",
