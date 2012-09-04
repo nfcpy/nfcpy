@@ -137,11 +137,11 @@ class BluetoothConfigRecord(Record):
 
     @property
     def service_class_uuid_list(self):
-        """List of Service Class UUIDs. Items may be 16-bit and 32-bit
-        Bluetooth UUIDs or global 128-bit UUIDs. Received as EIR types
-        0x02/0x03 (16-bit partial/complete UUIDs), 0x04/0x05 (32-bit
-        partial/complete UUIDs), 0x06/0x07 (128-bit partial/complete
-        UUIDs). Transmitted as complete UUID EIR types."""
+        """Listq of Service Class UUIDs. Set and retrieved as a list
+        of complete 128-bit UUIDs. Decoded from and encoded as EIR
+        types 0x02/0x03 (16-bit partial/complete UUIDs), 0x04/0x05
+        (32-bit partial/complete UUIDs), 0x06/0x07 (128-bit
+        partial/complete UUIDs)."""
         L = list()
         try: uuid_list = self.eir[0x03]
         except KeyError: uuid_list = self.eir.get(0x02, '')
