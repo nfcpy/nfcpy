@@ -339,6 +339,32 @@ def split(args):
             log.info("writing {fn}".format(fn=fn))
             file(fn, "w").write(str(record))
 
+def add_cat_parser(parser):
+    parser.description = "Concatenate records to a new message."
+    parser.set_defaults(func=cat)
+    parser.add_argument(
+        "-o", dest="output", metavar="FILE",
+        type=argparse.FileType('w'), default="-",
+        help="save message to file (writes binary data)")
+    parser.add_argument(
+        "records", metavar="record", type=argparse.FileType('r'), nargs="+",
+        help="record file")
+    
+def cat(args):
+    message = nfc.ndef.Message()
+    for f in args.records:
+        data = f.read()
+        try: data = data.decode("hex")
+        except TypeError: pass
+        record = nfc.ndef.Record(data=data)
+        log.info("add '{0}' record from file '{1}'"
+                 .format(record.type, f.name))
+        message.append(record)
+    if args.output.name == "<stdout>":
+        args.output.write(str(message).encode("hex"))
+    else:
+        args.output.write(str(message))
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
@@ -358,6 +384,8 @@ if __name__ == '__main__':
             'pack', help='pack data into an ndef record'))
     add_split_parser(subparsers.add_parser(
             'split', help='split messages into records'))
+    add_cat_parser(subparsers.add_parser(
+            'cat', help='concatenate records to message'))
 
     args = parser.parse_args()
 
