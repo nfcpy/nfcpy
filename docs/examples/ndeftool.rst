@@ -276,8 +276,8 @@ Options:
    bytes versus the hexadecimal string written to stdout.
 
 
-Usage examples
-==============
+Example use
+===========
 
 To build a smartposter that points to the nfcpy documentation page: ::
 
@@ -299,3 +299,6 @@ Here's a more complex example setting multi-language smartposter title, icons an
 
   $ ndeftool.py make smartposter http://nfcpy.org/docs -t "nfcpy documentation" -t "de:nfcpy Dokumentation" -i logo.gif -i logo.png -a save -o sp_nfcpy_docs.ndef
 
+It is sometimes helpful to have an NDEF message of specific length where the payload consists of monotonically increasing byte values::
+
+  $ python -c "import sys; sys.stdout.write(bytearray([x % 256 for x in xrange(1024-6)]))" | ndeftool.py pack - -o message-1k.ndef

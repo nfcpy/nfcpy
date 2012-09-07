@@ -6,7 +6,7 @@ The *nfcpy* module implements NFC Forum specifications for wireless short-range 
 
 .. note::
 
-   The documentation is work in progress still incomplete. Bear with
+   The documentation is work in progress and still incomplete. Bear with
    me that this changes.
 
 .. toctree::
