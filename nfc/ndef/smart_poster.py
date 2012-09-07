@@ -211,7 +211,10 @@ class SmartPosterRecord(Record):
         for lang in sorted(self.title):
             lines.append(("title[%s]" % lang, self.title[lang]))
         for icon in sorted(self.icons):
-            lines.append(("icon[%s]"%icon, str(len(self.icons[icon])))+" byte")
+            info = "{0} ... ({1} bytes)".format(
+                repr(self.icons[icon][:10]).strip("'"),
+                len(self.icons[icon]))
+            lines.append(("icon[%s]"%icon, info))
         lines.append(("action", self.action))
         
         indent = indent * ' '
