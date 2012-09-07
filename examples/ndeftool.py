@@ -126,10 +126,10 @@ def make_smartposter(args):
         if not mimetype == "image":
             log.error("file '%s' is not an image mime type" % icon.name)
             return
-        record.icon[subtype] = icon.read()
+        record.icons[subtype] = icon.read()
         if not args.action in ('default', 'exec', 'save', 'edit'):
             log.error("action not one of 'default', 'exec', 'save', 'edit'")
-        return
+            return
     record.action = args.action
 
     message = nfc.ndef.Message(record)
