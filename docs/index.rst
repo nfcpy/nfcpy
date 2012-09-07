@@ -4,10 +4,10 @@ nfcpy documentation
 
 The *nfcpy* module implements NFC Forum specifications for wireless short-range data exchange with NFC devices and tags. It is written in Python and aims to provide an easy-to-use, yet powerful API for Python applications.
 
-.. warning::
+.. note::
 
-   The documentation is work in progress and pretty much
-   incomplete. Bear with me that this changes.
+   The documentation is work in progress still incomplete. Bear with
+   me that this changes.
 
 .. toctree::
    :hidden:
