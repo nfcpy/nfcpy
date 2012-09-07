@@ -96,7 +96,7 @@ class NDEF(tag.NDEF):
             del blocks[0:nb_max]
             offset += length
         if len(blocks) > 0:
-            data += (16 - len(data)%16) * '\x00'
+            data += (-len(data) % 16) * '\x00'
             self.tag.write(data[offset:], blocks)
 
         self.attr[9] = 0x00; # Writing finished
@@ -173,6 +173,9 @@ class Type3Tag(tag.TAG):
         equal to the number of blocks times 16."""
 
         log.debug("write blocks " + repr(blocks))
+        if len(data) != len(blocks) * 16:
+            log.error("data length does not match block-count * 16")
+            raise ValueError("invalid data length for given number of blocks")
         cmd  = "\x08" + self.idm # ReadWithoutEncryption
         cmd += "\x01" + ("%02X%02X" % (service%256,service/256)).decode("hex")
         cmd += chr(len(blocks))
