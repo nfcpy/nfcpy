@@ -127,15 +127,16 @@ class Type3Tag(tag.TAG):
     @property
     def _is_present(self):
         """True if the tag is still within communication range."""
+        rto = int((self.rto[0] + self.rto[1]) * self.rto[2]) + 5
         try:
             cmd = "\x04" + self.idm
-            rsp = self.dev.tt3_exchange(chr(len(cmd)+1) + cmd)
+            rsp = self.dev.tt3_exchange(chr(len(cmd)+1) + cmd, rto)
             return rsp.startswith(chr(len(rsp)) + "\x05" + self.idm)
         except IOError:
             pass
         try:
             cmd = "\x00" + self.sys + "\x00\x00"
-            rsp = self.dev.tt3_exchange(chr(len(cmd)+1) + cmd)
+            rsp = self.dev.tt3_exchange(chr(len(cmd)+1) + cmd, rto)
             return rsp.startswith(chr(len(rsp)) + "\x01" + self.idm)
         except IOError:
             pass
