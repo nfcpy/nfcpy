@@ -2,24 +2,29 @@
 ndeftool.py
 ===========
 
-::
+The **ndeftool** intends to be a swiss army knife for working with
+NDEF data. ::
 
-   usage: ndeftool.py [-h] [-v] [-d] {print,make,pack,split} ...
+  $ ndeftool.py [-h|--help] [options] command
 
-   optional arguments:
-     -h, --help            show this help message and exit
-     -v                    print info messages to stderr
-     -d                    print debug messages to stderr
+.. program:: ndeftool.py
 
-   commands:
-     {print,make,pack,split}
-       print               parse and print messages
-       make                create ndef messages
-       pack                pack data into an ndef record
-       split               split messages into records
+.. option:: -v
+
+   Print informational messages to the stderr output device.
+
+.. option:: -d
+
+   Print debugging information to the stderr output device.
+
+Commands
+========
+
+.. contents::
+   :local:
 
 print
-=====
+-----
 
 The **print** command decodes and prints the content of an NDEF
 message. The message data may be in raw binary or hexadecimal string
@@ -29,7 +34,7 @@ format and is read from *message-file* or standard input if
   $ ndeftool.py print [-h|--help] [message]
 
 make
-====
+----
 
 The **make** command allows generating specific NDEF messages. The type of message is determined by a further sub-command:
 
@@ -38,8 +43,8 @@ The **make** command allows generating specific NDEF messages. The type of messa
 * **make wifipwd** - creates a WiFi Password record
 * **make btcfg** - creates a Bluetooth out-of-band record
 
-make smartposter
-----------------
+smartposter
+~~~~~~~~~~~
 
 The **make smartposter** command creates a smartposter message for the
 uniform resource identifier *reference*::
@@ -71,8 +76,14 @@ Options:
    browser, call phone number), "save" (store SMS in INBOX, bookmark
    hyperlink, save phone number in contacts), and "edit".
 
-make wificfg
-------------
+.. option:: -o output-file
+
+   Write message data to *output-file* (default is write to standard
+   output). The ``-o`` option also switches the output format to raw
+   bytes versus the hexadecimal string written to stdout.
+   
+wificfg
+~~~~~~~
 
 The **make wificfg** command creates a configuration token for the WiFi network with SSID *network-name*. Without further options this command creates configuration data for an open network::
 
@@ -104,8 +115,14 @@ Options:
    Set this option if the network configuration may be shared with
    other devices.
 
-make wifipwd
-------------
+.. option:: -o output-file
+
+   Write message data to *output-file* (default is write to standard
+   output). The ``-o`` option also switches the output format to raw
+   bytes versus the hexadecimal string written to stdout.
+   
+wifipwd
+~~~~~~~
 
 The **make wifipwd** command creates a password token for the WiFi Protected Setup registration protocol, signed with the first 160 bits of SHA-256 hash of the enrollee's public key in *public-key-file*.::
 
@@ -126,8 +143,14 @@ Options:
    identifier for the device password. If the ``-i`` option is not
    given a random password identifier is generated.
 
-make btcfg
-----------
+.. option:: -o output-file
+
+   Write message data to *output-file* (default is write to standard
+   output). The ``-o`` option also switches the output format to raw
+   bytes versus the hexadecimal string written to stdout.
+   
+btcfg
+~~~~~
 
 The **make btcfg** command creates an out-of-band configuration record for a Bluetooth device.::
 
@@ -176,8 +199,14 @@ Options:
    'GN', 'PANU', 'Phonebook Access - PCE', 'Headset - Audio Gateway
    (AG)', 'Reference Printing', 'HDP'
 
+.. option:: -o output-file
+
+   Write message data to *output-file* (default is write to standard
+   output). The ``-o`` option also switches the output format to raw
+   bytes versus the hexadecimal string written to stdout.
+   
 pack
-====
+----
 
 The **pack** command converts a file into an NDEF record with both
 message begin and end flag set to 1. If the ``-t`` option is not given
@@ -186,40 +215,87 @@ module. The record name is by default set to the name of the file
 being converted, unless data is read from stdin in which case the
 record name is not encoded. ::
 
-  usage: ndeftool.py pack [-h] [-o FILE] [-t STRING] [-n STRING] FILE
+  $ ndeftool.py pack [-h|--help] [options] FILE
 
-  The pack command creates an NDEF record encapsulating the contents of FILE.
-  The record type is determined by the file type if possible, it may be
-  explicitely set with the -t option. The record name (payload identifier) is
-  set to the file name.
+Options:
 
-  positional arguments:
-    FILE        record data file ('-' to read from stdin)
+.. program:: ndeftool.py pack
 
-  optional arguments:
-    -h, --help  show this help message and exit
-    -o FILE     save to file (writes binary data)
-    -t STRING   record type (default: mimetype)
-    -n STRING   record name (default: pathname)
+.. option:: -t record-type
 
+   Set the record type to *record-type* (the default is to guess it from
+   the file mime type).
+
+.. option:: -n record-name
+
+   Set the record identifier to *record-name* (the default is to use
+   the file path name).
+
+.. option:: -o output-file
+
+   Write message data to *output-file* (default is write to standard
+   output). The ``-o`` option also switches the output format to raw
+   bytes versus the hexadecimal string written to stdout.
+   
 split
-=====
+-----
 
-The **split** command writes each record of an NDEF message into a
-separate file. ::
+The **split** command separates an an NDEF message into individual
+records. If data is read from a file, records are written as binary
+data into individual files with file names constructed from the input
+file base name, a hyphen followed by a three digit number and the
+input file name extension. If data is read from stdin, records are
+written to stdout as individual lines of hexadecimal strings. ::
 
-  usage: ndeftool.py split [-h] [--keep-message-flags] message
+  $ ndeftool.py split [-h|--help] [options] message-file
 
-  The split command separates an an NDEF message into individual records. If
-  data is read from a file, records are written as binary data into individual
-  files with file names constructed from the input file base name, a hyphen
-  followed by a three digit number and the input file name extension. If data
-  is read from stdin, records are written to stdout as individual lines of
-  hexadecimal strings.
+Options:
 
-  positional arguments:
-    message               message file ('-' to read from stdin)
+.. program:: ndeftool.py split
 
-  optional arguments:
-    -h, --help            show this help message and exit
-    --keep-message-flags  do not reset message begin and end flags
+.. option:: --keep-message-flags
+
+   Do not reset the record's message begin and end flags but leave tem
+   as found in the input message data.
+
+cat
+---
+
+The **cat** command concatenates records into a single message. ::
+
+  $ ndeftool.py cat [-h|--help] record-file [record-file ...]
+
+Options:
+
+.. program:: ndeftool.py cat
+
+.. option:: -o output-file
+
+   Write message data to *output-file* (default is write to standard
+   output). The ``-o`` option also switches the output format to raw
+   bytes versus the hexadecimal string written to stdout.
+
+
+Usage examples
+==============
+
+To build a smartposter that points to the nfcpy documentation page: ::
+
+  $ ndeftool.py make smartposter http://nfcpy.org/docs
+  d102135370d1010f55036e666370792e6f72672f646f6373
+
+The output can be made readable with the ndeftool print command: ::
+
+  $ ndeftool.py make smartposter http://nfcpy.org/docs | ndeftool.py print
+  Smartposter Record
+    resource = http://nfcpy.org/docs
+    action   = default
+
+To get the smartposter as raw bytes specify an output file: ::
+
+  $ ndeftool.py make smartposter http://nfcpy.org/docs -o sp_nfcpy_docs.ndef
+
+Here's a more complex example setting multi-language smartposter title, icons and a non-default action: ::
+
+  $ ndeftool.py make smartposter http://nfcpy.org/docs -t "nfcpy documentation" -t "de:nfcpy Dokumentation" -i logo.gif -i logo.png -a save -o sp_nfcpy_docs.ndef
+
