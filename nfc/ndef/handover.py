@@ -49,7 +49,7 @@ def parse_carrier_structure(ac_record, records):
             s = "auxiliary data reference {0} linked to nowhere"
             log.warning(s.format(ac_record.carrier_data_reference))
             raise DecodeError("orphaned auxiliary data reference")
-        carrier.axiliary_data_records.append(aux_data_record)
+        carrier.auxiliary_data_records.append(aux_data_record)
     return carrier
 
 # ------------------------------------------------------ HandoverRequestMessage
