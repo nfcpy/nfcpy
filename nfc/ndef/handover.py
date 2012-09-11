@@ -31,6 +31,7 @@ from record import Record, RecordList
 from message import Message
 from error import *
 from bt_record import BluetoothConfigRecord
+from wifi_record import WifiConfigRecord
 
 def parse_carrier_structure(ac_record, records):
     carrier_record = records.get(ac_record.carrier_data_reference)
@@ -198,6 +199,7 @@ class HandoverRequestMessage(object):
             lines.append(("collision nonce", str(self.nonce)))
         for index, carrier in enumerate(self.carriers):
             lines.append(("carrier {0}:".format(index+1),))
+            lines.append((indent + "power state", carrier.power_state))
             if carrier.record.type == "urn:nfc:wkt:Hc":
                 carrier_type = carrier.record.carrier_type
                 carrier_data = carrier.record.carrier_data
@@ -206,14 +208,12 @@ class HandoverRequestMessage(object):
             else:
                 record = carrier.record
                 if carrier.record.type == "application/vnd.bluetooth.ep.oob":
-                    record = nfc.ndef.BluetoothConfigRecord(carrier.record)
+                    record = BluetoothConfigRecord(carrier.record)
                 elif record.type == "application/vnd.wfa.wsc":
-                    record = nfc.ndef.WifiConfigRecord(carrier.record)
+                    record = WifiConfigRecord(carrier.record)
                 lines.append((indent + "carrier type", record.type))
-                lines.append((indent + "carrier config", record.type))
                 pretty_lines = carrier.record.pretty(2).split('\n')
-                lines.append([tuple(l.split(' = ')) for l in pretty_lines])
-            lines.append((indent + "power state", carrier.power_state))
+                lines.extend([tuple(l.split(' = ')) for l in pretty_lines])
             for record in carrier.auxiliary_data_records:
                 lines.append((indent + "auxiliary data",))
                 lines.append((2*indent + "record type", record.type))
@@ -423,6 +423,43 @@ class HandoverSelectMessage(object):
         for aux in aux_data_records:
             carrier.auxiliary_data_records.append(aux)
         self.carriers.append(carrier)
+    
+    def pretty(self, indent=0):
+        """Returns a string with a formatted representation that might
+        be considered pretty-printable."""
+        indent = indent * ' '
+        lines = list()
+        version_string = "{v.major}.{v.minor}".format(v=self.version)
+        lines.append(("handover version", version_string))
+        if self.error.reason:
+            lines.append(("error reason", self.error.reason))
+            lines.append(("error value", self.error.value))
+        for index, carrier in enumerate(self.carriers):
+            lines.append(("carrier {0}:".format(index+1),))
+            lines.append((indent + "power state", carrier.power_state))
+            if carrier.record.type == "urn:nfc:wkt:Hc":
+                carrier_type = carrier.record.carrier_type
+                carrier_data = carrier.record.carrier_data
+                lines.append((indent + "carrier type", carrier_type))
+                lines.append((indent + "carrier data", repr(carrier_data)))
+            else:
+                record = carrier.record
+                if carrier.record.type == "application/vnd.bluetooth.ep.oob":
+                    record = BluetoothConfigRecord(carrier.record)
+                elif record.type == "application/vnd.wfa.wsc":
+                    record = WifiConfigRecord(carrier.record)
+                lines.append((indent + "carrier type", record.type))
+                pretty_lines = carrier.record.pretty(2).split('\n')
+                lines.extend([tuple(l.split(' = ')) for l in pretty_lines])
+            for record in carrier.auxiliary_data_records:
+                lines.append((indent + "auxiliary data",))
+                lines.append((2*indent + "record type", record.type))
+                lines.append((2*indent + "record data", repr(record.data)))
+
+        lwidth = max([len(line[0]) for line in lines])
+        lines = [(line[0].ljust(lwidth),) + line[1:] for line in lines]
+        lines = [" = ".join(line) for line in lines]
+        return ("\n").join([indent + line for line in lines])
     
 # -------------------------------------------------------- HandoverSelectRecord
 class HandoverSelectRecord(Record):

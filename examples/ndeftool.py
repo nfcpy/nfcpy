@@ -82,6 +82,10 @@ def print_command(args):
         message = nfc.ndef.HandoverRequestMessage(message)
         print("Handover Request Message")
         print(message.pretty(indent=2) + '\n')
+    elif message.type == "urn:nfc:wkt:Hs":
+        message = nfc.ndef.HandoverSelectMessage(message)
+        print("Handover Select Message")
+        print(message.pretty(indent=2) + '\n')
     
 def add_make_parser(parser):
     parser.description = """The make command creates ndef
