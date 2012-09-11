@@ -204,9 +204,11 @@ class BluetoothConfigRecord(Record):
             else:
                 lines.append(("class of device", "{0:b}".format(cod)))
         if self.simple_pairing_hash:
-            lines.append(("pubkey hash", self.simple_pairing_hash))
+            simple_pairing_hash = str(self.simple_pairing_hash)
+            lines.append(("pubkey hash", simple_pairing_hash.encode("hex")))
         if self.simple_pairing_rand:
-            lines.append(("randomizer", self.simple_pairing_rand))
+            simple_pairing_rand = str(self.simple_pairing_rand)
+            lines.append(("randomizer", simple_pairing_rand.encode("hex")))
         for service_class_uuid in self.service_class_uuid_list:
             try: service_class = service_class_uuid_map[service_class_uuid]
             except KeyError: service_class = service_class_uuid
