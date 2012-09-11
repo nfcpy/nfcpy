@@ -515,7 +515,7 @@ class HandoverCarrierRecord(Record):
     def pretty(self, indent=0, prefix=''):
         indent = indent * ' '
         lines = list()
-        lines.append(("reference", repr(self.name)))
+        lines.append(("identifier", repr(self.name)))
         lines.append(("carrier type", self.carrier_type))
         lines.append(("carrier data", repr(self.carrier_data)))        
         lwidth = max([len(line[0]) for line in lines])

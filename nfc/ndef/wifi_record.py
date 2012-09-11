@@ -234,6 +234,8 @@ class WifiConfigRecord(Record):
 
     def pretty(self, indent=0, prefix=''):
         lines = list()
+        if self.name:
+            lines.append(("identifier", repr(self.name)))
         lines.append(("version", self.version))
         for credential in self.credentials:
             shareable = str(credential.get('shareable', False))
@@ -369,6 +371,8 @@ class WifiPasswordRecord(Record):
         
     def pretty(self, indent=0, prefix=''):
         lines = list()
+        if self.name:
+            lines.append(("identifier", repr(self.name)))
         lines.append(("version", self.version))
         for password in self.passwords:
             public_key_hash = password['public-key-hash'].encode("hex")

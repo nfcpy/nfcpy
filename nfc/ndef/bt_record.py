@@ -188,8 +188,8 @@ class BluetoothConfigRecord(Record):
         
     def pretty(self, indent=0, prefix=''):
         lines = list()
-        if len(self.name) > 0:
-            lines.append(("reference", repr(self.name)))
+        if self.name:
+            lines.append(("identifier", repr(self.name)))
         lines.append(("device address", self.device_address))
         if self.local_device_name:
             lines.append(("device name", self.local_device_name))

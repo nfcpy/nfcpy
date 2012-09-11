@@ -127,6 +127,8 @@ class TextRecord(Record):
 
     def pretty(self, indent=0, prefix=''):        
         lines = list()
+        if self.name:
+            lines.append(("identifier", repr(self.name)))
         lines.append(("text", self.text))
         lines.append(("language", self.language))
         lines.append(("encoding", self.encoding))

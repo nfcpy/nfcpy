@@ -97,7 +97,9 @@ class UriRecord(Record):
 
     def pretty(self, indent=0, prefix=''):        
         lines = list()
-        lines.append(("uri", self.uri))
+        if self.name:
+            lines.append(("identifier", repr(self.name)))
+        lines.append(("resource", self.uri))
         
         indent = indent * ' '
         lwidth = max([len(line[0]) for line in lines])
