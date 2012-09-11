@@ -77,6 +77,11 @@ def print_command(args):
         else:
             print("Unknown Record" + rcount)
         print(record.pretty(indent=2))
+    print('')
+    if message.type == "urn:nfc:wkt:Hr":
+        message = nfc.ndef.HandoverRequestMessage(message)
+        print("Handover Request Message")
+        print(message.pretty(indent=2) + '\n')
     
 def add_make_parser(parser):
     parser.description = """The make command creates ndef
