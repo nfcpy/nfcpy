@@ -46,19 +46,18 @@ def print_command(args):
     message = nfc.ndef.Message(data)
     for index, record in enumerate(message):
         rcount = " [record {0}]".format(index+1) if len(message) > 1 else ""
-        indent = 2
         if record.type == "urn:nfc:wkt:T":
             print("Text Record" + rcount)
-            print(nfc.ndef.TextRecord(record).pretty(indent))
+            record = nfc.ndef.TextRecord(record)
         elif record.type == "urn:nfc:wkt:U":
             print("URI Record" + rcount)
-            print(nfc.ndef.UriRecord(record).pretty(indent))
+            record = nfc.ndef.UriRecord(record)
         elif record.type == "urn:nfc:wkt:Sp":
             print("Smartposter Record" + rcount)
-            print(nfc.ndef.SmartPosterRecord(record).pretty(indent))
+            record = nfc.ndef.SmartPosterRecord(record)
         elif record.type == "application/vnd.bluetooth.ep.oob":
             print("Bluetooth Configuration Record" + rcount)
-            print(nfc.ndef.BluetoothConfigRecord(record).pretty(indent))
+            record = nfc.ndef.BluetoothConfigRecord(record)
         elif record.type == "application/vnd.wfa.wsc":
             try:
                 record = nfc.ndef.WifiPasswordRecord(record)
@@ -66,13 +65,15 @@ def print_command(args):
             except nfc.ndef.DecodeError:
                 record = nfc.ndef.WifiConfigRecord(record)
                 print("WiFi Configuration Record" + rcount)
-            print(record.pretty(indent))
+        elif record.type == "urn:nfc:wkt:Hr":
+            print("Handover Request Record" + rcount)
+            record = nfc.ndef.handover.HandoverRequestRecord(record)
         elif record.type == "urn:nfc:wkt:Hs":
             print("Handover Select Record" + rcount)
-            print(nfc.ndef.handover.HandoverSelectRecord(record).pretty(indent))
+            record = nfc.ndef.handover.HandoverSelectRecord(record)
         else:
             print("Unknown Record" + rcount)
-            print(record.pretty(indent))
+        print(record.pretty(indent=2))
     
 def add_make_parser(parser):
     parser.description = """The make command creates ndef

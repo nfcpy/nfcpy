@@ -234,6 +234,26 @@ class HandoverRequestRecord(Record):
                     s = "skip unknown local record {0}"
                     log.debug(s.format(record.type))
 
+    def pretty(self, indent=0, prefix=''):
+        indent = indent * ' '
+        lines = list()
+        if self.nonce:
+            lines.append(("collision nonce", str(self.nonce)))
+        for index, carrier in enumerate(self.carriers):
+            lines.append(("carrier {0}:".format(index+1),))
+            reference = carrier.carrier_data_reference
+            lines.append((indent + "reference", repr(reference)))
+            lines.append((indent + "power state", carrier.carrier_power_state))
+            if len(carrier.auxiliary_data_reference_list) > 0:
+                lines.append((indent + "auxiliary data",))
+                for aux_data_ref in carrier.auxiliary_data_reference_list:
+                    lines.append((2*indent + "reference", repr(aux_data_ref)))
+        
+        lwidth = max([len(line[0]) for line in lines])
+        lines = [(line[0].ljust(lwidth),) + line[1:] for line in lines]
+        lines = [" = ".join(line) for line in lines]
+        return ("\n").join([indent + prefix + line for line in lines])
+    
 # ------------------------------------------------------- HandoverSelectMessage
 class HandoverSelectMessage(object):
     """The handover select message is used in the the NFC Connection
@@ -416,7 +436,7 @@ class HandoverSelectRecord(Record):
             lines.append((indent + "reference", repr(reference)))
             lines.append((indent + "power state", carrier.carrier_power_state))
             if len(carrier.auxiliary_data_reference_list) > 0:
-                lines.append((indent + "auxiliary data references:",))
+                lines.append((indent + "auxiliary data",))
                 for aux_data_ref in carrier.auxiliary_data_reference_list:
                     lines.append((2*indent + "reference", repr(aux_data_ref)))
         
