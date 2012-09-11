@@ -21,7 +21,7 @@
 # -----------------------------------------------------------------------------
 
 import logging
-log = logging.getLogger("dev")
+log = logging.getLogger(__name__)
 
 import os
 import re
@@ -64,8 +64,8 @@ def connect(path=None):
                 for dev in bus.devices:
                     if dev.idVendor == vendor:
                         if product is None or dev.idProduct == product:
-                            print "trying usb:{0:04x}:{1:04x}"\
-                                .format(dev.idVendor, dev.idProduct)
+                            log.debug("trying usb:{0:04x}:{1:04x}"
+                                      .format(dev.idVendor, dev.idProduct))
                             if (vendor, dev.idProduct) in usb_device_map:
                                 product = dev.idProduct
                                 module = usb_device_map[(vendor, product)]
@@ -85,7 +85,8 @@ def connect(path=None):
                 if busnum is None or int(bus.dirname) == busnum:
                     for dev in bus.devices:
                         if devnum is None or int(dev.filename) == devnum:
-                            print "trying usb:"+bus.dirname+":"+dev.filename
+                            log.debug("trying usb:{0}:{1}"
+                                      .format(bus.dirname, dev.filename))
                             vendor, product = dev.idVendor, dev.idProduct
                             if (vendor, product) in usb_device_map:
                                 module = usb_device_map[(vendor, product)]
@@ -101,7 +102,8 @@ def connect(path=None):
             log.debug("path match for 'usb' (or no path given)")
             for bus in usb.busses():
                 for dev in bus.devices:
-                    log.debug("trying usb:"+bus.dirname+":"+dev.filename)
+                    log.debug("trying usb:{0}:{1}"
+                              .format(bus.dirname, dev.filename))
                     vendor, product = dev.idVendor, dev.idProduct
                     if (vendor, product) in usb_device_map:
                         module = usb_device_map[(vendor, product)]
@@ -122,7 +124,7 @@ def connect(path=None):
             if line is None or line == "usb":
                 if port is not None:
                     devname = "/dev/ttyUSB{0}".format(port)
-                    log.info("trying usb tty reader {0}".format(devname))
+                    log.debug("trying usb tty reader {0}".format(devname))
                     for module in ("arygon_tty", "pn53x_tty"):
                         driver = import_driver(module)
                         device = driver.init(devname)
@@ -132,7 +134,7 @@ def connect(path=None):
                 else:
                     log.info("searching for a usb tty reader")
                     for devname in glob.glob("/dev/ttyUSB[0-9]"):
-                        log.info("trying usb tty reader {0}".format(devname))
+                        log.debug("trying usb tty reader {0}".format(devname))
                         for module in ("arygon_tty", "pn53x_tty"):
                             driver = import_driver(module)
                             device = driver.init(devname)
@@ -198,12 +200,3 @@ class Device(object):
     def __str__(self):
         return "{dev.vendor} {dev.product} at {dev.path}".format(dev=self)
         
-if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG)
-#    print connect("usb:046d:c52f")
-#    print connect("usb:054c:02e1")
-#    print connect("usb:054c:")
-#    print connect("usb:")
-#    print connect("usb:3:2")
-#    print connect("usb")
-    print connect()
