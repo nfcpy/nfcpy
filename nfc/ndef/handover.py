@@ -237,6 +237,8 @@ class HandoverRequestRecord(Record):
     def pretty(self, indent=0, prefix=''):
         indent = indent * ' '
         lines = list()
+        version_string = "{v.major}.{v.minor}".format(v=self.version)
+        lines.append(("handover version", version_string))
         if self.nonce:
             lines.append(("collision nonce", str(self.nonce)))
         for index, carrier in enumerate(self.carriers):
@@ -427,6 +429,8 @@ class HandoverSelectRecord(Record):
     def pretty(self, indent=0, prefix=''):
         indent = indent * ' '
         lines = list()
+        version_string = "{v.major}.{v.minor}".format(v=self.version)
+        lines.append(("handover version", version_string))
         if self.error.reason:
             lines.append(("error reason", self.error.reason))
             lines.append(("error value", self.error.value))
