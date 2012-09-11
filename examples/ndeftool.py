@@ -71,6 +71,9 @@ def print_command(args):
         elif record.type == "urn:nfc:wkt:Hs":
             print("Handover Select Record" + rcount)
             record = nfc.ndef.handover.HandoverSelectRecord(record)
+        elif record.type == "urn:nfc:wkt:Hc":
+            print("Handover Carrier Record" + rcount)
+            record = nfc.ndef.handover.HandoverCarrierRecord(record)
         else:
             print("Unknown Record" + rcount)
         print(record.pretty(indent=2))

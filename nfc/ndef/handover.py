@@ -508,6 +508,16 @@ class HandoverCarrierRecord(Record):
     def carrier_data(self, value):
         self._carrier_data = value
     
+    def pretty(self, indent=0, prefix=''):
+        indent = indent * ' '
+        lines = list()
+        lines.append(("reference", repr(self.name)))
+        lines.append(("carrier type", self.carrier_type))
+        lines.append(("carrier data", repr(self.carrier_data)))        
+        lwidth = max([len(line[0]) for line in lines])
+        lines = [line[0].ljust(lwidth) + " = " + line[1] for line in lines]
+        return ("\n").join([indent + prefix + line for line in lines])
+    
 #----------------------------------------------------------- AlternativeCarrier
 class AlternativeCarrier(object):
     def __init__(self, payload=None):
