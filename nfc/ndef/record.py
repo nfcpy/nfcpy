@@ -260,9 +260,9 @@ class Record(object):
         indent = indent * ' '
         str = lambda data: ''.join(31<i<127 and chr(i) or '.' for i in data)
         return ("\n").join([
-                indent + prefix + "type = %s" %(str(bytearray(self.type))),
-                indent + prefix + "name = %s" %(str(bytearray(self.name))),
-                indent + prefix + "data = %s" %(str(bytearray(self.data))),
+                indent + prefix + "type = {0!r}".format(self.type),
+                indent + prefix + "name = {0!r}".format(self.name),
+                indent + prefix + "data = {0!r}".format(self.data),
                 ])
         
     # **************
