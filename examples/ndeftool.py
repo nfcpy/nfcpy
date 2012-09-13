@@ -46,46 +46,52 @@ def print_command(args):
     message = nfc.ndef.Message(data)
     for index, record in enumerate(message):
         rcount = " [record {0}]".format(index+1) if len(message) > 1 else ""
-        if record.type == "urn:nfc:wkt:T":
-            print("Text Record" + rcount)
-            record = nfc.ndef.TextRecord(record)
-        elif record.type == "urn:nfc:wkt:U":
-            print("URI Record" + rcount)
-            record = nfc.ndef.UriRecord(record)
-        elif record.type == "urn:nfc:wkt:Sp":
-            print("Smartposter Record" + rcount)
-            record = nfc.ndef.SmartPosterRecord(record)
-        elif record.type == "application/vnd.bluetooth.ep.oob":
-            print("Bluetooth Configuration Record" + rcount)
-            record = nfc.ndef.BluetoothConfigRecord(record)
-        elif record.type == "application/vnd.wfa.wsc":
-            try:
-                record = nfc.ndef.WifiPasswordRecord(record)
-                print("WiFi Password Record" + rcount)
-            except nfc.ndef.DecodeError:
-                record = nfc.ndef.WifiConfigRecord(record)
-                print("WiFi Configuration Record" + rcount)
-        elif record.type == "urn:nfc:wkt:Hr":
-            print("Handover Request Record" + rcount)
-            record = nfc.ndef.handover.HandoverRequestRecord(record)
-        elif record.type == "urn:nfc:wkt:Hs":
-            print("Handover Select Record" + rcount)
-            record = nfc.ndef.handover.HandoverSelectRecord(record)
-        elif record.type == "urn:nfc:wkt:Hc":
-            print("Handover Carrier Record" + rcount)
-            record = nfc.ndef.handover.HandoverCarrierRecord(record)
-        else:
-            print("Unknown Record" + rcount)
+        try:
+            if record.type == "urn:nfc:wkt:T":
+                print("Text Record" + rcount)
+                record = nfc.ndef.TextRecord(record)
+            elif record.type == "urn:nfc:wkt:U":
+                print("URI Record" + rcount)
+                record = nfc.ndef.UriRecord(record)
+            elif record.type == "urn:nfc:wkt:Sp":
+                print("Smartposter Record" + rcount)
+                record = nfc.ndef.SmartPosterRecord(record)
+            elif record.type == "application/vnd.bluetooth.ep.oob":
+                print("Bluetooth Configuration Record" + rcount)
+                record = nfc.ndef.BluetoothConfigRecord(record)
+            elif record.type == "application/vnd.wfa.wsc":
+                try:
+                    record = nfc.ndef.WifiPasswordRecord(record)
+                    print("WiFi Password Record" + rcount)
+                except nfc.ndef.DecodeError:
+                    record = nfc.ndef.WifiConfigRecord(record)
+                    print("WiFi Configuration Record" + rcount)
+            elif record.type == "urn:nfc:wkt:Hr":
+                print("Handover Request Record" + rcount)
+                record = nfc.ndef.handover.HandoverRequestRecord(record)
+            elif record.type == "urn:nfc:wkt:Hs":
+                print("Handover Select Record" + rcount)
+                record = nfc.ndef.handover.HandoverSelectRecord(record)
+            elif record.type == "urn:nfc:wkt:Hc":
+                print("Handover Carrier Record" + rcount)
+                record = nfc.ndef.handover.HandoverCarrierRecord(record)
+            else:
+                print("Unknown Record Type" + rcount)
+        except nfc.ndef.FormatError as e:
+            log.error(e)
         print(record.pretty(indent=2))
-    print('')
-    if message.type == "urn:nfc:wkt:Hr":
-        message = nfc.ndef.HandoverRequestMessage(message)
-        print("Handover Request Message")
-        print(message.pretty(indent=2) + '\n')
-    elif message.type == "urn:nfc:wkt:Hs":
-        message = nfc.ndef.HandoverSelectMessage(message)
-        print("Handover Select Message")
-        print(message.pretty(indent=2) + '\n')
+
+    try:
+        if message.type == "urn:nfc:wkt:Hr":
+            message = nfc.ndef.HandoverRequestMessage(message)
+            print("\nHandover Request Message")
+            print(message.pretty(indent=2) + '\n')
+        elif message.type == "urn:nfc:wkt:Hs":
+            message = nfc.ndef.HandoverSelectMessage(message)
+            print("\nHandover Select Message")
+            print(message.pretty(indent=2) + '\n')
+    except nfc.ndef.FormatError as e:
+        log.error(e)
     
 def add_make_parser(parser):
     parser.description = """The make command creates ndef
@@ -404,7 +410,7 @@ if __name__ == '__main__':
 
     verbosity = logging.INFO if args.verbose else logging.ERROR
     verbosity = logging.DEBUG if args.debug else verbosity
-    logging.basicConfig(level=verbosity, format='%(message)s')
+    logging.basicConfig(level=verbosity, format='%(levelname)s: %(message)s')
 
     log.debug(args)
     args.func(args)
