@@ -213,7 +213,8 @@ class HandoverRequestMessage(object):
                     record = WifiConfigRecord(carrier.record)
                 lines.append((indent + "carrier type", record.type))
                 pretty_lines = carrier.record.pretty(2).split('\n')
-                lines.extend([tuple(l.split(' = ')) for l in pretty_lines])
+                lines.extend([tuple(l.split(' = ')) for l in pretty_lines
+                              if not l.strip().startswith("identifier")])
             for record in carrier.auxiliary_data_records:
                 lines.append((indent + "auxiliary data",))
                 lines.append((2*indent + "record type", record.type))
@@ -260,8 +261,8 @@ class HandoverRequestRecord(Record):
                 if record.type == "urn:nfc:wkt:cr":
                     self.nonce = struct.unpack(">H", record.data)[0]
                 else:
-                    s = "cr record is required for version {0:s}"
-                    raise FormatError(s.format(self.version))
+                    s = "cr record is required for version {v.major}.{v.minor}"
+                    raise FormatError(s.format(v=self.version))
             while f.tell() < len(string):
                 record = Record(data=f)
                 if record.type == 'urn:nfc:wkt:ac':
@@ -450,7 +451,8 @@ class HandoverSelectMessage(object):
                     record = WifiConfigRecord(carrier.record)
                 lines.append((indent + "carrier type", record.type))
                 pretty_lines = carrier.record.pretty(2).split('\n')
-                lines.extend([tuple(l.split(' = ')) for l in pretty_lines])
+                lines.extend([tuple(l.split(' = ')) for l in pretty_lines
+                              if not l.strip().startswith("identifier")])
             for record in carrier.auxiliary_data_records:
                 lines.append((indent + "auxiliary data",))
                 lines.append((2*indent + "record type", record.type))
