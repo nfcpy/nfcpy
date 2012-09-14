@@ -128,7 +128,7 @@ class HandoverServer(nfc.handover.HandoverServer):
         super(HandoverServer, self).__init__()
         self.select_carrier = select_carrier_func
 
-    def process_request__(self, request):
+    def process_request(self, request):
         if request.type == 'urn:nfc:wkt:Hr':
             hr = nfc.ndef.HandoverRequestMessage(request)
             return self.select_carrier(hr)
@@ -192,12 +192,12 @@ class HandoverTestServer(TestBase):
         self.select_carrier_lock = threading.Lock()
         
     def register_llcp_services(self):
-        #self.handover_service = HandoverService()
+        self.handover_service = HandoverServer(self.select_carrier)
         if self.options.quirks:
             self.snep_service = DefaultSnepServer(self.select_carrier)
         
     def startup_llcp_services(self):
-        #self.handover_service.start()
+        self.handover_service.start()
         if self.options.quirks:
             self.snep_service.start()
         
