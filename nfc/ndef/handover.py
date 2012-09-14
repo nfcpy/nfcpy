@@ -206,13 +206,14 @@ class HandoverRequestMessage(object):
                 lines.append((indent + "carrier type", carrier_type))
                 lines.append((indent + "carrier data", repr(carrier_data)))
             else:
-                record = carrier.record
-                if carrier.record.type == "application/vnd.bluetooth.ep.oob":
-                    record = BluetoothConfigRecord(carrier.record)
-                elif record.type == "application/vnd.wfa.wsc":
-                    record = WifiConfigRecord(carrier.record)
-                lines.append((indent + "carrier type", record.type))
-                pretty_lines = carrier.record.pretty(2).split('\n')
+                if carrier.type == "application/vnd.bluetooth.ep.oob":
+                    carrier_record = BluetoothConfigRecord(carrier.record)
+                elif carrier.type == "application/vnd.wfa.wsc":
+                    carrier_record = WifiConfigRecord(carrier.record)
+                else:
+                    carrier_record = carrier.record
+                lines.append((indent + "carrier type", carrier.type))
+                pretty_lines = carrier_record.pretty(2).split('\n')
                 lines.extend([tuple(l.split(' = ')) for l in pretty_lines
                               if not l.strip().startswith("identifier")])
             for record in carrier.auxiliary_data_records:
@@ -444,13 +445,14 @@ class HandoverSelectMessage(object):
                 lines.append((indent + "carrier type", carrier_type))
                 lines.append((indent + "carrier data", repr(carrier_data)))
             else:
-                record = carrier.record
-                if carrier.record.type == "application/vnd.bluetooth.ep.oob":
-                    record = BluetoothConfigRecord(carrier.record)
-                elif record.type == "application/vnd.wfa.wsc":
-                    record = WifiConfigRecord(carrier.record)
-                lines.append((indent + "carrier type", record.type))
-                pretty_lines = carrier.record.pretty(2).split('\n')
+                if carrier.type == "application/vnd.bluetooth.ep.oob":
+                    carrier_record = BluetoothConfigRecord(carrier.record)
+                elif carrier.type == "application/vnd.wfa.wsc":
+                    carrier_record = WifiConfigRecord(carrier.record)
+                else:
+                    carrier_record = carrier.record
+                lines.append((indent + "carrier type", carrier.type))
+                pretty_lines = carrier_record.pretty(2).split('\n')
                 lines.extend([tuple(l.split(' = ')) for l in pretty_lines
                               if not l.strip().startswith("identifier")])
             for record in carrier.auxiliary_data_records:
@@ -730,12 +732,20 @@ class Carrier(object):
         self._auxiliary_data_records = list()
 
     @property
+    def type(self):
+        """The alternative carrier type name, equivalent to
+        :attr:`Carrier.record.type` or
+        :attr:`Carrier.record.carrier_type` if the carrier is
+        specified as a :class:`HandoverCarrierRecord`."""
+        return self.record.type if self.record.type != "urn:nfc:wkt:Hc" \
+            else self.record.carrier_type
+        
+    @property
     def record(self):
         """A carrier configuration record. Recognized and further
         interpreted records are: :class:`HandoverCarrierRecord`,
         :class:`BluetoothConfigRecord`, :class:`WifiConfigRecord`,
-        :class:`WifiPasswordRecord`.
-        """
+        :class:`WifiPasswordRecord`."""
         return self._record
         
     @property
