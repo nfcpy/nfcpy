@@ -125,7 +125,7 @@ class TextRecord(Record):
             raise ValueError('value not in ("UTF-8", "UTF-16")')
         self._utfx = value
 
-    def pretty(self, indent=0, prefix=''):        
+    def pretty(self, indent=0, format=''):
         lines = list()
         if self.name:
             lines.append(("identifier", repr(self.name)))
@@ -136,4 +136,7 @@ class TextRecord(Record):
         indent = indent * ' '
         lwidth = max([len(line[0]) for line in lines])
         lines = [line[0].ljust(lwidth) + " = " + line[1] for line in lines]
-        return ("\n").join([indent + prefix + line for line in lines])
+        if format=="list":
+            return [indent + line for line in lines]
+        else:
+            return ("\n").join([indent + line for line in lines])

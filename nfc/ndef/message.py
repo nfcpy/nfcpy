@@ -155,6 +155,24 @@ class Message(object):
         records. This attribute is read-only."""
         return self._records[0].name if len(self._records) else None
 
+    def pretty(self, indent=0, format=""):
+        """Returns a message representation that might be considered
+        pretty-printable. The optional *indent* argument determines
+        the number of white spaces inserted before each line."""
+        lines = list()
+        for index, record in enumerate(self._records):
+            lines.append((["record {0}".format(index)],))
+            lines += record.pretty(indent, format="list")
+        
+        indent = indent * ' '
+        lwidth = max([len(line[0]) for line in lines])
+        lines = [(line[0].ljust(lwidth),) + line[1:] for line in lines]
+        lines = [" = ".join(line) for line in lines]
+        if format=="list":
+            return [indent + line for line in lines]
+        else:
+            return ("\n").join([indent + line for line in lines])
+        
     # **************
     # * deprecated *
     # **************

@@ -186,7 +186,7 @@ class BluetoothConfigRecord(Record):
     def class_of_device(self, value):        
         self.eir[0x0D] = struct.pack('<L', value)[0:3]
         
-    def pretty(self, indent=0, prefix=''):
+    def pretty(self, indent=0, format=''):
         lines = list()
         if self.name:
             lines.append(("identifier", repr(self.name)))
@@ -220,7 +220,10 @@ class BluetoothConfigRecord(Record):
         indent = indent * ' '
         lwidth = max([len(line[0]) for line in lines])
         lines = [line[0].ljust(lwidth) + " = " + line[1] for line in lines]
-        return ("\n").join([indent + prefix + line for line in lines])
+        if format=="list":
+            return [indent + line for line in lines]
+        else:
+            return ("\n").join([indent + line for line in lines])
 
 def decode_class_of_device(cod):
     mdc, sdc = cod >> 8 & 0x1f, cod >> 2 & 0x3f

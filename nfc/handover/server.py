@@ -91,14 +91,12 @@ class HandoverServer(Thread):
 
     def _process_request(self, request):
         log.debug("rcvd handover request {0}".format(request.type))
-        if request.type == "urn:nfc:wkt:Hr":
-            for line in request.pretty().split('\n'):
-                log.debug(line)
+        for line in request.pretty(indent=2, format="list"):
+            log.debug(line)
         response = self.process_request(request)
         log.debug("send handover response {0}".format(response.type))
-        if request.type == "urn:nfc:wkt:Hs":
-            for line in request.pretty().split('\n'):
-                log.debug(line)
+        for line in response.pretty(indent=2, format="list"):
+            log.debug(line)
         return response
     
     def process_request(self, request):
@@ -108,5 +106,5 @@ class HandoverServer(Thread):
         :class:`nfc.ndef.HandoverSelectMessage` object with empty
         carrier list."""
         log.warning("default process_request method should be overwritten")
-        return nfc.ndef.HandoverSelectMessage("1.2")
+        return nfc.ndef.HandoverSelectMessage(version="1.2")
 

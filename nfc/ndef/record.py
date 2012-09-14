@@ -251,19 +251,21 @@ class Record(object):
             self.name.encode('string_escape'),
             self.data.encode('string_escape'))
 
-    def pretty(self, indent=0, prefix=''):
+    def pretty(self, indent=0, format=""):
         """Returns a string with a formatted representation that might
         be considered pretty-printable. The optional *indent* argument
         determines the number of white spaces inserted before each
-        line which will be followed by the content of the optional
-        *prefix* string."""
+        line. The optional argument format determines how pretty()
+        returns it's output, a list of lines is returned if format it
+        set to "list", otherwise it's single string with all lines
+        concateneted with newline characters."""
         indent = indent * ' '
-        str = lambda data: ''.join(31<i<127 and chr(i) or '.' for i in data)
-        return ("\n").join([
-                indent + prefix + "type = {0!r}".format(self.type),
-                indent + prefix + "name = {0!r}".format(self.name),
-                indent + prefix + "data = {0!r}".format(self.data),
-                ])
+        lines = [
+            indent + prefix + "type = {0!r}".format(self.type),
+            indent + prefix + "name = {0!r}".format(self.name),
+            indent + prefix + "data = {0!r}".format(self.data),
+            ]
+        return lines if format == "list" else ("\n").join(lines)
         
     # **************
     # * deprecated *
