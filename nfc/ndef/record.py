@@ -261,9 +261,9 @@ class Record(object):
         concateneted with newline characters."""
         indent = indent * ' '
         lines = [
-            indent + prefix + "type = {0!r}".format(self.type),
-            indent + prefix + "name = {0!r}".format(self.name),
-            indent + prefix + "data = {0!r}".format(self.data),
+            indent + "type = {0!r}".format(self.type),
+            indent + "name = {0!r}".format(self.name),
+            indent + "data = {0!r}".format(self.data),
             ]
         return lines if format == "list" else ("\n").join(lines)
         
