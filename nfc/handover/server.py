@@ -91,11 +91,11 @@ class HandoverServer(Thread):
 
     def _process_request(self, request):
         log.debug("rcvd handover request {0}".format(request.type))
-        for line in request.pretty(indent=2, format="list"):
+        for line in request.pretty().split('\n'):
             log.debug(line)
         response = self.process_request(request)
         log.debug("send handover response {0}".format(response.type))
-        for line in response.pretty(indent=2, format="list"):
+        for line in response.pretty().split('\n'):
             log.debug(line)
         return response
     
