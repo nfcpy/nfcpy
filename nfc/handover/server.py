@@ -100,9 +100,15 @@ class HandoverServer(Thread):
         return response
     
     def process_request(self, request):
-        """Process a handover request message. This method should be
-        overwritten by a subclass of :class:`HandoverServer` to
-        customize it's behavior. The default implementation returns a
+        """Process a handover request message. The *request* argument
+        is a valid NDEF message and usually, but not necessarily, of
+        type :class:`nfc.ndef.HandoverRequestMessage`. The return
+        value must be a valid NDEF message which is sent back to the
+        client.
+
+        This method should be overwritten by a subclass of
+        :class:`HandoverServer` to customize it's behavior. The
+        default implementation returns a
         :class:`nfc.ndef.HandoverSelectMessage` object with empty
         carrier list."""
         log.warning("default process_request method should be overwritten")
