@@ -45,11 +45,12 @@ Reference
 =========
 
 .. toctree::
-    :glob:
-    :maxdepth: 1
 
     api/nfc
-    api/*
+    api/ndef
+    api/llcp
+    api/snep
+    api/handover
 
 Indices
 =======
