@@ -232,7 +232,7 @@ class WifiConfigRecord(Record):
         f.seek(0, 0)
         return f.read()
 
-    def pretty(self, indent=0, format=''):
+    def pretty(self, indent=0):
         lines = list()
         if self.name:
             lines.append(("identifier", repr(self.name)))
@@ -251,10 +251,7 @@ class WifiConfigRecord(Record):
         indent = indent * ' '
         lwidth = max([len(line[0]) for line in lines])
         lines = [line[0].ljust(lwidth) + " = " + line[1] for line in lines]
-        if format=="list":
-            return [indent + line for line in lines]
-        else:
-            return ("\n").join([indent + line for line in lines])
+        return ("\n").join([indent + line for line in lines])
     
 class WifiPasswordRecord(Record):
     def __init__(self, record=None):
@@ -372,7 +369,7 @@ class WifiPasswordRecord(Record):
         f.seek(0, 0)
         return f.read()
         
-    def pretty(self, indent=0, format=''):
+    def pretty(self, indent=0):
         lines = list()
         if self.name:
             lines.append(("identifier", repr(self.name)))
@@ -388,10 +385,7 @@ class WifiPasswordRecord(Record):
         indent = indent * ' '
         lwidth = max([len(line[0]) for line in lines])
         lines = [line[0].ljust(lwidth) + " = " + line[1] for line in lines]
-        if format=="list":
-            return [indent + line for line in lines]
-        else:
-            return ("\n").join([indent + line for line in lines])
+        return ("\n").join([indent + line for line in lines])
     
 # -------------------------------------- helper functions for attribute parsing
 def parse_attribute(f):

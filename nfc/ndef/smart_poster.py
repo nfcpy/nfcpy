@@ -201,7 +201,7 @@ class SmartPosterRecord(Record):
     def resource_type(self, value):
         self._res_type = value
 
-    def pretty(self, indent=0, format=''):
+    def pretty(self, indent=0):
         lines = list()
         lines.append(("resource", self.uri))
         if self.name:
@@ -222,7 +222,4 @@ class SmartPosterRecord(Record):
         indent = indent * ' '
         lwidth = max([len(line[0]) for line in lines])
         lines = [line[0].ljust(lwidth) + " = " + line[1] for line in lines]
-        if format=="list":
-            return [indent + line for line in lines]
-        else:
-            return ("\n").join([indent + line for line in lines])
+        return ("\n").join([indent + line for line in lines])

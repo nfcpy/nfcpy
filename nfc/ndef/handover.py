@@ -188,7 +188,7 @@ class HandoverRequestMessage(object):
                 carrier.auxiliary_data_records.append(aux)
         self.carriers.append(carrier)
 
-    def pretty(self, indent=0, format=''):
+    def pretty(self, indent=0):
         """Returns a string with a formatted representation that might
         be considered pretty-printable."""
         indent = indent * ' '
@@ -224,10 +224,7 @@ class HandoverRequestMessage(object):
         lwidth = max([len(line[0]) for line in lines])
         lines = [(line[0].ljust(lwidth),) + line[1:] for line in lines]
         lines = [" = ".join(line) for line in lines]
-        if format=="list":
-            return [indent + line for line in lines]
-        else:
-            return ("\n").join([indent + line for line in lines])
+        return ("\n").join([indent + line for line in lines])
     
 # ------------------------------------------------------- HandoverRequestRecord
 class HandoverRequestRecord(Record):
@@ -276,7 +273,7 @@ class HandoverRequestRecord(Record):
                     s = "skip unknown local record {0}"
                     log.debug(s.format(record.type))
 
-    def pretty(self, indent=0, format=''):
+    def pretty(self, indent=0):
         indent = indent * ' '
         lines = list()
         version_string = "{v.major}.{v.minor}".format(v=self.version)
@@ -296,10 +293,7 @@ class HandoverRequestRecord(Record):
         lwidth = max([len(line[0]) for line in lines])
         lines = [(line[0].ljust(lwidth),) + line[1:] for line in lines]
         lines = [" = ".join(line) for line in lines]
-        if format=="list":
-            return [indent + line for line in lines]
-        else:
-            return ("\n").join([indent + line for line in lines])
+        return ("\n").join([indent + line for line in lines])
     
 # ------------------------------------------------------- HandoverSelectMessage
 class HandoverSelectMessage(object):
@@ -432,7 +426,7 @@ class HandoverSelectMessage(object):
             carrier.auxiliary_data_records.append(aux)
         self.carriers.append(carrier)
     
-    def pretty(self, indent=0, format=''):
+    def pretty(self, indent=0):
         """Returns a string with a formatted representation that might
         be considered pretty-printable."""
         indent = indent * ' '
@@ -469,10 +463,7 @@ class HandoverSelectMessage(object):
         lwidth = max([len(line[0]) for line in lines])
         lines = [(line[0].ljust(lwidth),) + line[1:] for line in lines]
         lines = [" = ".join(line) for line in lines]
-        if format=="list":
-            return [indent + line for line in lines]
-        else:
-            return ("\n").join([indent + line for line in lines])
+        return ("\n").join([indent + line for line in lines])
     
 # -------------------------------------------------------- HandoverSelectRecord
 class HandoverSelectRecord(Record):
@@ -513,7 +504,7 @@ class HandoverSelectRecord(Record):
                     s = "skip unknown local record {0}"
                     log.debug(s.format(record.type))
 
-    def pretty(self, indent=0, format=''):
+    def pretty(self, indent=0):
         indent = indent * ' '
         lines = list()
         version_string = "{v.major}.{v.minor}".format(v=self.version)
@@ -534,10 +525,7 @@ class HandoverSelectRecord(Record):
         lwidth = max([len(line[0]) for line in lines])
         lines = [(line[0].ljust(lwidth),) + line[1:] for line in lines]
         lines = [" = ".join(line) for line in lines]
-        if format=="list":
-            return [indent + line for line in lines]
-        else:
-            return ("\n").join([indent + line for line in lines])
+        return ("\n").join([indent + line for line in lines])
     
 # ------------------------------------------------------- HandoverCarrierRecord
 class HandoverCarrierRecord(Record):
@@ -602,7 +590,7 @@ class HandoverCarrierRecord(Record):
     def carrier_data(self, value):
         self._carrier_data = value
     
-    def pretty(self, indent=0, format=''):
+    def pretty(self, indent=0):
         indent = indent * ' '
         lines = list()
         lines.append(("identifier", repr(self.name)))
@@ -610,10 +598,7 @@ class HandoverCarrierRecord(Record):
         lines.append(("carrier data", repr(self.carrier_data)))        
         lwidth = max([len(line[0]) for line in lines])
         lines = [line[0].ljust(lwidth) + " = " + line[1] for line in lines]
-        if format=="list":
-            return [indent + line for line in lines]
-        else:
-            return ("\n").join([indent + line for line in lines])
+        return ("\n").join([indent + line for line in lines])
     
 #----------------------------------------------------------- AlternativeCarrier
 class AlternativeCarrier(object):
