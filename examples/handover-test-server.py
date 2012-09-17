@@ -140,14 +140,6 @@ class DefaultSnepServer(nfc.snep.SnepServer):
         super(DefaultSnepServer, self).__init__('urn:nfc:sn:snep')
         self.select_carrier = select_carrier_func
 
-    def put(self, data):
-        log.info("default snep server got PUT request")
-        log.info("ndef data length is {0} octets".format(len(data)))
-        file("snep-put.ndef", "w").write(data)
-        ndef_message = nfc.ndef.Message(data)
-        log.info("type is '{m.type}', id is '{m.name}'".format(m=ndef_message))
-        return nfc.snep.Success
-    
     def get(self, acceptable_length, data):
         log.info("default snep server got GET request")
         message = nfc.ndef.Message(data)
