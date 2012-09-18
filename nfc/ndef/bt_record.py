@@ -223,7 +223,6 @@ class BluetoothConfigRecord(Record):
         return ("\n").join([indent + line for line in lines])
 
 def decode_class_of_device(cod):
-    print hex(cod)
     mdc, sdc = cod >> 8 & 0x1f, cod >> 2 & 0x3f
     if mdc == 0:
         mdc = "Miscellaneous"
