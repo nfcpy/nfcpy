@@ -66,7 +66,17 @@ class BluetoothAdapter(object):
             record.simple_pairing_rand = bytearray(sp_rand)
         return record
 
-    def set_oob_data(self, bt_record):
+    def get_oob_data(self):
+        oob_hash, oob_rand = self.oob_adapter.ReadLocalData()
+        return bytearray(oob_hash), bytearray(oob_rand)
+
+    def set_oob_data(self, bdaddr, oob_hash, oob_rand):
+        self.remote_bdaddr = dbus.String(bdaddr)
+        oob_hash = dbus.Array(oob_hash)
+        oob_rand = dbus.Array(oob_rand)
+	self.oob_adapter.AddRemoteData(self.remote_bdaddr, oob_hash, oob_rand)
+        
+    def __old_set_oob_data__(self, bt_record):
         self.remote_bdaddr = dbus.String(bt_record.device_address)
         sp_hash = dbus.Array(bt_record.simple_pairing_hash)
         sp_rand = dbus.Array(bt_record.simple_pairing_rand)
