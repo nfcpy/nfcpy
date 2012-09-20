@@ -28,6 +28,7 @@ import os
 import sys
 import time
 import string
+import struct
 
 sys.path.insert(1, os.path.split(sys.path[0])[0])
 import nfc
@@ -49,12 +50,6 @@ def format_data(data):
 def add_show_parser(parser):
     #parser.description = ""
     parser.set_defaults(func=show_tag)
-    parser.add_argument(
-        "-l", "--loop", action='store_true',
-        help="repeat command until Control-C")
-    parser.add_argument(
-        "--no-wait", action='store_true',
-        help="do not wait for tag removal")
         
 def show_tag(args):
     tag = poll(args.clf)
@@ -143,6 +138,33 @@ def load_tag(args):
 def add_format_parser(parser):
     #parser.description = ""
     parser.set_defaults(func=format_tag)
+    parser.add_argument(
+        "--tt3-ver", default="1.1",
+        help="ndef mapping version number (default: %(default)s)")
+    parser.add_argument(
+        "--tt3-nbr", metavar="INT", type=int,
+        help="number of blocks that can be written at once")
+    parser.add_argument(
+        "--tt3-nbw", metavar="INT", type=int,
+        help="number of blocks that can be read at once")
+    parser.add_argument(
+        "--tt3-max", metavar="INT", type=int,
+        help="maximum number of blocks (nmaxb x 16 == capacity)")
+    parser.add_argument(
+        "--tt3-rfu", metavar="INT", type=int, default=0,
+        help="value to set for reserved bytes (default: %(default)s)")
+    parser.add_argument(
+        "--tt3-wf", metavar="INT", type=int, default=0,
+        help="write-flag attribute value (default: %(default)s)")
+    parser.add_argument(
+        "--tt3-rw", metavar="INT", type=int, default=1,
+        help="read-write flag attribute value (default: %(default)s)")
+    parser.add_argument(
+        "--tt3-len", metavar="INT", type=int, default=0,
+        help="ndef length attribute value (default: %(default)s)")
+    parser.add_argument(
+        "--tt3-crc", metavar="INT", type=int,
+        help="checksum attribute value (default: computed)")
         
 def format_tag(clf):
     tag = poll(args.clf)
@@ -154,7 +176,7 @@ def format_tag(clf):
     elif isinstance(tag, nfc.Type2Tag):
         print("unable to format {0}".format(str(tag)))
     elif isinstance(tag, nfc.Type3Tag):
-        tt3_format(tag)
+        tt3_format(tag, args)
     elif isinstance(tag, nfc.Type4Tag):
         print("unable to format {0}".format(str(tag)))
 
@@ -171,7 +193,7 @@ def tt1_format(tag):
         tag[0x0C] = 0x03
         tag[0x0D] = 0x00
     
-def tt3_format(tag):
+def tt3_format(tag, args):
     def determine_block_count(tag):
         block = 0
         try:
@@ -205,19 +227,38 @@ def tt3_format(tag):
     nbw = determine_block_write_count(tag, block_count)
     print("%d block(s) can be written at once" % nbw)
 
+    if args.tt3_max:
+        block_count = args.tt3_max + 1
+    if args.tt3_nbw:
+        nbw = args.tt3_nbw
+    if args.tt3_nbr:
+        nbr = args.tt3_nbr
+    rfu = args.tt3_rfu
+    wf = args.tt3_wf
+    rw = args.tt3_rw
+    ver = map(int, args.tt3_ver.split('.'))
+    ver = ver[0] << 4 | ver[1]
+        
     nmaxb_msb = (block_count - 1) / 256
     nmaxb_lsb = (block_count - 1) % 256
-    attr = [0x10, nbr, nbw, nmaxb_msb, nmaxb_lsb, 
-            0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]
-    csum = sum(attr[0:14])
+    attr = bytearray([ver, nbr, nbw, nmaxb_msb, nmaxb_lsb, 
+                      rfu, rfu, rfu, rfu, wf, rw, 0, 0, 0, 0, 0])
+    attr[11:14] = bytearray(struct.pack('!I', args.tt3_len)[1:])
+    csum = sum(attr[0:14]) if args.tt3_crc is None else args.tt3_crc
     attr[14] = csum / 256
     attr[15] = csum % 256
 
-    print("writing attribute data block:")
-    print(" ".join(["%02x" % x for x in attr]))
+    log.info("writing attribute data block:")
+    log.info(" ".join(["%02x" % x for x in attr]))
+    log.info("  Ver = {0}".format(args.tt3_ver))
+    log.info("  Nbr = {0}".format(nbr))
+    log.info("  Nbw = {0}".format(nbw))
+    log.info("  WF  = {0}".format(wf))
+    log.info("  RW  = {0}".format(rw))
+    log.info("  Ln  = {0}".format(args.tt3_len))
+    log.info("  CRC = {0}".format(csum))
 
-    attr = ''.join([chr(b) for b in attr])
-    tag.write(attr, [0])
+    tag.write(str(attr), [0])
 
 def poll(clf):
     try:
