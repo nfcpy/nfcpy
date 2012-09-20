@@ -28,7 +28,6 @@ import os
 import sys
 import time
 import string
-import signal
 
 sys.path.insert(1, os.path.split(sys.path[0])[0])
 import nfc
@@ -47,7 +46,21 @@ def format_data(data):
         s[-1] += printable(data[i:i+16])
     return '\n'.join(s)
 
-def show(tag):
+def add_show_parser(parser):
+    #parser.description = ""
+    parser.set_defaults(func=show_tag)
+    parser.add_argument(
+        "-l", "--loop", action='store_true',
+        help="repeat command until Control-C")
+    parser.add_argument(
+        "--no-wait", action='store_true',
+        help="do not wait for tag removal")
+        
+def show_tag(args):
+    tag = poll(args.clf)
+    if tag is None:
+        raise SystemExit(1)
+
     print(tag)
     if isinstance(tag, nfc.Type3Tag):
         tt3_card_map = {
@@ -57,7 +70,7 @@ def show(tag):
             "\x01\x20": "FeliCa Card RC-S976F [212/424kbps]",
             "\x03\x01": "FeliCa Card RC-S860 [212kbps, 4KB FEPROM]",
             }
-        print("  " + tt3_card_map.get(str(tag.pmm[0:2]), "unknown card type"))
+        print("  " + tt3_card_map.get(str(tag.pmm[0:2]), "unknown card"))
     if tag.ndef:
         print("NDEF attribute data:")
         print("  version   = %s" % tag.ndef.version)
@@ -70,23 +83,82 @@ def show(tag):
             message = nfc.ndef.Message(tag.ndef.message)
             print("NDEF record list:")
             for index, record in enumerate(message):
-                print(record.pretty(indent=2, prefix="[{0}] ".format(index+1)))
+                print(record.pretty(indent=2, prefix="[{0}] "
+                                    .format(index+1)))
+    return tag
+        
+def add_dump_parser(parser):
+    #parser.description = ""
+    parser.set_defaults(func=dump_tag)
+    parser.add_argument(
+        "-o", dest="output", metavar="FILE",
+        type=argparse.FileType('w'), default="-",
+        help="save ndef to FILE (writes binary data)")
+        
+def dump_tag(args):
+    tag = poll(args.clf)
+    if tag is None:
+        raise SystemExit(1)
 
+    if tag.ndef:
+        data = tag.ndef.message
+        if args.output.name == "<stdout>":
+            args.output.write(str(data).encode("hex"))
+            if args.loop:
+                args.output.write('\n')
+            else:
+                args.output.flush()
+        else:
+            args.output.write(str(data))                    
+
+    return tag
+
+def add_load_parser(parser):
+    #parser.description = ""
+    parser.set_defaults(func=load_tag)
+    parser.add_argument(
+        "input", metavar="FILE", type=argparse.FileType('r'),
+        help="ndef data file ('-' reads from stdin)")
+        
+def load_tag(args):
+    try: args.data
+    except AttributeError:
+        args.data = args.input.read()
+        try: args.data = args.data.decode("hex")
+        except TypeError: pass
+    
+    tag = poll(args.clf)
+    if tag is None:
+        raise SystemExit(1)
+
+    if tag.ndef:
+        log.info("old: " + tag.ndef.message.encode("hex"))
+        tag.ndef.message = args.data
+        log.info("new: " + args.data.encode("hex"))
+    else:
+        log.info("not an ndef tag")
+
+    return tag
+
+def add_format_parser(parser):
+    #parser.description = ""
+    parser.set_defaults(func=format_tag)
+        
 def format_tag(clf):
-    while True:
-        tag = poll(clf)
-        if tag:
-            if isinstance(tag, nfc.Type1Tag):
-                tt1_format(tag)
-            if isinstance(tag, nfc.Type2Tag):
-                print("unable to format {0}".format(str(tag)))
-            if isinstance(tag, nfc.Type3Tag):
-                tt3_format(tag)
-            if options.loopmode:
-                while tag.is_present:
-                    time.sleep(1)
-            else: break
-        else: break
+    tag = poll(args.clf)
+    if tag is None:
+        raise SystemExit(1)
+
+    if isinstance(tag, nfc.Type1Tag):
+        tt1_format(tag)
+    elif isinstance(tag, nfc.Type2Tag):
+        print("unable to format {0}".format(str(tag)))
+    elif isinstance(tag, nfc.Type3Tag):
+        tt3_format(tag)
+    elif isinstance(tag, nfc.Type4Tag):
+        print("unable to format {0}".format(str(tag)))
+
+    return tag
 
 def tt1_format(tag):
     # fixme: this is only correct for 120 byte tags
@@ -147,60 +219,6 @@ def tt3_format(tag):
     attr = ''.join([chr(b) for b in attr])
     tag.write(attr, [0])
 
-def copy_tag(clf):
-    tag = poll(clf)
-    if tag and tag.ndef:
-        data = tag.ndef.message
-        print("copied {0} byte <= {1}".format(len(data), tag))
-        while True:
-            while tag.is_present:
-                time.sleep(1)
-            tag = poll(clf)
-            if tag is None:
-                return
-            if tag.ndef:
-                tag.ndef.message = data
-                print("copied {0} byte => {1}".format(len(data), tag))
-            else:
-                print("not an ndef tag: {0}".format(tag))
-            if not options.loopmode:
-                break
-
-def dump_tag(clf):
-    while True:
-        tag = poll(clf)
-        if tag:
-            if tag.ndef:
-                data = tag.ndef.message
-                if not options.binary:
-                    data = data.encode("hex")
-                sys.stdout.write(data)
-                sys.stdout.flush()
-                if not options.loopmode:
-                    break
-            while tag.is_present:
-                time.sleep(1)
-        else: break
-
-def load_tag(clf):
-    if not options.binary:
-        data = sys.stdin.readlines()
-        data = ''.join([l.strip() for l in data])
-        data = data.decode("hex")
-    else:
-        data = sys.stdin.read()
-    while True:
-        tag = poll(clf)
-        if tag:
-            if tag.ndef:
-                tag.ndef.message = data
-                print(data.encode("hex"))
-                if not options.loopmode:
-                    break
-            while tag.is_present:
-                time.sleep(1)
-        else: break
-
 def poll(clf):
     try:
         while True:
@@ -210,56 +228,85 @@ def poll(clf):
     except KeyboardInterrupt:
         return None
 
-def sigint_handler(signum, frame):
-    signal.signal(signal.SIGINT, signal.SIG_IGN)
-    raise KeyboardInterrupt
-
-def main():
-    signal.signal(signal.SIGINT, sigint_handler)
-    
-    # find and initialize an NFC reader
-    for device in options.device:
-        try: clf = nfc.ContactlessFrontend(device); break
-        except LookupError: pass
-    else: return
-    
-    try:
-        if options.command == "show":
-            while True:
-                tag = poll(clf)
-                if tag:
-                    show(tag)
-                    if options.loopmode:
-                        while tag.is_present:
-                            time.sleep(1)
-                    else: break
-                else: break
-        elif options.command == "format":
-            format_tag(clf)
-        elif options.command == "copy":
-            copy_tag(clf)
-        elif options.command == "dump":
-            dump_tag(clf)
-        elif options.command == "load":
-            load_tag(clf)
-        else:
-            log.error("unknown command '{0}'".format(options.command))
-    except KeyboardInterrupt:
-        print()
-    finally:
-        clf.close()
-
 if __name__ == '__main__':
-    from optparse import OptionParser, OptionGroup
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-q", dest="quiet", action="store_true",
+        help="do not print any log messages'")
+    parser.add_argument(
+        "-d", dest="debug", action="store_true",
+        help="print debug log messages")
+    parser.add_argument(
+        "-l", "--loop", action='store_true',
+        help="repeat command until Control-C")
+    parser.add_argument(
+        "--no-wait", action='store_true',
+        help="do not wait for tag removal")
+    parser.add_argument(
+        "--device", metavar="NAME", action="append",
+        help="use specified contactless reader(s): "\
+            "usb[:vendor[:product]] (vendor and product in hex), "\
+            "usb[:bus[:dev]] (bus and device number in decimal), "\
+            "tty[:(usb|com)[:port]] (usb virtual or com port)")
 
-    usage = ["Usage: %prog [options] command\n",
-             "Commands:",
-             "  show   - pretty print NDEF data",
-             "  dump   - print NDEF data to stdout",
-             "  load   - write NDEF data from stdin",
-             "  copy   - copy NDEF data between tags",
-             "  format - format NDEF partition on tag"]
+    subparsers = parser.add_subparsers(title="commands")
+    add_show_parser(subparsers.add_parser(
+            'show', help='pretty print ndef data'))
+    add_dump_parser(subparsers.add_parser(
+            'dump', help='read ndef data from tag'))
+    add_load_parser(subparsers.add_parser(
+            'load', help='write ndef data to tag'))
+    add_format_parser(subparsers.add_parser(
+            'format', help='format ndef tag'))
 
+    for argument in sys.argv[1:]:
+        if not argument.startswith('-'):
+            break
+    else: sys.argv += ['show']
+    args = parser.parse_args()
+
+    if args.debug:
+        log_level = logging.DEBUG
+    elif args.quiet:
+        log_level = logging.ERROR
+    else:
+        log_level = logging.INFO
+        
+    logging.basicConfig(level=log_level, format='%(message)s')
+
+    log.debug(args)
+
+    if args.device is None:
+        args.device = ['']
+            
+    for device in args.device:
+        try:
+            args.clf = nfc.ContactlessFrontend(device);
+            break
+        except LookupError:
+            pass
+    else:
+        log.warning("no contactless reader")
+        raise SystemExit(1)
+
+    try:
+        while True:
+            log.info("touch a tag")
+            tag = args.func(args)
+            if not args.no_wait:
+                log.info("\nremove tag")
+                while tag.is_present:
+                    time.sleep(1)
+            if not args.loop:
+                break
+    except KeyboardInterrupt:
+        raise SystemExit
+    finally:
+        args.clf.close()
+    
+    raise SystemExit
+    
     parser = OptionParser('\n'.join(usage), version="%prog 0.1")
     parser.add_option("-l", default=False,
                       action="store_true", dest="loopmode",
