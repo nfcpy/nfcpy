@@ -214,7 +214,7 @@ def tt3_format(tag, args):
     def determine_block_write_count(tag, block_count):
         try:
             for i in range(block_count):
-                data = ((i+1)*16) * "\x00"
+                data = tag.read(range(i+1))
                 tag.write(data, range(i+1))
         except Exception: return i
 
