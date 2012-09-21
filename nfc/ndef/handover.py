@@ -566,7 +566,8 @@ class HandoverError(object):
             elif self.reason == 3:
                 self.data = ord(payload[1])
             else:
-                log.warning("unknown error reason value {0}".format(reason))
+                log.warning("unknown error reason value {0}"
+                            .format(self.reason))
         except (TypeError, struct.error):
             raise DecodeError("non matching error reason and data")
     
