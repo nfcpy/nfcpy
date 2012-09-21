@@ -147,5 +147,5 @@ Copy NDEF from one tag to another::
 
 Copy NDEF from one tag to many others::
 
-  $ tagtool.py dump -o /tmp/tag.ndef && tagtool load --loop /tmp/tag.ndef
+  $ tagtool.py dump -o /tmp/tag.ndef && tagtool --loop load /tmp/tag.ndef
 
