@@ -227,11 +227,11 @@ def tt3_format(tag, args):
     nbw = determine_block_write_count(tag, block_count)
     print("%d block(s) can be written at once" % nbw)
 
-    if args.tt3_max:
+    if not args.tt3_max is None:
         block_count = args.tt3_max + 1
-    if args.tt3_nbw:
+    if not args.tt3_nbw is None:
         nbw = args.tt3_nbw
-    if args.tt3_nbr:
+    if not args.tt3_nbr is None:
         nbr = args.tt3_nbr
     rfu = args.tt3_rfu
     wf = args.tt3_wf
