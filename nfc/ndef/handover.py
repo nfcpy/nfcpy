@@ -257,6 +257,8 @@ class HandoverRequestRecord(Record):
         if len(string) > 0:
             f = io.BytesIO(string)
             self.version = Version(f.read(1))
+            if self.version.major != 1:
+                raise DecodeError("unsupported major version")
             if self.version >= Version('\x12'):
                 record = Record(data=f)
                 if record.type == "urn:nfc:wkt:cr":
@@ -493,6 +495,8 @@ class HandoverSelectRecord(Record):
         if len(string) > 0:
             f = io.BytesIO(string)
             self.version = Version(f.read(1))
+            if self.version.major != 1:
+                raise DecodeError("unsupported major version")
             while f.tell() < len(string):
                 record = Record(data=f)
                 if record.type == 'urn:nfc:wkt:ac':
