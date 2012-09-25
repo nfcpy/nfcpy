@@ -2,8 +2,7 @@
 handover test tool
 ==================
 
-The **ndeftool** intends to be a swiss army knife for working with
-NDEF data.
+The scripts **handover-test-server.py** and **handover-test-client.py** provide a test facility for the NFC Forum Connection Handover Protocol.
 
 handover test server
 ====================
@@ -11,6 +10,32 @@ handover test server
 Usage::
 
   $ handover-test-server.py [-h|--help] [OPTION]... [CARRIER]...
+
+The handover test server implements the handover selector role. A
+handover client can connect to the server with the well-known service
+name ``urn:nfc:sn:handover`` and send handover request messages. The
+server replies with handover select messages populated with carriers
+provided through *CARRIER* arguments and matching the a carrier in the
+received handover request carrier list.
+
+Each *CARRIER* argument must provide an NDEF message file, which may
+be a handover select message with one or more alternative carriers
+(including auxiliary data) or an alternative carrier record optionally
+followed by one or more auxiliary data records. Note that only the
+handover select message format allows to specify the carrier power
+state. All carriers including power state information and auxiliary
+data records are accumulated into a list of selectable carriers,
+ordered by argument position and carrier sequence within a handover
+select message.
+
+Unless the ``--skip-local`` option is given, the server attempts to
+include carriers that are locally available on the host device. Local
+carriers are always added after all *CARRIER* arguments.
+
+.. note:: Local carrier detection currently requires a Linux OS with
+          the bluez Bluetooth stack and D-Bus. This is true for many
+          Linux distributions, but has so far only be tested on
+          Ubuntu.
 
 Options:
 
@@ -55,15 +80,32 @@ Options:
 handover test client
 ====================
 
-Usage::
+.. note:: The handover-test-client is not yet available.
+
+..
+  Usage::
 
   $ handover-test-client.py [-h|--help] [OPTION]... [CARRIER]...
 
-Options:
+  Options:
 
-.. program:: handover-test-client.py
+  .. program:: handover-test-client.py
 
 
 Recipes
 =======
 
+Return a handover select message with no alternative carriers. ::
+
+  $ examples/handover-test-server.py --select 0
+
+Generate a Bluetooth configuration piped to the handover test server
+as the only alternative carrier (locally available carriers are
+excluded with ``--skip-local``. ::
+
+  $ examples/ndeftool.py make btcfg 01:02:03:04:05:06 --activating | examples/handover-test-server --skip-local -
+
+Delay the handover select response for 10 seconds to check the other
+implementation's idea of user experience. ::
+
+  $ examples/handover-test-server.py --delay 10000
