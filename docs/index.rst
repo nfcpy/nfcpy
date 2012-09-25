@@ -36,10 +36,13 @@ Examples
 ========
 
 :doc:`examples/helloworld`
-   A straightforward example of NDEF encoding and decoding with NFC tags.
+   A straightforward example of NDEF read and write.
 
-:doc:`examples/ndeftool` 
-   Generate or inspect NDEF data. More a tool than an example.
+:doc:`examples/tagtool`
+   Read or write or format tags for NDEF use.
+
+:doc:`examples/ndeftool`
+   Generate or inspect or reorganize NDEF data.
 
 :doc:`examples/handover-test`
    A test tool for dynamic connection handover.
