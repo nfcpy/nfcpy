@@ -121,6 +121,11 @@ Options:
    output). The ``-o`` option also switches the output format to raw
    bytes versus the hexadecimal string written to stdout.
    
+.. option:: --hs
+
+   Encapsulate the Wifi Configuration record into a Handover Select
+   Message. The carrier power state will set to 'unknown'.
+
 wifipwd
 ~~~~~~~
 
@@ -205,6 +210,11 @@ Options:
    output). The ``-o`` option also switches the output format to raw
    bytes versus the hexadecimal string written to stdout.
    
+.. option:: --hs
+
+   Encapsulate the Bluetooth Configuration record into a Handover
+   Select Message. The carrier power state will set to 'unknown'.
+
 pack
 ----
 

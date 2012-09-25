@@ -214,6 +214,9 @@ def make_wificonfig_parser(parser):
     parser.add_argument(
         "--shareable", action="store_true",
         help="network key may be shared with other devices")
+    parser.add_argument(
+        "--hs", action="store_true",
+        help="generate a handover select message")
     
 def make_wificonfig(args):
     import uuid
@@ -234,7 +237,12 @@ def make_wificonfig(args):
     record.credential['mac-address'] = args.mac
     log.info(record.pretty())
     
-    message = nfc.ndef.Message(record)
+    if args.hs:
+        message = nfc.ndef.HandoverSelectMessage(version='1.2')
+        message.add_carrier(record, 'unknown')
+    else:
+        message = nfc.ndef.Message(record)
+        
     if args.outfile.name == "<stdout>":
         args.outfile.write(str(message).encode("hex"))
     else:
@@ -258,6 +266,9 @@ def make_bluetoothcfg_parser(parser):
     parser.add_argument(
         "-s", dest="service", metavar="STRING", action="append", default=[],
         help="a service class uuid")
+    parser.add_argument(
+        "--hs", action="store_true",
+        help="generate a handover select message")
     
 def make_bluetoothcfg(args):
     record = nfc.ndef.BluetoothConfigRecord()
@@ -280,8 +291,13 @@ def make_bluetoothcfg(args):
                 sys.exit(1)
     record.service_class_uuid_list = args.service
     log.info(record.pretty())
-    
-    message = nfc.ndef.Message(record)
+
+    if args.hs:
+        message = nfc.ndef.HandoverSelectMessage(version='1.2')
+        message.add_carrier(record, 'unknown')
+    else:
+        message = nfc.ndef.Message(record)
+        
     if args.outfile.name == "<stdout>":
         args.outfile.write(str(message).encode("hex"))
     else:
