@@ -217,6 +217,16 @@ def make_wificonfig_parser(parser):
     parser.add_argument(
         "--hs", action="store_true",
         help="generate a handover select message")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        "--active", action="store_true",
+        help="set power state 'active' (implies --hs)")
+    group.add_argument(
+        "--inactive", action="store_true",
+        help="set power state 'inactive' (implies --hs)")
+    group.add_argument(
+        "--activating", action="store_true",
+        help="set power state 'activating' (implies --hs)")
     
 def make_wificonfig(args):
     import uuid
@@ -236,10 +246,15 @@ def make_wificonfig(args):
     record.credential['encryption'] = encryption
     record.credential['mac-address'] = args.mac
     log.info(record.pretty())
-    
+
+    if args.active or args.inactive or args.activating:
+        args.hs = True
+        
     if args.hs:
         message = nfc.ndef.HandoverSelectMessage(version='1.2')
-        message.add_carrier(record, 'unknown')
+        power_state = ("active" if args.active else "inactive" if args.inactive
+                       else "activating" if args.activating else "unknown")
+        message.add_carrier(record, power_state)
     else:
         message = nfc.ndef.Message(record)
         
@@ -269,6 +284,16 @@ def make_bluetoothcfg_parser(parser):
     parser.add_argument(
         "--hs", action="store_true",
         help="generate a handover select message")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        "--active", action="store_true",
+        help="set power state 'active' (implies --hs)")
+    group.add_argument(
+        "--inactive", action="store_true",
+        help="set power state 'inactive' (implies --hs)")
+    group.add_argument(
+        "--activating", action="store_true",
+        help="set power state 'activating' (implies --hs)")
     
 def make_bluetoothcfg(args):
     record = nfc.ndef.BluetoothConfigRecord()
@@ -292,9 +317,14 @@ def make_bluetoothcfg(args):
     record.service_class_uuid_list = args.service
     log.info(record.pretty())
 
+    if args.active or args.inactive or args.activating:
+        args.hs = True
+        
     if args.hs:
         message = nfc.ndef.HandoverSelectMessage(version='1.2')
-        message.add_carrier(record, 'unknown')
+        power_state = ("active" if args.active else "inactive" if args.inactive
+                       else "activating" if args.activating else "unknown")
+        message.add_carrier(record, power_state)
     else:
         message = nfc.ndef.Message(record)
         

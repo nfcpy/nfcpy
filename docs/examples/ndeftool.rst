@@ -126,6 +126,24 @@ Options:
    Encapsulate the Wifi Configuration record into a Handover Select
    Message. The carrier power state will set to 'unknown'.
 
+.. option:: --active
+
+   Generate a Handover Select message with the WiFi carrier power
+   state set to 'active'. This option is mutually exclusive with the
+   ``--inactive`` and ``--activating`` options.
+
+.. option:: --inactive
+
+   Generate a Handover Select message with the WiFi carrier power
+   state set to 'inactive'. This option is mutually exclusive with the
+   ``--active`` and ``--activating`` options.
+
+.. option:: --activating
+
+   Generate a Handover Select message with the WiFi carrier power
+   state set to 'activating'. This option is mutually exclusive with
+   the ``--active`` and ``--inactive`` options.
+
 wifipwd
 ~~~~~~~
 
@@ -214,6 +232,24 @@ Options:
 
    Encapsulate the Bluetooth Configuration record into a Handover
    Select Message. The carrier power state will set to 'unknown'.
+
+.. option:: --active
+
+   Generate a Handover Select message with the Bluetooth carrier power
+   state set to 'active'. This option is mutually exclusive with the
+   ``--inactive`` and ``--activating`` options.
+
+.. option:: --inactive
+
+   Generate a Handover Select message with the Bluetooth carrier power
+   state set to 'inactive'. This option is mutually exclusive with the
+   ``--active`` and ``--activating`` options.
+
+.. option:: --activating
+
+   Generate a Handover Select message with the Bluetooth carrier power
+   state set to 'activating'. This option is mutually exclusive with
+   the ``--active`` and ``--inactive`` options.
 
 pack
 ----
