@@ -41,7 +41,8 @@ import threading
 import gobject
 import dbus.mainloop.glib
 
-bluetooth_oob_mime_type = "application/vnd.bluetooth.ep.oob"
+mime_btoob = "application/vnd.bluetooth.ep.oob"
+mime_wfasc = "application/vnd.wfa.wsc"
 
 class BluetoothAdapter(object):
     def __init__(self):
@@ -55,84 +56,32 @@ class BluetoothAdapter(object):
 	self.adapter = dbus.Interface(proxy, "org.bluez.Adapter")
 	self.oob_adapter = dbus.Interface(proxy, "org.bluez.OutOfBand")
 
-    def make_oob_record(self, secure=True):
-        record = nfc.ndef.BluetoothConfigRecord()
-        record.device_address = str(self.adapter.GetProperties()["Address"])
-        record.class_of_device = int(self.adapter.GetProperties()["Class"])
-        record.local_device_name = str(self.adapter.GetProperties()["Name"])
-        if secure:
-            sp_hash, sp_rand = self.oob_adapter.ReadLocalData()
-            record.simple_pairing_hash = bytearray(sp_hash)
-            record.simple_pairing_rand = bytearray(sp_rand)
-        return record
+    @property
+    def device_address(self):
+        return str(self.adapter.GetProperties()["Address"])
 
-    def get_oob_data(self):
-        oob_hash, oob_rand = self.oob_adapter.ReadLocalData()
-        return bytearray(oob_hash), bytearray(oob_rand)
+    @property
+    def device_class(self):
+        return int(self.adapter.GetProperties()["Class"])
 
-    def set_oob_data(self, bdaddr, oob_hash, oob_rand):
+    @property
+    def device_name(self):
+        return str(self.adapter.GetProperties()["Name"])
+
+    @property
+    def service_uuids(self):
+        return map(str, self.adapter.GetProperties()["UUIDs"])
+
+    def get_ssp_data(self):
+        ssp_hash, ssp_rand = self.oob_adapter.ReadLocalData()
+        return bytearray(ssp_hash), bytearray(ssp_rand)
+
+    def set_ssp_data(self, bdaddr, ssp_hash, ssp_rand):
         self.remote_bdaddr = dbus.String(bdaddr)
-        oob_hash = dbus.Array(oob_hash)
-        oob_rand = dbus.Array(oob_rand)
-	self.oob_adapter.AddRemoteData(self.remote_bdaddr, oob_hash, oob_rand)
-        
-    def __old_set_oob_data__(self, bt_record):
-        self.remote_bdaddr = dbus.String(bt_record.device_address)
-        sp_hash = dbus.Array(bt_record.simple_pairing_hash)
-        sp_rand = dbus.Array(bt_record.simple_pairing_rand)
-	self.oob_adapter.AddRemoteData(self.remote_bdaddr, sp_hash, sp_rand)
-        
-    def create_pairing(self):
-        def create_device_reply(device):
-            print "Pairing succeed!"
-            self.mainloop.quit()
-
-        def create_device_error(error):
-            print "Pairing failed."
-            self.mainloop.quit()
-      
-        self.adapter.CreatePairedDevice(
-            self.remote_bdaddr, "/test/agent_oob", "DisplayYesNo",
-            reply_handler=create_device_reply,
-            error_handler=create_device_error)
-
-        self.mainloop.run()
-    
-def process_handover_request(message):
-    request = nfc.ndef.HandoverRequestMessage(message)
-    log.info("received connection handover request message")
-    for line in request.pretty(indent=2).split('\n'):
-        log.info(line)
-    if request.version.major != 1:
-        log.warning("unsupported major version")
-        return nfc.ndef.HandoverSelectMessage(version="1.2")
-    if request.version.minor == 0 and options.quirks:
-        log.warning("quirks: accept handover version 1.0 as 1.1")
-    elif request.version.minor not in range(1,3):
-        log.warning("unsupported minor version")
-        return nfc.ndef.HandoverSelectMessage(version="1.2")
-    for carrier in request.carriers:
-        carrier_type = carrier.record.type
-        if carrier_type == "urn:nfc:wkt:Hc":
-            carrier_type = carrier.record.carrier_type
-        if options.quirks:
-            if carrier_type == "urn:nfc:wkt:application/vnd.bluetooth.ep.oob":
-                carrier_type = "application/vnd.bluetooth.ep.oob"
-                log.warning("quirks: correct Sony Xperia carrier type encoding")
-            if carrier_type == "urn:nfc:wkt:application/vnd.wfa.wsc":
-                carrier_type = "application/vnd.wfa.wsc"
-                log.warning("quirks: correct Sony Xperia carrier type encoding")
-        if carrier_type == "application/vnd.bluetooth.ep.oob":
-            bluetooth_adapter = BluetoothAdapter()
-            oob_record = bluetooth_adapter.make_oob_record()
-            select = nfc.ndef.HandoverSelectMessage(version="1.2")
-            select.add_carrier(oob_record, "active")
-            #bluetooth_adapter.set_oob_data(carrier.record)
-            log.debug("returning handover select record")
-            for line in select.pretty(2).split('\n'):
-                log.debug(line)
-            return select
-        
+        ssp_hash = dbus.Array(ssp_hash)
+        ssp_rand = dbus.Array(ssp_rand)
+	self.oob_adapter.AddRemoteData(self.remote_bdaddr, ssp_hash, ssp_rand)
+            
 class HandoverServer(nfc.handover.HandoverServer):
     def __init__(self, select_carrier_func):
         super(HandoverServer, self).__init__()
@@ -173,23 +122,55 @@ class HandoverTestServer(TestBase):
             "carriers", metavar="CARRIER", nargs="*",
             type=argparse.FileType('r'),
             help="supported carrier")
+        parser.add_argument(
+            "--skip-local", action="store_true",
+            help="skip local carrier detection")
+        parser.add_argument(
+            "--select", metavar="NUM", type=int, default=1,
+            help="select up to NUM carriers (default: %(default)s))")
+        parser.add_argument(
+            "--delay", type=int, metavar="INT",
+            help="delay the response for INT milliseconds")
         
         super(HandoverTestServer, self).__init__(parser)
 
         if sum([1 for f in self.options.carriers if f.name == "<stdin>"]) > 1:
-            log.error("only one carrier may be read from stdin")
+            log.error("only one carrier file may be read from stdin")
             raise SystemExit(1)
+
+        selectable = nfc.ndef.HandoverSelectMessage(version="1.2")
         
         for index, carrier in enumerate(self.options.carriers):
             data = carrier.read()
             try: data = data.decode("hex")
             except TypeError: pass
             message = nfc.ndef.Message(data)
-            self.options.carriers[index] = message
+            if message.type == "urn:nfc:wkt:Hs":
+                message = nfc.ndef.HandoverSelectMessage(message)
+                for carrier in message.carriers:
+                    selectable.add_carrier(carrier.record, carrier.power_state,
+                                           carrier.auxiliary_data_records)
+                    log.info("add specified carrier: {0}".format(carrier.type))
+            else:
+                selectable.add_carrier(message[0], "active", message[1:])
+                log.info("add specified carrier: {0}".format(message.type))
+            
+        if not self.options.skip_local:
+            if sys.platform == "linux2":
+                self.hci0 = BluetoothAdapter()
+                record = nfc.ndef.BluetoothConfigRecord()
+                record.device_address = self.hci0.device_address
+                record.class_of_device = self.hci0.device_class
+                record.local_device_name = self.hci0.device_name
+                record.service_class_uuid_list = self.hci0.service_uuids
+                selectable.add_carrier(record, "active")
+                log.info("add discovered carrier: {0}".format(record.type))
 
+        self.options.selectable = selectable
+        
         if self.options.quirks:
             log.warning("quirks: will accept SNEP GET 'Hr' requests "
-                        "as used by Android 4.1.0 devices")
+                        "used by Android 4.1.0 devices")
 
         self.select_carrier_lock = threading.Lock()
         
@@ -212,15 +193,40 @@ class HandoverTestServer(TestBase):
         log.info("<<< Handover Request\n" + handover_request.pretty(2))
         handover_select = nfc.ndef.HandoverSelectMessage(version="1.2")
         
-        for carrier in handover_request.carriers:
-            for my_carrier in self.options.carriers:
-                if carrier.type == my_carrier.type:
-                    log.info("matching {0!r}".format(my_carrier))
-                    handover_select.add_carrier(my_carrier[0], "active")
-                    break
+        if handover_request.version.minor == 0 and options.quirks:
+            log.warning("quirks: accept handover version 1.0 as 1.1")
+        elif handover_request.version.minor not in range(1,3):
+            log.warning("unsupported minor version")
+            self.select_carrier_lock.release()
+            return handover_select
+        
+        for remote_carrier in handover_request.carriers:
+            remote_carrier_type = remote_carrier.type
+            
+            if self.options.quirks:
+                if remote_carrier.type in ("urn:nfc:wkt:" + mime_btoob,
+                                           "urn:nfc:wkt:" + mime_wfasc):
+                    log.warning("quirks: correct xperia carrier request {0}"
+                                .format(remote_carrier.type))
+                    remote_carrier_type = remote_carrier.type[12:]
+                    
+                    
+            for local_carrier in self.options.selectable.carriers:
+                if remote_carrier_type == local_carrier.type:
+                    if len(handover_select.carriers) < self.options.select:
+                        log.info("match for {0}".format(local_carrier.type))
+                        handover_select.add_carrier(
+                            local_carrier.record, local_carrier.power_state,
+                            local_carrier.auxiliary_data_records)
+                    else: break
 
         log.info(">>> Handover Select\n" + handover_select.pretty(2))
         self.select_carrier_lock.release()
+        
+        if self.options.delay:
+            log.info("delay response for {0} ms".format(self.options.delay))
+            time.sleep(self.options.delay/1000.0)
+        
         return handover_select
 
 if __name__ == '__main__':

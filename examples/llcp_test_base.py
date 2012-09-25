@@ -116,9 +116,9 @@ class TestBase(object):
         group.add_argument(
             "--quirks", action="store_true",
             help="support non-compliant implementations")
-        group.add_argument(
-            "--strict", action="store_true",
-            help="apply strict standards interpretation")
+        #group.add_argument(
+        #    "--strict", action="store_true",
+        #    help="apply strict standards interpretation")
         
     def connect_reader(self):
         if self.options.device is None:

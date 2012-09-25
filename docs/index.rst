@@ -41,6 +41,9 @@ Examples
 :doc:`examples/ndeftool` 
    Generate or inspect NDEF data. More a tool than an example.
 
+:doc:`examples/handover-test`
+   A test tool for dynamic connection handover.
+
 Reference
 =========
 
