@@ -44,15 +44,19 @@ Examples
 :doc:`examples/ndeftool`
    Generate or inspect or reorganize NDEF data.
 
+:doc:`examples/handover-test`
+   A test tool for dynamic connection handover.
+
 Reference
 =========
 
 .. toctree::
-    :glob:
-    :maxdepth: 1
 
     api/nfc
-    api/*
+    api/ndef
+    api/llcp
+    api/snep
+    api/handover
 
 Indices
 =======

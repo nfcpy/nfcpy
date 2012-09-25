@@ -186,10 +186,10 @@ class BluetoothConfigRecord(Record):
     def class_of_device(self, value):        
         self.eir[0x0D] = struct.pack('<L', value)[0:3]
         
-    def pretty(self, indent=0, prefix=''):
+    def pretty(self, indent=0):
         lines = list()
-        if len(self.name) > 0:
-            lines.append(("reference", repr(self.name)))
+        if self.name:
+            lines.append(("identifier", repr(self.name)))
         lines.append(("device address", self.device_address))
         if self.local_device_name:
             lines.append(("device name", self.local_device_name))
@@ -204,9 +204,11 @@ class BluetoothConfigRecord(Record):
             else:
                 lines.append(("class of device", "{0:b}".format(cod)))
         if self.simple_pairing_hash:
-            lines.append(("pubkey hash", self.simple_pairing_hash))
+            simple_pairing_hash = str(self.simple_pairing_hash)
+            lines.append(("pubkey hash", simple_pairing_hash.encode("hex")))
         if self.simple_pairing_rand:
-            lines.append(("randomizer", self.simple_pairing_rand))
+            simple_pairing_rand = str(self.simple_pairing_rand)
+            lines.append(("randomizer", simple_pairing_rand.encode("hex")))
         for service_class_uuid in self.service_class_uuid_list:
             try: service_class = service_class_uuid_map[service_class_uuid]
             except KeyError: service_class = service_class_uuid
@@ -218,7 +220,7 @@ class BluetoothConfigRecord(Record):
         indent = indent * ' '
         lwidth = max([len(line[0]) for line in lines])
         lines = [line[0].ljust(lwidth) + " = " + line[1] for line in lines]
-        return ("\n").join([indent + prefix + line for line in lines])
+        return ("\n").join([indent + line for line in lines])
 
 def decode_class_of_device(cod):
     mdc, sdc = cod >> 8 & 0x1f, cod >> 2 & 0x3f

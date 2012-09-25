@@ -95,14 +95,16 @@ class UriRecord(Record):
         except AttributeError:
             raise TypeError("uri value must be a str type")
 
-    def pretty(self, indent=0, prefix=''):        
+    def pretty(self, indent=0):
         lines = list()
-        lines.append(("uri", self.uri))
+        if self.name:
+            lines.append(("identifier", repr(self.name)))
+        lines.append(("resource", self.uri))
         
         indent = indent * ' '
         lwidth = max([len(line[0]) for line in lines])
         lines = [line[0].ljust(lwidth) + " = " + line[1] for line in lines]
-        return ("\n").join([indent + prefix + line for line in lines])
+        return ("\n").join([indent + line for line in lines])
 
 protocol_strings = (
     "",

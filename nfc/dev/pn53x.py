@@ -113,7 +113,7 @@ class pn53x(object):
         ic, ver, rev, support = self.get_firmware_version()
         self.ic = "PN5{0:02x}".format(ic)
         self.fw = "{0}.{1}".format(ver, rev)
-        log.info("chipset is a {0} version {1}".format(self.ic, self.fw))
+        log.debug("chipset is a {0} version {1}".format(self.ic, self.fw))
 
     def close(self):
         self.bus.close()

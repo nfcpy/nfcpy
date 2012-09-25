@@ -31,6 +31,7 @@ from record import Record, RecordList
 from message import Message
 from error import *
 from bt_record import BluetoothConfigRecord
+from wifi_record import WifiConfigRecord
 
 def parse_carrier_structure(ac_record, records):
     carrier_record = records.get(ac_record.carrier_data_reference)
@@ -49,7 +50,7 @@ def parse_carrier_structure(ac_record, records):
             s = "auxiliary data reference {0} linked to nowhere"
             log.warning(s.format(ac_record.carrier_data_reference))
             raise DecodeError("orphaned auxiliary data reference")
-        carrier.axiliary_data_records.append(aux_data_record)
+        carrier.auxiliary_data_records.append(aux_data_record)
     return carrier
 
 # ------------------------------------------------------ HandoverRequestMessage
@@ -187,6 +188,44 @@ class HandoverRequestMessage(object):
                 carrier.auxiliary_data_records.append(aux)
         self.carriers.append(carrier)
 
+    def pretty(self, indent=0):
+        """Returns a string with a formatted representation that might
+        be considered pretty-printable."""
+        indent = indent * ' '
+        lines = list()
+        version_string = "{v.major}.{v.minor}".format(v=self.version)
+        lines.append(("handover version", version_string))
+        if self.nonce:
+            lines.append(("collision nonce", str(self.nonce)))
+        for index, carrier in enumerate(self.carriers):
+            lines.append(("carrier {0}:".format(index+1),))
+            lines.append((indent + "power state", carrier.power_state))
+            if carrier.record.type == "urn:nfc:wkt:Hc":
+                carrier_type = carrier.record.carrier_type
+                carrier_data = carrier.record.carrier_data
+                lines.append((indent + "carrier type", carrier_type))
+                lines.append((indent + "carrier data", repr(carrier_data)))
+            else:
+                if carrier.type == "application/vnd.bluetooth.ep.oob":
+                    carrier_record = BluetoothConfigRecord(carrier.record)
+                elif carrier.type == "application/vnd.wfa.wsc":
+                    carrier_record = WifiConfigRecord(carrier.record)
+                else:
+                    carrier_record = carrier.record
+                lines.append((indent + "carrier type", carrier.type))
+                pretty_lines = carrier_record.pretty(2).split('\n')
+                lines.extend([tuple(l.split(' = ')) for l in pretty_lines
+                              if not l.strip().startswith("identifier")])
+            for record in carrier.auxiliary_data_records:
+                lines.append((indent + "auxiliary data",))
+                lines.append((2*indent + "record type", record.type))
+                lines.append((2*indent + "record data", repr(record.data)))
+        
+        lwidth = max([len(line[0]) for line in lines])
+        lines = [(line[0].ljust(lwidth),) + line[1:] for line in lines]
+        lines = [" = ".join(line) for line in lines]
+        return ("\n").join([indent + line for line in lines])
+    
 # ------------------------------------------------------- HandoverRequestRecord
 class HandoverRequestRecord(Record):
     def __init__(self, record=None):
@@ -218,13 +257,15 @@ class HandoverRequestRecord(Record):
         if len(string) > 0:
             f = io.BytesIO(string)
             self.version = Version(f.read(1))
+            if self.version.major != 1:
+                raise DecodeError("unsupported major version")
             if self.version >= Version('\x12'):
                 record = Record(data=f)
                 if record.type == "urn:nfc:wkt:cr":
                     self.nonce = struct.unpack(">H", record.data)[0]
                 else:
-                    s = "cr record is required for version {0:s}"
-                    raise FormatError(s.format(self.version))
+                    s = "cr record is required for version {v.major}.{v.minor}"
+                    raise FormatError(s.format(v=self.version))
             while f.tell() < len(string):
                 record = Record(data=f)
                 if record.type == 'urn:nfc:wkt:ac':
@@ -234,6 +275,28 @@ class HandoverRequestRecord(Record):
                     s = "skip unknown local record {0}"
                     log.debug(s.format(record.type))
 
+    def pretty(self, indent=0):
+        indent = indent * ' '
+        lines = list()
+        version_string = "{v.major}.{v.minor}".format(v=self.version)
+        lines.append(("handover version", version_string))
+        if self.nonce:
+            lines.append(("collision nonce", str(self.nonce)))
+        for index, carrier in enumerate(self.carriers):
+            lines.append(("carrier {0}:".format(index+1),))
+            reference = carrier.carrier_data_reference
+            lines.append((indent + "reference", repr(reference)))
+            lines.append((indent + "power state", carrier.carrier_power_state))
+            if len(carrier.auxiliary_data_reference_list) > 0:
+                lines.append((indent + "auxiliary data",))
+                for aux_data_ref in carrier.auxiliary_data_reference_list:
+                    lines.append((2*indent + "reference", repr(aux_data_ref)))
+        
+        lwidth = max([len(line[0]) for line in lines])
+        lines = [(line[0].ljust(lwidth),) + line[1:] for line in lines]
+        lines = [" = ".join(line) for line in lines]
+        return ("\n").join([indent + line for line in lines])
+    
 # ------------------------------------------------------- HandoverSelectMessage
 class HandoverSelectMessage(object):
     """The handover select message is used in the the NFC Connection
@@ -365,6 +428,45 @@ class HandoverSelectMessage(object):
             carrier.auxiliary_data_records.append(aux)
         self.carriers.append(carrier)
     
+    def pretty(self, indent=0):
+        """Returns a string with a formatted representation that might
+        be considered pretty-printable."""
+        indent = indent * ' '
+        lines = list()
+        version_string = "{v.major}.{v.minor}".format(v=self.version)
+        lines.append(("handover version", version_string))
+        if self.error.reason:
+            lines.append(("error reason", self.error.reason))
+            lines.append(("error value", self.error.value))
+        for index, carrier in enumerate(self.carriers):
+            lines.append(("carrier {0}:".format(index+1),))
+            lines.append((indent + "power state", carrier.power_state))
+            if carrier.record.type == "urn:nfc:wkt:Hc":
+                carrier_type = carrier.record.carrier_type
+                carrier_data = carrier.record.carrier_data
+                lines.append((indent + "carrier type", carrier_type))
+                lines.append((indent + "carrier data", repr(carrier_data)))
+            else:
+                if carrier.type == "application/vnd.bluetooth.ep.oob":
+                    carrier_record = BluetoothConfigRecord(carrier.record)
+                elif carrier.type == "application/vnd.wfa.wsc":
+                    carrier_record = WifiConfigRecord(carrier.record)
+                else:
+                    carrier_record = carrier.record
+                lines.append((indent + "carrier type", carrier.type))
+                pretty_lines = carrier_record.pretty(2).split('\n')
+                lines.extend([tuple(l.split(' = ')) for l in pretty_lines
+                              if not l.strip().startswith("identifier")])
+            for record in carrier.auxiliary_data_records:
+                lines.append((indent + "auxiliary data",))
+                lines.append((2*indent + "record type", record.type))
+                lines.append((2*indent + "record data", repr(record.data)))
+
+        lwidth = max([len(line[0]) for line in lines])
+        lines = [(line[0].ljust(lwidth),) + line[1:] for line in lines]
+        lines = [" = ".join(line) for line in lines]
+        return ("\n").join([indent + line for line in lines])
+    
 # -------------------------------------------------------- HandoverSelectRecord
 class HandoverSelectRecord(Record):
     def __init__(self, record=None):
@@ -393,6 +495,8 @@ class HandoverSelectRecord(Record):
         if len(string) > 0:
             f = io.BytesIO(string)
             self.version = Version(f.read(1))
+            if self.version.major != 1:
+                raise DecodeError("unsupported major version")
             while f.tell() < len(string):
                 record = Record(data=f)
                 if record.type == 'urn:nfc:wkt:ac':
@@ -404,9 +508,11 @@ class HandoverSelectRecord(Record):
                     s = "skip unknown local record {0}"
                     log.debug(s.format(record.type))
 
-    def pretty(self, indent=0, prefix=''):
+    def pretty(self, indent=0):
         indent = indent * ' '
         lines = list()
+        version_string = "{v.major}.{v.minor}".format(v=self.version)
+        lines.append(("handover version", version_string))
         if self.error.reason:
             lines.append(("error reason", self.error.reason))
             lines.append(("error value", self.error.value))
@@ -416,14 +522,14 @@ class HandoverSelectRecord(Record):
             lines.append((indent + "reference", repr(reference)))
             lines.append((indent + "power state", carrier.carrier_power_state))
             if len(carrier.auxiliary_data_reference_list) > 0:
-                lines.append((indent + "auxiliary data references:",))
+                lines.append((indent + "auxiliary data",))
                 for aux_data_ref in carrier.auxiliary_data_reference_list:
                     lines.append((2*indent + "reference", repr(aux_data_ref)))
         
         lwidth = max([len(line[0]) for line in lines])
         lines = [(line[0].ljust(lwidth),) + line[1:] for line in lines]
         lines = [" = ".join(line) for line in lines]
-        return ("\n").join([indent + prefix + line for line in lines])
+        return ("\n").join([indent + line for line in lines])
     
 # ------------------------------------------------------- HandoverCarrierRecord
 class HandoverCarrierRecord(Record):
@@ -487,6 +593,16 @@ class HandoverCarrierRecord(Record):
     @carrier_data.setter
     def carrier_data(self, value):
         self._carrier_data = value
+    
+    def pretty(self, indent=0):
+        indent = indent * ' '
+        lines = list()
+        lines.append(("identifier", repr(self.name)))
+        lines.append(("carrier type", self.carrier_type))
+        lines.append(("carrier data", repr(self.carrier_data)))        
+        lwidth = max([len(line[0]) for line in lines])
+        lines = [line[0].ljust(lwidth) + " = " + line[1] for line in lines]
+        return ("\n").join([indent + line for line in lines])
     
 #----------------------------------------------------------- AlternativeCarrier
 class AlternativeCarrier(object):
@@ -620,12 +736,20 @@ class Carrier(object):
         self._auxiliary_data_records = list()
 
     @property
+    def type(self):
+        """The alternative carrier type name, equivalent to
+        :attr:`Carrier.record.type` or
+        :attr:`Carrier.record.carrier_type` if the carrier is
+        specified as a :class:`HandoverCarrierRecord`."""
+        return self.record.type if self.record.type != "urn:nfc:wkt:Hc" \
+            else self.record.carrier_type
+        
+    @property
     def record(self):
         """A carrier configuration record. Recognized and further
         interpreted records are: :class:`HandoverCarrierRecord`,
         :class:`BluetoothConfigRecord`, :class:`WifiConfigRecord`,
-        :class:`WifiPasswordRecord`.
-        """
+        :class:`WifiPasswordRecord`."""
         return self._record
         
     @property

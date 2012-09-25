@@ -46,33 +46,52 @@ def print_command(args):
     message = nfc.ndef.Message(data)
     for index, record in enumerate(message):
         rcount = " [record {0}]".format(index+1) if len(message) > 1 else ""
-        indent = 2
-        if record.type == "urn:nfc:wkt:T":
-            print("Text Record" + rcount)
-            print(nfc.ndef.TextRecord(record).pretty(indent))
-        elif record.type == "urn:nfc:wkt:U":
-            print("URI Record" + rcount)
-            print(nfc.ndef.UriRecord(record).pretty(indent))
-        elif record.type == "urn:nfc:wkt:Sp":
-            print("Smartposter Record" + rcount)
-            print(nfc.ndef.SmartPosterRecord(record).pretty(indent))
-        elif record.type == "application/vnd.bluetooth.ep.oob":
-            print("Bluetooth Configuration Record" + rcount)
-            print(nfc.ndef.BluetoothConfigRecord(record).pretty(indent))
-        elif record.type == "application/vnd.wfa.wsc":
-            try:
-                record = nfc.ndef.WifiPasswordRecord(record)
-                print("WiFi Password Record" + rcount)
-            except nfc.ndef.DecodeError:
-                record = nfc.ndef.WifiConfigRecord(record)
-                print("WiFi Configuration Record" + rcount)
-            print(record.pretty(indent))
-        elif record.type == "urn:nfc:wkt:Hs":
-            print("Handover Select Record" + rcount)
-            print(nfc.ndef.handover.HandoverSelectRecord(record).pretty(indent))
-        else:
-            print("Unknown Record" + rcount)
-            print(record.pretty(indent))
+        try:
+            if record.type == "urn:nfc:wkt:T":
+                print("Text Record" + rcount)
+                record = nfc.ndef.TextRecord(record)
+            elif record.type == "urn:nfc:wkt:U":
+                print("URI Record" + rcount)
+                record = nfc.ndef.UriRecord(record)
+            elif record.type == "urn:nfc:wkt:Sp":
+                print("Smartposter Record" + rcount)
+                record = nfc.ndef.SmartPosterRecord(record)
+            elif record.type == "application/vnd.bluetooth.ep.oob":
+                print("Bluetooth Configuration Record" + rcount)
+                record = nfc.ndef.BluetoothConfigRecord(record)
+            elif record.type == "application/vnd.wfa.wsc":
+                try:
+                    record = nfc.ndef.WifiPasswordRecord(record)
+                    print("WiFi Password Record" + rcount)
+                except nfc.ndef.DecodeError:
+                    record = nfc.ndef.WifiConfigRecord(record)
+                    print("WiFi Configuration Record" + rcount)
+            elif record.type == "urn:nfc:wkt:Hr":
+                print("Handover Request Record" + rcount)
+                record = nfc.ndef.handover.HandoverRequestRecord(record)
+            elif record.type == "urn:nfc:wkt:Hs":
+                print("Handover Select Record" + rcount)
+                record = nfc.ndef.handover.HandoverSelectRecord(record)
+            elif record.type == "urn:nfc:wkt:Hc":
+                print("Handover Carrier Record" + rcount)
+                record = nfc.ndef.handover.HandoverCarrierRecord(record)
+            else:
+                print("Unknown Record Type" + rcount)
+        except nfc.ndef.FormatError as e:
+            log.error(e)
+        print(record.pretty(indent=2))
+
+    try:
+        if message.type == "urn:nfc:wkt:Hr":
+            message = nfc.ndef.HandoverRequestMessage(message)
+            print("\nHandover Request Message")
+            print(message.pretty(indent=2) + '\n')
+        elif message.type == "urn:nfc:wkt:Hs":
+            message = nfc.ndef.HandoverSelectMessage(message)
+            print("\nHandover Select Message")
+            print(message.pretty(indent=2) + '\n')
+    except nfc.ndef.FormatError as e:
+        log.error(e)
     
 def add_make_parser(parser):
     parser.description = """The make command creates ndef
@@ -195,6 +214,19 @@ def make_wificonfig_parser(parser):
     parser.add_argument(
         "--shareable", action="store_true",
         help="network key may be shared with other devices")
+    parser.add_argument(
+        "--hs", action="store_true",
+        help="generate a handover select message")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        "--active", action="store_true",
+        help="set power state 'active' (implies --hs)")
+    group.add_argument(
+        "--inactive", action="store_true",
+        help="set power state 'inactive' (implies --hs)")
+    group.add_argument(
+        "--activating", action="store_true",
+        help="set power state 'activating' (implies --hs)")
     
 def make_wificonfig(args):
     import uuid
@@ -214,8 +246,18 @@ def make_wificonfig(args):
     record.credential['encryption'] = encryption
     record.credential['mac-address'] = args.mac
     log.info(record.pretty())
-    
-    message = nfc.ndef.Message(record)
+
+    if args.active or args.inactive or args.activating:
+        args.hs = True
+        
+    if args.hs:
+        message = nfc.ndef.HandoverSelectMessage(version='1.2')
+        power_state = ("active" if args.active else "inactive" if args.inactive
+                       else "activating" if args.activating else "unknown")
+        message.add_carrier(record, power_state)
+    else:
+        message = nfc.ndef.Message(record)
+        
     if args.outfile.name == "<stdout>":
         args.outfile.write(str(message).encode("hex"))
     else:
@@ -239,6 +281,19 @@ def make_bluetoothcfg_parser(parser):
     parser.add_argument(
         "-s", dest="service", metavar="STRING", action="append", default=[],
         help="a service class uuid")
+    parser.add_argument(
+        "--hs", action="store_true",
+        help="generate a handover select message")
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        "--active", action="store_true",
+        help="set power state 'active' (implies --hs)")
+    group.add_argument(
+        "--inactive", action="store_true",
+        help="set power state 'inactive' (implies --hs)")
+    group.add_argument(
+        "--activating", action="store_true",
+        help="set power state 'activating' (implies --hs)")
     
 def make_bluetoothcfg(args):
     record = nfc.ndef.BluetoothConfigRecord()
@@ -261,8 +316,18 @@ def make_bluetoothcfg(args):
                 sys.exit(1)
     record.service_class_uuid_list = args.service
     log.info(record.pretty())
-    
-    message = nfc.ndef.Message(record)
+
+    if args.active or args.inactive or args.activating:
+        args.hs = True
+        
+    if args.hs:
+        message = nfc.ndef.HandoverSelectMessage(version='1.2')
+        power_state = ("active" if args.active else "inactive" if args.inactive
+                       else "activating" if args.activating else "unknown")
+        message.add_carrier(record, power_state)
+    else:
+        message = nfc.ndef.Message(record)
+        
     if args.outfile.name == "<stdout>":
         args.outfile.write(str(message).encode("hex"))
     else:
@@ -391,7 +456,7 @@ if __name__ == '__main__':
 
     verbosity = logging.INFO if args.verbose else logging.ERROR
     verbosity = logging.DEBUG if args.debug else verbosity
-    logging.basicConfig(level=verbosity, format='%(message)s')
+    logging.basicConfig(level=verbosity, format='%(levelname)s: %(message)s')
 
     log.debug(args)
     args.func(args)

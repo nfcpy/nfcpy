@@ -155,6 +155,20 @@ class Message(object):
         records. This attribute is read-only."""
         return self._records[0].name if len(self._records) else None
 
+    def pretty(self):
+        """Returns a message representation that might be considered
+        pretty-printable."""
+        lines = list()
+        for index, record in enumerate(self._records):
+            lines.append(("record {0}".format(index),))
+            lines.append(("  type", repr(record.type)))
+            lines.append(("  name", repr(record.name)))
+            lines.append(("  data", repr(record.data)))
+        lwidth = max([len(line[0]) for line in lines])
+        lines = [(line[0].ljust(lwidth),) + line[1:] for line in lines]
+        lines = [" = ".join(line) for line in lines]
+        return ("\n").join([line for line in lines])
+        
     # **************
     # * deprecated *
     # **************

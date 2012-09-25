@@ -31,6 +31,10 @@ import struct
 import pn53x
 
 class rcs956(pn53x.pn53x):
+    def __init__(self, bus):
+        super(rcs956, self).__init__(bus)
+        self.reset_mode()
+        
     def diagnose(self, num_tst, in_param=""):
         return self.command(0x00, chr(num_tst) + in_param)
 
