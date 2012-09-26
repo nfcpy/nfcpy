@@ -77,9 +77,7 @@ def show_tag(args):
             print(format_data(tag.ndef.message))
             message = nfc.ndef.Message(tag.ndef.message)
             print("NDEF record list:")
-            for index, record in enumerate(message):
-                print(record.pretty(indent=2, prefix="[{0}] "
-                                    .format(index+1)))
+            print(message.pretty())
     return tag
         
 def add_dump_parser(parser):
