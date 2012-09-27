@@ -41,10 +41,19 @@ class TestBase(object):
         
         self.options = argument_parser.parse_args()
         
+        logformat = '%(message)s'
         verbosity = logging.ERROR if self.options.quiet else logging.INFO
-        logging.basicConfig(level=verbosity,
-                            format='[%(name)s] %(message)s')
+        
+        if self.options.debug:
+            logformat = '%(levelname)-5s [%(name)s] %(message)s'
+            if '' in self.options.debug:
+                verbosity = logging.DEBUG
+        
+        logging.basicConfig(level=verbosity, format=logformat)
 
+        if self.options.debug and 'nfc' in self.options.debug:
+            verbosity = logging.DEBUG
+            
         if self.options.logfile:
             logfile_format = \
                 '%(asctime)s %(levelname)-5s [%(name)s] %(message)s'
@@ -61,8 +70,6 @@ class TestBase(object):
                 logging.getLogger("nfc."+name[:-3]).setLevel(verbosity)
             
         if self.options.debug:
-            logging.getLogger('').setLevel(logging.DEBUG)
-            logging.getLogger('nfc').setLevel(logging.DEBUG)
             for module in self.options.debug:
                 log.info("enable debug output for module '{0}'".format(module))
                 logging.getLogger(module).setLevel(logging.DEBUG)
@@ -73,11 +80,8 @@ class TestBase(object):
             "-q", "--quiet", dest="quiet", action="store_true",
             help="do not print anything except errors")
         group.add_argument(
-            "--debug-all", dest="debug_all", action="store_true",
-            help="print all debug messages")
-        group.add_argument(
             "-d", metavar="MODULE", dest="debug", action="append",
-            help="print debug messages for MODULE")
+            help="print debug messages for MODULE, use '' for all")
         group.add_argument(
             "-f", dest="logfile", metavar="FILE",
             help="write log messages to file")
