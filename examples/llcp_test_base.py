@@ -151,6 +151,12 @@ class TestBase(object):
                 sys.stdout.write('.')
                 sys.stdout.flush()
 
+    def register_llcp_services(self):
+        pass
+    
+    def startup_llcp_services(self):
+        pass
+    
     def start(self):
         if not self.connect_reader():
             log.info("contactless frontend not found")
