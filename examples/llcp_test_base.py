@@ -67,8 +67,6 @@ class TestBase(object):
                 log.info("enable debug output for module '{0}'".format(module))
                 logging.getLogger(module).setLevel(logging.DEBUG)
 
-        log.info("arguments {0}".format(vars(self.options)))
-
     def add_info_options(self, argument_parser):
         group = argument_parser.add_argument_group()
         group.add_argument(
