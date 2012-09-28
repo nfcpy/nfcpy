@@ -94,15 +94,23 @@ Options:
 
    Run test number *N*. This option may be given more than once.
 
-   1. *Connect and disconnect.* Verify that the remote device has a
+   1. *Connect and Disconnect.* Verify that the remote device has a
       connection handover server running and a client can open and
       close a connection with the server.
-   2. *Connect and reconnect.* Verify that the handover server accepts
+   2. *Connect and Reconnect.* Verify that the handover server accepts
       a subsequent connection after a first one was established and
       released.
-   3. *Empty handover request.* Verify that the handover server
+   3. *Empty Handover Request.* Verify that the handover server
       responds to a handover request without alternative carriers with
       a handover select message that also has no alternative carriers.
+   4. *One Bluetooth Carrier* Send a single Bluetooth alternative
+      carrier and verify that the remote server responds with a single
+      Bluetooth carrier. Only applicable if the remote device has
+      Bluetooth technology. The expected carrier power state is either
+      "active" or "activating". The Bluetooth Local Name, Secure
+      Simple Pairing Hash C and Randomizer R, Class of Device and one
+      or more Service Class UUID attributes are expected unless the
+      `--quirks` option flag is set.
 
 .. option:: --quirks
 
