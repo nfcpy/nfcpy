@@ -193,7 +193,7 @@ class HandoverTestServer(TestBase):
         log.info("<<< Handover Request\n" + handover_request.pretty(2))
         handover_select = nfc.ndef.HandoverSelectMessage(version="1.2")
         
-        if handover_request.version.minor == 0 and options.quirks:
+        if handover_request.version.minor == 0 and self.options.quirks:
             log.warning("quirks: accept handover version 1.0 as 1.1")
         elif handover_request.version.minor not in range(1,3):
             log.warning("unsupported minor version")
