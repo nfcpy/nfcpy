@@ -32,6 +32,9 @@ Tutorials
 :doc:`topics/ndef`
     How to parse or generate NDEF records and messages.
 
+:doc:`topics/test-tags`
+    Recipes to generate tags for testing tag readers.
+
 Examples
 ========
 

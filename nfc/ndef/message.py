@@ -160,7 +160,7 @@ class Message(object):
         pretty-printable."""
         lines = list()
         for index, record in enumerate(self._records):
-            lines.append(("record {0}".format(index),))
+            lines.append(("record {0}".format(index+1),))
             lines.append(("  type", repr(record.type)))
             lines.append(("  name", repr(record.name)))
             lines.append(("  data", repr(record.data)))
