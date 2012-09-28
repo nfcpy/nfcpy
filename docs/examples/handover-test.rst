@@ -80,17 +80,39 @@ Options:
 handover test client
 ====================
 
-.. note:: The handover-test-client is not yet available.
-
-..
-  Usage::
+Usage::
 
   $ handover-test-client.py [-h|--help] [OPTION]... [CARRIER]...
 
-  Options:
+The handover test client implements the handover requester role.
 
-  .. program:: handover-test-client.py
+Options:
 
+.. program:: handover-test-client.py
+
+.. option:: -t N, --test 
+
+   Run test number *N*. This option may be given more than once.
+
+   1. *Connect and disconnect.* Verify that the remote device has a
+      connection handover server running and a client can open and
+      close a connection with the server.
+   2. *Connect and reconnect.* Verify that the handover server accepts
+      a subsequent connection after a first one was established and
+      released.
+   3. *Empty handover request.* Verify that the handover server
+      responds to a handover request without alternative carriers with
+      a handover select message that also has no alternative carriers.
+
+.. option:: --quirks
+
+   This option causes the handover test client to try support
+   non-compliant implementations if possible and as known. The
+   behavioral modifications activated with `--quirks` are:
+
+   * after test procedures are completed the client does not terminate
+     the LLCP link but waits until the link is disrupted to prevent
+     the NFC stack segfault and recovery on pre 4.1 Android devices.
 
 Recipes
 =======

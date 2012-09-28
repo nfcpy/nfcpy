@@ -27,6 +27,7 @@ import os
 import sys
 import time
 import argparse
+import random
 
 sys.path.insert(1, os.path.split(sys.path[0])[0])
 from llcp_test_base import TestBase
@@ -118,8 +119,9 @@ class TestError(Exception):
 def trace(func):
     def _func(*args, **kwargs):
         scenario = func.__doc__.splitlines()[0].lower().strip('.')
-        log.info("*** running scenario '{0}' ***".format(scenario))
-        return func(*args, **kwargs)
+        log.info("*** starting scenario '{0}' ***".format(scenario))
+        func(*args, **kwargs)
+        log.info("*** finished scenario '{0}' ***".format(scenario))
     return _func
 
 @trace
@@ -156,6 +158,45 @@ def test_02():
         log.info("reconnected to the remote handover server")
     except nfc.llcp.ConnectRefused:
         raise TestError("remote device refused the subsequent connect")
+
+@trace
+def test_03():
+    """Empty handover request.
+
+    Verify that the handover server responds to a handover request
+    without alternative carriers with a handover select message that
+    also has no alternative carriers.
+    """
+    client = nfc.handover.HandoverClient()
+    try:
+        client.connect()
+        log.info("connected to the remote handover server")
+    except nfc.llcp.ConnectRefused:
+        raise TestError("remote device does not have a handover service")
+
+    message = nfc.ndef.HandoverRequestMessage(version="1.2")
+    message.nonce = random.randint(0, 0xffff)
+    
+    if client.send(message):
+        message = client._recv(timeout=10.0)
+    else:
+        raise TestError("handover request send failed")
+        
+    if message is None:
+        raise TestError("no answer within 10 seconds")
+        
+    if not message.type == "urn:nfc:wkt:Hs":
+        raise TestError("unexpected message type '{0}'"
+                        .format(message.type))
+        
+    try:
+        message = nfc.ndef.HandoverSelectMessage(message)
+    except nfc.ndef.DecodeError:
+        raise TestError("invalid handover select message")
+        
+    if len(message.carriers) > 0:
+        raise TestError("handover select message returned carriers")
+        
 
 class HandoverTestClient(TestBase):
     def __init__(self):
