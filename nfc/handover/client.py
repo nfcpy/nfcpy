@@ -26,6 +26,7 @@ import logging
 log = logging.getLogger(__name__)
 
 import nfc.llcp
+import time
 
 class HandoverClient(object):
     """ NFC Forum Connection Handover client
@@ -63,37 +64,39 @@ class HandoverClient(object):
             else: break
         return bool(len(data) == 0)
         
-    def recv(self):
+    def recv(self, timeout=None):
         """Receive a handover select message from the remote server."""
-        message = self._recv()
+        message = self._recv(timeout)
         if message and message.type == "urn:nfc:wkt:Hs":
             log.debug("received '{0}' message".format(message.type))
-            return message
+            return nfc.ndef.HandoverSelectMessage(message)
         else:
+            log.error("received invalid message type {0}".format(message.type))
             return None
 
-    def _recv(self):
+    def _recv(self, timeout=None):
         data = ''
-        while nfc.llcp.poll(socket, "recv"):
+        started = time.time()
+        while nfc.llcp.poll(self.socket, "recv", timeout):
             try:
                 data += nfc.llcp.recv(self.socket)
                 message = nfc.ndef.Message(data)
                 log.debug("received message\n" + message.pretty())
-                break
+                return message
             except nfc.ndef.ParseError:
+                elapsed = time.time() - started
                 log.debug("message is incomplete ({0} byte)".format(len(data)))
+                if timeout:
+                    timeout = timeout - elapsed
+                    log.debug("{0:.3f} seconds left to timeout".format(timeout))
                 continue # incomplete message
             except TypeError:
-                return None # recv() returned None
-        return message
+                break # recv() returned None
     
     def __enter__(self):
         self.connect()
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        print exc_type
-        print exc_value
-        print traceback
         self.close()
 
