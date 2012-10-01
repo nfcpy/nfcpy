@@ -110,6 +110,14 @@ Options:
    Run test number *N* from the test suite. Multiple tests can be
    specified.
 
+.. option:: --relax
+
+   The ``--relax`` option affects how missing optional, but highly
+   recommended, handover date is handled when running test
+   scenarios. Without ``--relax`` any missing data is regarded as a
+   test error that terminates test execution. With the ``--relax``
+   option set only a warning message is logged.
+
 .. option:: --quirks
 
    This option causes the handover test client to try support
