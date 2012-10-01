@@ -40,8 +40,8 @@ class HandoverClient(object):
         have a handover service or the service does not accept any
         more connections."""
         socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
+        nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
         nfc.llcp.connect(socket, "urn:nfc:sn:handover")
-        nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVBUF, 15)
         log.info("handover client connected to remote sap {0}"
                  .format(nfc.llcp.getsockname(socket)))
         self.socket = socket
@@ -52,10 +52,16 @@ class HandoverClient(object):
             nfc.llcp.close(self.socket)
             self.socket = None
 
-    def send(self, request):
+    def send(self, message):
         """Send a handover request message to the remote server."""
+        log.debug("sending '{0}' message".format(message.type))
         send_miu = nfc.llcp.getsockopt(self.socket, nfc.llcp.SO_SNDMIU)
-        return self._send(str(request), send_miu)
+        try:
+            data = str(message)
+        except nfc.llcp.EncodeError as e:
+            log.error("message encoding failed: {0}".format(e))
+        else:
+            return self._send(data, send_miu)
         
     def _send(self, data, miu):
         while len(data) > 0:
@@ -83,7 +89,7 @@ class HandoverClient(object):
                 message = nfc.ndef.Message(data)
                 log.debug("received message\n" + message.pretty())
                 return message
-            except nfc.ndef.ParseError:
+            except nfc.ndef.LengthError:
                 elapsed = time.time() - started
                 log.debug("message is incomplete ({0} byte)".format(len(data)))
                 if timeout:
@@ -91,6 +97,7 @@ class HandoverClient(object):
                     log.debug("{0:.3f} seconds left to timeout".format(timeout))
                 continue # incomplete message
             except TypeError:
+                log.debug("data link connection closed")
                 break # recv() returned None
     
     def __enter__(self):
