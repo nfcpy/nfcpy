@@ -125,9 +125,13 @@ def handover_connect():
     except nfc.llcp.ConnectRefused:
         raise TestError("unable to connect to the handover server")
 
-def handover_send(client, message):
-    if not client.send(message):
-        raise TestError("handover request send failed")
+def handover_send(client, message, miu=128):
+    if isinstance(message, str):
+        if not client._send(message, miu):
+            raise TestError("error sending handover request")
+    else:
+        if not client.send(message):
+            raise TestError("error sending handover request")
 
 def handover_recv(client, timeout):
     message = client._recv(timeout)
@@ -197,14 +201,14 @@ def test_03(options):
 
     log.info("send handover request message with version 1.15")
     message = nfc.ndef.HandoverRequestMessage(version="1.15")
+    message.nonce = random.randint(0, 0xffff)
     handover_send(client, message)
     message = handover_recv(client, timeout=3.0)
     if message.version.major != 1 and message.version.minor != 2:
         raise TestError("handover select message version is not 1.2")
 
     log.info("send handover request message with version 15.0")
-    message = nfc.ndef.HandoverRequestMessage(version="15.0")
-    handover_send(client, message)
+    handover_send(client, "d102014872f0".decode("hex"), miu=128)
     message = handover_recv(client, timeout=3.0)
     if message.version.major != 1 and message.version.minor != 2:
         raise TestError("handover select message version is not 1.2")
@@ -241,17 +245,32 @@ def test_04(options):
         raise TestError("a Bluetooth carrier is expected")
     record = message.carrier[0].record
     if record.local_device_name is None:
-        raise TestError("no local device name attribute")
+        if options.relax:
+            log.warning("[relax] no local device name attribute")
+        else:
+            raise TestError("no local device name attribute")
     if record.local_device_name == "":
         raise TestError("empty local device name attribute")
     if record.class_of_device is None:
-        raise TestError("no class of device attribute")
+        if options.relax:
+            log.warning("[relax] ")
+        else:
+            raise TestError("no class of device attribute")
     if record.simple_pairing_hash is None:
-        raise TestError("no simple pairing hash attribute")
+        if options.relax:
+            log.warning("[relax] no simple pairing hash attribute")
+        else:
+            raise TestError("no simple pairing hash attribute")
     if record.simple_pairing_rand is None:
-        raise TestError("no simple pairing randomizer attribute")
+        if options.relax:
+            log.warning("[relax] no simple pairing randomizer attribute")
+        else:
+            raise TestError("no simple pairing randomizer attribute")
     if len(record.service_class_uuid_list) == 0:
-        raise TestError("no service class uuids attribute")
+        if options.relax:
+            log.warning("[relax] no service class uuids attribute")
+        else:
+            raise TestError("no service class uuids attribute")
     client.close()
 
 class HandoverTestClient(TestBase):
@@ -266,6 +285,9 @@ class HandoverTestClient(TestBase):
         parser.add_argument(
             "-t", "--test", action="append", type=int, metavar="N", default=[],
             help="run test number N")
+        parser.add_argument(
+            "--relax", action="store_true",
+            help="relax on verifying optional parts")        
         parser.add_argument(
             "--skip-local", action="store_true",
             help="skip local carrier detection")        
@@ -319,14 +341,15 @@ class HandoverTestClient(TestBase):
     
         for test in self.options.test:
             if test > 0 and test <= len(test_suite):
-                quirks_mode = "in quirks mode" if self.options.quirks else ""
+                test_mode = ("in quirks mode" if self.options.quirks else
+                             "in relax mode" if self.options.relax else "")
                 try:
                     test_func = test_suite[test-1]
                     test_name = test_func.__doc__.splitlines()[0]
                     test_name = test_name.lower().strip('.')
-                    log.info("*** test scenario '{0}' ***".format(test_name))
-                    test(self.options)
-                    log.info("PASSED {0!r} {1}".format(test_name, quirks_mode))
+                    log.info("*** test scenario {0!r} ***".format(test_name))
+                    test_func(self.options)
+                    log.info("PASSED {0!r} {1}".format(test_name, test_mode))
                 except TestError as error:
                     log.error("FAILED {0!r} because {1}"
                               .format(test_name, error))
