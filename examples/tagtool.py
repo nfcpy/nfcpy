@@ -62,8 +62,9 @@ def show_tag(args):
             "\x00\xF0": "FeliCa Lite RC-S965",
             "\x00\xF1": "FeliCa Lite-S RC-S966",
             "\x01\xE0": "FeliCa Plug RC-S801/RC-S802",
-            "\x01\x20": "FeliCa Card RC-S976F [212/424kbps]",
-            "\x03\x01": "FeliCa Card RC-S860 [212kbps, 4KB FEPROM]",
+            "\x01\x20": "FeliCa Card RC-S976F [424 kbps]",
+            "\x03\x01": "FeliCa Card RC-S860 [212 kbps, 4KB FEPROM]",
+            "\x0f\x0d": "FeliCa Card RC-S889 [424 kbps, 9KB FRAM]",
             }
         print("  " + tt3_card_map.get(str(tag.pmm[0:2]), "unknown card"))
     if tag.ndef:
