@@ -24,3 +24,4 @@
 # 
 
 from nfc.handover.server import HandoverServer
+from nfc.handover.client import HandoverClient
