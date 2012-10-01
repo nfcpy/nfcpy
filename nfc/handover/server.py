@@ -78,7 +78,7 @@ class HandoverServer(Thread):
                 response_data = str(response)
                 log.debug(">>> {0!r}".format(response_data))
 
-                while len(data) > 0:
+                while len(response_data) > 0:
                     if nfc.llcp.send(socket, response_data[0:send_miu]):
                         response_data = response_data[send_miu:]
                     else:
@@ -90,27 +90,33 @@ class HandoverServer(Thread):
             nfc.llcp.close(socket)
 
     def _process_request(self, request):
-        log.debug("rcvd handover request {0}".format(request.type))
-        for line in request.pretty().split('\n'):
-            log.debug(line)
-        response = self.process_request(request)
-        log.debug("send handover response {0}".format(response.type))
-        for line in response.pretty().split('\n'):
-            log.debug(line)
+        log.debug("rcvd handover request {0}\n{1}"
+                  .format(request.type, request.pretty()))
+        response = nfc.ndef.Message("\xd1\x02\x01Hs\x12")
+        if not request.type == 'urn:nfc:wkt:Hr':
+            log.error("received message which is not a handover request")
+        else:
+            try:
+                request = nfc.ndef.HandoverRequestMessage(request)
+            except nfc.ndef.DecodeError as e:
+                log.error("error decoding 'Hr' message: {0}".format(e))
+            else:
+                response = self.process_request(request)
+        log.debug("send handover response {0}\n{1}"
+                  .format(response.type, response.pretty()))
         return response
     
     def process_request(self, request):
         """Process a handover request message. The *request* argument
-        is a valid NDEF message and usually, but not necessarily, of
-        type :class:`nfc.ndef.HandoverRequestMessage`. The return
-        value must be a valid NDEF message which is sent back to the
-        client.
+        is a :class:`nfc.ndef.HandoverRequestMessage` object. The
+        return value must be a :class:`nfc.ndef.HandoverSelectMessage`
+        object to be sent back to the client.
 
         This method should be overwritten by a subclass of
         :class:`HandoverServer` to customize it's behavior. The
-        default implementation returns a
-        :class:`nfc.ndef.HandoverSelectMessage` object with empty
-        carrier list."""
+        default implementation returns a version ``1.2``
+        :class:`nfc.ndef.HandoverSelectMessage` with no carriers.
+        """
         log.warning("default process_request method should be overwritten")
         return nfc.ndef.HandoverSelectMessage(version="1.2")
 

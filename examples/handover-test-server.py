@@ -88,11 +88,7 @@ class HandoverServer(nfc.handover.HandoverServer):
         self.select_carrier = select_carrier_func
 
     def process_request(self, request):
-        if request.type == 'urn:nfc:wkt:Hr':
-            hr = nfc.ndef.HandoverRequestMessage(request)
-            return self.select_carrier(hr)
-        else:
-            log.error("unexpected message type {0!r}".format(request.type))
+        return self.select_carrier(request)
     
 class DefaultSnepServer(nfc.snep.SnepServer):
     def __init__(self, select_carrier_func):
