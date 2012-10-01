@@ -116,14 +116,6 @@ class TestError(Exception):
     def __str__(self):
         return str(self.value)
 
-def trace(func):
-    def _func(*args, **kwargs):
-        scenario = func.__doc__.splitlines()[0].lower().strip('.')
-        log.info("*** starting scenario '{0}' ***".format(scenario))
-        func(*args, **kwargs)
-        log.info("*** finished scenario '{0}' ***".format(scenario))
-    return _func
-
 def handover_connect():
     client = nfc.handover.HandoverClient()
     try:
@@ -150,23 +142,12 @@ def handover_recv(client, timeout):
     return message
         
     
-@trace
-def test_bv_01(options):
-    """Connect and disconnect.
+def test_01(options):
+    """Presence and connectivity.
 
-    Verify that the remote device has a connection handover server
-    running and a client can open and close a connection with the
-    server.
-    """
-    client = handover_connect()
-    client.close()
-
-@trace
-def test_bv_02(options):
-    """Connect and reconnect.
-
-    Verify that the handover server accepts a subsequent connection
-    after a first one was established and released.
+    Verify that the remote device has the connection handover service
+    active and that the client can open, close and re-open a connection
+    with the server.
     """
     log.info("1st attempt to connect to the remote handover server")
     client = handover_connect()
@@ -175,10 +156,9 @@ def test_bv_02(options):
     client = handover_connect()
     client.close()
 
-@trace
-def test_bv_03(options):
-    """Empty handover request.
-
+def test_02(options):
+    """Empty carrier list.
+    
     Verify that the handover server responds to a handover request
     without alternative carriers with a handover select message that
     also has no alternative carriers.
@@ -187,21 +167,64 @@ def test_bv_03(options):
     message = nfc.ndef.HandoverRequestMessage(version="1.2")
     message.nonce = random.randint(0, 0xffff)
     handover_send(client, message)
-    message = handover_recv(client, timeout=10.0)
+    message = handover_recv(client, timeout=3.0)
     if len(message.carriers) > 0:
         raise TestError("handover select message returned carriers")    
     client.close()
 
-@trace
-def test_bv_04(options):
-    """One Bluetooth carrier.
+def test_03(options):
+    """Version handling.
+    
+    Verify that the remote handover server handles historic and future
+    handover request version numbers.
+    """
+    client = handover_connect()
+
+    log.info("send handover request message with version 1.2")
+    message = nfc.ndef.HandoverRequestMessage(version="1.2")
+    message.nonce = random.randint(0, 0xffff)
+    handover_send(client, message)
+    message = handover_recv(client, timeout=3.0)
+    if message.version.major != 1 and message.version.minor != 2:
+        raise TestError("handover select message version is not 1.2")
+    
+    log.info("send handover request message with version 1.1")
+    message = nfc.ndef.HandoverRequestMessage(version="1.1")
+    handover_send(client, message)
+    message = handover_recv(client, timeout=3.0)
+    if message.version.major != 1 and message.version.minor != 2:
+        raise TestError("handover select message version is not 1.2")
+
+    log.info("send handover request message with version 1.15")
+    message = nfc.ndef.HandoverRequestMessage(version="1.15")
+    handover_send(client, message)
+    message = handover_recv(client, timeout=3.0)
+    if message.version.major != 1 and message.version.minor != 2:
+        raise TestError("handover select message version is not 1.2")
+
+    log.info("send handover request message with version 15.0")
+    message = nfc.ndef.HandoverRequestMessage(version="15.0")
+    handover_send(client, message)
+    message = handover_recv(client, timeout=3.0)
+    if message.version.major != 1 and message.version.minor != 2:
+        raise TestError("handover select message version is not 1.2")
+
+    client.close()
+
+def test_04(options):
+    """Single Bluetooth carrier.
+
+    Verify that the `application/vnd.bluetooth.ep.oob` alternative
+    carrier is correctly evaluated and replied with a all mandatory and
+    recommended information. This test is only applicable if the peer
+    device does have Bluetooth connectivity.
     """
     client = handover_connect()
     message = nfc.ndef.HandoverRequestMessage(version="1.2")
     message.nonce = random.randint(0, 0xffff)
     record = nfc.ndef.BluetoothConfigRecord()
     record.device_address = "01:02:03:04:05:06"
-    record.local_device_name = "Handover Test"
+    record.local_device_name = "Handover Test Client"
     record.simple_pairing_hash = os.urandom(16)
     record.simple_pairing_rand = os.urandom(16)
     record.class_of_device = 0x10010C
@@ -210,15 +233,26 @@ def test_bv_04(options):
         "00001106-0000-1000-8000-00805f9b34fb"]
     message.add_carrier(record, "active")
     handover_send(client, message)
-    message = handover_recv(client, timeout=10.0)
+    message = handover_recv(client, timeout=3.0)
     log.info(message.pretty())
     if len(message.carriers) != 1:
-        raise TestError("one selected carrier was expected")
+        raise TestError("one selected carrier is expected")
     if message.carrier[0].type != "application/vnd.bluetooth.ep.oob":
-        raise TestError("a Bluetooth carrier was expected")
+        raise TestError("a Bluetooth carrier is expected")
     record = message.carrier[0].record
+    if record.local_device_name is None:
+        raise TestError("no local device name attribute")
+    if record.local_device_name == "":
+        raise TestError("empty local device name attribute")
+    if record.class_of_device is None:
+        raise TestError("no class of device attribute")
+    if record.simple_pairing_hash is None:
+        raise TestError("no simple pairing hash attribute")
+    if record.simple_pairing_rand is None:
+        raise TestError("no simple pairing randomizer attribute")
+    if len(record.service_class_uuid_list) == 0:
+        raise TestError("no service class uuids attribute")
     client.close()
-
 
 class HandoverTestClient(TestBase):
     def __init__(self):
@@ -285,11 +319,17 @@ class HandoverTestClient(TestBase):
     
         for test in self.options.test:
             if test > 0 and test <= len(test_suite):
+                quirks_mode = "in quirks mode" if self.options.quirks else ""
                 try:
-                    test_suite[test-1](self.options)
-                    log.info("PASS")
+                    test_func = test_suite[test-1]
+                    test_name = test_func.__doc__.splitlines()[0]
+                    test_name = test_name.lower().strip('.')
+                    log.info("*** test scenario '{0}' ***".format(test_name))
+                    test(self.options)
+                    log.info("PASSED {0!r} {1}".format(test_name, quirks_mode))
                 except TestError as error:
-                    log.error("FAIL: {0}".format(error))
+                    log.error("FAILED {0!r} because {1}"
+                              .format(test_name, error))
             else:
                 log.info("invalid test number '{0}'".format(test))
 

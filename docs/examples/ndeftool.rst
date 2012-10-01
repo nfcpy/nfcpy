@@ -231,7 +231,9 @@ Options:
 .. option:: --hs
 
    Encapsulate the Bluetooth Configuration record into a Handover
-   Select Message. The carrier power state will set to 'unknown'.
+   Select Message. The carrier power state will set to 'unknown'
+   unless one of the options `--active`, `--inactive` or
+   `--activating` is given.
 
 .. option:: --active
 
