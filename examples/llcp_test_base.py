@@ -180,6 +180,8 @@ class TestBase(object):
                 try:
                     self.startup_llcp_services()
                     self.main()
+                except Exception as e:
+                    log.error(e)
                 finally:
                     nfc.llcp.shutdown()
                     log.info("I was the " + self.peer.role)
