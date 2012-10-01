@@ -70,8 +70,8 @@ class HandoverServer(Thread):
                             break # message complete
                         except nfc.ndef.LengthError:
                             continue # need more data
-                    else:
-                        return # connection closed
+                    else: return # connection closed
+                else: return # connection closed
 
                 log.debug("<<< {0!r}".format(request_data))
                 response = handover_server._process_request(request)
