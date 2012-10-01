@@ -168,13 +168,15 @@ def test_02(options):
     also has no alternative carriers.
     """
     client = handover_connect()
-    message = nfc.ndef.HandoverRequestMessage(version="1.2")
-    message.nonce = random.randint(0, 0xffff)
-    handover_send(client, message)
-    message = handover_recv(client, timeout=3.0)
-    if len(message.carriers) > 0:
-        raise TestError("handover select message returned carriers")    
-    client.close()
+    try:
+        message = nfc.ndef.HandoverRequestMessage(version="1.2")
+        message.nonce = random.randint(0, 0xffff)
+        handover_send(client, message)
+        message = handover_recv(client, timeout=3.0)
+        if len(message.carriers) > 0:
+            raise TestError("handover select message returned carriers")
+    finally:
+        client.close()
 
 def test_03(options):
     """Version handling.
@@ -183,37 +185,37 @@ def test_03(options):
     handover request version numbers.
     """
     client = handover_connect()
+    try:
+        log.info("send handover request message with version 1.2")
+        message = nfc.ndef.HandoverRequestMessage(version="1.2")
+        message.nonce = random.randint(0, 0xffff)
+        handover_send(client, message)
+        message = handover_recv(client, timeout=3.0)
+        if message.version.major != 1 and message.version.minor != 2:
+            raise TestError("handover select message version is not 1.2")
 
-    log.info("send handover request message with version 1.2")
-    message = nfc.ndef.HandoverRequestMessage(version="1.2")
-    message.nonce = random.randint(0, 0xffff)
-    handover_send(client, message)
-    message = handover_recv(client, timeout=3.0)
-    if message.version.major != 1 and message.version.minor != 2:
-        raise TestError("handover select message version is not 1.2")
-    
-    log.info("send handover request message with version 1.1")
-    message = nfc.ndef.HandoverRequestMessage(version="1.1")
-    handover_send(client, message)
-    message = handover_recv(client, timeout=3.0)
-    if message.version.major != 1 and message.version.minor != 2:
-        raise TestError("handover select message version is not 1.2")
+        log.info("send handover request message with version 1.1")
+        message = nfc.ndef.HandoverRequestMessage(version="1.1")
+        handover_send(client, message)
+        message = handover_recv(client, timeout=3.0)
+        if message.version.major != 1 and message.version.minor != 2:
+            raise TestError("handover select message version is not 1.2")
 
-    log.info("send handover request message with version 1.15")
-    message = nfc.ndef.HandoverRequestMessage(version="1.15")
-    message.nonce = random.randint(0, 0xffff)
-    handover_send(client, message)
-    message = handover_recv(client, timeout=3.0)
-    if message.version.major != 1 and message.version.minor != 2:
-        raise TestError("handover select message version is not 1.2")
+        log.info("send handover request message with version 1.15")
+        message = nfc.ndef.HandoverRequestMessage(version="1.15")
+        message.nonce = random.randint(0, 0xffff)
+        handover_send(client, message)
+        message = handover_recv(client, timeout=3.0)
+        if message.version.major != 1 and message.version.minor != 2:
+            raise TestError("handover select message version is not 1.2")
 
-    log.info("send handover request message with version 15.0")
-    handover_send(client, "d102014872f0".decode("hex"), miu=128)
-    message = handover_recv(client, timeout=3.0)
-    if message.version.major != 1 and message.version.minor != 2:
-        raise TestError("handover select message version is not 1.2")
-
-    client.close()
+        log.info("send handover request message with version 15.0")
+        handover_send(client, "d102014872f0".decode("hex"), miu=128)
+        message = handover_recv(client, timeout=3.0)
+        if message.version.major != 1 and message.version.minor != 2:
+            raise TestError("handover select message version is not 1.2")
+    finally:
+        client.close()
 
 def test_04(options):
     """Single Bluetooth carrier.
@@ -224,54 +226,56 @@ def test_04(options):
     device does have Bluetooth connectivity.
     """
     client = handover_connect()
-    message = nfc.ndef.HandoverRequestMessage(version="1.2")
-    message.nonce = random.randint(0, 0xffff)
-    record = nfc.ndef.BluetoothConfigRecord()
-    record.device_address = "01:02:03:04:05:06"
-    record.local_device_name = "Handover Test Client"
-    record.simple_pairing_hash = os.urandom(16)
-    record.simple_pairing_rand = os.urandom(16)
-    record.class_of_device = 0x10010C
-    record.service_class_uuid_list = [
-        "00001105-0000-1000-8000-00805f9b34fb",
-        "00001106-0000-1000-8000-00805f9b34fb"]
-    message.add_carrier(record, "active")
-    handover_send(client, message)
-    message = handover_recv(client, timeout=3.0)
-    log.info(message.pretty())
-    if len(message.carriers) != 1:
-        raise TestError("one selected carrier is expected")
-    if message.carrier[0].type != "application/vnd.bluetooth.ep.oob":
-        raise TestError("a Bluetooth carrier is expected")
-    record = message.carrier[0].record
-    if record.local_device_name is None:
-        if options.relax:
-            log.warning("[relax] no local device name attribute")
-        else:
-            raise TestError("no local device name attribute")
-    if record.local_device_name == "":
-        raise TestError("empty local device name attribute")
-    if record.class_of_device is None:
-        if options.relax:
-            log.warning("[relax] ")
-        else:
-            raise TestError("no class of device attribute")
-    if record.simple_pairing_hash is None:
-        if options.relax:
-            log.warning("[relax] no simple pairing hash attribute")
-        else:
-            raise TestError("no simple pairing hash attribute")
-    if record.simple_pairing_rand is None:
-        if options.relax:
-            log.warning("[relax] no simple pairing randomizer attribute")
-        else:
-            raise TestError("no simple pairing randomizer attribute")
-    if len(record.service_class_uuid_list) == 0:
-        if options.relax:
-            log.warning("[relax] no service class uuids attribute")
-        else:
-            raise TestError("no service class uuids attribute")
-    client.close()
+    try:
+        message = nfc.ndef.HandoverRequestMessage(version="1.2")
+        message.nonce = random.randint(0, 0xffff)
+        record = nfc.ndef.BluetoothConfigRecord()
+        record.device_address = "01:02:03:04:05:06"
+        record.local_device_name = "Handover Test Client"
+        record.simple_pairing_hash = os.urandom(16)
+        record.simple_pairing_rand = os.urandom(16)
+        record.class_of_device = 0x10010C
+        record.service_class_uuid_list = [
+            "00001105-0000-1000-8000-00805f9b34fb",
+            "00001106-0000-1000-8000-00805f9b34fb"]
+        message.add_carrier(record, "active")
+        handover_send(client, message)
+        message = handover_recv(client, timeout=3.0)
+        log.info(message.pretty())
+        if len(message.carriers) != 1:
+            raise TestError("one selected carrier is expected")
+        if message.carriers[0].type != "application/vnd.bluetooth.ep.oob":
+            raise TestError("a Bluetooth carrier is expected")
+        record = message.carriers[0].record
+        if record.local_device_name is None:
+            if options.relax:
+                log.warning("[relax] no local device name attribute")
+            else:
+                raise TestError("no local device name attribute")
+        if record.local_device_name == "":
+            raise TestError("empty local device name attribute")
+        if record.class_of_device is None:
+            if options.relax:
+                log.warning("[relax] ")
+            else:
+                raise TestError("no class of device attribute")
+        if record.simple_pairing_hash is None:
+            if options.relax:
+                log.warning("[relax] no simple pairing hash attribute")
+            else:
+                raise TestError("no simple pairing hash attribute")
+        if record.simple_pairing_rand is None:
+            if options.relax:
+                log.warning("[relax] no simple pairing randomizer attribute")
+            else:
+                raise TestError("no simple pairing randomizer attribute")
+        if len(record.service_class_uuid_list) == 0:
+            if options.relax:
+                log.warning("[relax] no service class uuids attribute")
+            else:
+                raise TestError("no service class uuids attribute")
+    finally:
+        client.close()
 
 class HandoverTestClient(TestBase):
     def __init__(self):
