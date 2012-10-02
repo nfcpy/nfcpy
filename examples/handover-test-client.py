@@ -41,6 +41,9 @@ import nfc.handover
 import gobject
 import dbus.mainloop.glib
 
+mime_btoob = "application/vnd.bluetooth.ep.oob"
+mime_wfasc = "application/vnd.wfa.wsc"
+
 class BluetoothAdapter(object):
     def __init__(self):
 	dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
@@ -52,17 +55,6 @@ class BluetoothAdapter(object):
         proxy = bus.get_object("org.bluez", adapter_path)
 	self.adapter = dbus.Interface(proxy, "org.bluez.Adapter")
 	self.oob_adapter = dbus.Interface(proxy, "org.bluez.OutOfBand")
-
-    def make_oob_record(self, secure=True):
-        record = nfc.ndef.BluetoothConfigRecord()
-        record.device_address = str(self.adapter.GetProperties()["Address"])
-        record.class_of_device = int(self.adapter.GetProperties()["Class"])
-        record.local_device_name = str(self.adapter.GetProperties()["Name"])
-        if secure:
-            sp_hash, sp_rand = self.oob_adapter.ReadLocalData()
-            record.simple_pairing_hash = bytearray(sp_hash)
-            record.simple_pairing_rand = bytearray(sp_rand)
-        return record
 
     @property
     def device_address(self):
@@ -85,12 +77,11 @@ class BluetoothAdapter(object):
         return bytearray(ssp_hash), bytearray(ssp_rand)
 
     def set_ssp_data(self, bdaddr, ssp_hash, ssp_rand):
-        self.remote_bdaddr = dbus.String(bdaddr)
         ssp_hash = dbus.Array(ssp_hash)
         ssp_rand = dbus.Array(ssp_rand)
-	self.oob_adapter.AddRemoteData(self.remote_bdaddr, ssp_hash, ssp_rand)
+	self.oob_adapter.AddRemoteData(bdaddr, ssp_hash, ssp_rand)
         
-    def create_pairing(self):
+    def create_pairing(self, remote_device_address):
         def create_device_reply(device):
             print "Pairing succeed!"
             self.mainloop.quit()
@@ -100,16 +91,12 @@ class BluetoothAdapter(object):
             self.mainloop.quit()
       
         self.adapter.CreatePairedDevice(
-            self.remote_bdaddr, "/test/agent_oob", "DisplayYesNo",
+            remote_device_address, "/test/agent_oob", "DisplayYesNo",
             reply_handler=create_device_reply,
             error_handler=create_device_error)
 
         self.mainloop.run()
     
-    def register_agent(self):
-        self.adapter.RegisterAgent("/test/agent_oob", "NoInputNoOutput")
-        self.mainloop.run()
-
 class TestError(Exception):
     def __init__(self, value):
         self.value = value
@@ -238,10 +225,21 @@ def test_04(options):
         record.service_class_uuid_list = [
             "00001105-0000-1000-8000-00805f9b34fb",
             "00001106-0000-1000-8000-00805f9b34fb"]
+
+        for carrier in options.carriers:
+            if carrier.type == mime_btoob:
+                hci0 = BluetoothAdapter()
+                if carrier.record.device_address == hci0.device_address:
+                    ssp_hash, ssp_rand = hci0.get_ssp_data()
+                    carrier.record.simple_pairing_hash = ssp_hash
+                    carrier.record.simple_pairing_rand = ssp_rand
+                record = carrier.record
+        
         message.add_carrier(record, "active")
         handover_send(client, message)
         message = handover_recv(client, timeout=3.0)
         log.info(message.pretty())
+        
         if len(message.carriers) != 1:
             raise TestError("one selected carrier is expected")
         if message.carriers[0].type != "application/vnd.bluetooth.ep.oob":
@@ -276,6 +274,10 @@ def test_04(options):
                 raise TestError("no service class uuids attribute")
     finally:
         client.close()
+
+    ssp_hash, ssp_rand = record.simple_pairing_hash, record.simple_pairing_rand
+    hci0.set_ssp_data(record.device_address, ssp_hash, ssp_rand)
+    hci0.create_pairing(record.device_address)
 
 class HandoverTestClient(TestBase):
     def __init__(self):
@@ -324,12 +326,12 @@ class HandoverTestClient(TestBase):
             
         if not self.options.skip_local:
             if sys.platform == "linux2":
-                self.hci0 = BluetoothAdapter()
+                hci0 = BluetoothAdapter()
                 record = nfc.ndef.BluetoothConfigRecord()
-                record.device_address = self.hci0.device_address
-                record.class_of_device = self.hci0.device_class
-                record.local_device_name = self.hci0.device_name
-                record.service_class_uuid_list = self.hci0.service_uuids
+                record.device_address = hci0.device_address
+                record.class_of_device = hci0.device_class
+                record.local_device_name = hci0.device_name
+                record.service_class_uuid_list = hci0.service_uuids
                 requestable.add_carrier(record, "active")
                 log.info("add discovered carrier: {0}".format(record.type))
 
