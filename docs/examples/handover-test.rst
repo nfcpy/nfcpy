@@ -235,6 +235,19 @@ Test Suite
       transmitted.
    #. Close the data link conection.
 
+**6 - Unknown carrier type.**
+
+   Verify that the remote handover server returns a select message
+   without alternative carriers if a single carrier of unknown type
+   was sent with the handover request.
+
+   #. Connect to the remote handover service.
+   #. Send a handover request message with a single alternative
+      carrier of type `urn:nfc:ext:nfcpy.org:unknown-carrier-type`.
+   #. Verify that the server returns a handover select message with an
+      empty alternative carrier selection.
+   #. Close the data link conection.
+
 Recipes
 =======
 

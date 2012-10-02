@@ -140,12 +140,7 @@ def handover_recv(client, timeout):
         
     
 def test_01(options):
-    """Presence and connectivity.
-
-    Verify that the remote device has the connection handover service
-    active and that the client can open, close and re-open a connection
-    with the server.
-    """
+    """Presence and connectivity"""
     log.info("1st attempt to connect to the remote handover server")
     client = handover_connect()
     client.close()
@@ -154,12 +149,7 @@ def test_01(options):
     client.close()
 
 def test_02(options):
-    """Empty carrier list.
-    
-    Verify that the handover server responds to a handover request
-    without alternative carriers with a handover select message that
-    also has no alternative carriers.
-    """
+    """Empty carrier list"""
     client = handover_connect()
     try:
         message = nfc.ndef.HandoverRequestMessage(version="1.2")
@@ -172,11 +162,7 @@ def test_02(options):
         client.close()
 
 def test_03(options):
-    """Version handling.
-    
-    Verify that the remote handover server handles historic and future
-    handover request version numbers.
-    """
+    """Version handling"""
     record = nfc.ndef.BluetoothConfigRecord()
     record.device_address = "01:02:03:04:05:06"
     
@@ -234,13 +220,7 @@ def test_03(options):
         client.close()
 
 def test_04(options):
-    """Bluetooth just-works pairing.
-
-    Verify that the `application/vnd.bluetooth.ep.oob` alternative
-    carrier is correctly evaluated and replied with a all mandatory and
-    recommended information. This test is only applicable if the peer
-    device does have Bluetooth connectivity.
-    """
+    """Bluetooth just-works pairing"""
     client = handover_connect()
     try:
         message = nfc.ndef.HandoverRequestMessage(version="1.2")
@@ -297,13 +277,7 @@ def test_04(options):
     hci0.create_pairing(record.device_address)
 
 def test_05(options):
-    """Bluetooth secure pairing.
-
-    Verify that the `application/vnd.bluetooth.ep.oob` alternative
-    carrier is correctly evaluated and replied with a all mandatory and
-    recommended information. This test is only applicable if the peer
-    device does have Bluetooth connectivity.
-    """
+    """Bluetooth secure pairing"""
     client = handover_connect()
     try:
         message = nfc.ndef.HandoverRequestMessage(version="1.2")
@@ -364,6 +338,26 @@ def test_05(options):
     ssp_hash = record.simple_pairing_hash
     ssp_rand = record.simple_pairing_rand
     hci0.create_pairing(record.device_address, ssp_hash, ssp_rand)
+
+def test_06(options):
+    """Unknown carrier type"""
+    client = handover_connect()
+    try:
+        message = nfc.ndef.HandoverRequestMessage(version="1.2")
+        message.nonce = random.randint(0, 0xffff)
+        record = nfc.ndef.Record("urn:nfc:ext:nfcpy.org:unknown-carrier-type")
+        message.add_carrier(record, "active")
+        
+        handover_send(client, message)
+        message = handover_recv(client, timeout=3.0)
+        log.info(message.pretty())
+
+        if message.version.major != 1:
+            raise TestError("handover major version is not 1")
+        if len(message.carriers) != 0:
+            raise TestError("an empty carrier selections is expected")
+    finally:
+        client.close()
 
 class HandoverTestClient(TestBase):
     def __init__(self):
