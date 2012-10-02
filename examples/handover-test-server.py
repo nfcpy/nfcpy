@@ -211,6 +211,14 @@ class HandoverTestServer(TestBase):
                 if remote_carrier_type == local_carrier.type:
                     if len(handover_select.carriers) < self.options.select:
                         log.info("match for {0}".format(local_carrier.type))
+                        if (local_carrier.type == mime_btoob
+                            and hasattr(self, 'hci0')):
+                            record = local_carrier.record
+                            bdaddr = self.hci0.device_address
+                            if bdaddr == record.device_address:
+                                ssp_hash, ssp_rand = self.hci0.get_ssp_data()
+                                record.simple_pairing_hash = ssp_hash
+                                record.simple_pairing_rand = ssp_rand
                         handover_select.add_carrier(
                             local_carrier.record, local_carrier.power_state,
                             local_carrier.auxiliary_data_records)
