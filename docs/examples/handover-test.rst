@@ -159,37 +159,80 @@ Test Suite
 **3 - Version handling**
 
    Verify that the remote handover server handles historic and future
-   handover request version numbers.
+   handover request version numbers. This test is run as a series of
+   steps where for each step the connection to the server is
+   established and closed after completion. In all steps configuration
+   sent is a Bluetooth carrier for device address
+   ``01:02:03:04:05:06``.
 
-   #. Connect to the remote handover service.
-   #. Send a handover request message with version ``1.2``.
-   #. Verify that the server replies with version ``1.2``. 
-   #. Send a handover request message with version ``1.1``.
-   #. Verify that the server replies with version ``1.2``. 
-   #. Send a handover request message with version ``1.15``.
-   #. Verify that the server replies with version ``1.2``. 
-   #. Send a handover request message with version ``15.0``.
-   #. Verify that the server replies with version ``1.2``. 
-   #. Close the data link conection.
+   #. Check version ``1.2``
 
-**4 - Single Bluetooth carrier**
+      #. Connect to the remote handover service.
+      #. Send a handover request message with version ``1.2``.
+      #. Verify that the server replies with version ``1.2``. 
+      #. Close the data link conection.
+
+   #. Check version ``1.1``
+
+      #. Connect to the remote handover service.
+      #. Send a handover request message with version ``1.1``.
+      #. Verify that the server replies with version ``1.2``. 
+      #. Close the data link conection.
+
+   #. Check version ``1.15``
+
+      #. Connect to the remote handover service.
+      #. Send a handover request message with version ``1.15``.
+      #. Verify that the server replies with version ``1.2``. 
+      #. Close the data link conection.
+
+   #. Check version ``15.0``
+
+      #. Connect to the remote handover service.
+      #. Send a handover request message with version ``15.0``.
+      #. Verify that the server replies with version ``1.2``. 
+      #. Close the data link conection.
+
+**4 - Bluetooth just-works pairing**
 
    Verify that the `application/vnd.bluetooth.ep.oob` alternative
-   carrier is correctly evaluated and replied with a all mandatory and
-   recommended information. This test is only applicable if the peer
-   device does have Bluetooth connectivity.
+   carrier is correctly evaluated and replied. This test is only
+   applicable if the peer device does have Bluetooth connectivity.
 
    #. Connect to the remote handover service.
-   #. Send a handover request message containing a single alternative
-      carrier with type `application/vnd.bluetooth.ep.oob` and power
-      state `active`.
+   #. Send a handover request message with a single alternative
+      carrier of type `application/vnd.bluetooth.ep.oob` and power
+      state `active`. Secure pairing hash and randomizer are not
+      provided with the Bluetooth configuration.
    #. Verify that the server returns a handover select message within
       no more than 3 seconds; that the message contains exactly one
       alternative carrier with type `application/vnd.bluetooth.ep.oob`
-      and power state `active` or `activating`; and that the Bluetooth
-      local name, secure simple pairing hash and randomizer, class of
-      device/service, and one or more service class UUID attributes
-      are provided.
+      and power state `active` or `activating`; that the Bluetooth
+      local device name is transmitted; and that secure simple pairing
+      hash and randomizer are not transmitted. Issues a warning if
+      class of device/service or service class UUID attributes are not
+      transmitted.
+   #. Close the data link conection.
+
+**5 - Bluetooth secure pairing.**
+
+   Verify that the `application/vnd.bluetooth.ep.oob` alternative
+   carrier is correctly evaluated and replied. This test is only
+   applicable if the peer device does have Bluetooth connectivity.
+
+   #. Connect to the remote handover service.
+   #. Send a handover request message with a single alternative
+      carrier of type `application/vnd.bluetooth.ep.oob` and power
+      state `active`. Secure pairing hash and randomizer are
+      transmitted with the Bluetooth configuration.
+   #. Verify that the server returns a handover select message within
+      no more than 3 seconds; that the message contains exactly one
+      alternative carrier with type `application/vnd.bluetooth.ep.oob`
+      and power state `active` or `activating`; that the Bluetooth
+      local device name is transmitted; and that secure simple pairing
+      hash and randomizer are transmitted. Issues a warning if class
+      of device/service or service class UUID attributes are not
+      transmitted.
    #. Close the data link conection.
 
 Recipes
