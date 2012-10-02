@@ -102,5 +102,5 @@ class Device(pn53x.Device):
         return super(Device, self).dep_get_data(timeout)
 
     def dep_set_data(self, data, timeout):
-        return super(Device, self).dep_set_data(data, timeout=100)
+        return super(Device, self).dep_set_data(data, timeout)
 

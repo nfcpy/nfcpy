@@ -73,19 +73,19 @@ class DEPTarget(DEP):
         *timeout* milliseconds the data portion is returned as a byte 
         string, otherwise an IOError exception is raised."""
         
-        log.debug("waiting for a dep command")
+        log.debug("wait up to {0} ms for a dep command".format(timeout))
         t0 = time.time()
         data = self._dev.dep_get_data(timeout)
         elapsed = int((time.time() - t0) * 1000)
-        log.debug("rcvd {0} byte cmd after {0} ms".format(len(data), elapsed))
         log.debug("dep raw << " + str(data).encode("hex"))
+        log.debug("rcvd {0} byte cmd after {0} ms".format(len(data), elapsed))
         return data
 
     def send_response(self, data, timeout):
         """Send an NFCIP-1 DEP response with the byte string *data* as
         the payload."""
         
-        log.debug("send dep response ({0} byte)".format(len(data)))
+        log.debug("send {0} byte dep rsp in {1} ms".format(len(data), timeout))
         log.debug("dep raw >> " + str(data).encode("hex"))
         t0 = time.time()
         self._dev.dep_set_data(data, timeout)
