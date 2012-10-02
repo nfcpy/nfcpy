@@ -212,7 +212,9 @@ class HandoverTestServer(TestBase):
                     if len(handover_select.carriers) < self.options.select:
                         log.info("match for {0}".format(local_carrier.type))
                         if (local_carrier.type == mime_btoob
-                            and hasattr(self, 'hci0')):
+                            and hasattr(self, 'hci0')
+                            and remote_carrier.record.simple_pairing_hash
+                            and remote_carrier.record.simple_pairing_rand):
                             record = local_carrier.record
                             bdaddr = self.hci0.device_address
                             if bdaddr == record.device_address:
