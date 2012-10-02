@@ -111,9 +111,12 @@ class BluetoothConfigRecord(Record):
 
     @simple_pairing_hash.setter
     def simple_pairing_hash(self, value):
-        if len(value) != 16:
-            raise EncodeError("wrong length of simple pairing hash")
-        self.eir[0x0E] = str(bytearray(value))
+        if value is None:
+            self.eir.pop(0x0E, None)
+        else:
+            if len(value) != 16:
+                raise EncodeError("wrong length of simple pairing hash")
+            self.eir[0x0E] = str(bytearray(value))
 
     @property
     def simple_pairing_rand(self):
@@ -131,9 +134,12 @@ class BluetoothConfigRecord(Record):
 
     @simple_pairing_rand.setter
     def simple_pairing_rand(self, value):
-        if len(value) != 16:
-            raise EncodeError("wrong length of simple pairing randomizer")
-        self.eir[0x0F] = str(bytearray(value))
+        if value is None:
+            self.eir.pop(0x0F, None)
+        else:
+            if len(value) != 16:
+                raise EncodeError("wrong length of simple pairing randomizer")
+            self.eir[0x0F] = str(bytearray(value))
 
     @property
     def service_class_uuid_list(self):
