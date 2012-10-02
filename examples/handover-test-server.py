@@ -219,7 +219,7 @@ class HandoverTestServer(TestBase):
                                 ssp_hash, ssp_rand = self.hci0.get_ssp_data()
                                 record.simple_pairing_hash = ssp_hash
                                 record.simple_pairing_rand = ssp_rand
-                                self.hci0.set_oob_data(
+                                self.hci0.set_ssp_data(
                                     remote_carrier.record.device_address,
                                     remote_carrier.record.simple_pairing_hash,
                                     remote_carrier.record.simple_pairing_hash)
