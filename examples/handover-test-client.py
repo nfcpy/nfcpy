@@ -109,14 +109,14 @@ class TestError(Exception):
     def __str__(self):
         return str(self.value)
 
-def handover_connect(quirks=False):
+def handover_connect(options):
     client = nfc.handover.HandoverClient()
     try:
-        client.connect()
+        client.connect(recv_miu=options.recv_miu, recv_buf=options.recv_buf)
         log.info("connected to the remote handover server")
         return client
     except nfc.llcp.ConnectRefused:
-        if not quirks:
+        if not options.quirks:
             raise TestError("unable to connect to the handover server")
         
     log.error("unable to connect to the handover server")
@@ -181,15 +181,15 @@ def handover_recv(client, timeout):
 def test_01(options):
     """Presence and connectivity"""
     log.info("1st attempt to connect to the remote handover server")
-    client = handover_connect(options.quirks)
+    client = handover_connect(options)
     client.close()
     log.info("2nd attempt to connect to the remote handover server")
-    client = handover_connect(options.quirks)
+    client = handover_connect(options)
     client.close()
 
 def test_02(options):
     """Empty carrier list"""
-    client = handover_connect(options.quirks)
+    client = handover_connect(options)
     try:
         message = nfc.ndef.HandoverRequestMessage(version="1.2")
         message.nonce = random.randint(0, 0xffff)
@@ -205,7 +205,7 @@ def test_03(options):
     record = nfc.ndef.BluetoothConfigRecord()
     record.device_address = "01:02:03:04:05:06"
     
-    client = handover_connect(options.quirks)
+    client = handover_connect(options)
     try:
         log.info("send handover request message with version 1.2")
         message = nfc.ndef.HandoverRequestMessage(version="1.2")
@@ -219,7 +219,7 @@ def test_03(options):
     finally:
         client.close()
 
-    client = handover_connect(options.quirks)
+    client = handover_connect(options)
     try:
         log.info("send handover request message with version 1.1")
         message = nfc.ndef.HandoverRequestMessage(version="1.1")
@@ -232,7 +232,7 @@ def test_03(options):
     finally:
         client.close()
 
-    client = handover_connect(options.quirks)
+    client = handover_connect(options)
     try:
         log.info("send handover request message with version 1.15")
         message = nfc.ndef.HandoverRequestMessage(version="1.15")
@@ -246,7 +246,7 @@ def test_03(options):
     finally:
         client.close()
 
-    client = handover_connect(options.quirks)
+    client = handover_connect(options)
     try:
         log.info("send handover request message with version 15.0")
         message = nfc.ndef.HandoverRequestMessage(version="1.2")
@@ -264,7 +264,7 @@ def test_03(options):
 
 def test_04(options):
     """Bluetooth just-works pairing"""
-    client = handover_connect(options.quirks)
+    client = handover_connect(options)
     try:
         message = nfc.ndef.HandoverRequestMessage(version="1.2")
         message.nonce = random.randint(0, 0xffff)
@@ -321,7 +321,7 @@ def test_04(options):
 
 def test_05(options):
     """Bluetooth secure pairing"""
-    client = handover_connect(options.quirks)
+    client = handover_connect(options)
     try:
         message = nfc.ndef.HandoverRequestMessage(version="1.2")
         message.nonce = random.randint(0, 0xffff)
@@ -384,7 +384,7 @@ def test_05(options):
 
 def test_06(options):
     """Unknown carrier type"""
-    client = handover_connect(options.quirks)
+    client = handover_connect(options)
     try:
         message = nfc.ndef.HandoverRequestMessage(version="1.2")
         message.nonce = random.randint(0, 0xffff)
@@ -419,7 +419,25 @@ class HandoverTestClient(TestBase):
             help="relax on verifying optional parts")        
         parser.add_argument(
             "--skip-local", action="store_true",
-            help="skip local carrier detection")        
+            help="skip local carrier detection")
+        def miu(string):
+            value = int(string)
+            if value <128 or value > 2176:
+                msg = "invalid choice: %d (choose from 128 to 2176)" % value
+                raise argparse.ArgumentTypeError(msg)
+            return value
+        parser.add_argument(
+            "--recv-miu", type=miu, metavar="INT", default=128,
+            help="data link connection receive miu (default: %(default)s)")
+        def buf(string):
+            value = int(string)
+            if value <0 or value > 15:
+                msg = "invalid choice: %d (choose from 0 to 15)" % value
+                raise argparse.ArgumentTypeError(msg)
+            return value
+        parser.add_argument(
+            "--recv-buf", type=buf, metavar="INT", default=2,
+            help="data link connection receive window (default: %(default)s)")
         
         super(HandoverTestClient, self).__init__(parser)
 

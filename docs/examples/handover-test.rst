@@ -60,6 +60,18 @@ Options:
    should answer within 1 second and if it doesn't the client may
    assume a processing error.
 
+.. option:: --recv-miu INT
+
+   Set the maximum information unit size for inbound LLCP packets on
+   the data link connection between the server and the remote client.
+   This value is transmitted with the CC PDU to the remote client.
+
+.. option:: --recv-buf INT
+
+   Set the receive window size for inbound LLCP packets on the data
+   link connection between the server and the remote client. This
+   value is transmitted with the CC PDU to the remote client.
+
 .. option:: --quirks
 
    This option causes the handover test server to try support
@@ -117,6 +129,19 @@ Options:
    scenarios. Without ``--relax`` any missing data is regarded as a
    test error that terminates test execution. With the ``--relax``
    option set only a warning message is logged.
+
+.. option:: --recv-miu INT
+
+   Set the maximum information unit size for inbound LLCP packets on
+   the data link connection between the client and the remote server.
+   This value is transmitted with the CONNECT PDU to the remote
+   server.
+
+.. option:: --recv-buf INT
+
+   Set the receive window size for inbound LLCP packets on the data
+   link connection between the client and the remote server. This
+   value is transmitted with the CONNECT PDU to the remote server.
 
 .. option:: --quirks
 
