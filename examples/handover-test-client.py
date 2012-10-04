@@ -427,6 +427,9 @@ class HandoverTestClient(TestBase):
             log.error("only one carrier file may be read from stdin")
             raise SystemExit(1)
 
+        if self.options.quirks:
+            self.options.relax = True
+            
         requestable = nfc.ndef.HandoverRequestMessage(version="1.0")
         
         for index, carrier in enumerate(self.options.carriers):
