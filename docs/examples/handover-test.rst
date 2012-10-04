@@ -121,12 +121,16 @@ Options:
 .. option:: --quirks
 
    This option causes the handover test client to try support
-   non-compliant implementations if possible and as known. The
-   behavioral modifications activated with `--quirks` are:
+   non-compliant implementations as much as possible, including and
+   beyond the ``--relax`` behavor. The modifications activated with
+   ``--quirks`` are:
 
-   * after test procedures are completed the client does not terminate
+   * After test procedures are completed the client does not terminate
      the LLCP link but waits until the link is disrupted to prevent
      the NFC stack segfault and recovery on pre 4.1 Android devices.
+   * Try sending the handover request message with a SNEP GET request
+     to the remote default SNEP server if the `urn:nfc:sn:handover`
+     service is not available.
 
 Test Suite
 ----------
