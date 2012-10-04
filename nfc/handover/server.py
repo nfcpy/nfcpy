@@ -31,17 +31,19 @@ import nfc.llcp
 class HandoverServer(Thread):
     """ NFC Forum Connection Handover server
     """
-    def __init__(self, request_size_limit=4096):
+    def __init__(self, request_size_limit=4096, recv_miu=248, recv_buf=2):
         service_name = 'urn:nfc:sn:handover'
         super(HandoverServer, self).__init__(name=service_name)
-        self.socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
-        nfc.llcp.bind(self.socket, service_name)
+        socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
+        nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVBUF, recv_buf)
+        nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVMIU, recv_miu)
+        nfc.llcp.bind(socket, service_name)
+        self.socket = socket
 
     def run(self):
         try:
             addr = nfc.llcp.getsockname(self.socket)
             log.info("handover server bound to port {0}".format(addr))
-            nfc.llcp.setsockopt(self.socket, nfc.llcp.SO_RCVBUF, 2)
             nfc.llcp.listen(self.socket, backlog=2)
             while True:
                 client_socket = nfc.llcp.accept(self.socket)

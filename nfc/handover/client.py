@@ -34,13 +34,14 @@ class HandoverClient(object):
     def __init__(self):
         self.socket = None
 
-    def connect(self):
+    def connect(self, recv_miu=248, recv_buf=2):
         """Connect to the remote handover server if available. Raises
         :exc:`nfc.llcp.ConnectRefused` if the remote device does not
         have a handover service or the service does not accept any
         more connections."""
         socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
-        nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
+        nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVBUF, recv_buf)
+        nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVMIU, recv_miu)
         nfc.llcp.connect(socket, "urn:nfc:sn:handover")
         log.info("handover client connected to remote sap {0}"
                  .format(nfc.llcp.getsockname(socket)))

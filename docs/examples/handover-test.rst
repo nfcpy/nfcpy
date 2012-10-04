@@ -60,6 +60,18 @@ Options:
    should answer within 1 second and if it doesn't the client may
    assume a processing error.
 
+.. option:: --recv-miu INT
+
+   Set the maximum information unit size for inbound LLCP packets on
+   the data link connection between the server and the remote client.
+   This value is transmitted with the CC PDU to the remote client.
+
+.. option:: --recv-buf INT
+
+   Set the receive window size for inbound LLCP packets on the data
+   link connection between the server and the remote client. This
+   value is transmitted with the CC PDU to the remote client.
+
 .. option:: --quirks
 
    This option causes the handover test server to try support
@@ -118,15 +130,32 @@ Options:
    test error that terminates test execution. With the ``--relax``
    option set only a warning message is logged.
 
+.. option:: --recv-miu INT
+
+   Set the maximum information unit size for inbound LLCP packets on
+   the data link connection between the client and the remote server.
+   This value is transmitted with the CONNECT PDU to the remote
+   server.
+
+.. option:: --recv-buf INT
+
+   Set the receive window size for inbound LLCP packets on the data
+   link connection between the client and the remote server. This
+   value is transmitted with the CONNECT PDU to the remote server.
+
 .. option:: --quirks
 
    This option causes the handover test client to try support
-   non-compliant implementations if possible and as known. The
-   behavioral modifications activated with `--quirks` are:
+   non-compliant implementations as much as possible, including and
+   beyond the ``--relax`` behavor. The modifications activated with
+   ``--quirks`` are:
 
-   * after test procedures are completed the client does not terminate
+   * After test procedures are completed the client does not terminate
      the LLCP link but waits until the link is disrupted to prevent
      the NFC stack segfault and recovery on pre 4.1 Android devices.
+   * Try sending the handover request message with a SNEP GET request
+     to the remote default SNEP server if the `urn:nfc:sn:handover`
+     service is not available.
 
 Test Suite
 ----------
