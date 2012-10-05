@@ -277,6 +277,17 @@ Test Suite
       empty alternative carrier selection.
    #. Close the data link conection.
 
+**7 - Two handover requests.**
+
+   Verify that the remote handover server returns a select message
+   without alternative carriers if a single carrier of unknown type
+   was sent with the handover request.
+
+   #. Connect to the remote handover service.
+   #. Send a handover request with a single carrier of unknown type
+   #. Send a handover request with a single Bluetooth carrier
+   #. Close the data link conection.
+
 Recipes
 =======
 

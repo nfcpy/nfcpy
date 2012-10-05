@@ -398,7 +398,51 @@ def test_06(options):
         if message.version.major != 1:
             raise TestError("handover major version is not 1")
         if len(message.carriers) != 0:
-            raise TestError("an empty carrier selections is expected")
+            raise TestError("an empty carrier selection is expected")
+    finally:
+        client.close()
+
+def test_07(options):
+    """Two handover requests"""
+    client = handover_connect(options)
+    try:
+        log.info("propose carrier {0!r}".format(message.carriers[0].type))
+        message = nfc.ndef.HandoverRequestMessage(version="1.2")
+        message.nonce = random.randint(0, 0xffff)
+        record = nfc.ndef.Record("urn:nfc:ext:nfcpy.org:unknown-carrier-type")
+        message.add_carrier(record, "active")
+
+        handover_send(client, message)
+        message = handover_recv(client, timeout=3.0)
+        log.info(message.pretty())
+
+        if message.version.major != 1:
+            raise TestError("handover major version is not 1")
+        if len(message.carriers) != 0:
+            raise TestError("an empty carrier selection is expected first")
+
+        log.info("propose carrier {0!r}".format(message.carriers[0].type))
+        message = nfc.ndef.HandoverRequestMessage(version="1.2")
+        message.nonce = random.randint(0, 0xffff)
+        record = nfc.ndef.BluetoothConfigRecord()
+        record.device_address = "01:02:03:04:05:06"
+        record.local_device_name = "Handover Test Client"
+        record.class_of_device = 0x10010C
+        record.service_class_uuid_list = [
+            "00001105-0000-1000-8000-00805f9b34fb",
+            "00001106-0000-1000-8000-00805f9b34fb"]
+        record.simple_pairing_hash = None
+        record.simple_pairing_rand = None
+        
+        for carrier in options.carriers:
+            if carrier.type == mime_btoob:
+                record = carrier.record
+        
+        message.add_carrier(record, "active")
+        handover_send(client, message)
+        message = handover_recv(client, timeout=3.0)
+        log.info(message.pretty())
+        
     finally:
         client.close()
 
