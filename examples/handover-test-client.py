@@ -446,6 +446,57 @@ def test_07(options):
     finally:
         client.close()
 
+def test_08(options):
+    """Reserved-future-use check"""
+    client = handover_connect(options)
+    try:
+        message = nfc.ndef.HandoverRequestMessage(version="1.2")
+        message.nonce = random.randint(0, 0xffff)
+        record = nfc.ndef.BluetoothConfigRecord()
+        record.device_address = "01:02:03:04:05:06"
+        record.local_device_name = "Handover Test Client"
+        record.class_of_device = 0x10010C
+        record.service_class_uuid_list = [
+            "00001105-0000-1000-8000-00805f9b34fb",
+            "00001106-0000-1000-8000-00805f9b34fb"]
+        record.simple_pairing_hash = None
+        record.simple_pairing_rand = None
+        
+        for carrier in options.carriers:
+            if carrier.type == mime_btoob:
+                record = carrier.record
+        
+        message.add_carrier(record, "active")
+        handover_send(client, message)
+        message = handover_recv(client, timeout=3.0)
+        log.info(message.pretty())
+
+        if len(message.carriers) == 0:
+            raise TestError("non-empty carrier selection is required")
+        if message.version.major != 1 or message.version.minor != 2:
+            raise TestError("handover message version 1.2 is required")
+            
+        message = nfc.ndef.Message(str(message))
+        try:
+            message = nfc.ndef.Message(message[0].data[1:])
+        except nfc.ndef.FormatError as e:
+            raise TestError(str(e))
+        else:
+            if message[1].type != "nfc:ndef:wkt:ac":
+                raise TestError("no alternative carrier record")
+            data = bytearray(message[1].data)
+            if data[0] & 0xfc != 0:
+                raise TestError("reserved bits set in 1st octet of ac record")
+            data = data[2+data[1]:] # carrier data reference
+            aux_ref_count = data.pop(0)
+            for i in range(aux_ref_count):
+                data = data[1+data[1]:] # auxiliary data reference
+            if len(data) != 0:
+                raise TestError("reserved bytes used at end of ac record")
+        
+    finally:
+        client.close()
+        
 class HandoverTestClient(TestBase):
     def __init__(self):
         parser = argparse.ArgumentParser(
