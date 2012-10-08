@@ -277,6 +277,30 @@ Test Suite
       empty alternative carrier selection.
    #. Close the data link conection.
 
+**7 - Two handover requests.**
+
+   Verify that the remote handover server does not close the data link
+   connection after the first handover request message.
+
+   #. Connect to the remote handover service.
+   #. Send a handover request with a single carrier of unknown type
+   #. Send a handover request with a single Bluetooth carrier
+   #. Close the data link conection.
+
+**8 - Reserved-future-use check.**
+
+   Verify that reserved bits are set to zero and optional reserved
+   bytes are not present in the payload of the alternative carrier
+   record. This test requires that the remote server selects a
+   Bluetooth alternative carrier if present in the request.
+
+   #. Connect to the remote handover service.
+   #. Send a handover request with a single Bluetooth carrier
+   #. Verify that an alternative carrier record is present; that
+      reserved bits in the first octet are zero; and that the record
+      payload ends with the last auxiliary data reference.
+   #. Close the data link conection.
+
 Recipes
 =======
 
