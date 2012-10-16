@@ -484,7 +484,6 @@ def test_08(options):
             
         try:
             message = nfc.ndef.Message(message[0].data[1:])
-            print repr(message)
         except nfc.ndef.FormatError as e:
             raise TestError(str(e))
         else:
