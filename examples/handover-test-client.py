@@ -504,6 +504,44 @@ def test_08(options):
     finally:
         client.close()
         
+def test_09(options):
+    """Skip meaningless records"""
+    client = handover_connect(options)
+    try:
+        message = nfc.ndef.HandoverRequestMessage(version="1.2")
+        message.nonce = random.randint(0, 0xffff)
+        record = nfc.ndef.BluetoothConfigRecord()
+        record.device_address = "01:02:03:04:05:06"
+        record.local_device_name = "Handover Test Client"
+        record.class_of_device = 0x10010C
+        record.service_class_uuid_list = [
+            "00001105-0000-1000-8000-00805f9b34fb",
+            "00001106-0000-1000-8000-00805f9b34fb"]
+        record.simple_pairing_hash = None
+        record.simple_pairing_rand = None
+        
+        for carrier in options.carriers:
+            if carrier.type == mime_btoob:
+                record = carrier.record
+        
+        message.add_carrier(record, "active")
+        
+        message = nfc.ndef.Message(str(message))
+        hr_records = nfc.ndef.Message(message[0].data[1:])
+        hr_records.insert(i=0, record=nfc.ndef.TextRecord("text"))
+        message[0].data = '\x12' + str(hr_records)
+        
+        handover_send(client, message)
+        message = handover_recv(client, timeout=3.0)
+        log.info("received {0!r}\n".format(message.type) + message.pretty(2))
+        
+        if len(message.carriers) != 1:
+            raise TestError("one selected carrier is expected")
+        if message.carriers[0].type != "application/vnd.bluetooth.ep.oob":
+            raise TestError("a Bluetooth carrier is expected")
+    finally:
+        client.close()
+
 class HandoverTestClient(TestBase):
     def __init__(self):
         parser = argparse.ArgumentParser(
