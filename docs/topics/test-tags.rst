@@ -28,7 +28,7 @@ TT3_READ_BV_001
 
    $ ./tagtool.py format
    $ ./ndeftool.py make smartposter http://nfcpy.readthedocs.org/ -t "nfcpy documentation hosted on readthedocs" | ./tagtool.py load -
-   $ ./tagtool.py format format --tt3-len 80 --tt3-max 5 --tt3-rw 0
+   $ ./tagtool.py format --tt3-len 80 --tt3-max 5 --tt3-rw 0
 
 * Settings: Len = Nmaxb * 16, RWFlag = 0x00
 * Expected: Fully used tag. Read all data stored (Len)
@@ -77,7 +77,7 @@ TT3_READ_BV_005
 
    $ ./tagtool.py format
    $ ./ndeftool.py make smartposter http://nfcpy.readthedocs.org/ -t "nfcpy documentation" | ./tagtool.py load -
-   $ ./tagtool.py format --tt3-len 58 --tt3-rw 0 --tt3-max 4
+   $ ./tagtool.py format --tt3-len 58 --tt3-rw 0 --tt3-max 3
 
 * Nmaxb * 16 < Len, RWFlag = 0x00
 * Identify as „Corrupted data“ (invalid length)
