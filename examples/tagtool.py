@@ -208,14 +208,20 @@ def tt3_format(tag, args):
         try:
             for i in range(block_count):
                 tag.read(range(i+1))
-        except Exception: return i
+            else:
+                return block_count
+        except Exception:
+            return i
 
     def determine_block_write_count(tag, block_count):
         try:
             for i in range(block_count):
                 data = tag.read(range(i+1))
                 tag.write(data, range(i+1))
-        except Exception: return i
+            else:
+                return block_count
+        except Exception:
+            return i
 
     block_count = determine_block_count(tag)
     print("tag has %d user data blocks" % block_count)
