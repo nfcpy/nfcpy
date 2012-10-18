@@ -69,6 +69,7 @@ def show_tag(args):
         print("  " + tt3_card_map.get(str(tag.pmm[0:2]), "unknown card"))
     if tag.ndef:
         print("NDEF attribute data:")
+        print("  " + " ".join(["{0:02x}".format(b) for b in tag.ndef.attr]))
         print("  version   = %s" % tag.ndef.version)
         print("  writeable = %s" % ("no", "yes")[tag.ndef.writeable])
         print("  capacity  = %d byte" % tag.ndef.capacity)
