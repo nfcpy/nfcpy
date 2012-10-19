@@ -35,8 +35,11 @@ class pn53x_usb(object):
         self.dh = dev.open()
         self.usb_out = None
         self.usb_inp = None
-        self.dh.setConfiguration(dev.configurations[0])
-        self.dh.claimInterface(0)
+        try:
+            self.dh.setConfiguration(dev.configurations[0])
+            self.dh.claimInterface(0)
+        except usb.USBError:
+            raise IOError("unusable device")
         intf = dev.configurations[0].interfaces[0]
         self.usb_out = intf[0].endpoints[0].address
         self.usb_inp = intf[0].endpoints[1].address
@@ -45,6 +48,8 @@ class pn53x_usb(object):
         self.write(bytearray("\x00\x00\xFF\x00\xFF\x00")) # ack
 
     def close(self):
+        log.debug("close usb device")
+        self.write(bytearray("\x00\x00\xFF\x00\xFF\x00")) # ack
         self.dh.releaseInterface()
         self.dh = None
 

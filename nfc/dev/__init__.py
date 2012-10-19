@@ -71,7 +71,10 @@ def connect(path=None):
                                 product = dev.idProduct
                                 module = usb_device_map[(vendor, product)]
                                 driver = import_driver(module)
-                                device = driver.init(dev)
+                                try:
+                                    device = driver.init(dev)
+                                except IOError:
+                                    continue
                                 device._path = "usb:{0}:{1}".format(
                                     bus.dirname, dev.filename)
                                 return device
@@ -92,7 +95,10 @@ def connect(path=None):
                             if (vendor, product) in usb_device_map:
                                 module = usb_device_map[(vendor, product)]
                                 driver = import_driver(module)
-                                device = driver.init(dev)
+                                try:
+                                    device = driver.init(dev)
+                                except IOError:
+                                    continue
                                 device._path = "usb:{0}:{1}".format(
                                     bus.dirname, dev.filename)
                                 return device
@@ -109,7 +115,10 @@ def connect(path=None):
                     if (vendor, product) in usb_device_map:
                         module = usb_device_map[(vendor, product)]
                         driver = import_driver(module)
-                        device = driver.init(dev)
+                        try:
+                            device = driver.init(dev)
+                        except IOError:
+                            continue
                         device._path = "usb:{0}:{1}".format(
                             bus.dirname, dev.filename)
                         return device
@@ -143,6 +152,7 @@ def connect(path=None):
                                 port = devname[-1]
                                 device._path = "tty:usb:{0}".format(port)
                                 return device
+    
     elif path.startswith("tty"):
         log.info("sorry, tty readers are only supported on posix systems")
 
