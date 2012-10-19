@@ -352,16 +352,21 @@ def add_pack_parser(parser):
         "-n", metavar="STRING", dest="name", default=None,
         help="record name (default: pathname)")
     parser.add_argument(
-        "file", metavar="FILE", type=argparse.FileType('r'),
+        "input", metavar="FILE", type=argparse.FileType('r'),
         help="record data file ('-' to read from stdin)")
     
 def pack(args):
     if args.type == 'unknown':
-        mimetype = mimetypes.guess_type(args.file.name, strict=False)[0]
+        mimetype = mimetypes.guess_type(args.input.name, strict=False)[0]
         if mimetype is not None: args.type = mimetype
     if args.name is None:
-        args.name = args.file.name if args.file.name != "<stdin>" else ""
-    record = nfc.ndef.Record(args.type, args.name, args.file.read())
+        args.name = args.input.name if args.input.name != "<stdin>" else ""
+        
+    data = args.input.read()
+    try: data = data.decode("hex")
+    except TypeError: pass
+
+    record = nfc.ndef.Record(args.type, args.name, data)
     message = nfc.ndef.Message(record)
     if args.outfile.name == "<stdout>":
         args.outfile.write(str(message).encode("hex"))
