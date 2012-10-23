@@ -27,7 +27,7 @@ import dev
 from dep import DEPTarget, DEPInitiator
 from tt1 import Type1Tag
 from tt2 import Type2Tag
-from tt3 import Type3Tag
+from tt3 import Type3Tag, Type3TagEmulation
 from tt4 import Type4Tag
 
 class ContactlessFrontend(object):
@@ -86,24 +86,45 @@ class ContactlessFrontend(object):
             if target.get("type") == "TT2":
                 return Type2Tag(self.dev, target)
             if target.get("type") == "TT3":
-                return Type3Tag(self.dev, target)
+                return Type3Tag(self, target)
             if target.get("type") == "TT4":
                 return Type4Tag(self.dev, target)
 
-    def listen(self, timeout, protocol_data):
-        """Wait to become initialized by a peer device. The *timeout*
-        value is in milliseconds and determines the approximate time
-        the reader will stay discoverable. The *protocol_data*
-        parameter must be byte string that is sent to the remote
-        device during initialization.
+    def listen(self, target_list, timeout):
+        """Wait *timeout* milliseconds to become initialized by a peer
+        device as one of the targets listed in *target_list*. Current
+        valid targets are :class:`nfc.dep.DEPTarget` and any subclass
+        of :class:`nfc.tag.TagEmulation`. Note that not all
+        contactless frontends support tag emulation. If the timeout
+        expired before initialization the return value is
+        :const:`None`, otherwise it is the initialized target object.
+        """
         
-        Returns :class:`nfc.DEPTarget` if initialized else :const:`None`."""
+        if len(target_list) == 0:
+            raise ValueError("at least one target must be said to listen")
         
-        data = self.dev.listen(protocol_data, timeout)
-        if not data is None:
-            log.debug("got dep master, general bytes " + data.encode("hex"))
-            return DEPTarget(self.dev, data)
+        if len(target_list) > 1:
+            raise NotImplemented("can't yet listen for multiple targets")
 
+        target = target_list[0]
+        
+        if isinstance(target, DEPTarget):
+            general_bytes = self.dev.listen(target.general_bytes, timeout)
+            if general_bytes is not None:
+                log.debug("got nfcip1 general bytes " + data.encode("hex"))
+                target._gb = general_bytes
+                target._dev = self.dev
+                return target
+        elif isinstance(target, Type3TagEmulation):
+            idm, pmm, sc, br = target.idm, target.pmm, target.sc, target.br
+            data = self.dev.listen_nfcf(idm, pmm, sc, br, timeout)
+            if data is not None:
+                target.cmd = data
+                target.clf = self
+                return target
+        else:
+            raise ValueError("invalid or unsupported listen target type")
+        
     def __enter__(self):
         return self
 

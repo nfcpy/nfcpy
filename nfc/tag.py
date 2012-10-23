@@ -26,7 +26,8 @@ log = logging.getLogger(__name__)
 class NDEF(object):
     @property
     def version(self):
-        """The version of the NDEF mapping as a "<major>.<minor>" number string."""
+        """The version of the NDEF mapping as a "<major>.<minor>"
+        number string."""
         raise NotImplemented
 
     @property
@@ -52,7 +53,8 @@ class NDEF(object):
 class TAG(object):
     @property
     def ndef(self):
-        """Holds an :class:`~nfc.NDEF` object if the tag is appropriately formatted, else :const:`None`."""
+        """Holds an :class:`~nfc.NDEF` object if the tag is
+        appropriately formatted, else :const:`None`."""
         return self._ndef if hasattr(self, "_ndef") else None
 
     @property

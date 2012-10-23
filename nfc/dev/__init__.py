@@ -37,6 +37,7 @@ usb_device_map = {
     (0x04e6, 0x5591) : "pn53x_usb", # SCM SCL3711
     (0x04e6, 0x5593) : "pn53x_usb", # SCM SCL3712
     (0x054c, 0x02e1) : "rcs956_usb", # Sony RC-S330/360/370
+    (0x054c, 0x06c1) : "rcs380", # Sony RC-S330/360/370
     (0x072f, 0x2200) : "acr122_usb", # Arygon ACR122U
     }
 
@@ -108,7 +109,7 @@ def connect(path=None):
                     if (vendor, product) in usb_device_map:
                         module = usb_device_map[(vendor, product)]
                         driver = import_driver(module)
-                        device = driver.init(dev)
+                        device = driver.init(dev, "usb")
                         device._path = "usb:{0}:{1}".format(
                             bus.dirname, dev.filename)
                         return device
@@ -185,6 +186,9 @@ class Device(object):
     def tt4_exchange(self, cmd):
         raise NotImplemented
 
+    ##
+    ## properties
+    ##
     @property
     def vendor(self):
         return self._vendor

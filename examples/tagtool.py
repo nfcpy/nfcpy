@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2010-2011 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2010-2012 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -165,7 +165,7 @@ def add_format_parser(parser):
         "--tt3-crc", metavar="INT", type=int,
         help="checksum attribute value (default: computed)")
         
-def format_tag(clf):
+def format_tag(args):
     tag = poll(args.clf)
     if tag is None:
         raise SystemExit(1)
@@ -259,6 +259,99 @@ def tt3_format(tag, args):
 
     tag.write(str(attr), [0])
 
+def add_emulate_parser(parser):
+    parser.description = """Emulate an ndef tag."""    
+    subparsers = parser.add_subparsers()
+    emulate_tt3_parser(subparsers.add_parser(
+            'tt3', help='emulate a type 3 tag'))
+    
+def emulate_tt3_parser(parser):
+    parser.set_defaults(func=emulate_tt3)
+    parser.add_argument(
+        "--idm", metavar="HEX", default="03FEFFE011223344",
+        help="manufacture identifier (default: %(default)s)")
+    parser.add_argument(
+        "--pmm", metavar="HEX", default="01E0000000FFFF00",
+        help="manufacture parameter (default: %(default)s)")
+    parser.add_argument(
+        "--sc", metavar="HEX", default="12FC",
+        help="system code (default: %(default)s)")
+    parser.add_argument(
+        "--br", choices=["212", "424"], default="424",
+        help="baud rate (default: %(default)s)")
+    parser.add_argument(
+        "-s", dest="size", type=int, default="1024",
+        help="ndef data area size (default: %(default)s)")
+    parser.add_argument(
+        "-c", dest="continue", action="store_true",
+        help="continue to listen after tag release")
+    parser.add_argument(
+        "input", metavar="FILE", type=argparse.FileType('r'),
+        nargs="?", default=None,
+        help="ndef message to serve ('-' reads from stdin)")
+    
+def emulate_tt3(args):
+    if args.size % 16 != 0:
+        args.size = ((args.size + 15) // 16) * 16
+        log.warning("ndef data area size rounded to {0}".format(args.size))
+    
+    try: args.data
+    except AttributeError:
+        if args.input:
+            args.data = args.input.read()
+            try: args.data = args.data.decode("hex")
+            except TypeError: pass
+        else:
+            args.data = ""
+    
+    if args.input:
+        ndef_data_area = bytearray(16) + bytearray(args.data) + \
+            bytearray(max(0, args.size - len(args.data)))
+    else:
+        ndef_data_area = bytearray(16 + args.size)
+
+    # set attribute data
+    ndef_data_area[0x0] = 0x11 # Ver
+    ndef_data_area[0x1] = 0x0C # Nbr
+    ndef_data_area[0x2] = 0x08 # Nbw
+    ndef_data_area[0x3] = (len(ndef_data_area) // 16) // 256 # Nmaxb (MSB)
+    ndef_data_area[0x4] = (len(ndef_data_area) // 16) % 256  # Nmaxb (LSB)
+    ndef_data_area[0x9] = 0x00 # Write Flag
+    ndef_data_area[0xA] = 0x00 # RW Flag
+    ndef_data_area[0xB] = len(args.data) >> 16 & 255 # Ln (MSB)
+    ndef_data_area[0xC] = len(args.data) >> 8 & 255  # Ln
+    ndef_data_area[0xD] = len(args.data) & 255       # Ln (LSB)
+    ndef_data_area[0xE] = sum(ndef_data_area[0:14]) >> 8 & 255 # Checksum (MSB)
+    ndef_data_area[0xF] = sum(ndef_data_area[0:14]) & 255      # Checksum (LSB)
+    
+    def ndef_read(block_number):
+        log.debug("tt3 read block #{0}".format(block_number))
+        if block_number < len(ndef_data_area) / 16:
+            block_data = ndef_data_area[block_number*16:(block_number+1)*16]
+            return block_data
+    def ndef_write(block_number, block_data):
+        log.debug("tt3 write block #{0}".format(block_number))
+        if block_number < len(ndef_data_area) / 16:
+            ndef_data_area[block_number*16:(block_number+1)*16] = block_data
+            return True
+        
+    idm = bytearray.fromhex(args.idm)
+    pmm = bytearray.fromhex(args.pmm)
+    sc = bytearray.fromhex(args.sc)
+    tag = nfc.tt3.Type3TagEmulation(idm, pmm, sc, args.br)
+    tag.add_service(0x0009, ndef_read, ndef_write)
+    tag.add_service(0x000B, ndef_read, lambda: False)
+    log.info("touch a reader")
+    while True:
+        activated = args.clf.listen([tag], timeout=1000)
+        if activated and activated == tag:
+            log.info("tag activated")
+            while tag.wait_command(timeout=10000):
+                tag.send_response()
+            else:
+                log.info("tag released")
+                #break
+
 def poll(clf):
     try:
         while True:
@@ -290,7 +383,7 @@ if __name__ == '__main__':
             "usb[:bus[:dev]] (bus and device number in decimal), "\
             "tty[:(usb|com)[:port]] (usb virtual or com port)")
 
-    subparsers = parser.add_subparsers(title="commands")
+    subparsers = parser.add_subparsers(title="commands", dest="subparser")
     add_show_parser(subparsers.add_parser(
             'show', help='pretty print ndef data'))
     add_dump_parser(subparsers.add_parser(
@@ -299,6 +392,8 @@ if __name__ == '__main__':
             'load', help='write ndef data to tag'))
     add_format_parser(subparsers.add_parser(
             'format', help='format ndef tag'))
+    add_emulate_parser(subparsers.add_parser(
+            'emulate', help='emulate ndef tag'))
 
     for argument in sys.argv[1:]:
         if not argument.startswith('-'):
@@ -313,7 +408,8 @@ if __name__ == '__main__':
     else:
         log_level = logging.INFO
         
-    logging.basicConfig(level=log_level, format='%(message)s')
+    logging.basicConfig(level=log_level,
+                        format='%(asctime)s %(message)s')
 
     log.debug(args)
 
@@ -332,9 +428,10 @@ if __name__ == '__main__':
 
     try:
         while True:
-            log.info("touch a tag")
+            if not args.subparser == "emulate":
+                log.info("touch a tag")
             tag = args.func(args)
-            if not args.no_wait:
+            if not args.subparser == "emulate" and not args.no_wait:
                 log.info("\nremove tag")
                 while tag.is_present:
                     time.sleep(1)
