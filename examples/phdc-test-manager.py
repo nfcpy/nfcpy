@@ -29,6 +29,8 @@ import sys
 import time
 import string
 import struct
+import os.path
+import inspect
 import threading
 import Queue as queue
 
@@ -107,12 +109,9 @@ class PhdcTagManager(PhdcManager):
                 log.info("[phdc] <<< {0}".format(str(data).encode("hex")))
                 if data[0] & 0x0F == (self.mc % 4) << 2 | 2:
                     if isinstance(self.tag, nfc.Type3Tag):
-                        attr = bytearray(self.tag.read([0]))
-                        attr[9] = 0x0F
-                        attr[11:14] = [0, 0, 0]
-                        attr[14] = (sum(attr[0:14]) >> 8) & 0xFF
-                        attr[15] = sum(attr[0:14]) & 0xFF
-                        self.tag.write(attr, [0])
+                        attr = nfc.tt3.NdefAttributeData(self.tag.read([0]))
+                        attr.writing = True; attr.length = 0
+                        self.tag.write(str(attr), [0])
                     self.mc += 1
                     return data[1:]
 
@@ -192,8 +191,11 @@ if __name__ == '__main__':
         "-q", dest="quiet", action="store_true",
         help="do not print any log messages'")
     parser.add_argument(
-        "-d", dest="debug", action="store_true",
-        help="print debug log messages")
+        "-d", metavar="MODULE", dest="debug", action="append",
+        help="print debug messages for MODULE, use '' for all")
+    parser.add_argument(
+        "-f", dest="logfile", metavar="FILE",
+        help="write log messages to file")
     parser.add_argument(
         "-l", "--loop", action='store_true',
         help="repeat command until Control-C")
@@ -207,26 +209,47 @@ if __name__ == '__main__':
             "usb[:bus[:dev]] (bus and device number in decimal), "\
             "tty[:(usb|com)[:port]] (usb virtual or com port)")
 
-    args = parser.parse_args()
+    options = parser.parse_args()
 
-    if args.debug:
-        log_level = logging.DEBUG
-    elif args.quiet:
-        log_level = logging.ERROR
-    else:
-        log_level = logging.INFO
+    logformat = '%(message)s'
+    verbosity = logging.ERROR if options.quiet else logging.INFO
         
-    logging.basicConfig(level=log_level,
-                        format='%(asctime)s %(message)s')
+    if options.debug:
+        logformat = '%(levelname)-5s [%(name)s] %(message)s'
+        if '' in options.debug:
+            verbosity = logging.DEBUG
+        
+    logging.basicConfig(level=verbosity, format=logformat)
 
-    log.debug(args)
-
-    if args.device is None:
-        args.device = ['']
+    if options.debug and 'nfc' in options.debug:
+        verbosity = logging.DEBUG
             
-    for device in args.device:
+    if options.logfile:
+        logfile_format = \
+            '%(asctime)s %(levelname)-5s [%(name)s] %(message)s'
+        logfile = logging.FileHandler(options.logfile, "w")
+        logfile.setFormatter(logging.Formatter(logfile_format))
+        logfile.setLevel(logging.DEBUG)
+        logging.getLogger('').addHandler(logfile)
+
+    nfcpy_path = os.path.dirname(inspect.getfile(nfc))
+    for name in os.listdir(nfcpy_path):
+        if os.path.isdir(os.path.join(nfcpy_path, name)):
+            logging.getLogger("nfc."+name).setLevel(verbosity)
+        elif name.endswith(".py") and name != "__init__.py":
+            logging.getLogger("nfc."+name[:-3]).setLevel(verbosity)
+
+    if options.debug:
+        for module in options.debug:
+            log.info("enable debug output for module '{0}'".format(module))
+            logging.getLogger(module).setLevel(logging.DEBUG)
+
+    if options.device is None:
+        options.device = ['']
+            
+    for device in options.device:
         try:
-            args.clf = nfc.ContactlessFrontend(device);
+            options.clf = nfc.ContactlessFrontend(device);
             break
         except LookupError:
             pass
@@ -237,11 +260,11 @@ if __name__ == '__main__':
     try:
         while True:
             log.info("waiting for agent")
-            phdc_tag_manager(args)
-            if not args.loop:
+            phdc_tag_manager(options)
+            if not options.loop:
                 break
     except KeyboardInterrupt:
         raise SystemExit
     finally:
-        args.clf.close()
+        options.clf.close()
     

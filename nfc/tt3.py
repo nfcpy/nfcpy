@@ -37,7 +37,39 @@ def trace(func):
         return func(*args, **kwargs)
     return traced_func
 
+class NdefAttributeData:
+    def __init__(self, attr=16):
+        attr = bytearray(attr)
+        self.version = "{0}.{1}".format(attr[0] >> 4, attr[0] & 15)
+        self.nbr = attr[1]
+        self.nbw = attr[2]
+        self.capacity = (attr[3] * 256 + attr[4]) * 16
+        self.writing = bool(attr[9])
+        self.writeable = bool(attr[10])
+        self.length = attr[11]<<16 | attr[12]<<8 | attr[13]
+        self.valid = sum(attr[0:14]) == attr[14] << 8 | attr[15]
+
+    def __str__(self):
+        attr = bytearray(16)
+        vers = map(lambda x: int(x) & 15, self.version.split('.'))
+        maxb = ((self.capacity + 15) // 16) & 0xffff
+        attr[0] = vers[0] << 4 | vers[1]
+        attr[1] = self.nbr
+        attr[2] = self.nbw
+        attr[3] = maxb >> 8
+        attr[4] = maxb & 0xff
+        attr[9] = 15 if self.writing else 0
+        attr[10] = 1 if self.writeable else 0
+        attr[11] = self.length >> 16 & 0xff
+        attr[12] = self.length >> 8 & 0xff
+        attr[13] = self.length & 0xff
+        checksum = sum(attr[0:14])
+        attr[14] = checksum >> 8
+        attr[15] = checksum & 0xff
+        return str(attr)
+    
 class NDEF(tag.NDEF):
+
     def __init__(self, tag):
         self.tag = tag
         self._attr = None
@@ -297,7 +329,6 @@ class Type3TagEmulation(object):
 
         return bytearray([0, 0, len(block_data)/16]) + block_data
 
-    @trace
     def write_without_encryption(self, cmd_data):
         service_list = cmd_data.pop(0) * [None]
         for i in range(len(service_list)):

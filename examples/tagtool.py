@@ -311,18 +311,13 @@ def emulate_tt3(args):
         ndef_data_area = bytearray(16 + args.size)
 
     # set attribute data
-    ndef_data_area[0x0] = 0x11 # Ver
-    ndef_data_area[0x1] = 0x0C # Nbr
-    ndef_data_area[0x2] = 0x08 # Nbw
-    ndef_data_area[0x3] = (len(ndef_data_area) // 16) // 256 # Nmaxb (MSB)
-    ndef_data_area[0x4] = (len(ndef_data_area) // 16) % 256  # Nmaxb (LSB)
-    ndef_data_area[0x9] = 0x00 # Write Flag
-    ndef_data_area[0xA] = 0x00 # RW Flag
-    ndef_data_area[0xB] = len(args.data) >> 16 & 255 # Ln (MSB)
-    ndef_data_area[0xC] = len(args.data) >> 8 & 255  # Ln
-    ndef_data_area[0xD] = len(args.data) & 255       # Ln (LSB)
-    ndef_data_area[0xE] = sum(ndef_data_area[0:14]) >> 8 & 255 # Checksum (MSB)
-    ndef_data_area[0xF] = sum(ndef_data_area[0:14]) & 255      # Checksum (LSB)
+    attr = nfc.tt3.NdefAttributeData()
+    attr.version = "1.1"
+    attr.nbr, attr.nbw = 12, 8
+    attr.capacity = len(ndef_data_area) - 16
+    attr.writeable = True
+    attr.length = len(args.data)
+    ndef_data_area[0:16] = str(attr)
     
     def ndef_read(block_number):
         log.debug("tt3 read block #{0}".format(block_number))
