@@ -301,6 +301,20 @@ Test Suite
       payload ends with the last auxiliary data reference.
    #. Close the data link conection.
 
+**9 - Skip meaningless records.**
+
+   Verify that records that have no defined meaning in the payload of
+   a handover request record are ignored. This test assumes that the
+   remote server selects a Bluetooth alternative carrier if present in
+   the request.
+
+   #. Connect to the remote handover service.
+   #. Send a handover request with a single Bluetooth carrier and a
+      meaningless text record as the first record of the handover
+      request record payload.
+   #. Verify that an Bluetooth alternative carrier record is returned.
+   #. Close the data link conection.
+
 Recipes
 =======
 
