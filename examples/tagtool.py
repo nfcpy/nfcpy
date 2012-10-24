@@ -69,6 +69,7 @@ def show_tag(args):
         print("  " + tt3_card_map.get(str(tag.pmm[0:2]), "unknown card"))
     if tag.ndef:
         print("NDEF attribute data:")
+        print("  " + " ".join(["{0:02x}".format(b) for b in tag.ndef.attr]))
         print("  version   = %s" % tag.ndef.version)
         print("  writeable = %s" % ("no", "yes")[tag.ndef.writeable])
         print("  capacity  = %d byte" % tag.ndef.capacity)
@@ -208,14 +209,20 @@ def tt3_format(tag, args):
         try:
             for i in range(block_count):
                 tag.read(range(i+1))
-        except Exception: return i
+            else:
+                return block_count
+        except Exception:
+            return i
 
     def determine_block_write_count(tag, block_count):
         try:
             for i in range(block_count):
                 data = tag.read(range(i+1))
                 tag.write(data, range(i+1))
-        except Exception: return i
+            else:
+                return block_count
+        except Exception:
+            return i
 
     block_count = determine_block_count(tag)
     print("tag has %d user data blocks" % block_count)

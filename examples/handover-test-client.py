@@ -109,48 +109,90 @@ class TestError(Exception):
     def __str__(self):
         return str(self.value)
 
-def handover_connect():
+def handover_connect(options):
     client = nfc.handover.HandoverClient()
     try:
-        client.connect()
+        client.connect(recv_miu=options.recv_miu, recv_buf=options.recv_buf)
         log.info("connected to the remote handover server")
         return client
     except nfc.llcp.ConnectRefused:
-        raise TestError("unable to connect to the handover server")
+        if not options.quirks:
+            raise TestError("unable to connect to the handover server")
+        
+    log.error("unable to connect to the handover server")
+    log.warning("[quirks] trying the snep server get method")
+    client = nfc.snep.SnepClient()
+    try:
+        client.connect("urn:nfc:sn:snep")
+        log.info("[quirks] connected to the remote default snep server")
+        return client
+    except nfc.llcp.ConnectRefused:
+        raise TestError("unable to connect to the default snep server")
+
+# global object to store the handover response in quirks mode when the
+# handover message exchange is via the snep default server, as done by
+# the initial Android Jelly Bean release.
+quirks_handover_snep_response_data = None
 
 def handover_send(client, message, miu=128):
-    if isinstance(message, str):
-        if not client._send(message, miu):
-            raise TestError("error sending handover request")
+    if isinstance(client, nfc.handover.HandoverClient):
+        if isinstance(message, str):
+            if not client._send(message, miu):
+                raise TestError("error sending handover request")
+        else:
+            if not client.send(message):
+                raise TestError("error sending handover request")
+    elif isinstance(client, nfc.snep.SnepClient):
+        global quirks_handover_snep_response_data
+        quirks_handover_snep_response_data = None
+        try:
+            data = client.get(str(message), timeout=3.0)
+        except nfc.snep.SnepError as err:
+            raise TestError("remote snep server returned '{0}'".format(err))
+        else:
+            quirks_handover_snep_response_data = data
     else:
-        if not client.send(message):
-            raise TestError("error sending handover request")
+        raise ValueError("wrong client argument type")
 
-def handover_recv(client, timeout):
-    message = client._recv(timeout)
+def handover_recv(client, timeout, raw=False):
+    message = None
+    
+    if isinstance(client, nfc.handover.HandoverClient):
+        message = client._recv(timeout)
+    elif isinstance(client, nfc.snep.SnepClient):
+        global quirks_handover_snep_response_data
+        if quirks_handover_snep_response_data:
+            message = nfc.ndef.Message(quirks_handover_snep_response_data)
+            quirks_handover_snep_response_data = None
+    else:
+        raise ValueError("wrong client argument type")
+    
     if message is None:
         raise TestError("no answer within {0} seconds".format(int(timeout)))
     if not message.type == "urn:nfc:wkt:Hs":
         raise TestError("unexpected message type '{0}'".format(message.type))
-    try:
-        message = nfc.ndef.HandoverSelectMessage(message)
-    except nfc.ndef.DecodeError:
-        raise TestError("invalid handover select message")
+    
+    if not raw:
+        try:
+            message = nfc.ndef.HandoverSelectMessage(message)
+        except nfc.ndef.DecodeError:
+            raise TestError("invalid handover select message")
+        
     return message
         
     
 def test_01(options):
     """Presence and connectivity"""
     log.info("1st attempt to connect to the remote handover server")
-    client = handover_connect()
+    client = handover_connect(options)
     client.close()
     log.info("2nd attempt to connect to the remote handover server")
-    client = handover_connect()
+    client = handover_connect(options)
     client.close()
 
 def test_02(options):
     """Empty carrier list"""
-    client = handover_connect()
+    client = handover_connect(options)
     try:
         message = nfc.ndef.HandoverRequestMessage(version="1.2")
         message.nonce = random.randint(0, 0xffff)
@@ -166,7 +208,7 @@ def test_03(options):
     record = nfc.ndef.BluetoothConfigRecord()
     record.device_address = "01:02:03:04:05:06"
     
-    client = handover_connect()
+    client = handover_connect(options)
     try:
         log.info("send handover request message with version 1.2")
         message = nfc.ndef.HandoverRequestMessage(version="1.2")
@@ -176,10 +218,11 @@ def test_03(options):
         message = handover_recv(client, timeout=3.0)
         if message.version.major != 1 and message.version.minor != 2:
             raise TestError("handover select message version is not 1.2")
+        log.info("received handover select message version 1.2")
     finally:
         client.close()
 
-    client = handover_connect()
+    client = handover_connect(options)
     try:
         log.info("send handover request message with version 1.1")
         message = nfc.ndef.HandoverRequestMessage(version="1.1")
@@ -188,10 +231,11 @@ def test_03(options):
         message = handover_recv(client, timeout=3.0)
         if message.version.major != 1 and message.version.minor != 2:
             raise TestError("handover select message version is not 1.2")
+        log.info("received handover select message version 1.2")
     finally:
         client.close()
 
-    client = handover_connect()
+    client = handover_connect(options)
     try:
         log.info("send handover request message with version 1.15")
         message = nfc.ndef.HandoverRequestMessage(version="1.15")
@@ -201,10 +245,11 @@ def test_03(options):
         message = handover_recv(client, timeout=3.0)
         if message.version.major != 1 and message.version.minor != 2:
             raise TestError("handover select message version is not 1.2")
+        log.info("received handover select message version 1.2")
     finally:
         client.close()
 
-    client = handover_connect()
+    client = handover_connect(options)
     try:
         log.info("send handover request message with version 15.0")
         message = nfc.ndef.HandoverRequestMessage(version="1.2")
@@ -216,12 +261,13 @@ def test_03(options):
         message = handover_recv(client, timeout=3.0)
         if message.version.major != 1 and message.version.minor != 2:
             raise TestError("handover select message version is not 1.2")
+        log.info("received handover select message version 1.2")
     finally:
         client.close()
 
 def test_04(options):
     """Bluetooth just-works pairing"""
-    client = handover_connect()
+    client = handover_connect(options)
     try:
         message = nfc.ndef.HandoverRequestMessage(version="1.2")
         message.nonce = random.randint(0, 0xffff)
@@ -242,7 +288,7 @@ def test_04(options):
         message.add_carrier(record, "active")
         handover_send(client, message)
         message = handover_recv(client, timeout=3.0)
-        log.info(message.pretty())
+        log.info("received {0!r}\n".format(message.type) + message.pretty(2))
         
         if len(message.carriers) != 1:
             raise TestError("one selected carrier is expected")
@@ -278,7 +324,7 @@ def test_04(options):
 
 def test_05(options):
     """Bluetooth secure pairing"""
-    client = handover_connect()
+    client = handover_connect(options)
     try:
         message = nfc.ndef.HandoverRequestMessage(version="1.2")
         message.nonce = random.randint(0, 0xffff)
@@ -304,7 +350,7 @@ def test_05(options):
         message.add_carrier(record, "active")
         handover_send(client, message)
         message = handover_recv(client, timeout=3.0)
-        log.info(message.pretty())
+        log.info("received {0!r}\n".format(message.type) + message.pretty(2))
         
         if len(message.carriers) != 1:
             raise TestError("one selected carrier is expected")
@@ -341,7 +387,7 @@ def test_05(options):
 
 def test_06(options):
     """Unknown carrier type"""
-    client = handover_connect()
+    client = handover_connect(options)
     try:
         message = nfc.ndef.HandoverRequestMessage(version="1.2")
         message.nonce = random.randint(0, 0xffff)
@@ -350,12 +396,148 @@ def test_06(options):
         
         handover_send(client, message)
         message = handover_recv(client, timeout=3.0)
-        log.info(message.pretty())
+        log.info("received {0!r}\n".format(message.type) + message.pretty(2))
 
         if message.version.major != 1:
             raise TestError("handover major version is not 1")
         if len(message.carriers) != 0:
-            raise TestError("an empty carrier selections is expected")
+            raise TestError("an empty carrier selection is expected")
+    finally:
+        client.close()
+
+def test_07(options):
+    """Two handover requests"""
+    client = handover_connect(options)
+    try:
+        message = nfc.ndef.HandoverRequestMessage(version="1.2")
+        message.nonce = random.randint(0, 0xffff)
+        record = nfc.ndef.Record("urn:nfc:ext:nfcpy.org:unknown-carrier-type")
+        message.add_carrier(record, "active")
+        
+        log.info("propose carrier {0!r}".format(message.carriers[0].type))
+        handover_send(client, message)
+        message = handover_recv(client, timeout=3.0)
+        log.info("received {0!r}\n".format(message.type) + message.pretty(2))
+
+        if message.version.major != 1:
+            raise TestError("handover major version is not 1")
+        if len(message.carriers) != 0:
+            raise TestError("an empty carrier selection is expected first")
+
+        message = nfc.ndef.HandoverRequestMessage(version="1.2")
+        message.nonce = random.randint(0, 0xffff)
+        record = nfc.ndef.BluetoothConfigRecord()
+        record.device_address = "01:02:03:04:05:06"
+        record.local_device_name = "Handover Test Client"
+        record.class_of_device = 0x10010C
+        record.service_class_uuid_list = [
+            "00001105-0000-1000-8000-00805f9b34fb",
+            "00001106-0000-1000-8000-00805f9b34fb"]
+        record.simple_pairing_hash = None
+        record.simple_pairing_rand = None
+        for carrier in options.carriers:
+            if carrier.type == mime_btoob:
+                record = carrier.record
+        message.add_carrier(record, "active")
+        
+        log.info("propose carrier {0!r}".format(message.carriers[0].type))
+        handover_send(client, message)
+        message = handover_recv(client, timeout=3.0)
+        log.info("received {0!r}\n".format(message.type) + message.pretty(2))
+        
+    finally:
+        client.close()
+
+def test_08(options):
+    """Reserved-future-use check"""
+    client = handover_connect(options)
+    try:
+        message = nfc.ndef.HandoverRequestMessage(version="1.2")
+        message.nonce = random.randint(0, 0xffff)
+        record = nfc.ndef.BluetoothConfigRecord()
+        record.device_address = "01:02:03:04:05:06"
+        record.local_device_name = "Handover Test Client"
+        record.class_of_device = 0x10010C
+        record.service_class_uuid_list = [
+            "00001105-0000-1000-8000-00805f9b34fb",
+            "00001106-0000-1000-8000-00805f9b34fb"]
+        record.simple_pairing_hash = None
+        record.simple_pairing_rand = None
+        
+        for carrier in options.carriers:
+            if carrier.type == mime_btoob:
+                record = carrier.record
+        
+        message.add_carrier(record, "active")
+        handover_send(client, message)
+        message = handover_recv(client, timeout=3.0, raw=True)
+        try:
+            log.info("received {0!r}\n".format(message.type) +
+                     nfc.ndef.HandoverSelectMessage(message).pretty(2))
+        except nfc.ndef.DecodeError:
+            raise TestError("decoding errors in received message")
+
+        if message[0].data[0] != "\x12":
+            raise TestError("handover message version 1.2 is required")
+        if len(message[0].data) == 1:
+            raise TestError("non-empty carrier selection is required")
+            
+        try:
+            message = nfc.ndef.Message(message[0].data[1:])
+        except nfc.ndef.FormatError as e:
+            raise TestError(str(e))
+        else:
+            record = message[0]
+            if record.type != "urn:nfc:wkt:ac":
+                raise TestError("no alternative carrier record")
+            data = bytearray(record.data)
+            if data[0] & 0xfc != 0:
+                raise TestError("reserved bits set in 1st octet of ac record")
+            data = data[2+data[1]:] # carrier data reference
+            aux_ref_count = data.pop(0)
+            for i in range(aux_ref_count):
+                data = data[1+data[1]:] # auxiliary data reference
+            if len(data) != 0:
+                raise TestError("reserved bytes used at end of ac record")
+        
+    finally:
+        client.close()
+        
+def test_09(options):
+    """Skip meaningless records"""
+    client = handover_connect(options)
+    try:
+        message = nfc.ndef.HandoverRequestMessage(version="1.2")
+        message.nonce = random.randint(0, 0xffff)
+        record = nfc.ndef.BluetoothConfigRecord()
+        record.device_address = "01:02:03:04:05:06"
+        record.local_device_name = "Handover Test Client"
+        record.class_of_device = 0x10010C
+        record.service_class_uuid_list = [
+            "00001105-0000-1000-8000-00805f9b34fb",
+            "00001106-0000-1000-8000-00805f9b34fb"]
+        record.simple_pairing_hash = None
+        record.simple_pairing_rand = None
+        
+        for carrier in options.carriers:
+            if carrier.type == mime_btoob:
+                record = carrier.record
+        
+        message.add_carrier(record, "active")
+        
+        message = nfc.ndef.Message(str(message))
+        hr_records = nfc.ndef.Message(message[0].data[1:])
+        hr_records.insert(i=0, record=nfc.ndef.TextRecord("text"))
+        message[0].data = '\x12' + str(hr_records)
+        
+        handover_send(client, message)
+        message = handover_recv(client, timeout=3.0)
+        log.info("received {0!r}\n".format(message.type) + message.pretty(2))
+        
+        if len(message.carriers) != 1:
+            raise TestError("one selected carrier is expected")
+        if message.carriers[0].type != "application/vnd.bluetooth.ep.oob":
+            raise TestError("a Bluetooth carrier is expected")
     finally:
         client.close()
 
@@ -376,7 +558,25 @@ class HandoverTestClient(TestBase):
             help="relax on verifying optional parts")        
         parser.add_argument(
             "--skip-local", action="store_true",
-            help="skip local carrier detection")        
+            help="skip local carrier detection")
+        def miu(string):
+            value = int(string)
+            if value <128 or value > 2176:
+                msg = "invalid choice: %d (choose from 128 to 2176)" % value
+                raise argparse.ArgumentTypeError(msg)
+            return value
+        parser.add_argument(
+            "--recv-miu", type=miu, metavar="INT", default=128,
+            help="data link connection receive miu (default: %(default)s)")
+        def buf(string):
+            value = int(string)
+            if value <0 or value > 15:
+                msg = "invalid choice: %d (choose from 0 to 15)" % value
+                raise argparse.ArgumentTypeError(msg)
+            return value
+        parser.add_argument(
+            "--recv-buf", type=buf, metavar="INT", default=2,
+            help="data link connection receive window (default: %(default)s)")
         
         super(HandoverTestClient, self).__init__(parser)
 
@@ -384,6 +584,9 @@ class HandoverTestClient(TestBase):
             log.error("only one carrier file may be read from stdin")
             raise SystemExit(1)
 
+        if self.options.quirks:
+            self.options.relax = True
+            
         requestable = nfc.ndef.HandoverRequestMessage(version="1.0")
         
         for index, carrier in enumerate(self.options.carriers):
@@ -417,10 +620,6 @@ class HandoverTestClient(TestBase):
 
         self.options.carriers = requestable.carriers
         
-        #if self.options.quirks:
-        #    log.warning("quirks: will accept SNEP PUT 'Hr' requests "
-        #                "used by Android 4.1.0 devices")
-
     def main(self):
         test_suite = sorted([globals().get(k) for k in globals().keys()
                              if k.startswith("test_")])
@@ -443,7 +642,7 @@ class HandoverTestClient(TestBase):
                 log.info("invalid test number '{0}'".format(test))
 
         if self.options.quirks:
-            log.warning("quirks: waiting for device removal to avoid Android "
+            log.warning("[quirks] waiting for device removal to avoid Android "
                         "(before 4.1) crash on intentional link deactivation")
             while nfc.llcp.connected():
                 time.sleep(1)

@@ -60,6 +60,18 @@ Options:
    should answer within 1 second and if it doesn't the client may
    assume a processing error.
 
+.. option:: --recv-miu INT
+
+   Set the maximum information unit size for inbound LLCP packets on
+   the data link connection between the server and the remote client.
+   This value is transmitted with the CC PDU to the remote client.
+
+.. option:: --recv-buf INT
+
+   Set the receive window size for inbound LLCP packets on the data
+   link connection between the server and the remote client. This
+   value is transmitted with the CC PDU to the remote client.
+
 .. option:: --quirks
 
    This option causes the handover test server to try support
@@ -118,15 +130,32 @@ Options:
    test error that terminates test execution. With the ``--relax``
    option set only a warning message is logged.
 
+.. option:: --recv-miu INT
+
+   Set the maximum information unit size for inbound LLCP packets on
+   the data link connection between the client and the remote server.
+   This value is transmitted with the CONNECT PDU to the remote
+   server.
+
+.. option:: --recv-buf INT
+
+   Set the receive window size for inbound LLCP packets on the data
+   link connection between the client and the remote server. This
+   value is transmitted with the CONNECT PDU to the remote server.
+
 .. option:: --quirks
 
    This option causes the handover test client to try support
-   non-compliant implementations if possible and as known. The
-   behavioral modifications activated with `--quirks` are:
+   non-compliant implementations as much as possible, including and
+   beyond the ``--relax`` behavor. The modifications activated with
+   ``--quirks`` are:
 
-   * after test procedures are completed the client does not terminate
+   * After test procedures are completed the client does not terminate
      the LLCP link but waits until the link is disrupted to prevent
      the NFC stack segfault and recovery on pre 4.1 Android devices.
+   * Try sending the handover request message with a SNEP GET request
+     to the remote default SNEP server if the `urn:nfc:sn:handover`
+     service is not available.
 
 Test Suite
 ----------
@@ -246,6 +275,44 @@ Test Suite
       carrier of type `urn:nfc:ext:nfcpy.org:unknown-carrier-type`.
    #. Verify that the server returns a handover select message with an
       empty alternative carrier selection.
+   #. Close the data link conection.
+
+**7 - Two handover requests.**
+
+   Verify that the remote handover server does not close the data link
+   connection after the first handover request message.
+
+   #. Connect to the remote handover service.
+   #. Send a handover request with a single carrier of unknown type
+   #. Send a handover request with a single Bluetooth carrier
+   #. Close the data link conection.
+
+**8 - Reserved-future-use check.**
+
+   Verify that reserved bits are set to zero and optional reserved
+   bytes are not present in the payload of the alternative carrier
+   record. This test requires that the remote server selects a
+   Bluetooth alternative carrier if present in the request.
+
+   #. Connect to the remote handover service.
+   #. Send a handover request with a single Bluetooth carrier
+   #. Verify that an alternative carrier record is present; that
+      reserved bits in the first octet are zero; and that the record
+      payload ends with the last auxiliary data reference.
+   #. Close the data link conection.
+
+**9 - Skip meaningless records.**
+
+   Verify that records that have no defined meaning in the payload of
+   a handover request record are ignored. This test assumes that the
+   remote server selects a Bluetooth alternative carrier if present in
+   the request.
+
+   #. Connect to the remote handover service.
+   #. Send a handover request with a single Bluetooth carrier and a
+      meaningless text record as the first record of the handover
+      request record payload.
+   #. Verify that an Bluetooth alternative carrier record is returned.
    #. Close the data link conection.
 
 Recipes

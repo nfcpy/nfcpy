@@ -36,7 +36,7 @@ from wifi_record import WifiConfigRecord
 def parse_carrier_structure(ac_record, records):
     carrier_record = records.get(ac_record.carrier_data_reference)
     if carrier_record is None:
-        s = "carrier data reference {0} linked to nowhere"
+        s = "carrier data reference {0} links to nowhere"
         log.warning(s.format(ac_record.carrier_data_reference))
         raise DecodeError("orphaned carrier data reference")
     if carrier_record.type == "urn:nfc:wkt:Hc":
@@ -47,7 +47,7 @@ def parse_carrier_structure(ac_record, records):
     for aux_data_ref in ac_record.auxiliary_data_reference_list:
         aux_data_record = records.get(aux_data_ref)
         if aux_data_record is None:
-            s = "auxiliary data reference {0} linked to nowhere"
+            s = "auxiliary data reference {0} links to nowhere"
             log.warning(s.format(ac_record.carrier_data_reference))
             raise DecodeError("orphaned auxiliary data reference")
         carrier.auxiliary_data_records.append(aux_data_record)
@@ -273,7 +273,7 @@ class HandoverRequestRecord(Record):
                     self.carriers.append(carrier)
                 else:
                     s = "skip unknown local record {0}"
-                    log.debug(s.format(record.type))
+                    log.warning(s.format(record.type))
 
     def pretty(self, indent=0):
         indent = indent * ' '
@@ -506,7 +506,7 @@ class HandoverSelectRecord(Record):
                     self.error = HandoverError(record.data)
                 else:
                     s = "skip unknown local record {0}"
-                    log.debug(s.format(record.type))
+                    log.warning(s.format(record.type))
 
     def pretty(self, indent=0):
         indent = indent * ' '
@@ -625,7 +625,7 @@ class AlternativeCarrier(object):
         for i in range(len(self.auxiliary_data_reference_list)):
             self.auxiliary_data_reference_list[i] = read_octet_sequence(f)
         if f.tell() < len(payload):
-            log.debug("not all data consumed in ac record payload")
+            log.warning("not all data consumed in ac record payload")
                 
     def encode(self):
         f = io.BytesIO()

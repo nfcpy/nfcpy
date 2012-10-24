@@ -34,6 +34,7 @@ usb_device_map = {
     (0x04cc, 0x0531) : "pn53x_usb", # Philips demo board
     (0x054c, 0x0193) : "pn53x_usb", # Sony demo board
     (0x04cc, 0x2533) : "pn53x_usb", # NXP PN533 demo board
+    (0x04cc, 0x0531) : "pn53x_usb", # SCM SCL3710
     (0x04e6, 0x5591) : "pn53x_usb", # SCM SCL3711
     (0x04e6, 0x5593) : "pn53x_usb", # SCM SCL3712
     (0x054c, 0x02e1) : "rcs956_usb", # Sony RC-S330/360/370
@@ -71,7 +72,10 @@ def connect(path=None):
                                 product = dev.idProduct
                                 module = usb_device_map[(vendor, product)]
                                 driver = import_driver(module)
-                                device = driver.init(dev)
+                                try:
+                                    device = driver.init(dev, "usb")
+                                except IOError:
+                                    continue
                                 device._path = "usb:{0}:{1}".format(
                                     bus.dirname, dev.filename)
                                 return device
@@ -92,7 +96,10 @@ def connect(path=None):
                             if (vendor, product) in usb_device_map:
                                 module = usb_device_map[(vendor, product)]
                                 driver = import_driver(module)
-                                device = driver.init(dev)
+                                try:
+                                    device = driver.init(dev, "usb")
+                                except IOError:
+                                    continue
                                 device._path = "usb:{0}:{1}".format(
                                     bus.dirname, dev.filename)
                                 return device
@@ -109,7 +116,10 @@ def connect(path=None):
                     if (vendor, product) in usb_device_map:
                         module = usb_device_map[(vendor, product)]
                         driver = import_driver(module)
-                        device = driver.init(dev, "usb")
+                        try:
+                            device = driver.init(dev, "usb")
+                        except IOError:
+                            continue
                         device._path = "usb:{0}:{1}".format(
                             bus.dirname, dev.filename)
                         return device
@@ -143,6 +153,7 @@ def connect(path=None):
                                 port = devname[-1]
                                 device._path = "tty:usb:{0}".format(port)
                                 return device
+    
     elif path.startswith("tty"):
         log.info("sorry, tty readers are only supported on posix systems")
 

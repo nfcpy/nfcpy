@@ -83,8 +83,9 @@ class BluetoothAdapter(object):
 	self.oob_adapter.AddRemoteData(self.remote_bdaddr, ssp_hash, ssp_rand)
             
 class HandoverServer(nfc.handover.HandoverServer):
-    def __init__(self, select_carrier_func):
-        super(HandoverServer, self).__init__()
+    def __init__(self, select_carrier_func, options):
+        super(HandoverServer, self).__init__(
+            recv_miu=options.recv_miu, recv_buf=options.recv_buf)
         self.select_carrier = select_carrier_func
 
     def process_request(self, request):
@@ -127,6 +128,24 @@ class HandoverTestServer(TestBase):
         parser.add_argument(
             "--delay", type=int, metavar="INT",
             help="delay the response for INT milliseconds")
+        def miu(string):
+            value = int(string)
+            if value <128 or value > 2176:
+                msg = "invalid choice: %d (choose from 128 to 2176)" % value
+                raise argparse.ArgumentTypeError(msg)
+            return value
+        parser.add_argument(
+            "--recv-miu", type=miu, metavar="INT", default=128,
+            help="data link connection receive miu (default: %(default)s)")
+        def buf(string):
+            value = int(string)
+            if value <0 or value > 15:
+                msg = "invalid choice: %d (choose from 0 to 15)" % value
+                raise argparse.ArgumentTypeError(msg)
+            return value
+        parser.add_argument(
+            "--recv-buf", type=buf, metavar="INT", default=2,
+            help="data link connection receive window (default: %(default)s)")
         
         super(HandoverTestServer, self).__init__(parser)
 
@@ -171,7 +190,8 @@ class HandoverTestServer(TestBase):
         self.select_carrier_lock = threading.Lock()
         
     def register_llcp_services(self):
-        self.handover_service = HandoverServer(self.select_carrier)
+        self.handover_service = HandoverServer(
+            self.select_carrier, self.options)
         if self.options.quirks:
             self.snep_service = DefaultSnepServer(self.select_carrier)
         
