@@ -326,12 +326,12 @@ def emulate_tt3(args):
     attr.length = len(args.data)
     ndef_data_area[0:16] = str(attr)
     
-    def ndef_read(block_number):
+    def ndef_read(block_number, rb, re):
         log.debug("tt3 read block #{0}".format(block_number))
         if block_number < len(ndef_data_area) / 16:
             block_data = ndef_data_area[block_number*16:(block_number+1)*16]
             return block_data
-    def ndef_write(block_number, block_data):
+    def ndef_write(block_number, block_data, wb, we):
         log.debug("tt3 write block #{0}".format(block_number))
         if block_number < len(ndef_data_area) / 16:
             ndef_data_area[block_number*16:(block_number+1)*16] = block_data

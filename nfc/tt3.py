@@ -113,6 +113,7 @@ class NDEF(tag.NDEF):
             del blocks[0:nb_max]
         if len(blocks) > 0:
             data += self.tag.read(blocks)
+        self._attr = None
         return data[0:length]
 
     @message.setter
@@ -255,6 +256,12 @@ class Type3TagEmulation(object):
     def add_service(self, service_code, block_read_func, block_write_func):
         self.services[service_code] = (block_read_func, block_write_func)
 
+    def serve(self, timeout):
+        log.debug("tag activated")
+        while self.wait_command(timeout):
+            self.send_response()
+        log.debug("tag released")
+    
     def wait_command(self, timeout):
         """Wait *timeout* ms for a reader command."""
         if self.cmd is None:
@@ -298,49 +305,20 @@ class Type3TagEmulation(object):
         return bytearray([0])
     
     def read_without_encryption(self, cmd_data):
-        service_list = cmd_data.pop(0) * [None]
-        for i in range(len(service_list)):
-            service_code = cmd_data[1] << 8 | cmd_data[0]
-            if not service_code in self.services.keys():
-                return bytearray([255, 0xA1, 0])
-            service_list[i] = service_code
-            del cmd_data[0:2]
-        service_block_list = cmd_data.pop(0) * [None]
-        for i in range(len(service_block_list)):
-            try:
-                service_code = service_list[cmd_data[0] & 0x0F]
-            except IndexError:
-                return bytearray([1<<(i%8), 0xA3, 0])
-            if cmd_data[0] >= 128:
-                block_number = cmd_data[1]
-                del cmd_data[0:2]
-            else:
-                block_number = cmd_data[2] << 8 | cmd_data[1]
-                del cmd_data[0:3]
-            service_block_list[i] = (service_code, block_number)
-
-        block_data = bytearray()
-        for i, (service_code, block_number) in enumerate(service_block_list):
-            read_func, write_func = self.services[service_code]
-            try:
-                block_data.extend(read_func(block_number))
-            except TypeError: # read_func returned None
-                return bytearray([1<<(i%8), 0xA2, 0])
-
-        return bytearray([0, 0, len(block_data)/16]) + block_data
-
-    def write_without_encryption(self, cmd_data):
-        service_list = cmd_data.pop(0) * [None]
+        service_list = cmd_data.pop(0) * [[None, None]]
         for i in range(len(service_list)):
             service_code = cmd_data[1] << 8 | cmd_data[0]
             if not service_code in self.services.keys():
                 return bytearray([255, 0xA1])
-            service_list[i] = service_code
+            service_list[i] = [service_code, 0]
             del cmd_data[0:2]
+        
         service_block_list = cmd_data.pop(0) * [None]
         for i in range(len(service_block_list)):
             try:
-                service_code = service_list[cmd_data[0] & 0x0F]
+                service_list_item = service_list[cmd_data[0] & 0x0F]
+                service_code = service_list_item[0]
+                service_list_item[1] += 1
             except IndexError:
                 return bytearray([1<<(i%8), 0xA3])
             if cmd_data[0] >= 128:
@@ -349,15 +327,70 @@ class Type3TagEmulation(object):
             else:
                 block_number = cmd_data[2] << 8 | cmd_data[1]
                 del cmd_data[0:3]
-            service_block_list[i] = (service_code, block_number)
+            service_block_list[i] = [service_code, block_number, 0]
 
+        service_block_count = dict(service_list)
+        for service_block_list_item in service_block_list:
+            service_code = service_block_list_item[0]
+            service_block_list_item[2] = service_block_count[service_code]
+            
+        block_data = bytearray()
+        for i, service_block_list_item in enumerate(service_block_list):
+            service_code, block_number, block_count = service_block_list_item
+            # rb (read begin) and re (read end) mark an atomic read
+            rb = bool(block_count == service_block_count[service_code])
+            service_block_count[service_code] -= 1
+            re = bool(service_block_count[service_code] == 0)
+            read_func, write_func = self.services[service_code]
+            one_block_data = read_func(block_number, rb, re)
+            if one_block_data is None:
+                return bytearray([1<<(i%8), 0xA2, 0])
+            block_data.extend(one_block_data)
+            
+        return bytearray([0, 0, len(block_data)/16]) + block_data
+
+    def write_without_encryption(self, cmd_data):
+        service_list = cmd_data.pop(0) * [[None, None]]
+        for i in range(len(service_list)):
+            service_code = cmd_data[1] << 8 | cmd_data[0]
+            if not service_code in self.services.keys():
+                return bytearray([255, 0xA1])
+            service_list[i] = [service_code, 0]
+            del cmd_data[0:2]
+            
+        service_block_list = cmd_data.pop(0) * [None]
+        for i in range(len(service_block_list)):
+            try:
+                service_list_item = service_list[cmd_data[0] & 0x0F]
+                service_code = service_list_item[0]
+                service_list_item[1] += 1
+            except IndexError:
+                return bytearray([1<<(i%8), 0xA3])
+            if cmd_data[0] >= 128:
+                block_number = cmd_data[1]
+                del cmd_data[0:2]
+            else:
+                block_number = cmd_data[2] << 8 | cmd_data[1]
+                del cmd_data[0:3]
+            service_block_list[i] = [service_code, block_number, 0]
+
+        service_block_count = dict(service_list)
+        for service_block_list_item in service_block_list:
+            service_code = service_block_list_item[0]
+            service_block_list_item[2] = service_block_count[service_code]
+            
         block_data = cmd_data[0:]
         if len(block_data) % 16 != 0:
             return bytearray([255, 0xA2])
             
-        for i, (service_code, block_number) in enumerate(service_block_list):
+        for i, service_block_list_item in enumerate(service_block_list):
+            service_code, block_number, block_count = service_block_list_item
+            # wb (write begin) and we (write end) mark an atomic write
+            wb = bool(block_count == service_block_count[service_code])
+            service_block_count[service_code] -= 1
+            we = bool(service_block_count[service_code] == 0)
             read_func, write_func = self.services[service_code]
-            if not write_func(block_number, block_data[i*16:(i+1)*16]):
+            if not write_func(block_number, block_data[i*16:(i+1)*16], wb, we):
                 return bytearray([1<<(i%8), 0xA2, 0])
 
         return bytearray([0, 0])
