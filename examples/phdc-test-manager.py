@@ -127,13 +127,12 @@ class PhdcTagManager(PhdcManager):
         log.info("entering phdc manager run loop")
         while True:
             try:
-                self.write_phd_message(self.dequeue())
+                apdu = self.dequeue()
+                self.write_phd_message(apdu)
+                apdu = self.read_phd_message(timeout=100)
+                self.enqueue(apdu)
             except IOError:
                 self.enqueue(None)
-                break
-            try:
-                self.enqueue(self.read_phd_message(timeout=100))
-            except IOError:
                 break
         log.info("leaving phdc manager run loop")
         
@@ -165,7 +164,7 @@ def phdc_tag_manager(args):
                 manager.start()
                 log.info("entering ieee manager echo loop")
                 while True:
-                    apdu = manager.recv(timeout=5.0)
+                    apdu = manager.recv(timeout=None)
                     if apdu is None: break
                     log.info("[ieee] <<< {0}".format(str(apdu).encode("hex")))
                     apdu = apdu[::-1]
