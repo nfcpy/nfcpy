@@ -281,7 +281,7 @@ class Device(object):
 
     def listen_nfcf(self, idm, pmm, sc, br, timeout):
         self.chipset.tg_set_rf(br+"F")
-        self.chipset.tg_set_protocol([0, 1, 1, 0, 2, 7])
+        self.chipset.tg_set_protocol([0, 1, 1, 1, 2, 7])
         
         data = self.chipset.tg_comm_rf(1000, recv_timeout=timeout)
         if data is None or tuple(data[3:7]) != (0, 0, 0, 0):
@@ -302,13 +302,19 @@ class Device(object):
         while cmd[0] == 6 and cmd[1] == 0:
             log.debug("rcvd SENSF_REQ " + str(cmd).encode("hex"))
             if tuple(cmd[2:4]) in [(255, 255), tuple(sc)]:
-                rsp = idm + pmm + sc if cmd[4] == 1 else idm + pmm
+                if cmd[4] == 1:
+                    rsp = idm + pmm + sc
+                elif cmd[4] == 2:
+                    protocol_features = ("\x00\x81", "\x00\x82")[br=="424"]
+                    rsp = idm + pmm + protocol_features
+                else:
+                    rsp = idm + pmm
                 rsp = bytearray([2 + len(rsp), 0x01]) + rsp
                 log.debug("send SENSF_RES " + str(rsp).encode("hex"))
                 tsn = cmd[5]
                 data = self.chipset.tg_comm_rf(
                     2416 + tsn * 1208, 2416 + (tsn + 1) * 1208,
-                    recv_timeout=500, transmit_data=rsp)
+                    recv_timeout=3000, transmit_data=rsp)
                 if data is None or tuple(data[3:7]) != (0, 0, 0, 0):
                     return None
                 cmd = data[7:]
@@ -318,7 +324,6 @@ class Device(object):
                 log.debug("unmatched system code in SENSF_REQ command")
                 return None
 
-        self.chipset.tg_set_protocol([0, 1, 1, 1, 2, 7])
         return cmd
 
     @trace
