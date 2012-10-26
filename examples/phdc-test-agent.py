@@ -78,13 +78,17 @@ class PhdcAgent(threading.Thread):
         return apdu
                 
     def send(self, apdu):
+        log.info("[ieee] >>> {0}".format(str(apdu).encode("hex")))
         self.oqueue.put(apdu)
 
     def recv(self, timeout):
         try:
-            return self.iqueue.get(block=True, timeout=timeout)
+            apdu = self.iqueue.get(block=True, timeout=timeout)
         except queue.Empty:
-            return None
+            pass
+        else:
+            log.info("[ieee] <<< {0}".format(str(apdu).encode("hex")))
+            return apdu
 
 class PhdcTagAgent(PhdcAgent):
     def __init__(self, tag, apdu=bytearray()):
@@ -173,6 +177,25 @@ class PhdcTagAgent(PhdcAgent):
             self.tag.send_response()
         log.info("leaving phdc agent run loop")
         
+thermometer_assoc_req = \
+    "E200003280000000" \
+    "0001002A50790026" \
+    "80000000A0008000" \
+    "0000000000000080" \
+    "0000000831323334" \
+    "3536373803200001" \
+    "01000000"
+
+thermometer_assoc_res = \
+    "E300002C00005079" \
+    "0026800000008000" \
+    "8000000000000000" \
+    "800000000008XXXX" \
+    "XXXXXXXXXXXX0000" \
+    "0000000000000000" \
+
+assoc_release_req = "E40000020000"
+assoc_release_res = "E50000020000"
 
 def phdc_tag_agent(args):
     idm = bytearray.fromhex("02FE") + os.urandom(6)
@@ -189,14 +212,27 @@ def phdc_tag_agent(args):
             log.info("agent activated")
             agent.start()
             log.info("entering ieee agent")
-            for i in range(1):
-                apdu = agent.recv(timeout=5.0)
-                if apdu is None: break
-                log.info("[ieee] <<< {0}".format(str(apdu).encode("hex")))
-                apdu = bytearray("agent-send")
-                #time.sleep(0.2)
-                log.info("[ieee] >>> {0}".format(str(apdu).encode("hex")))
-                agent.send(apdu)
+            
+            apdu = bytearray.fromhex(thermometer_assoc_req)
+            log.info("send thermometer association request")
+            agent.send(apdu)
+            
+            apdu = agent.recv(timeout=5.0)
+            if apdu is None: break
+            if apdu.startswith("\xE3\x00"):
+                log.info("received association response")
+            
+            time.sleep(1.0)
+            
+            apdu = bytearray.fromhex(assoc_release_req)
+            log.info("send association release request")
+            agent.send(apdu)
+                
+            apdu = agent.recv(timeout=5.0)
+            if apdu is None: break
+            if apdu.startswith("\xE5\x00"):
+                log.info("received association release response")
+            
             log.info("leaving ieee agent")
             agent.join(timeout=10.0)
             break

@@ -136,6 +136,25 @@ class PhdcTagManager(PhdcManager):
                 break
         log.info("leaving phdc manager run loop")
         
+thermometer_assoc_req = \
+    "E200003280000000" \
+    "0001002A50790026" \
+    "80000000A0008000" \
+    "0000000000000080" \
+    "0000000831323334" \
+    "3536373803200001" \
+    "01000000"
+
+thermometer_assoc_res = \
+    "E300002C00005079" \
+    "0026800000008000" \
+    "8000000000000000" \
+    "8000000000081122" \
+    "3344556677880000" \
+    "0000000000000000" \
+
+assoc_release_req = "E40000020000"
+assoc_release_res = "E50000020000"
 
 def phdc_tag_manager(args):
     tag = poll(args.clf)
@@ -167,7 +186,12 @@ def phdc_tag_manager(args):
                     apdu = manager.recv(timeout=None)
                     if apdu is None: break
                     log.info("[ieee] <<< {0}".format(str(apdu).encode("hex")))
-                    apdu = apdu[::-1]
+                    if apdu.startswith("\xE2\x00"):
+                        apdu = bytearray.fromhex(thermometer_assoc_res)
+                    elif apdu.startswith("\xE4\x00"):
+                        apdu = bytearray.fromhex(assoc_release_res)
+                    else:
+                        apdu = apdu[::-1]
                     time.sleep(0.2)
                     log.info("[ieee] >>> {0}".format(str(apdu).encode("hex")))
                     manager.send(apdu)
