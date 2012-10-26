@@ -106,8 +106,8 @@ class PhdcTagManager(PhdcManager):
                 continue
             if message.type == "urn:nfc:wkt:PHD":
                 data = bytearray(message[0].data)
-                log.info("[phdc] <<< {0}".format(str(data).encode("hex")))
                 if data[0] & 0x0F == (self.mc % 4) << 2 | 2:
+                    log.info("[phdc] <<< {0}".format(str(data).encode("hex")))
                     if isinstance(self.tag, nfc.Type3Tag):
                         attr = nfc.tt3.NdefAttributeData(self.tag.read([0]))
                         attr.writing = True; attr.length = 0
