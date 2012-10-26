@@ -43,7 +43,7 @@ def trace(func):
         _args = "{0}".format(args[1:]).strip("(),")
         if kwargs:
             _args = ', '.join([_args, "{0}".format(kwargs).strip("{}")])
-        log.debug("{func}({args})".format(func=func.__name__, args=_args))
+        log.info("{func}({args})".format(func=func.__name__, args=_args))
         return func(*args, **kwargs)
     return traced_func
 
@@ -70,9 +70,9 @@ class PhdcAgent(threading.Thread):
         if apdu is None or len(apdu) > 0:
             self.iqueue.put(apdu)
 
-    def dequeue(self):
+    def dequeue(self, timeout):
         try:
-            apdu = self.oqueue.get(block=True, timeout=0.1)
+            apdu = self.oqueue.get(block=True, timeout=timeout)
         except queue.Empty:
             apdu = ""
         return apdu
@@ -111,64 +111,56 @@ class PhdcTagAgent(PhdcAgent):
         self.ndef_write_lock = threading.Lock()
 
     def ndef_read(self, block, read_begin, read_end):
-        print "read_begin = {0} read_end = {1}".format(read_begin, read_end)
         if read_begin is True:
             self.ndef_read_lock.acquire()
         try:
-            log.info("tt3 read block #{0}".format(block))
+            log.debug("tt3 read block #{0}".format(block))
             if block < len(self.ndef_data_area) / 16:
                 return self.ndef_data_area[block*16:(block+1)*16]
         finally:
             if read_end is True:
                 self.ndef_read_lock.release()
-        
+    
     def ndef_write(self, block, data, write_begin, write_end):
         if write_begin is True:
             self.ndef_write_lock.acquire()
         try:
-            log.info("tt3 write block #{0}".format(block))
+            log.debug("tt3 write block #{0}".format(block))
             if block < len(self.ndef_data_area) / 16:
                 self.ndef_data_area[block*16:(block+1)*16] = data
                 return True
         finally:
             if write_end is True:
                 self.ndef_write_lock.release()
+                apdu = self.recv_phd_message()
+                if apdu is not None:
+                    self.enqueue(apdu)
+                    threading.Thread(target=self.send_phd_message).start()
             
-    @trace
-    def read_phd_message(self, timeout):
-        t0 = time.time()
-        while True:
-            message = None
-            time.sleep(0.1)
-            with self.ndef_write_lock:
-                #print str(self.ndef_data_area[0:16]).encode("hex")
-                #print str(self.ndef_data_area[16:32]).encode("hex")
-                attr = nfc.tt3.NdefAttributeData(self.ndef_data_area[0:16])
-                if attr.length > 0 and not attr.writing:
-                    try:
-                        message = nfc.ndef.Message(
-                            self.ndef_data_area[16:16+attr.length])
-                    except nfc.ndef.LengthError:
-                        pass
-                
-            if message and message.type == "urn:nfc:wkt:PHD":
-                data = bytearray(message[0].data)
-                if data[0] & 0x0F == (self.mc % 4) << 2 | 2:
-                    log.info("[phdc] <<< {0:2d} {1}"
-                             .format(self.mc % 16, str(data).encode("hex")))
-                    self.mc += 1
-                    return data[1:]
-                    
-            if int((time.time() - t0) * 1000) > timeout:
+    def recv_phd_message(self):
+        attr = nfc.tt3.NdefAttributeData(self.ndef_data_area[0:16])
+        if attr.valid and not attr.writing and attr.length > 0:
+            try:
+                message = nfc.ndef.Message(
+                    self.ndef_data_area[16:16+attr.length])
+            except nfc.ndef.LengthError:
                 return None
-                    
-    @trace
-    def write_phd_message(self, apdu):
+
+            if message.type == "urn:nfc:wkt:PHD":
+                data = bytearray(message[0].data)
+                if data[0] & 0x0F == (self.mc % 4) << 2 | 3:
+                    log.info("[phdc] <<< " + str(data).encode("hex"))
+                    self.mc += 1
+                    attr.length = 0
+                    self.ndef_data_area[0:16] = bytearray(str(attr))
+                    return data[1:]
+                   
+    def send_phd_message(self):
+        apdu = self.dequeue(timeout=0.1)
         data = bytearray([(self.mc % 4) << 2 | 2]) + apdu
         record = nfc.ndef.Record("urn:nfc:wkt:PHD", data=str(data))
         with self.ndef_read_lock:
-            log.info("[phdc] >>> {0:2d} {1}"
-                     .format(self.mc % 16, str(data).encode("hex")))
+            log.info("[phdc] >>> " + str(data).encode("hex"))
             data = bytearray(str(nfc.ndef.Message(record)))
             attr = nfc.tt3.NdefAttributeData(self.ndef_data_area[0:16])
             attr.length = len(data)
@@ -177,16 +169,8 @@ class PhdcTagAgent(PhdcAgent):
         
     def run(self):
         log.info("entering phdc agent run loop")
-        for i in range(10):
-            try:
-                self.enqueue(self.read_phd_message(timeout=1000))
-            except IOError:
-                self.enqueue(None)
-                break
-            try:
-                self.write_phd_message(self.dequeue())
-            except IOError:
-                break
+        while self.tag.wait_command(timeout=1000):
+            self.tag.send_response()
         log.info("leaving phdc agent run loop")
         
 
@@ -203,18 +187,18 @@ def phdc_tag_agent(args):
         activated = args.clf.listen([agent.tag], timeout=1000)
         if activated and activated == agent.tag:
             log.info("agent activated")
-            threading.Thread(target=agent.tag.serve, args=(5000,)).start()
             agent.start()
             log.info("entering ieee agent")
             for i in range(1):
                 apdu = agent.recv(timeout=5.0)
                 if apdu is None: break
                 log.info("[ieee] <<< {0}".format(str(apdu).encode("hex")))
-                apdu = apdu[::-1]
+                apdu = bytearray("agent-send")
                 #time.sleep(0.2)
                 log.info("[ieee] >>> {0}".format(str(apdu).encode("hex")))
                 agent.send(apdu)
             log.info("leaving ieee agent")
+            agent.join(timeout=10.0)
             break
         
 if __name__ == '__main__':
