@@ -26,8 +26,8 @@
 import logging
 log = logging.getLogger(__name__)
 
-import usb
 import sys
+from usb import USBError
 
 class usb(object):
     def __init__(self, dev):
@@ -37,7 +37,7 @@ class usb(object):
         try:
             self.dh.setConfiguration(dev.configurations[0])
             self.dh.claimInterface(0)
-        except usb.USBError:
+        except USBError:
             raise IOError("unusable device")
         intf = dev.configurations[0].interfaces[0]
         self.usb_out = intf[0].endpoints[0].address
@@ -67,7 +67,7 @@ class usb(object):
     def read(self, timeout):
         if self.dh is not None and self.usb_inp is not None:
             try: frame = self.dh.bulkRead(self.usb_inp, 300, timeout)
-            except usb.USBError as error:
+            except USBError as error:
                 timeout_messages = ("No error", "Connection timed out",
                                     "usb_reap: timeout error")
                 if error.args[0] in timeout_messages:
