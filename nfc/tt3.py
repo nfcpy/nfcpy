@@ -203,11 +203,15 @@ class Type3Tag(tag.TAG):
         if not self.clf.dev.tt3_send_command(chr(len(cmd)+1) + cmd):
             raise IOError("tt3 send error")
         resp = self.clf.dev.tt3_recv_response(rto)
+        if resp is None:
+            raise IOError("tt3 recv error")
         if not resp.startswith(chr(len(resp)) + "\x07" + self.idm):
             raise IOError("tt3 data error")
         if resp[10] != 0 or resp[11] != 0:
             raise IOError("tt3 cmd error {0:02x} {1:02x}".format(*resp[10:12]))
-        return str(resp[13:])
+        data = str(resp[13:])
+        log.debug("<<< {0}".format(data.encode("hex")))
+        return data
 
     def write(self, data, blocks, service=ndef_write_service):
         """Write service data blocks to tag. The *service* argument is the
@@ -220,6 +224,7 @@ class Type3Tag(tag.TAG):
         if len(data) != len(blocks) * 16:
             log.error("data length does not match block-count * 16")
             raise ValueError("invalid data length for given number of blocks")
+        log.debug(">>> {0}".format(str(data).encode("hex")))
         cmd  = "\x08" + self.idm # ReadWithoutEncryption
         cmd += "\x01" + ("%02X%02X" % (service%256,service/256)).decode("hex")
         cmd += chr(len(blocks))
@@ -230,10 +235,10 @@ class Type3Tag(tag.TAG):
         wto = int((self.wto[0] + self.wto[1] * len(blocks)) * self.wto[2]) + 5
         log.debug("write timeout is {0} ms".format(wto))
         if not self.clf.dev.tt3_send_command(chr(len(cmd)+1) + cmd):
-            raise IOError("tt3 send cmd error")
+            raise IOError("tt3 send error")
         resp = self.clf.dev.tt3_recv_response(timeout=wto)
         if resp is None:
-            raise IOError("tt3 recv rsp error")
+            raise IOError("tt3 recv error")
         if not resp.startswith(chr(len(resp)) + "\x09" + self.idm):
             raise IOError("tt3 data error")
         if resp[10] != 0 or resp[11] != 0:
@@ -256,12 +261,6 @@ class Type3TagEmulation(object):
     def add_service(self, service_code, block_read_func, block_write_func):
         self.services[service_code] = (block_read_func, block_write_func)
 
-    def serve(self, timeout):
-        log.debug("tag activated")
-        while self.wait_command(timeout):
-            self.send_response()
-        log.debug("tag released")
-    
     def wait_command(self, timeout):
         """Wait *timeout* ms for a reader command."""
         if self.cmd is None:
