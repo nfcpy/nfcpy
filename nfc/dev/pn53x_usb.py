@@ -104,7 +104,9 @@ class Device(pn53x.Device):
             log.info(info.format(ttype, speed, cmode))
             return str(data[18:])
             
-def init(usb_dev):
+def init(usb_dev, transport):
+    #if transport == "usb":
+    #    pass
     bus = pn53x_usb(usb_dev)
     dev = pn53x.pn53x(bus)
     device = Device(dev)

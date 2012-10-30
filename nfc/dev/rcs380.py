@@ -144,7 +144,7 @@ class Chipset():
             error = CommunicationError(data[0:4])
             log.debug("in_comm_rf error {0}".format(error))
             raise error
-        return data[4:]
+        return data[5:]
         
     @trace
     def switch_rf(self, switch):
@@ -219,12 +219,12 @@ class Chipset():
 class Device(object):
     def __init__(self, chipset):
         self.chipset = chipset
-        self.mode = None
     
     def close(self):
         pass
     
     def poll(self, p2p_activation_data=None):
+        self.tech = None
         for poll in (self._poll_nfca, self._poll_nfcb, self._poll_nfcf):
             target = poll()
             if target is not None:
@@ -241,6 +241,7 @@ class Device(object):
     
     def _poll_nfcf(self):
         log.debug("polling for NFC-F technology")
+        self.technology = None
 
         poll_ffff = "\x06\x00\xFF\xFF\x00\x00"
         poll_12fc = "\x06\x00\x12\xFC\x00\x00"
@@ -249,37 +250,63 @@ class Device(object):
             self.chipset.in_set_rf(br)
             try:
                 rsp = self.chipset.in_comm_rf("\x06\x00\xFF\xFF\x00\x00", 100)
-                if (rsp[1], rsp[2]) != (0x12, 0x01): return None
+                if (rsp[0], rsp[1]) != (0x12, 0x01): return None
             except CommunicationError as error:
                 if error == "RECEIVE_TIMEOUT_ERROR": continue
-                raise error
+                else: raise error
 
-            if rsp[3] == 0x01 and rsp[4] == 0xFE:
+            if (rsp[2], rsp[3]) == (0x01, 0xfe):
+                self.tech = "nfcf"
                 return {"type": "DEP"}
 
             for poll_cmd in ("\x06\x00\x12\xFC\x01\x00",
                              "\x06\x00\xFF\xFF\x01\x00"):
                 try:
                     rsp = self.chipset.in_comm_rf(poll_cmd, 100)
-                    if (rsp[1], rsp[2]) != (0x14, 0x01): return None
+                    if (rsp[0], rsp[1]) != (0x14, 0x01): return None
                 except CommunicationError as error:
                     if error == "RECEIVE_TIMEOUT_ERROR": continue
                     raise error
                 else:
                     log.debug("NFC-F target at {0} kbps".format(br[0:3]))
-                    idm, pmm, sys = rsp[3:11], rsp[11:19], rsp[19:21]
+                    idm, pmm, sys = rsp[2:10], rsp[10:18], rsp[18:20]
+                    self.tech = "nfcf"
                     return {"type": "TT3", "IDm": idm, "PMm": pmm, "SYS": sys}
         else:
             # no target found, shut down rf field
             self.chipset.switch_rf("off")
             
-    def _poll_dep(self, general_bytes):
-        pass
+    def _poll_dep(self, gb):
+        def ATR(nfcid3, bs, br, pp, gb):
+            atr = "\x00\xD4\x00" + nfcid3 + bytearray([0, bs, br, pp]) + gb
+            atr[0] = len(atr)
+            return atr
+            
+        log.debug("polling for NFC-DEP protocol")
+        if self.tech == "nfcf":
+            rsp = self.chipset.in_comm_rf("\x06\x00\xFF\xFF\x00\x00", 100)
+            if (rsp[2], rsp[3]) == (0x01, 0xfe):
+                nfcid3 = rsp[2:10] + "\x00\x00"
+                frame = ATR(nfcid3, bs=0, br=0, pp=0b00110010, gb=gb)
+                frame = self.chipset.in_comm_rf(frame, 1300)
+                if not frame or frame[0] != len(frame) or frame[0] < 18:
+                    log.error("no atr_rsp or atr_rsp length error")
+                    return
+                if tuple(frame[1:2]) == (0xD5, 0x01):
+                    log.error("not an atr_rsp pdu type")
+                    return
+                if frame[3:11] != nfcid3[0:8]:
+                    log.warning("wrong nfcid3 in atr_rsp")
+                to, pp, gb = frame[16], frame[17], frame[18:]
+                wt = to & 0x0f; rwt = 4096 / 13.56E6 * pow(2, wt)
+                return {"type": "DEP", "rwt": rwt, "data": str(gb)}
 
     def listen(self, general_bytes, timeout):
+        self.tech = None
         pass
 
     def listen_nfcf(self, idm, pmm, sc, br, timeout):
+        self.tech = None
         self.chipset.tg_set_rf(br+"F")
         self.chipset.tg_set_protocol([0, 1, 1, 1, 2, 7])
         
@@ -324,32 +351,52 @@ class Device(object):
                 log.debug("unmatched system code in SENSF_REQ command")
                 return None
 
+        self.tech = "nfcf"
         return cmd
 
     @trace
-    def tt3_send_command(self, data):
+    def send_command(self, data):
+        if self.tech == "nfcf":
+            return self._nfcf_send_command(data)
+        raise NotImplemented
+
+    @trace
+    def recv_response(self, timeout):
+        if self.tech == "nfcf":
+            return self._nfcf_recv_response(timeout)        
+        raise NotImplemented
+
+    @trace
+    def recv_command(self, timeout):
+        if self.tech == "nfcf":
+            return self._nfcf_recv_command(timeout)        
+        raise NotImplemented
+
+    @trace
+    def send_response(self, data):
+        if self.tech == "nfcf":
+            return self._nfcf_send_response(data)
+        raise NotImplemented
+    
+    def _nfcf_send_command(self, data):
         try:
             self.chipset.in_comm_rf(data, timeout=0)
             return True
         except CommunicationError as error:
-            log.error("tt3_send_command error {0}".format(error))
+            log.error("nfcf_send_command error {0}".format(error))
 
-    @trace
-    def tt3_recv_response(self, timeout):
+    def _nfcf_recv_response(self, timeout):
         try:
-            data = self.chipset.in_comm_rf(data="", timeout=timeout)
-            return data[1:]
+            return self.chipset.in_comm_rf(data="", timeout=timeout)
         except CommunicationError as error:
             if not error == "RECEIVE_TIMEOUT_ERROR":
-                log.error("tt3_recv_response error {0}".format(error))
+                log.error("nfcf_recv_response error {0}".format(error))
 
-    @trace
-    def tt3_wait_command(self, timeout):
+    def _nfcf_recv_command(self, timeout):
         data = self.chipset.tg_comm_rf(200, recv_timeout=timeout)
         return data[7:] if tuple(data[3:7]) == (0, 0, 0, 0) else None
 
-    @trace
-    def tt3_send_response(self, data):
+    def _nfcf_send_response(self, data):
         data = self.chipset.tg_comm_rf(3624, recv_timeout=0, transmit_data=data)
         return True if tuple(data[3:7]) == (0, 0, 0, 0) else False
 

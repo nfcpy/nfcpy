@@ -177,12 +177,12 @@ class Type3Tag(tag.TAG):
         rto = int((self.rto[0] + self.rto[1]) * self.rto[2]) + 5
         cmd = "\x04" + self.idm
         rsp = None
-        if self.clf.dev.tt3_send_command(chr(len(cmd)+1) + cmd):
-            rsp = self.clf.dev.tt3_recv_response(timeout=rto)
+        if self.clf.dev.send_command(chr(len(cmd)+1) + cmd):
+            rsp = self.clf.dev.recv_response(timeout=rto)
             if not rsp:
                 cmd = "\x00" + self.sys + "\x00\x00"
-                if self.clf.dev.tt3_send_command(chr(len(cmd)+1) + cmd):
-                    rsp = self.clf.dev.tt3_recv_response(timeout=rto)
+                if self.clf.dev.send_command(chr(len(cmd)+1) + cmd):
+                    rsp = self.clf.dev.recv_response(timeout=rto)
         return bool(rsp)
 
     def read(self, blocks, service=ndef_read_service):
@@ -200,9 +200,9 @@ class Type3Tag(tag.TAG):
             else: cmd += "\x00" + chr(block%256) + chr(block/256)
         rto = int((self.rto[0] + self.rto[1] * len(blocks)) * self.rto[2]) + 5
         log.debug("read timeout is {0} ms".format(rto))
-        if not self.clf.dev.tt3_send_command(chr(len(cmd)+1) + cmd):
+        if not self.clf.dev.send_command(chr(len(cmd)+1) + cmd):
             raise IOError("tt3 send error")
-        resp = self.clf.dev.tt3_recv_response(rto)
+        resp = self.clf.dev.recv_response(rto)
         if resp is None:
             raise IOError("tt3 recv error")
         if not resp.startswith(chr(len(resp)) + "\x07" + self.idm):
@@ -234,9 +234,9 @@ class Type3Tag(tag.TAG):
         cmd += data
         wto = int((self.wto[0] + self.wto[1] * len(blocks)) * self.wto[2]) + 5
         log.debug("write timeout is {0} ms".format(wto))
-        if not self.clf.dev.tt3_send_command(chr(len(cmd)+1) + cmd):
+        if not self.clf.dev.send_command(chr(len(cmd)+1) + cmd):
             raise IOError("tt3 send error")
-        resp = self.clf.dev.tt3_recv_response(timeout=wto)
+        resp = self.clf.dev.recv_response(timeout=wto)
         if resp is None:
             raise IOError("tt3 recv error")
         if not resp.startswith(chr(len(resp)) + "\x09" + self.idm):
@@ -264,7 +264,7 @@ class Type3TagEmulation(object):
     def wait_command(self, timeout):
         """Wait *timeout* ms for a reader command."""
         if self.cmd is None:
-            self.cmd = self.clf.dev.tt3_wait_command(timeout)
+            self.cmd = self.clf.dev.recv_command(timeout)
             if self.cmd and len(self.cmd) != self.cmd[0]:
                 log.error("tt3 command length error")
                 self.cmd = None
@@ -290,7 +290,7 @@ class Type3TagEmulation(object):
             rsp = bytearray([10 + len(rsp), 0x0D]) + self.idm + rsp
         if rsp is not None:
             log.debug("tt3: sending response " + str(rsp).encode("hex"))
-            self.clf.dev.tt3_send_response(rsp)
+            self.clf.dev.send_response(rsp)
         self.cmd = None
 
     def polling(self, cmd_data):

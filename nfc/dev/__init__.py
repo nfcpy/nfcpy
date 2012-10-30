@@ -181,22 +181,25 @@ class Device(object):
     
     def dep_set_data(self, data, timeout):
         raise NotImplemented
+
+    ##
+    ## initiator send/recv
+    ##
+    def send_command(self, data):
+        raise NotImplemented
+
+    def recv_response(self, timeout):
+        raise NotImplemented
+
+    ##
+    ## target recv/send
+    ##
+    def recv_command(self, timeout):
+        raise NotImplemented
+
+    def send_response(self, data):
+        raise NotImplemented
         
-    ##
-    ## tag type (1|2|3) command/response exchange
-    ##
-    def tt1_exchange(self, cmd):
-        raise NotImplemented
-
-    def tt2_exchange(self, cmd):
-        raise NotImplemented
-
-    def tt3_exchange(self, cmd, timeout=500):
-        raise NotImplemented
-
-    def tt4_exchange(self, cmd):
-        raise NotImplemented
-
     ##
     ## properties
     ##

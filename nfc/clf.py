@@ -44,8 +44,8 @@ class ContactlessFrontend(object):
         * **tty[:usb][:port]** with usb serial *port* number (dec)
         * **tty[:com][:port]** with serial *port* number (dec)
 
-        Raises :exc:`LookupError` if no available reader device was
-        found."""
+        Raises :exc:`LookupError` if no available reader device is found.
+        """
         
         if not path: log.info("searching for a usable reader")
         else: log.info("searching for reader with path '{0}'".format(path))
@@ -80,7 +80,7 @@ class ContactlessFrontend(object):
         if target is not None:
             log.debug("found target {0}".format(target))
             if target.get("type") == "DEP":
-                return DEPInitiator(self.dev, target['data'])
+                return DEPInitiator(self, target['data'], target['rwt'])
             if target.get("type") == "TT1":
                 return Type1Tag(self.dev, target)
             if target.get("type") == "TT2":
@@ -101,7 +101,7 @@ class ContactlessFrontend(object):
         """
         
         if len(target_list) == 0:
-            raise ValueError("at least one target must be said to listen")
+            raise ValueError("need at least one target to listen for")
         
         if len(target_list) > 1:
             raise NotImplemented("can't yet listen for multiple targets")
