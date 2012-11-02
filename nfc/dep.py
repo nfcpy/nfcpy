@@ -66,7 +66,7 @@ class DEPInitiator(DEP):
             for i in range(0, len(data), self.miu):
                 more = len(data) - i * self.miu > self.miu
                 self._send_information(data[i:i+self.miu], more)
-                if more: self._recv_acknowledge()
+                if more: self._recv_acknowledge(self.rwt)
             return True
         except IOError as error:
             log.error(error)
