@@ -37,6 +37,7 @@ import Queue as queue
 sys.path.insert(1, os.path.split(sys.path[0])[0])
 import nfc
 import nfc.ndef
+import nfc.llcp
 
 def trace(func):
     def traced_func(*args, **kwargs):
@@ -181,7 +182,7 @@ def phdc_tag_manager(args):
             if phd_data[0] == 0:
                 manager = PhdcTagManager(tag, apdu=phd_data[1:])
                 manager.start()
-                log.info("entering ieee manager echo loop")
+                log.info("entering ieee manager")
                 while True:
                     apdu = manager.recv(timeout=None)
                     if apdu is None: break
@@ -195,9 +196,70 @@ def phdc_tag_manager(args):
                     time.sleep(0.2)
                     log.info("[ieee] >>> {0}".format(str(apdu).encode("hex")))
                     manager.send(apdu)
-                log.info("leaving ieee manager echo loop")
+                log.info("leaving ieee manager")
     
+def phdc_p2p_manager(args):
+    llcp_config = {'recv-miu': 240, 'send-lto': 500}
+    llcp_option_string = nfc.llcp.startup(llcp_config)
+    try:
+        while True:
+            peer = args.clf.poll(llcp_option_string)
+            if isinstance(peer, nfc.DEP):
+                if peer.general_bytes.startswith("Ffm"):
+                    break
+    except KeyboardInterrupt:
+        pass
+    
+    if not peer:
+        return
+
+    log.info("got a peer")
+    nfc.llcp.activate(peer)
+
+    socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
+    try:
+        nfc.llcp.bind(socket, args.service_name)
+        addr = nfc.llcp.getsockname(socket)
+        log.info("phdc manager bound to port {0}".format(addr))
+        nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
+        nfc.llcp.listen(socket, backlog=1)
+        while True:
+            client = nfc.llcp.accept(socket)
+            peer = nfc.llcp.getpeername(client)
+            miu = nfc.llcp.getsockopt(socket, nfc.llcp.SO_SNDMIU)
+            log.info("serving phdc agent from sap {0}".format(peer))
+            log.info("entering ieee manager")
+            while True:
+                data = nfc.llcp.recv(client)
+                if data == None: break
+                log.info("rcvd {0} byte data".format(len(data)))
+                size = struct.unpack(">H", data[0:2])[0]
+                apdu = data[2:]
+                while len(apdu) < size:
+                    data = nfc.llcp.recv(client)
+                    if data == None: break
+                    log.info("rcvd {0} byte data".format(len(data)))
+                    apdu += data
+                log.info("[ieee] <<< {0}".format(str(apdu).encode("hex")))
+                if apdu.startswith("\xE2\x00"):
+                    apdu = bytearray.fromhex(thermometer_assoc_res)
+                elif apdu.startswith("\xE4\x00"):
+                    apdu = bytearray.fromhex(assoc_release_res)
+                else:
+                    apdu = apdu[::-1]
+                time.sleep(0.2)
+                log.info("[ieee] >>> {0}".format(str(apdu).encode("hex")))
+                data = struct.pack(">H", len(apdu)) + apdu
+                for i in range(0, len(data), miu):
+                    nfc.llcp.send(client, str(data[i:i+miu]))
+            log.info("remote peer {0} closed connection".format(peer))
+            log.info("leaving ieee manager")
         
+    except nfc.llcp.Error as e:
+        log.error(str(e))
+    finally:
+        nfc.llcp.close(socket)
+
 def poll(clf):
     try:
         while True:
@@ -231,6 +293,14 @@ if __name__ == '__main__':
             "usb[:vendor[:product]] (vendor and product in hex), "\
             "usb[:bus[:dev]] (bus and device number in decimal), "\
             "tty[:(usb|com)[:port]] (usb virtual or com port)")
+
+    parser.add_argument("--service-name", default="urn:nfc:sn:phdc")
+    
+    subparsers = parser.add_subparsers(title="modes", dest="subparser")
+    subparsers.add_parser('tag', help='run phdc tag manager')\
+        .set_defaults(func=phdc_tag_manager)
+    subparsers.add_parser('p2p', help='run phdc p2p manager')\
+        .set_defaults(func=phdc_p2p_manager)
 
     options = parser.parse_args()
 
@@ -283,7 +353,7 @@ if __name__ == '__main__':
     try:
         while True:
             log.info("waiting for agent")
-            phdc_tag_manager(options)
+            options.func(options)
             if not options.loop:
                 break
     except KeyboardInterrupt:

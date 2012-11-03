@@ -37,6 +37,7 @@ import Queue as queue
 sys.path.insert(1, os.path.split(sys.path[0])[0])
 import nfc
 import nfc.ndef
+import nfc.llcp
 
 def trace(func):
     def traced_func(*args, **kwargs):
@@ -91,7 +92,7 @@ class PhdcAgent(threading.Thread):
             return apdu
 
 class PhdcTagAgent(PhdcAgent):
-    def __init__(self, tag, apdu=bytearray()):
+    def __init__(self, tag, apdu=bytearray(), flags='\x00'):
         super(PhdcTagAgent, self).__init__()
         self.mc = 1
         attr = nfc.tt3.NdefAttributeData()
@@ -101,7 +102,7 @@ class PhdcTagAgent(PhdcAgent):
         attr.writeable = True
         attr.length = 7 + len(apdu)
     
-        phd_rec = nfc.ndef.Record("urn:nfc:wkt:PHD", data="\x00" + apdu)
+        phd_rec = nfc.ndef.Record("urn:nfc:wkt:PHD", data=flags + apdu)
         phd_msg = nfc.ndef.Message(phd_rec)
         
         self.ndef_data_area = str(attr) + bytearray(attr.capacity)
@@ -198,6 +199,17 @@ assoc_release_req = "E40000020000"
 assoc_release_res = "E50000020000"
 
 def phdc_tag_agent(args):
+    log.info("performing as tag agent")
+    if args.test == 1:
+        phdc_tag_agent_test1(args)
+    if args.test == 2:
+        phdc_tag_agent_test2(args)
+    if args.test == 3:
+        phdc_tag_agent_test3(args)
+    if args.test == 4:
+        phdc_tag_agent_test4(args)
+
+def phdc_tag_agent_test1(args):
     idm = bytearray.fromhex("02FE") + os.urandom(6)
     pmm = bytearray.fromhex("01E0000000FFFF00")
     sc = bytearray.fromhex("12FC")
@@ -220,9 +232,9 @@ def phdc_tag_agent(args):
             apdu = agent.recv(timeout=5.0)
             if apdu is None: break
             if apdu.startswith("\xE3\x00"):
-                log.info("received association response")
+                log.info("rcvd association response")
             
-            time.sleep(1.0)
+            time.sleep(3.0)
             
             apdu = bytearray.fromhex(assoc_release_req)
             log.info("send association release request")
@@ -231,12 +243,294 @@ def phdc_tag_agent(args):
             apdu = agent.recv(timeout=5.0)
             if apdu is None: break
             if apdu.startswith("\xE5\x00"):
-                log.info("received association release response")
+                log.info("rcvd association release response")
             
             log.info("leaving ieee agent")
             agent.join(timeout=10.0)
             break
         
+def phdc_tag_agent_test2(args):
+    idm = bytearray.fromhex("02FE") + os.urandom(6)
+    pmm = bytearray.fromhex("01E0000000FFFF00")
+    sc = bytearray.fromhex("12FC")
+    tag = nfc.tt3.Type3TagEmulation(idm, pmm, sc, "212")
+                       
+    agent = PhdcTagAgent(tag)
+    log.info("touch a manager")
+
+    while True:
+        activated = args.clf.listen([agent.tag], timeout=1000)
+        if activated and activated == agent.tag:
+            log.info("agent activated")
+            agent.start()
+            log.info("entering ieee agent")
+            
+            apdu = bytearray.fromhex(thermometer_assoc_req)
+            log.info("send thermometer association request")
+            agent.send(apdu)
+            
+            apdu = agent.recv(timeout=5.0)
+            if apdu is None: break
+            if apdu.startswith("\xE3\x00"):
+                log.info("rcvd association response")
+            
+            apdu = bytearray.fromhex(assoc_release_req)
+            log.info("send association release request")
+            agent.send(apdu)
+                
+            apdu = agent.recv(timeout=5.0)
+            if apdu is None: break
+            if apdu.startswith("\xE5\x00"):
+                log.info("rcvd association release response")
+            
+            log.info("leaving ieee agent")
+
+            time.sleep(3.0)
+
+            log.info("entering ieee agent")
+            
+            apdu = bytearray.fromhex(thermometer_assoc_req)
+            log.info("send thermometer association request")
+            agent.send(apdu)
+            
+            apdu = agent.recv(timeout=5.0)
+            if apdu is None: break
+            if apdu.startswith("\xE3\x00"):
+                log.info("rcvd association response")
+            
+            time.sleep(1.0)
+            log.info("now move devices out of communication range")
+            
+            log.info("leaving ieee agent")
+            agent.join(timeout=10.0)
+            
+            break
+        
+def phdc_tag_agent_test3(args):
+    idm = bytearray.fromhex("02FE") + os.urandom(6)
+    pmm = bytearray.fromhex("01E0000000FFFF00")
+    sc = bytearray.fromhex("12FC")
+    tag = nfc.tt3.Type3TagEmulation(idm, pmm, sc, "212")
+                       
+    agent = PhdcTagAgent(tag, flags="\x02")
+    log.info("touch a manager")
+
+    while True:
+        activated = args.clf.listen([agent.tag], timeout=1000)
+        if activated and activated == agent.tag:
+            log.info("tag activated, wait 10 sec")
+            agent.start()
+            agent.join(timeout=10.0)
+        
+def phdc_tag_agent_test4(args):
+    idm = bytearray.fromhex("02FE") + os.urandom(6)
+    pmm = bytearray.fromhex("01E0000000FFFF00")
+    sc = bytearray.fromhex("12FC")
+    tag = nfc.tt3.Type3TagEmulation(idm, pmm, sc, "212")
+
+    agent = PhdcTagAgent(tag, flags="\x40")
+    log.info("touch a manager")
+
+    while True:
+        activated = args.clf.listen([agent.tag], timeout=1000)
+        if activated and activated == agent.tag:
+            log.info("agent activated")
+            agent.start()
+            log.info("entering ieee agent")
+            time.sleep(3.0)
+            log.info("leaving ieee agent")
+            agent.join(timeout=10.0)
+            break
+        
+def phdc_p2p_agent(args):
+    log.info("performing as p2p agent")
+    if args.test == 1:
+        phdc_p2p_agent_test1(args)
+    if args.test == 2:
+        phdc_p2p_agent_test2(args)
+    if args.test == 3:
+        phdc_p2p_agent_test3(args)
+
+def phdc_p2p_agent_test1(args):
+    log.info("running p2p agent test #1")
+    llcp_config = {'recv-miu': 240, 'send-lto': 500}
+    llcp_option_string = nfc.llcp.startup(llcp_config)
+    try:
+        while True:
+            peer = args.clf.poll(llcp_option_string)
+            if isinstance(peer, nfc.DEP):
+                log.info("dep target activated")
+                log.info("general bytes: {0}".
+                         format(peer.general_bytes.encode("hex")))
+                if peer.general_bytes.startswith("Ffm"):
+                    break
+    except KeyboardInterrupt:
+        pass
+    
+    if not peer:
+        return
+
+    log.info("got a peer")
+    nfc.llcp.activate(peer)
+    
+    socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
+    nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
+    nfc.llcp.connect(socket, "urn:nfc:sn:phdc")
+    peer_sap = nfc.llcp.getpeername(socket)
+    log.info("connected with phdc manager at sap {0}".format(peer_sap))
+    log.info("entering ieee agent")
+    
+    apdu = bytearray.fromhex(thermometer_assoc_req)
+    apdu = struct.pack(">H", len(apdu)) + apdu
+    log.info("send thermometer association request")
+    log.info("send {0}".format(str(apdu).encode("hex")))
+    nfc.llcp.send(socket, str(apdu))
+    
+    apdu = nfc.llcp.recv(socket)
+    log.info("rcvd {0}".format(str(apdu).encode("hex")))
+    if apdu.startswith("\xE3\x00"):
+        log.info("rcvd association response")
+
+    time.sleep(3.0)
+            
+    apdu = bytearray.fromhex(assoc_release_req)
+    apdu = struct.pack(">H", len(apdu)) + apdu
+    log.info("send association release request")
+    log.info("send {0}".format(str(apdu).encode("hex")))
+    nfc.llcp.send(socket, str(apdu))
+
+    apdu = nfc.llcp.recv(socket)
+    log.info("rcvd {0}".format(str(apdu).encode("hex")))
+    if apdu.startswith("\xE5\x00"):
+        log.info("rcvd association release response")
+
+    log.info("leaving ieee agent")
+    socket.close()
+    
+def phdc_p2p_agent_test2(args):
+    log.info("running p2p agent test #2")
+    llcp_config = {'recv-miu': 240, 'send-lto': 500}
+    llcp_option_string = nfc.llcp.startup(llcp_config)
+    try:
+        while True:
+            peer = args.clf.poll(llcp_option_string)
+            if isinstance(peer, nfc.DEP):
+                if peer.general_bytes.startswith("Ffm"):
+                    break
+    except KeyboardInterrupt:
+        pass
+    
+    if not peer:
+        return
+
+    log.info("got a peer")
+    nfc.llcp.activate(peer)
+    
+    socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
+    nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
+    nfc.llcp.connect(socket, "urn:nfc:sn:phdc")
+    peer_sap = nfc.llcp.getpeername(socket)
+    log.info("connected with phdc manager at sap {0}".format(peer_sap))
+    log.info("entering ieee agent")
+    
+    apdu = bytearray.fromhex(thermometer_assoc_req)
+    apdu = struct.pack(">H", len(apdu)) + apdu
+    log.info("send thermometer association request")
+    log.info("send {0}".format(str(apdu).encode("hex")))
+    nfc.llcp.send(socket, str(apdu))
+    
+    apdu = nfc.llcp.recv(socket)
+    log.info("rcvd {0}".format(str(apdu).encode("hex")))
+    if apdu.startswith("\xE3\x00"):
+        log.info("rcvd association response")
+
+    socket.close()
+    
+    socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
+    nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
+    nfc.llcp.connect(socket, "urn:nfc:sn:phdc")
+    peer_sap = nfc.llcp.getpeername(socket)
+    log.info("connected with phdc manager at sap {0}".format(peer_sap))
+    log.info("entering ieee agent")
+    
+    apdu = bytearray.fromhex(thermometer_assoc_req)
+    apdu = struct.pack(">H", len(apdu)) + apdu
+    log.info("send thermometer association request")
+    log.info("send {0}".format(str(apdu).encode("hex")))
+    nfc.llcp.send(socket, str(apdu))
+    
+    apdu = nfc.llcp.recv(socket)
+    log.info("rcvd {0}".format(str(apdu).encode("hex")))
+    if apdu.startswith("\xE3\x00"):
+        log.info("rcvd association response")
+
+    time.sleep(3.0)
+            
+    apdu = bytearray.fromhex(assoc_release_req)
+    apdu = struct.pack(">H", len(apdu)) + apdu
+    log.info("send association release request")
+    log.info("send {0}".format(str(apdu).encode("hex")))
+    nfc.llcp.send(socket, str(apdu))
+
+    apdu = nfc.llcp.recv(socket)
+    log.info("rcvd {0}".format(str(apdu).encode("hex")))
+    if apdu.startswith("\xE5\x00"):
+        log.info("rcvd association release response")
+
+    log.info("leaving ieee agent")
+    
+def phdc_p2p_agent_test3(args):
+    log.info("running p2p agent test #3")
+    llcp_config = {'recv-miu': 240, 'send-lto': 500}
+    llcp_option_string = nfc.llcp.startup(llcp_config)
+    try:
+        while True:
+            peer = args.clf.poll(llcp_option_string)
+            if isinstance(peer, nfc.DEP):
+                if peer.general_bytes.startswith("Ffm"):
+                    break
+    except KeyboardInterrupt:
+        pass
+    
+    if not peer:
+        return
+
+    log.info("got a peer")
+    nfc.llcp.activate(peer)
+
+    socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
+    nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
+    nfc.llcp.connect(socket, "urn:nfc:xsn:nfc-forum.org:phdc-validation")
+    peer_sap = nfc.llcp.getpeername(socket)
+    log.info("connected with phdc manager at sap {0}".format(peer_sap))
+
+    miu = nfc.llcp.getsockopt(socket, nfc.llcp.SO_SNDMIU)
+    miu = 240
+
+    apdu = os.urandom(2176)
+    apdu = struct.pack(">H", len(apdu)) + apdu
+    log.info("send long message")
+    for i in range(0, len(apdu), miu):
+        nfc.llcp.send(socket, str(apdu[i:i+miu]))
+
+    sent_apdu = apdu
+    
+    data = nfc.llcp.recv(socket)
+    size = struct.unpack(">H", data[0:2])[0]
+    apdu = data[2:]
+    while len(apdu) < size:
+        data = nfc.llcp.recv(socket)
+        if data == None: break
+        log.info("rcvd {0} byte data".format(len(data)))
+        apdu += data
+    log.info("rcvd {0} byte apdu".format(len(apdu)))
+
+    rcvd_apdu = apdu
+    if rcvd_apdu != sent_apdu[::-1]:
+        log.error("received data does not equal sent data")
+        
+    socket.close()
+    
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
@@ -261,6 +555,16 @@ if __name__ == '__main__':
             "usb[:vendor[:product]] (vendor and product in hex), "\
             "usb[:bus[:dev]] (bus and device number in decimal), "\
             "tty[:(usb|com)[:port]] (usb virtual or com port)")
+
+    parser.add_argument(
+        "-t", "--test", type=int, metavar="N", default=1,
+        help="run test number N")
+
+    subparsers = parser.add_subparsers(title="commands", dest="subparser")
+    sp = subparsers.add_parser('tag', help='run phdc tag agent')
+    sp.set_defaults(func=phdc_tag_agent)
+    sp = subparsers.add_parser('p2p', help='run phdc p2p agent')
+    sp.set_defaults(func=phdc_p2p_agent)
 
     options = parser.parse_args()
 
@@ -313,7 +617,7 @@ if __name__ == '__main__':
     try:
         while True:
             log.info("waiting for agent")
-            phdc_tag_agent(options)
+            options.func(options)
             if not options.loop:
                 break
     except KeyboardInterrupt:
