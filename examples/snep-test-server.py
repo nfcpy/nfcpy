@@ -64,7 +64,7 @@ class ValidationServer(nfc.snep.SnepServer):
         key = (ndef_message.type, ndef_message.name)
         log.info("client requests ndef message with key " + str(key))
         if key in self.ndef_message_store:
-            ndef_message = self.ndef_message_store[key].tostring()
+            ndef_message = str(self.ndef_message_store[key])
             info = "found matching ndef message, total length is {0} octets"
             log.info(info.format(len(ndef_message)))
             if len(ndef_message) <= acceptable_length:
