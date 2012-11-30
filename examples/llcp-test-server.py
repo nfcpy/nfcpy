@@ -281,9 +281,9 @@ if __name__ == '__main__':
     parser.add_option("-f", type="string",
                       action="store", dest="logfile",
                       help="write log messages to LOGFILE")
-    parser.add_option("--link-miu", type="int", default=128,
+    parser.add_option("--link-miu", type="int", default=2175,
                       action="store", dest="link_miu", metavar="MIU",
-                      help="set maximum information unit size to MIU")
+                      help="set LLCP Link MIU (default: 2175)")
     parser.add_option("--device", type="string", default=[],
                       action="append", dest="device", metavar="SPEC",
                       help="use only device(s) according to SPEC: "\

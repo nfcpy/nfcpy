@@ -69,8 +69,10 @@ def test_01():
        are no longer exchanged.
     """
     info("Test 1: link activation, symmetry and deactivation", prefix="")
-    time.sleep(5)
-    return
+    for i in range(5):
+        time.sleep(1)
+        if not nfc.llcp.connected():
+            raise TestError("connection lost before test completion")
 
 def test_02():
     """Connection-less information transfer
@@ -846,7 +848,7 @@ if __name__ == '__main__':
     parser.add_option("--co-echo", type="int", default=None,
                       action="store", dest="co_echo_sap", metavar="SAP",
                       help="connection-oriented echo server address")
-    parser.add_option("--link-miu", type="int", default=1024,
+    parser.add_option("--link-miu", type="int", default=2175,
                       action="store", dest="link_miu", metavar="MIU",
                       help="set maximum information unit size to MIU")
     parser.add_option("--quirks", type="string",

@@ -69,7 +69,9 @@ def show_tag(args):
         print("  " + tt3_card_map.get(str(tag.pmm[0:2]), "unknown card"))
     if tag.ndef:
         print("NDEF attribute data:")
-        print("  " + " ".join(["{0:02x}".format(b) for b in tag.ndef.attr]))
+        if isinstance(tag, nfc.Type3Tag):
+            attr = ["{0:02x}".format(b) for b in tag.ndef.attr]
+            print("  " + " ".join(attr))
         print("  version   = %s" % tag.ndef.version)
         print("  writeable = %s" % ("no", "yes")[tag.ndef.writeable])
         print("  capacity  = %d byte" % tag.ndef.capacity)
@@ -139,7 +141,7 @@ def add_format_parser(parser):
     #parser.description = ""
     parser.set_defaults(func=format_tag)
     parser.add_argument(
-        "--tt3-ver", metavar="STR", default="1.1",
+        "--tt3-ver", metavar="STR", default="1.0",
         help="ndef mapping version number (default: %(default)s)")
     parser.add_argument(
         "--tt3-nbr", metavar="INT", type=int,
