@@ -321,7 +321,7 @@ def emulate_tt3(args):
 
     # set attribute data
     attr = nfc.tt3.NdefAttributeData()
-    attr.version = "1.1"
+    attr.version = "1.0"
     attr.nbr, attr.nbw = 12, 8
     attr.capacity = len(ndef_data_area) - 16
     attr.writeable = True
