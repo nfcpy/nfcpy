@@ -141,7 +141,7 @@ def add_format_parser(parser):
     #parser.description = ""
     parser.set_defaults(func=format_tag)
     parser.add_argument(
-        "--tt3-ver", metavar="STR", default="1.1",
+        "--tt3-ver", metavar="STR", default="1.0",
         help="ndef mapping version number (default: %(default)s)")
     parser.add_argument(
         "--tt3-nbr", metavar="INT", type=int,
