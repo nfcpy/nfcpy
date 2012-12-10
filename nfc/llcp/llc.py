@@ -273,8 +273,8 @@ class LogicalLinkControl(threading.Thread):
         link_terminate_str = link_terminate_pdu.to_string()
         link_symmetry_pdu = Symmetry()
 
-        recv_timeout = self.cfg['recv-lto'] + 50
-        send_timeout = self.cfg['send-lto'] / 2
+        recv_timeout = 1E-3 * (self.cfg['recv-lto'] + 50)
+        send_timeout = 1E-3 * (self.cfg['send-lto'] / 2)
 
         recv_symm_count = 0
         recv_symm_level = 10
@@ -287,7 +287,7 @@ class LogicalLinkControl(threading.Thread):
                 if pdu == link_terminate_pdu:
                     log.info("shutdown on local request")
                     log.debug("SEND " + str(pdu))
-                    try: self.mac.exchange(pdu.to_string(), timeout=1)
+                    try: self.mac.exchange(pdu.to_string(), timeout=0.001)
                     except IOError: pass
                     shutdown_clients(self.sap)
                     break
@@ -310,7 +310,7 @@ class LogicalLinkControl(threading.Thread):
                 self._dispatch(pdu)
                 pdu = self._collect()
                 if pdu is None and recv_symm_count >= recv_symm_level:
-                    time.sleep(0.001 * send_timeout)
+                    time.sleep(send_timeout)
                     pdu = self._collect()
 
         if self.mac.role == "Target":
@@ -335,7 +335,7 @@ class LogicalLinkControl(threading.Thread):
                 self._dispatch(pdu)
                 pdu = self._collect()
                 if pdu is None and recv_symm_count >= recv_symm_level:
-                    time.sleep(0.001 * send_timeout)
+                    time.sleep(send_timeout)
                     pdu = self._collect()
                 if pdu is None:
                     pdu = Symmetry()

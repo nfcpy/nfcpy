@@ -174,7 +174,7 @@ class PhdcTagAgent(PhdcAgent):
         
     def run(self):
         log.info("entering phdc agent run loop")
-        while self.tag.wait_command(timeout=1000):
+        while self.tag.wait_command(timeout=1.0):
             self.tag.send_response()
         log.info("leaving phdc agent run loop")
         
@@ -219,7 +219,7 @@ def phdc_tag_agent_test1(args):
     log.info("touch a manager")
 
     while True:
-        activated = args.clf.listen([agent.tag], timeout=1000)
+        activated = args.clf.listen(1.0, agent.tag)
         if activated and activated == agent.tag:
             log.info("agent activated")
             agent.start()

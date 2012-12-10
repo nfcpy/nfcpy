@@ -157,8 +157,8 @@ class Type3Tag(tag.TAG):
         self.pmm = target["PMm"]
         self.sys  = target["SYS"]
         rto, wto = self.pmm[5], self.pmm[6]
-        self.rto = ((rto&0x07)+1, (rto>>3&0x07)+1, 0.302 * 4**(rto >> 6))
-        self.wto = ((wto&0x07)+1, (wto>>3&0x07)+1, 0.302 * 4**(wto >> 6))
+        self.rto = ((rto&0x07)+1, (rto>>3&0x07)+1, 302E-6 * 4**(rto >> 6))
+        self.wto = ((wto&0x07)+1, (wto>>3&0x07)+1, 302E-6 * 4**(wto >> 6))
         self._ndef = None
         if self.sys == "\x12\xFC":
             try: self._ndef = NDEF(self)
@@ -174,7 +174,7 @@ class Type3Tag(tag.TAG):
     @property
     def _is_present(self):
         """True if the tag is still within communication range."""
-        rto = int((self.rto[0] + self.rto[1]) * self.rto[2]) + 5
+        rto = ((self.rto[0] + self.rto[1]) * self.rto[2]) + 5E-3
         cmd = "\x04" + self.idm
         rsp = None
         if self.clf.dev.send_command(chr(len(cmd)+1) + cmd):
@@ -198,11 +198,11 @@ class Type3Tag(tag.TAG):
         for block in blocks:
             if block < 256: cmd += "\x80" + chr(block)
             else: cmd += "\x00" + chr(block%256) + chr(block/256)
-        rto = int((self.rto[0] + self.rto[1] * len(blocks)) * self.rto[2]) + 5
-        log.debug("read timeout is {0} ms".format(rto))
+        rto = ((self.rto[0] + self.rto[1] * len(blocks)) * self.rto[2]) + 5E-3
+        log.debug("read timeout is {0} sec".format(rto))
         if not self.clf.dev.send_command(chr(len(cmd)+1) + cmd):
             raise IOError("tt3 send error")
-        resp = self.clf.dev.recv_response(rto)
+        resp = self.clf.dev.recv_response(timeout=rto)
         if resp is None:
             raise IOError("tt3 recv error")
         if not resp.startswith(chr(len(resp)) + "\x07" + self.idm):
@@ -232,8 +232,8 @@ class Type3Tag(tag.TAG):
             if block < 256: cmd += "\x80" + chr(block)
             else: cmd += "\x00" + chr(block%256) + chr(block/256)
         cmd += data
-        wto = int((self.wto[0] + self.wto[1] * len(blocks)) * self.wto[2]) + 5
-        log.debug("write timeout is {0} ms".format(wto))
+        wto = ((self.wto[0] + self.wto[1] * len(blocks)) * self.wto[2]) + 5E-3
+        log.debug("write timeout is {0} sec".format(wto))
         if not self.clf.dev.send_command(chr(len(cmd)+1) + cmd):
             raise IOError("tt3 send error")
         resp = self.clf.dev.recv_response(timeout=wto)
@@ -262,8 +262,9 @@ class Type3TagEmulation(object):
         self.services[service_code] = (block_read_func, block_write_func)
 
     def wait_command(self, timeout):
-        """Wait *timeout* ms for a reader command."""
+        """Wait *timeout* seconds for a reader command."""
         if self.cmd is None:
+            log.debug("wait {0} sec for a tag command".format(timeout))
             self.cmd = self.clf.dev.recv_command(timeout)
             if self.cmd and len(self.cmd) != self.cmd[0]:
                 log.error("tt3 command length error")

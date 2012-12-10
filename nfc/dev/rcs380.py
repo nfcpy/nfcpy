@@ -221,6 +221,7 @@ class Device(object):
         self.chipset = chipset
     
     def close(self):
+        self.chipset.switch_rf("off")
         pass
     
     def poll(self, p2p_activation_data=None):
@@ -310,7 +311,7 @@ class Device(object):
         self.chipset.tg_set_rf(br+"F")
         self.chipset.tg_set_protocol([0, 1, 1, 1, 2, 7])
         
-        data = self.chipset.tg_comm_rf(1000, recv_timeout=timeout)
+        data = self.chipset.tg_comm_rf(1000, recv_timeout=int(timeout*1E3))
         if data is None or tuple(data[3:7]) != (0, 0, 0, 0):
             return None
         
@@ -363,13 +364,13 @@ class Device(object):
     @trace
     def recv_response(self, timeout):
         if self.tech == "nfcf":
-            return self._nfcf_recv_response(timeout)        
+            return self._nfcf_recv_response(int(timeout*1E3))
         raise NotImplemented
 
     @trace
     def recv_command(self, timeout):
         if self.tech == "nfcf":
-            return self._nfcf_recv_command(timeout)        
+            return self._nfcf_recv_command(int(timeout*1E3))
         raise NotImplemented
 
     @trace

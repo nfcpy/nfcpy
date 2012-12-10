@@ -90,7 +90,7 @@ class ContactlessFrontend(object):
             if target.get("type") == "TT4":
                 return Type4Tag(self.dev, target)
 
-    def listen(self, target_list, timeout):
+    def listen(self, timeout, *targets):
         """Wait *timeout* milliseconds to become initialized by a peer
         device as one of the targets listed in *target_list*. Current
         valid targets are :class:`nfc.dep.DEPTarget` and any subclass
@@ -100,13 +100,13 @@ class ContactlessFrontend(object):
         :const:`None`, otherwise it is the initialized target object.
         """
         
-        if len(target_list) == 0:
+        if len(targets) == 0:
             raise ValueError("need at least one target to listen for")
         
-        if len(target_list) > 1:
+        if len(targets) > 1:
             raise NotImplemented("can't yet listen for multiple targets")
 
-        target = target_list[0]
+        target = targets[0]
         
         if isinstance(target, DEPTarget):
             general_bytes = self.dev.listen(target.general_bytes, timeout)

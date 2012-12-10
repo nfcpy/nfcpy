@@ -63,10 +63,10 @@ class DEPInitiator(DEP):
         log.debug("dep raw >> " + str(data).encode("hex"))
         data = bytearray(data)
         try:
-            for i in range(0, len(data), self.miu):
-                more = len(data) - i * self.miu > self.miu
-                self._send_information(data[i:i+self.miu], more)
-                if more: self._recv_acknowledge(self.rwt)
+            for offset in range(0, len(data), self.miu):
+                more = len(data) - offset > self.miu
+                self._send_information(data[offset:offset+self.miu], more)
+                if more: self._recv_acknowledge(self.rwt); time.sleep(0.1)
             return True
         except IOError as error:
             log.error(error)
@@ -75,7 +75,8 @@ class DEPInitiator(DEP):
     def recv_response(self, timeout):
         """Receive a data exchange protocol response.
         """
-        log.debug("rwt is {0} ms".format(int(self.rwt * 1000)))
+        log.debug("response expected latest in {0} second".format(timeout))
+        log.debug("rwt is {0} second".format(self.rwt))
         try:
             data, more = self._recv_information(timeout)
             while more:
@@ -116,6 +117,7 @@ class DEPInitiator(DEP):
         return pfb & 0b00010000 == 0
     
     def _recv_pdu(self, timeout):
+        log.debug("wait {0} sec for dep response")
         pdu = self.clf.dev.recv_response(timeout)
         if pdu is None or len(pdu) == 0:
             raise IOError("dep pdu receive error")
@@ -148,32 +150,112 @@ class DEPInitiator(DEP):
 class DEPTarget(DEP):
     def __init__(self, clf, general_bytes):
         DEP.__init__(self, clf, general_bytes, "Target")
+        self._miu = 251
+        self._pni = 0
 
-    @property
-    def response_waiting_time(self):
-        return self._dev.rwt
+#    def wait_command(self, timeout):
+#        """Receive an NFCIP-1 DEP command. If a command is received within
+#        *timeout* milliseconds the data portion is returned as a byte 
+#        string, otherwise an IOError exception is raised."""
+#        
+#        log.debug("wait up to {0} ms for a dep command".format(timeout))
+#        t0 = time.time()
+#        data = self._dev.dep_get_data(timeout)
+#        elapsed = int((time.time() - t0) * 1000)
+#        log.debug("dep raw << " + str(data).encode("hex"))
+#        log.debug("rcvd {0} byte cmd after {0} ms".format(len(data), elapsed))
+#        return data
+#
+#    def send_response(self, data, timeout):
+#        """Send an NFCIP-1 DEP response with the byte string *data* as
+#        the payload."""
+#        
+#        log.debug("send {0} byte dep rsp in {1} ms".format(len(data), timeout))
+#        log.debug("dep raw >> " + str(data).encode("hex"))
+#        t0 = time.time()
+#        self._dev.dep_set_data(data, timeout)
+#        elapsed = int((time.time() - t0) * 1000)
+#        log.debug("sent {0} byte dep rsp in {0} ms".format(len(data), elapsed))
 
-    def wait_command(self, timeout):
-        """Receive an NFCIP-1 DEP command. If a command is received within
-        *timeout* milliseconds the data portion is returned as a byte 
-        string, otherwise an IOError exception is raised."""
-        
-        log.debug("wait up to {0} ms for a dep command".format(timeout))
-        t0 = time.time()
-        data = self._dev.dep_get_data(timeout)
-        elapsed = int((time.time() - t0) * 1000)
+    def recv_command(self, timeout):
+        """Receive a data exchange protocol response.
+        """
+        try:
+            data, more = self._recv_information(timeout)
+            while more:
+                self._send_acknowledge()
+                fragment, more = self._recv_information(timeout)
+                data += fragment
+        except IOError as error:
+            log.error(error)
+            raise
         log.debug("dep raw << " + str(data).encode("hex"))
-        log.debug("rcvd {0} byte cmd after {0} ms".format(len(data), elapsed))
-        return data
-
-    def send_response(self, data, timeout):
-        """Send an NFCIP-1 DEP response with the byte string *data* as
-        the payload."""
-        
-        log.debug("send {0} byte dep rsp in {1} ms".format(len(data), timeout))
+        return str(data)
+            
+    def send_response(self, data):
+        """Send a data exchange protocol command.
+        """
         log.debug("dep raw >> " + str(data).encode("hex"))
-        t0 = time.time()
-        self._dev.dep_set_data(data, timeout)
-        elapsed = int((time.time() - t0) * 1000)
-        log.debug("sent {0} byte dep rsp in {0} ms".format(len(data), elapsed))
+        data = bytearray(data)
+        try:
+            for i in range(0, len(data), self._miu):
+                more = len(data) - i * self._miu > self._miu
+                self._send_information(data[i:i+self._miu], more)
+                if more: self._recv_acknowledge(timeout=1.0)
+            return True
+        except IOError as error:
+            log.error(error)
+            raise
 
+    def _recv_information(self, timeout):
+        pfb, data = self._recv_pdu(timeout)
+        if pfb & 0b11100000 != 0:
+            raise IOError("dep inf pdu type error")
+        if pfb & 0b00000011 != self.pni:
+            raise IOError("dep inf pdu seq error")
+        return data, bool(pfb & 0b00010000)
+
+    def _recv_acknowledge(self, timeout):
+        """returns true for an ack and false for a nack"""
+        pfb, data = self._recv_pdu(timeout)
+        if pfb & 0b11100000 != 0b01000000:
+            raise IOError("dep ack pdu type error")
+        if pfb & 0b00000011 != self.pni:
+            raise IOError("dep ack pdu seq error")
+        self.pni = (self.pni + 1)  % 4
+        return pfb & 0b00010000 == 0
+    
+    def _recv_pdu(self, timeout):
+        pdu = self.clf.dev.recv_command(timeout)
+        if pdu is None or len(pdu) == 0:
+            raise IOError("dep pdu receive error")
+        if pdu[0] != len(pdu) or pdu[0] < 4:
+            raise IOError("dep pdu length error")
+        if pdu[1] != 0xd5 or pdu[2] != 0x07:
+            raise IOError("dep pdu format error")
+        if pdu[3] & 0b00001100 != 0:
+            raise IOError("dep pdu did/nad error")
+        return pdu[3], pdu[4:]
+    
+    def _send_information(self, data, more):
+        pfb = 0b00000000 | int(more) << 4 | self.pni
+        cmd = bytearray([0xd4, 0x06, pfb]) + data
+        self._send_pdu(cmd)
+        self._pni = (self._pni + 1) % 4
+
+    def _send_acknowledge(self, nack=False):
+        pfb = 0b01000000 | int(nack) << 4 | self.pni
+        cmd = bytearray([0xd4, 0x06, pfb])
+        self._send_pdu(cmd)
+        self._pni = (self._pni + 1) % 4
+
+    def _send_attention(self):
+        cmd = bytearray([0xd4, 0x06, 0b10000000])
+        self._send_pdu(cmd)
+
+    def _send_rtox_cmd(self, rtox):
+        cmd = bytearray([0xd4, 0x06, 0b10010000, rtox])
+        self._send_pdu(cmd)
+
+    def _send_pdu(self, pdu):
+        self.clf.dev.send_response(chr(1+len(pdu)) + pdu)

@@ -347,10 +347,10 @@ def emulate_tt3(args):
     tag.add_service(0x000B, ndef_read, lambda: False)
     log.info("touch a reader")
     while True:
-        activated = args.clf.listen([tag], timeout=1000)
+        activated = args.clf.listen(1.0, tag)
         if activated and activated == tag:
             log.info("tag activated")
-            while tag.wait_command(timeout=10000):
+            while tag.wait_command(timeout=10.0):
                 tag.send_response()
             else:
                 log.info("tag released")
