@@ -138,9 +138,10 @@ class TestBase(object):
     def connect_peer(self, llcp_option_string):
         while True:
             if self.options.mode is None or self.options.mode[0] == "t":
-                listen_time = self.options.listen_time
-                listen_time += ord(os.urandom(1))
-                peer = self.clf.listen(listen_time, llcp_option_string)
+                listen_time = self.options.listen_time + ord(os.urandom(1))
+                listen_time = listen_time / 1E3
+                llcp_target = nfc.dep.Target(llcp_option_string)
+                peer = self.clf.listen(listen_time, llcp_target)
                 if isinstance(peer, nfc.DEP):
                     if peer.general_bytes.startswith("Ffm"):
                         return peer

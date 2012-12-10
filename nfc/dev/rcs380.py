@@ -303,6 +303,7 @@ class Device(object):
                 return {"type": "DEP", "rwt": rwt, "data": str(gb)}
 
     def listen(self, general_bytes, timeout):
+        # timeout in seconds
         self.tech = None
         pass
 

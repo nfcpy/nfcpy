@@ -24,7 +24,7 @@ import logging
 log = logging.getLogger(__name__)
 
 import dev
-from dep import DEPTarget, DEPInitiator
+import nfc.dep
 from tt1 import Type1Tag
 from tt2 import Type2Tag
 from tt3 import Type3Tag, Type3TagEmulation
@@ -72,7 +72,7 @@ class ContactlessFrontend(object):
         *protocol_data* is present it must be a string which is sent
         to the peer device in the NFC-DEP initialization phase.
 
-        Returns :class:`nfc.DEPInitiator` or a subtype of
+        Returns :class:`nfc.dep.Initiator` or a subtype of
         :class:`nfc.TAG` if a target was found, else :const:`None`.
         """
         
@@ -80,7 +80,7 @@ class ContactlessFrontend(object):
         if target is not None:
             log.debug("found target {0}".format(target))
             if target.get("type") == "DEP":
-                return DEPInitiator(self, target['data'], target['rwt'])
+                return nfc.dep.Initiator(self, target['data'], target['rwt'])
             if target.get("type") == "TT1":
                 return Type1Tag(self.dev, target)
             if target.get("type") == "TT2":
@@ -91,9 +91,9 @@ class ContactlessFrontend(object):
                 return Type4Tag(self.dev, target)
 
     def listen(self, timeout, *targets):
-        """Wait *timeout* milliseconds to become initialized by a peer
+        """Wait *timeout* seconds to become initialized by a peer
         device as one of the targets listed in *target_list*. Current
-        valid targets are :class:`nfc.dep.DEPTarget` and any subclass
+        valid targets are :class:`nfc.dep.Target` and any subclass
         of :class:`nfc.tag.TagEmulation`. Note that not all
         contactless frontends support tag emulation. If the timeout
         expired before initialization the return value is
@@ -108,12 +108,12 @@ class ContactlessFrontend(object):
 
         target = targets[0]
         
-        if isinstance(target, DEPTarget):
+        if isinstance(target, nfc.dep.Target):
             general_bytes = self.dev.listen(target.general_bytes, timeout)
             if general_bytes is not None:
                 log.debug("got nfcip1 general bytes " + data.encode("hex"))
                 target._gb = general_bytes
-                target._dev = self.dev
+                target.clf = self
                 return target
         elif isinstance(target, Type3TagEmulation):
             idm, pmm, sc, br = target.idm, target.pmm, target.sc, target.br

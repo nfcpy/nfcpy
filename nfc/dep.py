@@ -41,7 +41,7 @@ class DEP(object):
         """Role in DEP communication, either 'Target' or 'Initiator'"""
         return self._role
 
-class DEPInitiator(DEP):
+class Initiator(DEP):
     def __init__(self, clf, general_bytes, response_waiting_time):
         DEP.__init__(self, clf, general_bytes, "Initiator")
         self.rwt = response_waiting_time
@@ -147,9 +147,9 @@ class DEPInitiator(DEP):
         cmd = bytearray([5, 0xd4, 0x06, 0b10010000, rtox])
         self.clf.dev.send_command(cmd)
 
-class DEPTarget(DEP):
-    def __init__(self, clf, general_bytes):
-        DEP.__init__(self, clf, general_bytes, "Target")
+class Target(DEP):
+    def __init__(self, general_bytes):
+        DEP.__init__(self, None, general_bytes, "Target")
         self._miu = 251
         self._pni = 0
 

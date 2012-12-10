@@ -358,7 +358,7 @@ def phdc_p2p_agent_test1(args):
     try:
         while True:
             peer = args.clf.poll(llcp_option_string)
-            if isinstance(peer, nfc.DEP):
+            if isinstance(peer, nfc.dep.DEP):
                 log.info("dep target activated")
                 log.info("general bytes: {0}".
                          format(peer.general_bytes.encode("hex")))
@@ -414,7 +414,7 @@ def phdc_p2p_agent_test2(args):
     try:
         while True:
             peer = args.clf.poll(llcp_option_string)
-            if isinstance(peer, nfc.DEP):
+            if isinstance(peer, nfc.dep.DEP):
                 if peer.general_bytes.startswith("Ffm"):
                     break
     except KeyboardInterrupt:
@@ -486,7 +486,7 @@ def phdc_p2p_agent_test3(args):
     try:
         while True:
             peer = args.clf.poll(llcp_option_string)
-            if isinstance(peer, nfc.DEP):
+            if isinstance(peer, nfc.dep.DEP):
                 if peer.general_bytes.startswith("Ffm"):
                     break
     except KeyboardInterrupt:

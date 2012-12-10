@@ -204,7 +204,7 @@ def phdc_p2p_manager(args):
     try:
         while True:
             peer = args.clf.poll(llcp_option_string)
-            if isinstance(peer, nfc.DEP):
+            if isinstance(peer, nfc.dep.DEP):
                 if peer.general_bytes.startswith("Ffm"):
                     break
     except KeyboardInterrupt:

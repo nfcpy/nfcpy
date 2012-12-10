@@ -21,7 +21,7 @@
 # -----------------------------------------------------------------------------
 
 from clf import ContactlessFrontend
-from dep import DEP, DEPTarget, DEPInitiator
+import nfc.dep
 from tag import TAG, NDEF
 from tt1 import Type1Tag
 from tt2 import Type2Tag
