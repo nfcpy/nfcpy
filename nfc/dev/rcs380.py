@@ -132,7 +132,7 @@ class Chipset():
         
     @trace
     def in_set_protocol(self, data):
-        data = self.send_command(0x42, data, 100)
+        data = self.send_command(0x02, data, 100)
         if data[0] != 0:
             log.error("in_set_protocol error {0:x}".format(data[0]))
         
@@ -235,14 +235,46 @@ class Device(object):
                     return self._poll_dep(p2p_activation_data)
 
     def _poll_nfca(self):
-        pass
+        log.debug("polling for NFC-A technology")
+        self.technology = None
+        self.chipset.in_set_rf("106A")
+        p = bytearray.fromhex("0006010002000300040005010600070708000900"+
+                              "0a000b000c000e040f001000110012001306")
+        self.chipset.in_set_protocol(p)
+        try:
+            rsp = self.chipset.in_comm_rf("\x26", 30)
+            print repr(rsp)
+        except CommunicationError as error:
+            if not error == "RECEIVE_TIMEOUT_ERROR":
+                raise error
+        p = bytearray.fromhex("0101 0201 0401 0708")
+        self.chipset.in_set_protocol(p)
+        
+        self.chipset.switch_rf("off")
+        #raise SystemExit
 
     def _poll_nfcb(self):
-        pass
+        log.debug("polling for NFC-B technology")
+        self.technology = None
+        self.chipset.in_set_rf("106B")        
+        p = bytearray.fromhex("0014010102010300040005000600070808000901"+
+                              "0a010b010c010e040f001000110012001306")
+        self.chipset.in_set_protocol(p)
+        try:
+            rsp = self.chipset.in_comm_rf("\x05\x00\x00", 30)
+            print repr(rsp)
+        except CommunicationError as error:
+            if not error == "RECEIVE_TIMEOUT_ERROR":
+                raise error
+        self.chipset.switch_rf("off")
     
     def _poll_nfcf(self):
         log.debug("polling for NFC-F technology")
         self.technology = None
+        
+        p = bytearray.fromhex("0018010102010301040005000600070808000900"+
+                              "0a000b000c000e040f001000110012001306")
+        self.chipset.in_set_protocol(p)
 
         poll_ffff = "\x06\x00\xFF\xFF\x00\x00"
         poll_12fc = "\x06\x00\x12\xFC\x00\x00"
@@ -275,6 +307,8 @@ class Device(object):
                     return {"type": "TT3", "IDm": idm, "PMm": pmm, "SYS": sys}
         else:
             # no target found, shut down rf field
+            p = bytearray.fromhex("0300")
+            self.chipset.in_set_protocol(p)
             self.chipset.switch_rf("off")
             
     def _poll_dep(self, gb):
