@@ -283,7 +283,8 @@ class Device(object):
             elif sak & 0b00100000:
                 ats = self.chipset.in_comm_rf("\xE0\x80", 30)
                 log.debug("ATS = " + str(ats).encode("hex"))
-                return {"type": "TT4", "ATQ": atq, "SAK": sak, "UID": uid}
+                return {"type": "TT4", "ATQ": atq, "SAK": sak, "UID": uid,
+                        "ATS": ats}
             elif sak & 0b01000000:
                 return {"type": "DEP", "ATQ": atq, "SAK": sak, "UID": uid}
         else:
@@ -425,6 +426,14 @@ class Device(object):
 
         self.tech = "nfcf"
         return cmd
+
+    @trace
+    def transceive(self, data, timeout):
+        try:
+            return self.chipset.in_comm_rf(data, int(timeout*1E3))
+        except CommunicationError as error:
+            log.error("{0} transceive error {1}".format(self.tech, error))
+            raise
 
     @trace
     def send_command(self, data):

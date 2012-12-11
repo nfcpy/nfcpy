@@ -147,23 +147,55 @@ class Type4Tag(tag.TAG):
         self.atq = data["ATQ"]
         self.sak = data["SAK"]
         self.uid = data["UID"]
-        self._iso_dep_pni = 0
+        self.ats = data["ATS"]
+        try: self.miu = (16,24,32,40,48,64,86,128)[self.ats[1] & 0x07]
+        except IndexError: self.miu = 256
+        self.pni = 0
         try: self._ndef = NDEF(self)
         except Exception as e: log.error(str(e))
 
     def __str__(self):
-        s = "Type4Tag ATQ={0:04x} SAK={1:02x} UID={2}"
-        return s.format(self.atq, self.sak, str(self.uid).encode("hex"))
+        return "Type4Tag ATQ={0:04x} SAK={1:02x} UID={2}, ATS={3}".format(
+            self.atq, self.sak, str(self.uid).encode("hex"),
+            str(self.ats).encode("hex"))
 
-    def transceive(self, data):
-        data = chr(0x02 | self._iso_dep_pni) + data
-        if not self.clf.dev.send_command(data):
-            raise IOError("tt4 send error")
-        data = self.clf.dev.recv_response(timeout=1.0)
-        if data is None:
-            raise IOError("tt4 recv error")
-        self._iso_dep_pni = (self._iso_dep_pni + 1) % 2
-        return data[1:]
+    def transceive(self, command):
+        timeout = 0.5
+        for offset in range(0, len(command), self.miu):
+            more = len(command) - offset > self.miu
+            pfb = (0x02 if not more else 0x12) | self.pni
+            data = chr(pfb) + command[offset:offset+self.miu]
+            data = self.clf.dev.transceive(data, timeout)
+            while data[0] & 0b11111110 == 0b11110010: # WTX
+                log.debug("ISO-DEP waiting time extension")
+                data = self.clf.dev.transceive(data, timeout)
+            if data[0] & 0x01 != self.pni:
+                log.error("ISO-DEP protocol error: block number")
+                raise IOError("ISO-DEP protocol error: block number")
+            if more:
+                if data[0] & 0b11111110 == 0b10100010: # ACK
+                    self.pni = (self.pni + 1) % 2
+                else:
+                    log.error("ISO-DEP protocol error: expected ack")
+                    raise IOError("ISO-DEP protocol error: expected ack")
+            else:
+                if data[0] & 0b11101110 == 0b00000010: # INF
+                    self.pni = (self.pni + 1) % 2
+                    response = data[1:]
+                else:
+                    log.error("ISO-DEP protocol error: expected inf")
+                    raise IOError("ISO-DEP protocol error: expected inf")
+
+        while bool(data[0] & 0b00010000):
+            data = chr(0b10100010 | self.pni) # ack
+            data = self.clf.dev.transceive(data, timeout)
+            if data[0] & 0x01 != self.pni:
+                log.error("ISO-DEP protocol error: block number")
+                raise IOError("ISO-DEP protocol error: block number")
+            response = response + data[1:]
+            self.pni = (self.pni + 1) % 2
+            
+        return response
                 
     @property
     def _is_present(self):
