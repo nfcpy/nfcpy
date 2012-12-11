@@ -88,7 +88,7 @@ class ContactlessFrontend(object):
             if target.get("type") == "TT3":
                 return Type3Tag(self, target)
             if target.get("type") == "TT4":
-                return Type4Tag(self.dev, target)
+                return Type4Tag(self, target)
 
     def listen(self, timeout, *targets):
         """Wait *timeout* seconds to become initialized by a peer

@@ -142,11 +142,12 @@ class NDEF(tag.NDEF):
         self.tag.update_binary(0, bytearray(ndef_size))
 
 class Type4Tag(tag.TAG):
-    def __init__(self, dev, data):
-        self.dev = dev
+    def __init__(self, clf, data):
+        self.clf = clf
         self.atq = data["ATQ"]
         self.sak = data["SAK"]
         self.uid = data["UID"]
+        self._iso_dep_pni = 0
         try: self._ndef = NDEF(self)
         except Exception as e: log.error(str(e))
 
@@ -154,6 +155,16 @@ class Type4Tag(tag.TAG):
         s = "Type4Tag ATQ={0:04x} SAK={1:02x} UID={2}"
         return s.format(self.atq, self.sak, str(self.uid).encode("hex"))
 
+    def transceive(self, data):
+        data = chr(0x02 | self._iso_dep_pni) + data
+        if not self.clf.dev.send_command(data):
+            raise IOError("tt4 send error")
+        data = self.clf.dev.recv_response(timeout=1.0)
+        if data is None:
+            raise IOError("tt4 recv error")
+        self._iso_dep_pni = (self._iso_dep_pni + 1) % 2
+        return data[1:]
+                
     @property
     def _is_present(self):
         """True if the tag is still within communication range."""
@@ -164,14 +175,16 @@ class Type4Tag(tag.TAG):
             return False
 
     def select_file(self, p1, p2, data, expected_response_length=None):
-        """Select a file or directory with parameters defined in ISO/IEC 7816-4"""
+        """Select a file or directory with parameters defined in
+        ISO/IEC 7816-4"""
+        
         log.debug("select file")
         cmd = bytearray([0x00, 0xA4, p1, p2])
         if not data is None:
             cmd += bytearray([len(data)]) + bytearray(data)
         if not expected_response_length is None:
             cmd += bytearray([expected_response_length])
-        rsp = self.dev.tt4_exchange(cmd)
+        rsp = self.transceive(cmd)
         if rsp[-2:] != "\x90\x00":
             raise Type4TagError(rsp[-2:])
 
@@ -179,7 +192,7 @@ class Type4Tag(tag.TAG):
         """Read *count* bytes from selected file starting at *offset*"""
         log.debug("read binary from {0} to {1}".format(offset, offset+count))
         cmd = bytearray([0x00, 0xB0, offset/256, offset%256, count])
-        rsp = self.dev.tt4_exchange(cmd)
+        rsp = self.transceive(cmd)
         if rsp[-2:] != "\x90\x00":
             raise Type4TagError(rsp[-2:])
         return rsp[0:-2]
@@ -188,6 +201,6 @@ class Type4Tag(tag.TAG):
         """Write *data* bytes to selected file starting at *offset*"""
         cmd = bytearray([0x00, 0xD6, offset/256, offset%256, len(data)])
         cmd = cmd + bytearray(data)
-        rsp = self.dev.tt4_exchange(cmd)
+        rsp = self.transceive(cmd)
         if rsp[-2:] != "\x90\x00":
             raise Type4TagError(rsp[-2:])

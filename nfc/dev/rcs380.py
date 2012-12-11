@@ -241,17 +241,54 @@ class Device(object):
         p = bytearray.fromhex("0006010002000300040005010600070708000900"+
                               "0a000b000c000e040f001000110012001306")
         self.chipset.in_set_protocol(p)
+        
         try:
-            rsp = self.chipset.in_comm_rf("\x26", 30)
-            print repr(rsp)
+            sens_res = self.chipset.in_comm_rf("\x26", 30)
+            log.debug("SENS_RES (ATQ) = " + str(sens_res).encode("hex"))
         except CommunicationError as error:
+            self.chipset.switch_rf("off")
             if not error == "RECEIVE_TIMEOUT_ERROR":
                 raise error
-        p = bytearray.fromhex("0101 0201 0401 0708")
-        self.chipset.in_set_protocol(p)
-        
-        self.chipset.switch_rf("off")
-        #raise SystemExit
+
+        self.chipset.in_set_protocol("\x04\x01\x07\x08")
+
+        nfcid1 = bytearray()
+        for cascade_level in range(3):
+            sel_cmd = ("\x93", "\x95", "\x97")[cascade_level]
+            # SDD_REQ
+            self.chipset.in_set_protocol("\x01\x00\x02\x00")
+            sdd_res = self.chipset.in_comm_rf(sel_cmd + "\x20", 30)
+            log.debug("SDD_RES = " + str(sdd_res).encode("hex"))
+            # SDD_SEL
+            self.chipset.in_set_protocol("\x01\x01\x02\x01")
+            sel_res = self.chipset.in_comm_rf(sel_cmd + "\x70" + sdd_res, 30)
+            log.debug("SEL_RES = " + str(sel_res).encode("hex"))
+            # DONE ?
+            nfcid1_complete = bool(sel_res[0] & 0b00000100 == 0)
+            nfcid1 += sdd_res[0:4] if nfcid1_complete else sdd_res[1:4]
+            if nfcid1_complete:
+                log.debug("NFCID1 = " + str(nfcid1).encode("hex"))
+                break
+
+        if nfcid1_complete:
+            log.debug("NFC-A target found at 106 kbps")
+            self.tech = "nfca"        
+            atq = sens_res[0] * 256 + sens_res[1]
+            sak = sel_res[0]
+            uid = nfcid1
+            platform = ("TT2", "TT4", "DEP", "DEP/TT4")[(sak >> 5) & 0b11]
+            log.debug("NFC-A configured for {0}".format(platform))
+            if sak == 0b00000000:
+                return {"type": "TT2", "ATQ": atq, "SAK": sak, "UID": uid}
+            elif sak & 0b00100000:
+                ats = self.chipset.in_comm_rf("\xE0\x80", 30)
+                log.debug("ATS = " + str(ats).encode("hex"))
+                return {"type": "TT4", "ATQ": atq, "SAK": sak, "UID": uid}
+            elif sak & 0b01000000:
+                return {"type": "DEP", "ATQ": atq, "SAK": sak, "UID": uid}
+        else:
+            # no target found, shut off rf field
+            self.chipset.switch_rf("off")
 
     def _poll_nfcb(self):
         log.debug("polling for NFC-B technology")
@@ -307,8 +344,7 @@ class Device(object):
                     return {"type": "TT3", "IDm": idm, "PMm": pmm, "SYS": sys}
         else:
             # no target found, shut down rf field
-            p = bytearray.fromhex("0300")
-            self.chipset.in_set_protocol(p)
+            self.chipset.in_set_protocol("\x03\x00")
             self.chipset.switch_rf("off")
             
     def _poll_dep(self, gb):
@@ -392,12 +428,16 @@ class Device(object):
 
     @trace
     def send_command(self, data):
+        if self.tech == "nfca":
+            return self._nfca_send_command(data)
         if self.tech == "nfcf":
             return self._nfcf_send_command(data)
         raise NotImplemented
 
     @trace
     def recv_response(self, timeout):
+        if self.tech == "nfca":
+            return self._nfca_recv_response(int(timeout*1E3))
         if self.tech == "nfcf":
             return self._nfcf_recv_response(int(timeout*1E3))
         raise NotImplemented
@@ -414,6 +454,17 @@ class Device(object):
             return self._nfcf_send_response(data)
         raise NotImplemented
     
+    def _nfca_send_command(self, data):
+        self._nfca_cmd = data
+        return True
+
+    def _nfca_recv_response(self, timeout):
+        try:
+            return self.chipset.in_comm_rf(self._nfca_cmd, timeout=timeout)
+        except CommunicationError as error:
+            if not error == "RECEIVE_TIMEOUT_ERROR":
+                log.error("nfca_recv_response error {0}".format(error))
+
     def _nfcf_send_command(self, data):
         try:
             self.chipset.in_comm_rf(data, timeout=0)
