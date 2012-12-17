@@ -39,8 +39,6 @@ class NDEF(tag.NDEF):
             raise ValueError("wrong ndef magic number")
         if not self._cc[3] & 0xF0 == 0:
             raise ValueError("no ndef read permissions")
-        tag_size = (self._cc[2] + 1) * 8
-        log.debug("tag memory dump:\n" + format_data(tag[0:tag_size], w=8))
         self._skip = set(range(104, 120))
         offset = 12
         while offset is not None:
@@ -237,16 +235,3 @@ class Type1Tag(tag.TAG):
         cmd = "\x53" if erase is True else "\x1A"
         cmd = cmd + chr(addr) + chr(byte) + str(self.uid)
         return self.dev.tt1_exchange(cmd)
-
-def format_data(data, w=16):
-    if type(data) is not type(str()):
-        data = str(data)
-    import string
-    printable = string.digits + string.letters + string.punctuation + ' '
-    s = []
-    for i in range(0, len(data), w):
-        s.append("  {offset:04x}: ".format(offset=i))
-        s[-1] += ' '.join(["%02x" % ord(c) for c in data[i:i+w]]) + ' '
-        s[-1] += (8 + w*3 - len(s[-1])) * ' '
-        s[-1] += ''.join([c if c in printable else '.' for c in data[i:i+w]])
-    return '\n'.join(s)

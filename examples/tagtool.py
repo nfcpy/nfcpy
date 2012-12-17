@@ -34,17 +34,16 @@ sys.path.insert(1, os.path.split(sys.path[0])[0])
 import nfc
 import nfc.ndef
 
-def printable(data):
+def format_data(data, w=16):
     printable = string.digits + string.letters + string.punctuation + ' '
-    return ''.join([c if c in printable else '.' for c in data])
-
-def format_data(data):
+    if type(data) is not type(str()):
+        data = str(data)
     s = []
-    for i in range(0, len(data), 16):
-        s.append("  %04x: " % i)
-        s[-1] += ' '.join(["%02x" % ord(c) for c in data[i:i+16]]) + ' '
-        s[-1] += (8 + 16*3 - len(s[-1])) * ' '
-        s[-1] += printable(data[i:i+16])
+    for i in range(0, len(data), w):
+        s.append("  {offset:04x}: ".format(offset=i))
+        s[-1] += ' '.join(["%02x" % ord(c) for c in data[i:i+w]]) + ' '
+        s[-1] += (8 + w*3 - len(s[-1])) * ' '
+        s[-1] += ''.join([c if c in printable else '.' for c in data[i:i+w]])
     return '\n'.join(s)
 
 def add_show_parser(parser):
@@ -57,16 +56,25 @@ def show_tag(args):
         raise SystemExit(1)
 
     print(tag)
-    if isinstance(tag, nfc.Type3Tag):
-        tt3_card_map = {
-            "\x00\xF0": "FeliCa Lite RC-S965",
-            "\x00\xF1": "FeliCa Lite-S RC-S966",
-            "\x01\xE0": "FeliCa Plug RC-S801/RC-S802",
-            "\x01\x20": "FeliCa Card RC-S976F [424 kbps]",
-            "\x03\x01": "FeliCa Card RC-S860 [212 kbps, 4KB FEPROM]",
-            "\x0f\x0d": "FeliCa Card RC-S889 [424 kbps, 9KB FRAM]",
-            }
-        print("  " + tt3_card_map.get(str(tag.pmm[0:2]), "unknown card"))
+    if args.verbose:
+        if isinstance(tag, nfc.Type1Tag):
+            memory_dump = tag[0:8+tag[10]*8]
+            print("TAG memory dump:")
+            print(format_data(memory_dump, w=8))
+        elif isinstance(tag, nfc.Type2Tag):
+            memory_dump = tag[0:16+tag[14]*8]
+            print("TAG memory dump:")
+            print(format_data(memory_dump))
+        elif isinstance(tag, nfc.Type3Tag):
+            tt3_card_map = {
+                "\x00\xF0": "FeliCa Lite RC-S965",
+                "\x00\xF1": "FeliCa Lite-S RC-S966",
+                "\x01\xE0": "FeliCa Plug RC-S801/RC-S802",
+                "\x01\x20": "FeliCa Card RC-S976F [424 kbps]",
+                "\x03\x01": "FeliCa Card RC-S860 [212 kbps, 4KB FEPROM]",
+                "\x0f\x0d": "FeliCa Card RC-S889 [424 kbps, 9KB FRAM]",
+                }
+            print("  " + tt3_card_map.get(str(tag.pmm[0:2]), "unknown card"))
     if tag.ndef:
         print("NDEF attribute data:")
         if isinstance(tag, nfc.Type3Tag):
@@ -361,7 +369,7 @@ def poll(clf):
         while True:
             tag = clf.poll()
             if tag: return tag
-            else: time.sleep(0.5)
+            else: time.sleep(0.3)
     except KeyboardInterrupt:
         return None
 
@@ -370,7 +378,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "-q", dest="quiet", action="store_true",
-        help="do not print any log messages'")
+        help="print minimum information'")
+    parser.add_argument(
+        "-v", dest="verbose", action="store_true",
+        help="print verbose information'")
     parser.add_argument(
         "-d", dest="debug", action="store_true",
         help="print debug log messages")
@@ -433,10 +444,10 @@ if __name__ == '__main__':
     try:
         while True:
             if not args.subparser == "emulate":
-                log.info("touch a tag")
+                print("touch a tag")
             tag = args.func(args)
             if not args.subparser == "emulate" and not args.no_wait:
-                log.info("\nremove tag")
+                print("\nremove tag")
                 while tag.is_present:
                     time.sleep(1)
             if not args.loop:

@@ -27,6 +27,8 @@ import logging
 log = logging.getLogger(__name__)
 
 from transport import usb as usb_transport
+from nfc.clf import ProtocolError, TransmissionError, TimeoutError
+
 import struct
 import time
 
@@ -101,6 +103,20 @@ class CommunicationError:
         return CommunicationError.err2str.get(
             self.errno, "{0:08x}".format(self.errno))
     
+class StatusError:
+    err2str = ("SUCCESS", "PARAMETER_ERROR", "PB_ERROR", "RFCA_ERROR",
+               "TEMPERATURE_ERROR", "PWD_ERROR", "RECEIVE_ERROR",
+               "COMMANDTYPE_ERROR")
+
+    def __init__(self, status):
+        self.errno = status
+
+    def __str__(self):
+        try:
+            return StatusError.err2str[self.errno]
+        except IndexError:
+            return "UNKNOWN STATUS ERROR {0:02x}".format(self.errno)
+    
 class Chipset():
     def __init__(self, transport):
         self.transport = transport
@@ -135,6 +151,7 @@ class Chipset():
         data = self.send_command(0x02, data, 100)
         if data[0] != 0:
             log.error("in_set_protocol error {0:x}".format(data[0]))
+            raise StatusError(data[0])
         
     @trace
     def in_comm_rf(self, data, timeout):
@@ -226,7 +243,7 @@ class Device(object):
     
     def poll(self, p2p_activation_data=None):
         self.tech = None
-        for poll in (self._poll_nfca, self._poll_nfcb, self._poll_nfcf):
+        for poll in (self.nfca_poll, self._poll_nfcb, self._poll_nfcf):
             target = poll()
             if target is not None:
                 if target['type'] is not "DEP":
@@ -234,7 +251,7 @@ class Device(object):
                 if p2p_activation_data is not None:
                     return self._poll_dep(p2p_activation_data)
 
-    def _poll_nfca(self):
+    def nfca_poll(self):
         log.debug("polling for NFC-A technology")
         self.technology = None
         self.chipset.in_set_rf("106A")
@@ -247,7 +264,9 @@ class Device(object):
             log.debug("SENS_RES (ATQ) = " + str(sens_res).encode("hex"))
         except CommunicationError as error:
             self.chipset.switch_rf("off")
-            if not error == "RECEIVE_TIMEOUT_ERROR":
+            if error == "RECEIVE_TIMEOUT_ERROR":
+                return None
+            else:
                 raise error
 
         self.chipset.in_set_protocol("\x04\x01\x07\x08")
@@ -294,7 +313,7 @@ class Device(object):
     def _poll_nfcb(self):
         log.debug("polling for NFC-B technology")
         self.technology = None
-        self.chipset.in_set_rf("106B")        
+        self.chipset.in_set_rf("106B")
         p = bytearray.fromhex("0014010102010300040005000600070808000901"+
                               "0a010b010c010e040f001000110012001306")
         self.chipset.in_set_protocol(p)
@@ -310,15 +329,16 @@ class Device(object):
         log.debug("polling for NFC-F technology")
         self.technology = None
         
-        p = bytearray.fromhex("0018010102010301040005000600070808000900"+
-                              "0a000b000c000e040f001000110012001306")
-        self.chipset.in_set_protocol(p)
+        p = bytearray.fromhex("0018 0101 0201 0301 0400 0500 0600" +
+                              "0708 0800 0900 0a00 0b00 0c00 0e04" +
+                              "0f00 1000 1100 1200 1306")
 
         poll_ffff = "\x06\x00\xFF\xFF\x00\x00"
         poll_12fc = "\x06\x00\x12\xFC\x00\x00"
 
         for br in ("424F", "212F"):
             self.chipset.in_set_rf(br)
+            self.chipset.in_set_protocol(p)
             try:
                 rsp = self.chipset.in_comm_rf("\x06\x00\xFF\xFF\x00\x00", 100)
                 if (rsp[0], rsp[1]) != (0x12, 0x01): return None
@@ -427,13 +447,28 @@ class Device(object):
         self.tech = "nfcf"
         return cmd
 
-    @trace
-    def transceive(self, data, timeout):
+    def transceive(self, data, timeout, check_crc=True):
         try:
-            return self.chipset.in_comm_rf(data, int(timeout*1E3))
+            if self.tech == "nfca":
+                return self.nfca_transceive(data, timeout, check_crc)
+            if self.tech == "nfcf":
+                return self.nfcf_transceive(data, timeout, check_crc)
         except CommunicationError as error:
-            log.error("{0} transceive error {1}".format(self.tech, error))
-            raise
+            log.error("{0} transceive {1}".format(self.tech, error))
+            if error == "RECEIVE_TIMEOUT_ERROR":
+                raise TimeoutError
+            if error == "CRC_ERROR":
+                raise TransmissionError
+            raise DigitalProtocolError
+        
+    @trace
+    def nfca_transceive(self, data, timeout, check_crc):
+        self.chipset.in_set_protocol("\x02" + chr(check_crc))
+        return self.chipset.in_comm_rf(data, int(timeout*1E3))
+
+    @trace
+    def nfcf_transceive(self, data, timeout, check_crc):
+        return self.chipset.in_comm_rf(data, int(timeout*1E3))
 
     @trace
     def send_command(self, data):

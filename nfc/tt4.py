@@ -121,7 +121,6 @@ class NDEF(tag.NDEF):
             while len(data) < size:
                 count = min(self._max_lc, size - len(data))
                 data += self.tag.read_binary(len(data), count)
-            print str(data).encode("hex"), len(data)
             self.data = str(data[2:size])
         return self.data
 
@@ -222,7 +221,7 @@ class Type4Tag(tag.TAG):
 
     def read_binary(self, offset, count):
         """Read *count* bytes from selected file starting at *offset*"""
-        log.debug("read binary from {0} to {1}".format(offset, offset+count))
+        log.debug("read binary {0} to {1}".format(offset, offset+count))
         cmd = bytearray([0x00, 0xB0, offset/256, offset%256, count])
         rsp = self.transceive(cmd)
         if rsp[-2:] != "\x90\x00":
@@ -231,6 +230,7 @@ class Type4Tag(tag.TAG):
 
     def update_binary(self, offset, data):
         """Write *data* bytes to selected file starting at *offset*"""
+        log.debug("write binary {0} to {1}".format(offset, offset+len(data)))
         cmd = bytearray([0x00, 0xD6, offset/256, offset%256, len(data)])
         cmd = cmd + bytearray(data)
         rsp = self.transceive(cmd)

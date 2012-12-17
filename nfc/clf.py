@@ -84,7 +84,7 @@ class ContactlessFrontend(object):
             if target.get("type") == "TT1":
                 return Type1Tag(self.dev, target)
             if target.get("type") == "TT2":
-                return Type2Tag(self.dev, target)
+                return Type2Tag(self, target)
             if target.get("type") == "TT3":
                 return Type3Tag(self, target)
             if target.get("type") == "TT4":
@@ -136,3 +136,45 @@ class ContactlessFrontend(object):
             s = "{dev.vendor} {dev.product} on {dev.path}"
             return s.format(dev=self.dev)
         else: return self.__repr__()
+
+class DigitalProtocolError(BaseException):
+    def __init__(self, requirement=""):
+        self.reqno = requirement
+    def __str__(self):
+        return "[{0}] {1}".format(
+            self.reqno, requirements.get(self.reqno, self.reqno))
+
+class ProtocolError(DigitalProtocolError):
+    def __str__(self):
+        return "Protocol Error {0} {1}".format(
+            self.reqno, requirements.get(self.reqno, self.reqno))
+
+class TransmissionError(DigitalProtocolError):
+    def __str__(self):
+        return "Transmission Error {0} {1}".format(
+            self.reqno, requirements.get(self.reqno, self.reqno))
+
+class TimeoutError(DigitalProtocolError):
+    def __str__(self):
+        return "Timeout Error {0} {1}".format(
+            self.reqno, requirements.get(self.reqno, self.reqno))
+
+requirements = {
+    "": "unknown requirement violation",
+    
+    "4.4.1.3": "NFCA frame checksum",
+    
+    "6.4.1.8": "NFCF frame checksum",
+    
+    "9.6.2":   "T2TP undefined read response",
+    "9.6.2.3": "T2TP read command returned nack",
+    "9.7.2":   "T2TP undefined write response error",
+    "9.7.2.1": "T2TP write command returned nack",
+    "9.8.3.1": "T2TP sector select 1 returned nack",
+    "9.8.3.3": "T2TP sector select 2 returned data",
+    "9.9.1.3": "T2TP frame delay time expired",
+    
+    "10.6":     "T3TP maximum response time",
+    "10.6.1.1": "T3TP check command timeout",
+    "10.6.1.3": "T3TP update command timeout",
+    }
