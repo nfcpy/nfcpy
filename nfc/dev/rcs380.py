@@ -348,6 +348,7 @@ class Device(object):
 
             if (rsp[2], rsp[3]) == (0x01, 0xfe):
                 self.tech = "nfcf"
+                self.chipset.in_set_protocol(bytearray.fromhex("0300"))
                 return {"type": "DEP"}
 
             for poll_cmd in ("\x06\x00\x12\xFC\x01\x00",
@@ -362,6 +363,7 @@ class Device(object):
                     log.debug("NFC-F target at {0} kbps".format(br[0:3]))
                     idm, pmm, sys = rsp[2:10], rsp[10:18], rsp[18:20]
                     self.tech = "nfcf"
+                    self.chipset.in_set_protocol(bytearray.fromhex("0300"))
                     return {"type": "TT3", "IDm": idm, "PMm": pmm, "SYS": sys}
         else:
             # no target found, shut down rf field
@@ -403,7 +405,7 @@ class Device(object):
         self.chipset.tg_set_rf(br+"F")
         self.chipset.tg_set_protocol([0, 1, 1, 1, 2, 7])
         
-        data = self.chipset.tg_comm_rf(1000, recv_timeout=int(timeout*1E3))
+        data = self.chipset.tg_comm_rf(1000, recv_timeout=int(timeout*1E3)+1)
         if data is None or tuple(data[3:7]) != (0, 0, 0, 0):
             return None
         
@@ -464,11 +466,11 @@ class Device(object):
     @trace
     def nfca_transceive(self, data, timeout, check_crc):
         self.chipset.in_set_protocol("\x02" + chr(check_crc))
-        return self.chipset.in_comm_rf(data, int(timeout*1E3))
+        return self.chipset.in_comm_rf(data, int(timeout*1E3)+1)
 
     @trace
     def nfcf_transceive(self, data, timeout, check_crc):
-        return self.chipset.in_comm_rf(data, int(timeout*1E3))
+        return self.chipset.in_comm_rf(data, int(timeout*1E3)+1)
 
     @trace
     def send_command(self, data):
@@ -481,15 +483,15 @@ class Device(object):
     @trace
     def recv_response(self, timeout):
         if self.tech == "nfca":
-            return self._nfca_recv_response(int(timeout*1E3))
+            return self._nfca_recv_response(int(timeout*1E3)+1)
         if self.tech == "nfcf":
-            return self._nfcf_recv_response(int(timeout*1E3))
+            return self._nfcf_recv_response(int(timeout*1E3)+1)
         raise NotImplemented
 
     @trace
     def recv_command(self, timeout):
         if self.tech == "nfcf":
-            return self._nfcf_recv_command(int(timeout*1E3))
+            return self._nfcf_recv_command(int(timeout*1E3)+1)
         raise NotImplemented
 
     @trace
