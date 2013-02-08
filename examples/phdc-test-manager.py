@@ -22,7 +22,7 @@
 # -----------------------------------------------------------------------------
 
 import logging
-log = logging.getLogger()
+log = logging.getLogger('main')
 
 import os
 import sys
@@ -99,7 +99,6 @@ class PhdcTagManager(PhdcManager):
         t0 = time.time()
         while True:
             time.sleep(0.01)
-            log.debug("current ndef "+str(self.tag.ndef.message).encode("hex"))
             try:
                 message = nfc.ndef.Message(self.tag.ndef.message)
             except nfc.ndef.LengthError:
@@ -108,24 +107,17 @@ class PhdcTagManager(PhdcManager):
                 continue
             if message.type == "urn:nfc:wkt:PHD":
                 data = bytearray(message[0].data)
-                if data[0] & 0x0F == (self.mc % 4) << 2 | 2:
+                if data[0] & 0x8F == (self.mc % 16) | 0x80:
                     log.info("[phdc] <<< {0}".format(str(data).encode("hex")))
-                    if isinstance(self.tag, nfc.Type2Tag):
-                        self.tag.ndef.message = ""
-                    elif isinstance(self.tag, nfc.Type3Tag):
-                        attr = nfc.tt3.NdefAttributeData(self.tag.read([0]))
-                        attr.writing = True; attr.length = 0
-                        self.tag.write(str(attr), [0])
-                    elif isinstance(self.tag, nfc.Type4Tag):
-                        self.tag.ndef.message = ""
+                    self.tag.ndef.message = str(nfc.ndef.Record())
                     self.mc += 1
                     return data[1:]
                 else:
-                    log.debug("wrong flags (mc={0})".format((data[0]>>2)&3))
+                    log.debug("wrong flags {0:02x}".format(data[0]))
 
     @trace
     def write_phd_message(self, apdu):
-        data = bytearray([(self.mc % 4) << 2 | 3]) + apdu
+        data = bytearray([(self.mc % 16) | 0x80]) + apdu
         record = nfc.ndef.Record("urn:nfc:wkt:PHD", data=str(data))
         log.info("[phdc] >>> {0}".format(record.data.encode("hex")))
         self.tag.ndef.message = str(nfc.ndef.Message(record))

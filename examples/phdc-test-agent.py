@@ -94,6 +94,7 @@ class PhdcAgent(threading.Thread):
 class PhdcTagAgent(PhdcAgent):
     def __init__(self, tag, apdu=bytearray(), flags='\x00'):
         super(PhdcTagAgent, self).__init__()
+        self.terminate = False
         self.mc = 1
         attr = nfc.tt3.NdefAttributeData()
         attr.version = "1.0"
@@ -119,9 +120,13 @@ class PhdcTagAgent(PhdcAgent):
         if read_begin is True:
             self.ndef_read_lock.acquire()
         try:
-            log.debug("tt3 read block #{0}".format(block))
             if block < len(self.ndef_data_area) / 16:
-                return self.ndef_data_area[block*16:(block+1)*16]
+                data = self.ndef_data_area[block*16:(block+1)*16]
+                log.debug("[tt3] got read block #{0} {1}".format(
+                        block, str(data).encode("hex")))
+                return data
+            else:
+                log.debug("[tt3] got read block #{0}".format(block))
         finally:
             if read_end is True:
                 self.ndef_read_lock.release()
@@ -130,7 +135,8 @@ class PhdcTagAgent(PhdcAgent):
         if write_begin is True:
             self.ndef_write_lock.acquire()
         try:
-            log.debug("tt3 write block #{0}".format(block))
+            log.debug("[tt3] got write block #{0} {1}".format(
+                    block, str(data).encode("hex")))
             if block < len(self.ndef_data_area) / 16:
                 self.ndef_data_area[block*16:(block+1)*16] = data
                 return True
@@ -145,6 +151,7 @@ class PhdcTagAgent(PhdcAgent):
     def recv_phd_message(self):
         attr = nfc.tt3.NdefAttributeData(self.ndef_data_area[0:16])
         if attr.valid and not attr.writing and attr.length > 0:
+            print str(self.ndef_data_area[16:16+attr.length]).encode("hex")
             try:
                 message = nfc.ndef.Message(
                     self.ndef_data_area[16:16+attr.length])
@@ -153,7 +160,7 @@ class PhdcTagAgent(PhdcAgent):
 
             if message.type == "urn:nfc:wkt:PHD":
                 data = bytearray(message[0].data)
-                if data[0] & 0x0F == (self.mc % 4) << 2 | 3:
+                if data[0] & 0x8F == 0x80 | (self.mc % 16):
                     log.info("[phdc] <<< " + str(data).encode("hex"))
                     self.mc += 1
                     attr.length = 0
@@ -162,7 +169,7 @@ class PhdcTagAgent(PhdcAgent):
                    
     def send_phd_message(self):
         apdu = self.dequeue(timeout=0.1)
-        data = bytearray([(self.mc % 4) << 2 | 2]) + apdu
+        data = bytearray([0x80 | (self.mc % 16)]) + apdu
         record = nfc.ndef.Record("urn:nfc:wkt:PHD", data=str(data))
         with self.ndef_read_lock:
             log.info("[phdc] >>> " + str(data).encode("hex"))
@@ -174,9 +181,13 @@ class PhdcTagAgent(PhdcAgent):
         
     def run(self):
         log.info("entering phdc agent run loop")
-        while self.tag.wait_command(timeout=1.0):
+        while self.tag.wait_command(timeout=1.0) and not self.terminate:
             self.tag.send_response()
         log.info("leaving phdc agent run loop")
+
+    def stop(self):
+        self.terminate = True
+        self.join(timeout=10.0)
         
 thermometer_assoc_req = \
     "E200 0032 8000 0000" \
@@ -228,9 +239,11 @@ def phdc_tag_agent_test1(args):
             apdu = bytearray.fromhex(thermometer_assoc_req)
             log.info("send thermometer association request")
             agent.send(apdu)
-            
+
             apdu = agent.recv(timeout=5.0)
-            if apdu is None: break
+            if apdu is None:
+                break
+            
             if apdu.startswith("\xE3\x00"):
                 log.info("rcvd association response")
             
@@ -241,13 +254,17 @@ def phdc_tag_agent_test1(args):
             agent.send(apdu)
                 
             apdu = agent.recv(timeout=5.0)
-            if apdu is None: break
+            if apdu is None:
+                break
+            
             if apdu.startswith("\xE5\x00"):
                 log.info("rcvd association release response")
             
             log.info("leaving ieee agent")
-            agent.join(timeout=10.0)
             break
+
+    if agent.is_alive():
+        agent.stop()
         
 def phdc_tag_agent_test2(args):
     idm = bytearray.fromhex("02FE") + os.urandom(6)
