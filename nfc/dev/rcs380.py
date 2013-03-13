@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2012 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2012-2013 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -269,6 +269,28 @@ class Device(object):
             else:
                 raise error
 
+        if sens_res[0] & 0x1F == 0 and sens_res[1] & 0x0F != 0b1100:
+            pass
+        
+        if sens_res[1] & 0x0F == 0b1100:
+            if not sens_res[0] & 0x1F == 0:
+                raise ProtocolError("4.6.3.3")
+            
+            log.debug("NFC-A TT1 target @ 106 kbps")
+            # set: add tt1 crc, check tt1 crc, all bits valid, rrdd = 60µs
+            self.chipset.in_set_protocol("\x01\x02\x02\x02\x07\x08\x11\x02")
+            rid_cmd = "\x78\x00\x00\x00\x00\x00\x00"
+            rid_res = self.chipset.in_comm_rf(rid_cmd, 30)
+            if not rid_res[0] & 0xF0 == 0x10:
+                raise ProtocolError("8.6.2.1")
+            self.tech = "nfcj"
+            return {"type": "TT1", "UID": rid_res[2:]}
+
+        else:
+            if sens_res[0] & 0x1F == 0:
+                raise ProtocolError("4.6.3.3")
+            log.debug("type 2 tag platform")
+            
         self.chipset.in_set_protocol("\x04\x01\x07\x08")
 
         nfcid1 = bytearray()
@@ -453,10 +475,12 @@ class Device(object):
         try:
             if self.tech == "nfca":
                 return self.nfca_transceive(data, timeout, check_crc)
+            if self.tech == "nfcj":
+                return self.nfcj_transceive(data, timeout, check_crc)
             if self.tech == "nfcf":
                 return self.nfcf_transceive(data, timeout, check_crc)
         except CommunicationError as error:
-            log.error("{0} transceive {1}".format(self.tech, error))
+            log.debug("{0} transceive {1}".format(self.tech, error))
             if error == "RECEIVE_TIMEOUT_ERROR":
                 raise TimeoutError
             if error == "CRC_ERROR":
@@ -466,6 +490,10 @@ class Device(object):
     @trace
     def nfca_transceive(self, data, timeout, check_crc):
         self.chipset.in_set_protocol("\x02" + chr(check_crc))
+        return self.chipset.in_comm_rf(data, int(timeout*1E3)+1)
+
+    @trace
+    def nfcj_transceive(self, data, timeout, check_crc):
         return self.chipset.in_comm_rf(data, int(timeout*1E3)+1)
 
     @trace

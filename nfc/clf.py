@@ -82,7 +82,7 @@ class ContactlessFrontend(object):
             if target.get("type") == "DEP":
                 return nfc.dep.Initiator(self, target['data'], target['rwt'])
             if target.get("type") == "TT1":
-                return Type1Tag(self.dev, target)
+                return Type1Tag(self, target)
             if target.get("type") == "TT2":
                 return Type2Tag(self, target)
             if target.get("type") == "TT3":
@@ -163,8 +163,11 @@ requirements = {
     "": "unknown requirement violation",
     
     "4.4.1.3": "NFCA frame checksum",
+    "4.6.3.3": "SENS_RES has invalid encoding",
     
     "6.4.1.8": "NFCF frame checksum",
+
+    "8.6.2.1": "T1TP invalid header rom byte 0",
     
     "9.6.2":   "T2TP undefined read response",
     "9.6.2.3": "T2TP read command returned nack",
