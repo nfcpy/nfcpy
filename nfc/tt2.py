@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2009-2011 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2009-2013 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -57,9 +57,8 @@ class NDEF(tag.NDEF):
         self._ndef_tlv_offset = offset - 1
         length, offset = self._read_tlv_length(offset)
         self._capacity = 16 + self._cc[2] * 8 - offset - len(self._skip)
-        if self._capacity > 254:
-            # needs 2 more tlv length byte
-            self._capacity -= 2
+        if length < 255 and self._capacity >= 255:
+            self._capacity -= 2 # account for three byte length format
         self._msg = bytearray()
         while length > 0:
             if not offset in self._skip:
