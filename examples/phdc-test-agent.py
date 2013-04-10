@@ -211,6 +211,8 @@ assoc_release_res = "E50000020000"
 
 def phdc_tag_agent(args):
     log.info("performing as tag agent")
+    if args.test == 0:
+        phdc_tag_agent_test0(args)
     if args.test == 1:
         phdc_tag_agent_test1(args)
     if args.test == 2:
@@ -220,6 +222,38 @@ def phdc_tag_agent(args):
     if args.test == 4:
         phdc_tag_agent_test4(args)
 
+def phdc_tag_agent_test0(args):
+    idm = bytearray.fromhex("02FE") + os.urandom(6)
+    pmm = bytearray.fromhex("01E0000000FFFF00")
+    sc = bytearray.fromhex("12FC")
+    tag = nfc.tt3.Type3TagEmulation(idm, pmm, sc, "212")
+                       
+    agent = PhdcTagAgent(tag)
+    log.info("touch a manager")
+
+    while True:
+        activated = args.clf.listen(1.0, agent.tag)
+        if activated and activated == agent.tag:
+            log.info("agent activated")
+            agent.start()
+            log.info("entering ieee agent")
+
+            with open("scenario.txt") as f:
+                for line in f:
+                    if line.startswith('#'):
+                        continue
+                    apdu = bytearray.fromhex(line)
+                    agent.send(apdu)
+                    apdu = agent.recv(timeout=5.0)
+                    if apdu is None:
+                        break
+            
+            log.info("leaving ieee agent")
+            break
+
+    if agent.is_alive():
+        agent.stop()
+        
 def phdc_tag_agent_test1(args):
     idm = bytearray.fromhex("02FE") + os.urandom(6)
     pmm = bytearray.fromhex("01E0000000FFFF00")
@@ -361,6 +395,8 @@ def phdc_tag_agent_test4(args):
         
 def phdc_p2p_agent(args):
     log.info("performing as p2p agent")
+    if args.test == 0:
+        phdc_p2p_agent_test0(args)
     if args.test == 1:
         phdc_p2p_agent_test1(args)
     if args.test == 2:
@@ -368,6 +404,51 @@ def phdc_p2p_agent(args):
     if args.test == 3:
         phdc_p2p_agent_test3(args)
 
+def phdc_p2p_agent_test0(args):
+    log.info("running p2p agent test #1")
+    llcp_config = {'recv-miu': 240, 'send-lto': 500}
+    llcp_option_string = nfc.llcp.startup(llcp_config)
+    try:
+        while True:
+            peer = args.clf.poll(llcp_option_string)
+            if isinstance(peer, nfc.dep.DEP):
+                log.info("dep target activated")
+                log.info("general bytes: {0}".
+                         format(peer.general_bytes.encode("hex")))
+                if peer.general_bytes.startswith("Ffm"):
+                    break
+    except KeyboardInterrupt:
+        pass
+    
+    if not peer:
+        return
+
+    log.info("got a peer")
+    nfc.llcp.activate(peer)
+    
+    socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
+    nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
+    nfc.llcp.connect(socket, "urn:nfc:sn:phdc")
+    peer_sap = nfc.llcp.getpeername(socket)
+    log.info("connected with phdc manager at sap {0}".format(peer_sap))
+    log.info("entering ieee agent")
+
+    with open("scenario.txt") as f:
+        for line in f:
+            if line.startswith('#'):
+                continue
+            
+            apdu = bytearray.fromhex(line)
+            apdu = struct.pack(">H", len(apdu)) + apdu
+            log.info("send {0}".format(str(apdu).encode("hex")))
+            nfc.llcp.send(socket, str(apdu))
+            
+            apdu = nfc.llcp.recv(socket)
+            log.info("rcvd {0}".format(str(apdu).encode("hex")))
+            
+    log.info("leaving ieee agent")
+    socket.close()
+    
 def phdc_p2p_agent_test1(args):
     log.info("running p2p agent test #1")
     llcp_config = {'recv-miu': 240, 'send-lto': 500}
