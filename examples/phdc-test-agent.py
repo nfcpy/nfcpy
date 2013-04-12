@@ -242,7 +242,7 @@ def phdc_tag_agent_test0(args):
                 for line in f:
                     if line.startswith('#'):
                         continue
-                    apdu = bytearray.fromhex(line)
+                    apdu = bytearray.fromhex(line.strip())
                     agent.send(apdu)
                     apdu = agent.recv(timeout=5.0)
                     if apdu is None:
