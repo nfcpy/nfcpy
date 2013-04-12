@@ -109,7 +109,8 @@ class PhdcTagManager(PhdcManager):
                 data = bytearray(message[0].data)
                 if data[0] & 0x8F == (self.mc % 16) | 0x80:
                     log.info("[phdc] <<< {0}".format(str(data).encode("hex")))
-                    self.tag.ndef.message = str(nfc.ndef.Record())
+                    empty_ndef_message = nfc.ndef.Message(nfc.ndef.Record())
+                    self.tag.ndef.message = str(empty_ndef_message)
                     self.mc += 1
                     return data[1:]
                 else:
