@@ -43,6 +43,9 @@ def trace(func):
 
 class Frame():
     def __init__(self, data):
+        self._data = None
+        self._frame = None
+
         if data[0:3] == bytearray("\x00\x00\xff"):
             frame = bytearray(data)
             if frame == bytearray("\x00\x00\xff\x00\xff\x00"):
@@ -127,13 +130,16 @@ class Chipset():
 
     #@trace
     def send_command(self, cmd_code, cmd_data, timeout):
-        data = bytearray([0xD6, cmd_code]) + bytearray(cmd_data)
-        self.transport.write(str(Frame(data)))
+        cmd = bytearray([0xD6, cmd_code]) + bytearray(cmd_data)
+        self.transport.write(str(Frame(cmd)))
         if Frame(self.transport.read(timeout=100)).type == "ack":
-            data = Frame(self.transport.read(timeout)).data
-            if data[0] == 0xD7 and data[1] == cmd_code + 1:
-                return data[2:]
-
+            rsp_frame = self.transport.read(timeout)
+            if rsp_frame is None:
+                raise IOError("no answer from reader within %d ms" % timeout)
+            rsp = Frame(rsp_frame).data
+            if rsp[0] == 0xD7 and rsp[1] == cmd_code + 1:
+                return rsp[2:]
+                
     @trace
     def in_set_rf(self, comm_type):
         in_comm_type = {"212F": (1, 1, 15, 1), "424F": (1, 2, 15, 2),
