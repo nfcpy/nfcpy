@@ -56,7 +56,7 @@ class DEPInitiator(DEP):
         t0 = time.time()
         data = self._dev.dep_exchange(data, timeout)
         elapsed = int((time.time() - t0) * 1000)
-        log.debug("rcvd {0} byte dep rsp in {0} ms".format(len(data), elapsed))
+        log.debug("rcvd {0} byte dep rsp in {1} ms".format(len(data), elapsed))
         log.debug("dep raw << " + str(data).encode("hex"))
         return data
 
@@ -78,7 +78,7 @@ class DEPTarget(DEP):
         data = self._dev.dep_get_data(timeout)
         elapsed = int((time.time() - t0) * 1000)
         log.debug("dep raw << " + str(data).encode("hex"))
-        log.debug("rcvd {0} byte cmd after {0} ms".format(len(data), elapsed))
+        log.debug("rcvd {0} byte cmd after {1} ms".format(len(data), elapsed))
         return data
 
     def send_response(self, data, timeout):
@@ -90,5 +90,5 @@ class DEPTarget(DEP):
         t0 = time.time()
         self._dev.dep_set_data(data, timeout)
         elapsed = int((time.time() - t0) * 1000)
-        log.debug("sent {0} byte dep rsp in {0} ms".format(len(data), elapsed))
+        log.debug("sent {0} byte dep rsp in {1} ms".format(len(data), elapsed))
 
