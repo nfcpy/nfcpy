@@ -23,239 +23,666 @@
 import logging
 log = logging.getLogger(__name__)
 
-import time
+from os import urandom
+from time import time
+from collections import namedtuple
 
-class DEP(object):
-    def __init__(self, clf, general_bytes, role):
+import nfc.clf
+
+class DataExchangeProtocol(object):
+    def __init__(self, clf):
+        self.count = Counters()
         self.clf = clf
-        self._gb = general_bytes
-        self._role = role
+        self.gbi = ""
+        self.gbt = ""
 
     @property
     def general_bytes(self):
         """The general bytes received with the ATR exchange"""
-        return self._gb
+        if isinstance(self, Initiator):
+            return str(self.gbt)
+        if isinstance(self, Target):
+            return str(self.gbi)
 
     @property
     def role(self):
         """Role in DEP communication, either 'Target' or 'Initiator'"""
-        return self._role
+        if isinstance(self, Initiator):
+            return "Initiator"
+        if isinstance(self, Target):
+            return "Target"
 
-class Initiator(DEP):
-    def __init__(self, clf, general_bytes, response_waiting_time):
-        DEP.__init__(self, clf, general_bytes, "Initiator")
-        self.rwt = response_waiting_time
-        self.miu = 251
+    @property
+    def stat(self):
+        return str(self) + " sent/rcvd " \
+            "INF {count.inf_sent}/{count.inf_rcvd} " \
+            "ATN {count.atn_sent}/{count.atn_rcvd} " \
+            "ACK {count.ack_sent}/{count.ack_rcvd} " \
+            "NAK {count.nak_sent}/{count.nak_rcvd} " \
+            .format(count=self.count)
+
+class Initiator(DataExchangeProtocol):
+    def __init__(self, clf):
+        DataExchangeProtocol.__init__(self, clf)
+        self.did = None
+        self.nad = None
+        self.rwt = 0
+        self.pni = 0
+        self.miu = 0
+
+    def __str__(self):
+        return "NFC-DEP Initiator"
+
+    def activate(self, timeout=None, brs=(0, 1, 2), gbi='', did=None, lr=3):
+        # brs: bit rate selection, an integer or list of integers, 0 => 106A
+        if not timeout: timeout = 4096 * 2**12 / 13.56E6
+        if type(brs) == int: brs = (brs,)
+        if did is not None: self.did = did
+        
+        poll = [('106A',), ('212F', 0xFFFF, 0), ('424F', 0xFFFF, 0)]
+        tg = self.clf.sense([poll[br] for br in brs])
+
+        if ((tg is None) or
+            (type(tg) == nfc.clf.TTA and tg.cfg[2] & 0x40 == 0) or
+            (type(tg) == nfc.clf.TTF and not tg.idm.startswith('\x01\xFE'))):
+            return None
+        
+        self.target = tg
+        log.debug(self.target)
+        
+        nfcid2 = tg.idm if type(tg) is nfc.clf.TTF else bytearray(urandom(8))
+        ppi = (lr << 4) | (bool(gbi) << 1) | int(bool(self.nad))
+        did = int(bool(self.did))
+        
+        atr_req = ATR_REQ(nfcid2 + "\x00\x00", did, 0, 0, ppi, gbi)
+        if len(atr_req) > 64:
+            raise nfc.clf.ProtocolError("14.6.1.1")
+        
+        atr_res = self.send_req_recv_res(atr_req, timeout=pow(2,24)/13.56E6)
+        if type(atr_res) != ATR_RES:
+            raise nfc.clf.ProtocolError("Table-86")
+        if len(atr_res) > 64:
+            raise nfc.clf.ProtocolError("14.6.1.3")
+
+        self.rwt = 4096/13.56E6 * pow(2, atr_res.wt)
+        self.miu = atr_res.lr - 3
+        self.gbt = atr_res.gb
+
+        if ('106A', '212F', '424F').index(self.target.tec) < max(brs):
+            psl_req = PSL_REQ(self.did, max(brs) | max(brs)<<3, 0x03)
+            psl_res = self.send_req_recv_res(psl_req, timeout=1.0)
+            if type(psl_res) != PSL_RES:
+                raise nfc.clf.ProtocolError("Table-86")
+            if psl_res.did != psl_req.did:
+                raise nfc.clf.ProtocolError("14.7.2.2")
+            #self.clf.set_technology(('106A', '212F', '424F')[max(brs)])
+
+        return atr_res.gb
+
+    def deactivate(self, release=True):
+        REQ, RES = (RLS_REQ, RLS_RES) if release else (DSL_REQ, DSL_RES)
+        req = REQ(self.did)
+        res = self.send_req_recv_res(req, 0.1)
+        if type(res) != RES:
+            raise nfc.clf.ProtocolError("Table-86")
+        if res.did != req.did:
+            raise nfc.clf.ProtocolError("14.7.2.2")
+        log.info(self.stat)
+        return True
+    
+    def exchange(self, send_data, timeout):
+        def INF(pni, data, more, did, nad):
+            pdu_type = (DEP_REQ.LastInformation, DEP_REQ.MoreInformation)[more]
+            pfb = DEP_REQ.PFB(pdu_type, nad is not None, did is not None, pni)
+            return DEP_REQ(pfb, did, nad, data)
+            
+        def ACK(pni, did, nad):
+            pdu_type = DEP_REQ.PositiveAck
+            pfb = DEP_REQ.PFB(pdu_type, nad is not None, did is not None, pni)
+            return DEP_REQ(pfb, did, nad, data=None)
+        
+        def RTOX(rtox, did, nad):
+            if rtox < 1 or rtox > 59:
+                raise nfc.clf.ProtocolError("14.8.4.2")
+            pdu_type = DEP_REQ.TimeoutExtension
+            pfb = DEP_REQ.PFB(pdu_type, nad is not None, did is not None, 0)
+            return DEP_REQ(pfb, did, nad, data=bytearray([rtox]))
+
+        log.debug("dep raw >> " + str(send_data).encode("hex"))
+        send_data = bytearray(send_data)
+        
+        while send_data:
+            data = send_data[0:self.miu]; del send_data[0:self.miu]
+            req = INF(self.pni, data, bool(send_data), self.did, self.nad)
+            res = self.send_dep_req_recv_dep_res(req, self.rwt)
+            self.count.inf_sent += 1
+            if res.pfb.type == DEP_RES.TimeoutExtension:
+                req = RTOX(res.data[0], self.did, self.nad)
+                res = self.send_dep_req_recv_dep_res(req, res.data[0]*self.rwt)
+            if res.pfb.type == DEP_RES.PositiveAck and not send_data:
+                raise nfc.clf.ProtocolError("14.12.4.3")
+            if res.pfb.pni != self.pni:
+                raise nfc.clf.ProtocolError("14.12.3.3")
+            self.pni = (self.pni + 1) & 0x3
+        
+        if (res.pfb.type != DEP_RES.LastInformation and
+            res.pfb.type != DEP_RES.MoreInformation):
+            raise nfc.clf.ProtocolError("14.12.4.6")
+        
+        recv_data = res.data
+        self.count.inf_rcvd += 1
+        
+        while res.pfb.type == DEP_RES.MoreInformation:
+            req = ACK(self.pni, self.did, self.nad)
+            res = self.send_dep_req_recv_dep_res(req, timeout)
+            if res.pfb.type == DEP_RES.TimeoutExtension:
+                req = RTOX(res.data[0], self.did, self.nad)
+                res = self.send_dep_req_recv_dep_res(req, res.data[0]*self.rwt)
+            if (res.pfb.type != DEP_RES.LastInformation and
+                res.pfb.type != DEP_RES.MoreInformation):
+                raise nfc.clf.ProtocolError("14.12.4.7")
+            if res.pfb.pni != self.pni:
+                raise nfc.clf.ProtocolError("14.12.3.3")
+            recv_data += res.data
+            self.pni = (self.pni + 1) & 0x3
+            self.count.inf_rcvd += 1
+                
+        log.debug("dep raw << " + str(recv_data).encode("hex"))
+        return str(recv_data)
+
+    def send_dep_req_recv_dep_res(self, req, timeout):
+        def NAK(pni, did, nad):
+            pdu_type = DEP_REQ.NegativeAck
+            pfb = DEP_REQ.PFB(pdu_type, nad != None, did != None, self.pni)
+            return DEP_REQ(pfb, did, nad, data=None)
+
+        def ATN():
+            pdu_type = DEP_REQ.Attention
+            pfb = DEP_REQ.PFB(pdu_type, nad=False, did=False, pni=0)
+            return DEP_REQ(pfb, did=None, nad=None, data=None)
+
+        def request_attention(self, n_retry_atn):
+            req = ATN()
+            for i in range(n_retry_atn):
+                try:
+                    res = self.send_req_recv_res(req, 0.1)
+                except nfc.clf.DigitalProtocolError:
+                    continue
+                else:
+                    self.count.atn_sent += 1
+                    if res.pfb.type == DEP_RES.TimeoutExtension:
+                        raise nfc.clf.ProtocolError("14.12.4.4")
+                    if res.pfb.type != DEP_RES.Attention:
+                        raise nfc.clf.ProtocolError("14.12.4.2")
+                    self.count.atn_rcvd += 1
+                    return
+            else:
+                raise nfc.clf.ProtocolError("14.12.5.6")
+            
+        def request_retransmission(self, n_retry_nak):
+            req = NAK(self.pni, self.did, self.nad)
+            for i in range(n_retry_nak):
+                try:
+                    res = self.send_req_recv_res(req, 0.1)
+                except nfc.clf.DigitalProtocolError:
+                    continue
+                else:
+                    self.count.nak_sent += 1
+                    if res.pfb.type == DEP_RES.TimeoutExtension:
+                        raise nfc.clf.ProtocolError("14.12.4.4")
+                    if res.pfb.type not in (DEP_RES.LastInformation,
+                                            DEP_RES.MoreInformation):
+                        raise nfc.clf.ProtocolError("14.12.5.4")
+                    return res
+            else:
+                raise nfc.clf.ProtocolError("14.12.5.6")
+
+        while True:
+            try:
+                res = self.send_req_recv_res(req, timeout)
+                break
+            except nfc.clf.TimeoutError:
+                request_attention(self, n_retry_atn=2)
+                continue
+            except nfc.clf.TransmissionError:
+                res = request_retransmission(self, n_retry_nak=2)
+                break
+
+        if res.pfb.type == DEP_RES.NegativeAck:
+            raise nfc.clf.ProtocolError("14.12.4.5")
+        return res
+        
+    def send_req_recv_res(self, req, timeout):
+        cmd = self.encode_frame(req)
+        rsp = self.clf.exchange(cmd, timeout)
+        res = self.decode_frame(rsp)
+        if res.PDU_NAME[0:3] != req.PDU_NAME[0:3]:
+            raise nfc.clf.ProtocolError("Table-86")
+        return res
+
+    def encode_frame(self, packet):
+        log.debug(">> {0}".format(packet))
+        frame = packet.encode()
+        frame = chr(len(frame) + 1) + frame
+        if type(self.target) is nfc.clf.TTA:
+            frame = '\xF0' + frame
+        return frame
+        
+    def decode_frame(self, frame):
+        if type(self.target) is nfc.clf.TTA and frame.pop(0) != 0xF0:
+            raise nfc.clf.ProtocolError("14.4.1.1")
+        if len(frame) != frame.pop(0):
+            raise nfc.clf.ProtocolError("14.4.1.2")
+        if len(frame) < 2:
+            raise nfc.clf.TransmissionError("14.4.1.3")
+        if frame[0] != 0xD5 or frame[1] not in (1, 5, 7, 9, 11):
+            raise nfc.clf.ProtocolError("Table-86")
+        res_name = {1: 'ATR', 5: 'PSL', 7: 'DEP', 9: 'DSL', 11: 'RLS'}
+        packet = eval(res_name[frame[1]] + "_RES").decode(frame)
+        log.debug("<< {0}".format(packet))
+        return packet
+        
+class Target(DataExchangeProtocol):
+    def __init__(self, clf):
+        DataExchangeProtocol.__init__(self, clf)
+        self.miu = None
+        self.did = None
+        self.nad = None
         self.pni = 0
 
-    def exchange(self, data, timeout):
-        t0 = time.time()
-        log.debug("send {0} byte dep cmd".format(len(data)))
-        self.send_command(data)
-        data = self.recv_response(timeout)
-        elapsed = int((time.time() - t0) * 1000)
-        log.debug("rcvd {0} byte dep rsp in {0} ms".format(len(data), elapsed))
-        return data
+    def __str__(self):
+        return "NFC-DEP Target"
 
-    def send_command(self, data):
-        """Send a data exchange protocol command.
-        """
-        log.debug("dep raw >> " + str(data).encode("hex"))
-        data = bytearray(data)
-        try:
-            for offset in range(0, len(data), self.miu):
-                more = len(data) - offset > self.miu
-                self._send_information(data[offset:offset+self.miu], more)
-                if more: self._recv_acknowledge(self.rwt); time.sleep(0.1)
-            return True
-        except IOError as error:
-            log.error(error)
-            raise
+    def activate(self, timeout=None, brs=(0, 1, 2), gbt='', wt=8, lr=3):
+        # brs: bit rate selection, an integer or list of integers, 0 => 106A
+        if not timeout: timeout = 372 + ord(urandom(1))
+        if type(brs) == int: brs = (brs,)
+        
+        targets = [
+            nfc.clf.TTA(tec='106A',
+                        cfg=bytearray.fromhex("010C40"),
+                        uid=bytearray.fromhex("11223344")),
+            nfc.clf.TTF(tec='212F',
+                        idm=bytearray.fromhex("01FE010203040506"),
+                        pmm=bytearray.fromhex("0000000000000000"),
+                        sys=bytearray.fromhex("FFFF")),
+            nfc.clf.TTF(tec='424F',
+                        idm=bytearray.fromhex("01FE010203040506"),
+                        pmm=bytearray.fromhex("0000000000000000"),
+                        sys=bytearray.fromhex("FFFF"))]
+
+        deadline = time() + timeout
+        activated = self.clf.listen([targets[br] for br in brs], timeout)
+        if not activated: return None
+
+        self.target, req_frame = activated
+        req = self.decode_frame(req_frame)
+        while type(req) != ATR_REQ or len(req) > 64:
+            req = self.send_res_recv_req(None, deadline)
+        
+        atr_req = req
+        if (type(self.target) == nfc.clf.TTF and not
+            atr_req.nfcid3.startswith(self.target.idm)):
+            raise nfc.clf.ProtocolError("14.6.2.1")
+
+        self.miu = atr_req.lr - 3
+        self.did = atr_req.did if atr_req.did > 0 else None
+        self.gbi = atr_req.gb
+        
+        pp = (lr << 4) | (bool(gbt) << 1) | int(bool(self.nad))        
+        atr_res = ATR_RES(atr_req.nfcid3, atr_req.did, 0, 0, wt, pp, gbt)
+        if len(atr_res) > 64:
+            raise nfc.clf.ProtocolError("14.6.1.4")
+
+        req = self.send_res_recv_req(atr_res, max(deadline, time()+0.1))
+        
+        if type(req) == PSL_REQ and req.did == atr_req.did:
+            #self.clf.set_technology(targets[req.dsi].tec)
+            self.miu = req.lr - 3
+            res = PSL_RES(did=req.did)
+            req = self.send_res_recv_req(res, max(deadline, time()+0.1))
+
+        if type(req) == DEP_REQ and req.did == self.did:
+            self.req = req
+            return atr_req.gb
+    
+    def deactivate(self):
+        log.info(self.stat)
+
+    def exchange(self, send_data, timeout):
+        def INF(pni, data, more, did, nad):
+            pdu_type = (DEP_RES.LastInformation, DEP_RES.MoreInformation)[more]
+            pfb = DEP_RES.PFB(pdu_type, nad is not None, did is not None, pni)
+            return DEP_RES(pfb, did, nad, data)
             
-    def recv_response(self, timeout):
-        """Receive a data exchange protocol response.
-        """
-        log.debug("response expected latest in {0} second".format(timeout))
-        log.debug("rwt is {0} second".format(self.rwt))
-        try:
-            data, more = self._recv_information(timeout)
-            while more:
-                self._send_acknowledge()
-                fragment, more = self._recv_information(timeout)
-                data += fragment
-        except IOError as error:
-            log.error(error)
-            raise
-        log.debug("dep raw << " + str(data).encode("hex"))
-        return str(data)
+        def ACK(pni, did, nad):
+            pdu_type = DEP_RES.PositiveAck
+            pfb = DEP_RES.PFB(pdu_type, nad is not None, did is not None, pni)
+            return DEP_RES(pfb, did, nad, data=None)
+        
+        if send_data is not None and len(send_data) == 0:
+            raise ValueError("send_data must not be empty")
 
-    def _recv_information(self, timeout):
-        pfb, data = self._recv_pdu(timeout)
-        while pfb & 0xf3 == 0b10010000: # RTOX REQ
-            log.warning("dep rtox req is not compliant with llcp")
-            self._send_rtox_rsp(data[0])
-            pfb, data = self._recv_pdu(timeout)
-        if pfb & 0b11100000 != 0:
-            raise IOError("dep inf pdu type error")
-        if pfb & 0b00000011 != self.pni:
-            raise IOError("dep inf pdu seq error")
-        self.pni = (self.pni + 1) % 4
-        return data, bool(pfb & 0b00010000)
+        deadline = time() + timeout
+        
+        if self.req is not None:
+            # first packet is rcvd in activate
+            assert send_data is None, "send_data must be None on first call"
+            req = self.req; self.req = None
+        else:
+            send_data = bytearray(send_data)
+            while send_data:
+                data = send_data[0:self.miu];
+                more = len(send_data) > self.miu
+                res = INF(self.pni, data, more, self.did, self.nad)
+                req = self.send_dep_res_recv_dep_req(res, deadline)
+                if req is None: return None
+                if more and req.pfb.type is not DEP_REQ.PositiveAck:
+                    raise nfc.clf.ProtocolError("14.12.2.1")
+                self.pni = (self.pni + 1) & 0x3
+                if req.pfb.pni != self.pni:
+                    raise nfc.clf.ProtocolError("14.12.3.3")
+                del send_data[0:self.miu]
 
-    def _recv_acknowledge(self, timeout):
-        """returns true for an ack and false for a nack"""
-        pfb, data = self._recv_pdu(timeout)
-        while pfb & 0xf3 == 0b10010000: # RTOX REQ
-            log.warning("dep rtox req is not compliant with llcp")
-            self._send_rtox_rsp(data[0])
-            pfb, data = self._recv_pdu(timeout)
-        if pfb & 0b11100000 != 0b01000000:
-            raise IOError("dep ack pdu type error")
-        if pfb & 0b00000011 != self.pni:
-            raise IOError("dep ack pdu seq error")
-        self.pni = (self.pni + 1)  % 4
-        return pfb & 0b00010000 == 0
+        recv_data = bytearray()
+        while req.pfb.type == DEP_REQ.MoreInformation:
+            recv_data += req.data
+            res = ACK(self.pni, self.did, self.nad)
+            req = self.send_dep_res_recv_dep_req(res, deadline)
+            if req is None: return None
+            self.pni = (self.pni + 1) & 0x3
+            if req.pfb.pni != self.pni:
+                raise nfc.clf.ProtocolError("14.12.3.3")
+            
+        recv_data += req.data
+        return str(recv_data)
+
+    def send_timeout_extension(self, rtox):
+        def RTOX(rtox, did, nad):
+            pdu_type = DEP_RES.TimeoutExtension
+            pfb = DEP_RES.PFB(pdu_type, nad is not None, did is not None, 0)
+            return DEP_RES(pfb, did, nad, data=bytearray([rtox]))
+        
+        res = RTOX(rtox, self.did, self.nad)
+        req = self.send_dep_res_recv_dep_req(res, deadline=time()+1)
+        if type(req) == DEP_REQ and req.pfb.type == DEP_REQ.TimeoutExtension:
+            return req.data[0] & 0x3F
     
-    def _recv_pdu(self, timeout):
-        log.debug("wait {0} sec for dep response")
-        pdu = self.clf.dev.recv_response(timeout)
-        if pdu is None or len(pdu) == 0:
-            raise IOError("dep pdu receive error")
-        if pdu[0] != len(pdu) or pdu[0] < 4:
-            raise IOError("dep pdu length error")
-        if pdu[1] != 0xd5 or pdu[2] != 0x07:
-            raise IOError("dep pdu format error")
-        if pdu[3] & 0b00001100 != 0:
-            raise IOError("dep pdu did/nad error")
-        return pdu[3], pdu[4:]
-    
-    def _send_information(self, data, more):
-        pfb = 0b00000000 | int(more) << 4 | self.pni
-        cmd = bytearray([4+len(data), 0xd4, 0x06, pfb]) + data
-        self.clf.dev.send_command(cmd)
+    def send_dep_res_recv_dep_req(self, dep_res, deadline):
+        def ATN(did, nad):
+            pdu_type = DEP_RES.Attention
+            pfb = DEP_RES.PFB(pdu_type, nad is not None, did is not None, 0)
+            return DEP_RES(pfb, did, nad, data=None)
 
-    def _send_acknowledge(self, nack=False):
-        pfb = 0b01000000 | int(nack) << 4 | self.pni
-        cmd = bytearray([4, 0xd4, 0x06, pfb])
-        self.clf.dev.send_command(cmd)
+        res = dep_res; dep_req = None
+        while dep_req == None:
+            req = self.send_res_recv_req(res, deadline)
+            if req.did != self.did:
+                res = None
+            elif type(req) == DSL_REQ:
+                return self.send_res_recv_req(DSL_RES(self.did), 0)
+            elif type(req) == RLS_REQ:
+                return self.send_res_recv_req(RLS_RES(self.did), 0)
+            elif type(req) == DEP_REQ:
+                if req.pfb.type == DEP_REQ.Attention:
+                    self.count.atn_rcvd += 1
+                    res = ATN(self.did, self.nad)
+                    self.count.atn_sent += 1
+                elif req.pfb.type == DEP_REQ.NegativeAck:
+                    self.count.nak_rcvd += 1
+                    res = dep_res
+                elif req.pfb.type == DEP_REQ.TimeoutExtension:
+                    dep_req = req
+                elif req.pfb.pni == self.pni:
+                    res = dep_res                        
+                else:
+                    dep_req = req
+        return dep_req
+            
+    def send_res_recv_req(self, res, deadline):
+        frame = self.encode_frame(res) if res is not None else None
+        while True:
+            try:
+                frame = self.clf.exchange(frame, timeout=deadline-time())
+                return self.decode_frame(frame) if frame else None
+            except nfc.clf.TransmissionError:
+                frame = None
 
-    def _send_attention(self):
-        cmd = bytearray([4, 0xd4, 0x06, 0b10000000])
-        self.clf.dev.send_command(cmd)
-
-    def _send_rtox_rsp(self, rtox):
-        cmd = bytearray([5, 0xd4, 0x06, 0b10010000, rtox])
-        self.clf.dev.send_command(cmd)
-
-class Target(DEP):
-    def __init__(self, general_bytes):
-        DEP.__init__(self, None, general_bytes, "Target")
-        self._miu = 251
-        self._pni = 0
-
-#    def wait_command(self, timeout):
-#        """Receive an NFCIP-1 DEP command. If a command is received within
-#        *timeout* milliseconds the data portion is returned as a byte 
-#        string, otherwise an IOError exception is raised."""
-#        
-#        log.debug("wait up to {0} ms for a dep command".format(timeout))
-#        t0 = time.time()
-#        data = self._dev.dep_get_data(timeout)
-#        elapsed = int((time.time() - t0) * 1000)
-#        log.debug("dep raw << " + str(data).encode("hex"))
-#        log.debug("rcvd {0} byte cmd after {0} ms".format(len(data), elapsed))
-#        return data
+    def encode_frame(self, packet):
+        log.debug(packet)
+        frame = packet.encode()
+        frame = chr(len(frame) + 1) + frame
+        if type(self.target) is nfc.clf.TTA:
+            frame = '\xF0' + frame
+        return frame
+        
+    def decode_frame(self, frame):
+        if type(self.target) is nfc.clf.TTA and frame.pop(0) != 0xF0:
+            raise nfc.clf.ProtocolError("14.4.1.1")
+        if len(frame) != frame.pop(0):
+            raise nfc.clf.ProtocolError("14.4.1.2")
+        if len(frame) < 2:
+            raise nfc.clf.TransmissionError("14.4.1.3")
+        if frame[0] != 0xD4 or frame[1] not in (0, 4, 6, 8, 10):
+            raise nfc.clf.ProtocolError("Table-86")
+        req_name = {0: 'ATR', 4: 'PSL', 6: 'DEP', 8: 'DSL', 10: 'RLS'}
+        req = eval(req_name[frame[1]] + "_REQ").decode(frame)
+        log.debug(req)
+        return req
+        
 #
-#    def send_response(self, data, timeout):
-#        """Send an NFCIP-1 DEP response with the byte string *data* as
-#        the payload."""
-#        
-#        log.debug("send {0} byte dep rsp in {1} ms".format(len(data), timeout))
-#        log.debug("dep raw >> " + str(data).encode("hex"))
-#        t0 = time.time()
-#        self._dev.dep_set_data(data, timeout)
-#        elapsed = int((time.time() - t0) * 1000)
-#        log.debug("sent {0} byte dep rsp in {0} ms".format(len(data), elapsed))
-
-    def recv_command(self, timeout):
-        """Receive a data exchange protocol response.
-        """
-        try:
-            data, more = self._recv_information(timeout)
-            while more:
-                self._send_acknowledge()
-                fragment, more = self._recv_information(timeout)
-                data += fragment
-        except IOError as error:
-            log.error(error)
-            raise
-        log.debug("dep raw << " + str(data).encode("hex"))
-        return str(data)
-            
-    def send_response(self, data):
-        """Send a data exchange protocol command.
-        """
-        log.debug("dep raw >> " + str(data).encode("hex"))
-        data = bytearray(data)
-        try:
-            for i in range(0, len(data), self._miu):
-                more = len(data) - i * self._miu > self._miu
-                self._send_information(data[i:i+self._miu], more)
-                if more: self._recv_acknowledge(timeout=1.0)
-            return True
-        except IOError as error:
-            log.error(error)
-            raise
-
-    def _recv_information(self, timeout):
-        pfb, data = self._recv_pdu(timeout)
-        if pfb & 0b11100000 != 0:
-            raise IOError("dep inf pdu type error")
-        if pfb & 0b00000011 != self.pni:
-            raise IOError("dep inf pdu seq error")
-        return data, bool(pfb & 0b00010000)
-
-    def _recv_acknowledge(self, timeout):
-        """returns true for an ack and false for a nack"""
-        pfb, data = self._recv_pdu(timeout)
-        if pfb & 0b11100000 != 0b01000000:
-            raise IOError("dep ack pdu type error")
-        if pfb & 0b00000011 != self.pni:
-            raise IOError("dep ack pdu seq error")
-        self.pni = (self.pni + 1)  % 4
-        return pfb & 0b00010000 == 0
+# Data Exchange Protocol Data Units
+#
+class ATR_REQ_RES(object):
+    def __str__(self):
+        nfcid3, gb = [str(ba).encode("hex") for ba in [self.nfcid3, self.gb]]
+        return self.PDU_SHOW.format(self=self, nfcid3=nfcid3, gb=gb)
     
-    def _recv_pdu(self, timeout):
-        pdu = self.clf.dev.recv_command(timeout)
-        if pdu is None or len(pdu) == 0:
-            raise IOError("dep pdu receive error")
-        if pdu[0] != len(pdu) or pdu[0] < 4:
-            raise IOError("dep pdu length error")
-        if pdu[1] != 0xd5 or pdu[2] != 0x07:
-            raise IOError("dep pdu format error")
-        if pdu[3] & 0b00001100 != 0:
-            raise IOError("dep pdu did/nad error")
-        return pdu[3], pdu[4:]
+    @property
+    def lr(self):
+        return (64, 128, 192, 254)[(self.pp >> 4) & 0x3]
     
-    def _send_information(self, data, more):
-        pfb = 0b00000000 | int(more) << 4 | self.pni
-        cmd = bytearray([0xd4, 0x06, pfb]) + data
-        self._send_pdu(cmd)
-        self._pni = (self._pni + 1) % 4
+class ATR_REQ(ATR_REQ_RES):
+    PDU_CODE = bytearray('\xD4\x00')
+    PDU_NAME = 'ATR-REQ'
+    PDU_SHOW = "{self.PDU_NAME} NFCID3={nfcid3} DID={self.did:02x} "\
+        "BS={self.bs:02x} BR={self.br:02x} PP={self.pp:02x} GB={gb}"
+    
+    def __init__(self, nfcid3, did, bs, br, pp, gb):
+        self.nfcid3, self.did, self.bs, self.br, self.pp, self.gb = \
+            nfcid3, did, bs, br, pp, gb
 
-    def _send_acknowledge(self, nack=False):
-        pfb = 0b01000000 | int(nack) << 4 | self.pni
-        cmd = bytearray([0xd4, 0x06, pfb])
-        self._send_pdu(cmd)
-        self._pni = (self._pni + 1) % 4
+    def __len__(self):
+        return 16 + len(self.gb)
 
-    def _send_attention(self):
-        cmd = bytearray([0xd4, 0x06, 0b10000000])
-        self._send_pdu(cmd)
+    @staticmethod
+    def decode(data):
+        if data.startswith(ATR_REQ.PDU_CODE):
+            nfcid3, (did, bs, br, pp) = data[2:12], data[12:16]
+            gb = data[16:] if pp & 0x02 else bytearray()
+            return ATR_REQ(nfcid3, did, bs, br, pp, gb)
 
-    def _send_rtox_cmd(self, rtox):
-        cmd = bytearray([0xd4, 0x06, 0b10010000, rtox])
-        self._send_pdu(cmd)
+    def encode(self):
+        data = ATR_REQ.PDU_CODE + self.nfcid3
+        data.extend([self.did, self.bs, self.br, self.pp])
+        return data + self.gb
+    
+class ATR_RES(ATR_REQ_RES):
+    PDU_CODE = bytearray('\xD5\x01')
+    PDU_NAME = 'ATR-RES'
+    PDU_SHOW = "{self.PDU_NAME} NFCID3={nfcid3} DID={self.did:02x} "\
+        "BS={self.bs:02x} BR={self.br:02x} TO={self.to:02x} "\
+        "PP={self.pp:02x} GB={gb}"
+    
+    def __init__(self, nfcid3, did, bs, br, to, pp, gb):
+        self.nfcid3, self.did, self.bs, self.br, self.to, self.pp, self.gb = \
+            nfcid3, did, bs, br, to, pp, gb
+    
+    def __len__(self):
+        return 17 + len(self.gb)
 
-    def _send_pdu(self, pdu):
-        self.clf.dev.send_response(chr(1+len(pdu)) + pdu)
+    @staticmethod
+    def decode(data):
+        if data.startswith(ATR_RES.PDU_CODE):
+            nfcid3, (did, bs, br, to, pp) = data[2:12], data[12:17]
+            gb = data[17:] if pp & 0x02 else bytearray()
+            return ATR_RES(nfcid3, did, bs, br, to, pp, gb)
+
+    def encode(self):
+        data = ATR_RES.PDU_CODE + self.nfcid3
+        data.extend([self.did, self.bs, self.br, self.to, self.pp])
+        return data + self.gb
+
+    @property
+    def wt(self):
+        return self.to & 0x0F
+
+class PSL_REQ_RES(object):
+    def __str__(self):
+        return self.PDU_SHOW.format(name=self.PDU_NAME, self=self) 
+    
+    @classmethod
+    def decode(cls, data):
+        if data.startswith(cls.PDU_CODE):
+            try:
+                return cls(*data[2:])
+            except ValueError:
+                raise ProtocolError(cls.PDU_SPEC)
+
+class PSL_REQ(PSL_REQ_RES):
+    PDU_CODE = bytearray('\xD4\x04')
+    PDU_NAME = 'PSL-REQ'
+    PDU_SPEC = 'Table-98'
+    PDU_SHOW = "{name} DID={self.did} BRS={self.brs:02x}, FSL={self.fsl:02x}"
+    
+    def __init__(self, did, brs, fsl):
+        self.did, self.brs, self.fsl = did if did else 0, brs, fsl
+
+    def encode(self):
+        return PSL_REQ.PDU_CODE + bytearray([self.did, self.brs, self.fsl])
+    
+    @property
+    def dsi(self):
+        return self.brs >> 3 & 0x07
+    
+    @property
+    def dri(self):
+        return self.brs & 0x07
+
+    @property
+    def lr(self):
+        return (64, 128, 192, 254)[self.fsl & 0x03]
+
+class PSL_RES(PSL_REQ_RES):
+    PDU_CODE = bytearray('\xD5\x05')
+    PDU_NAME = 'PSL-RES'
+    PDU_SPEC = 'Table-102'
+    PDU_SHOW = "{name} DID={self.did}"
+    
+    def __init__(self, did):
+        self.did = did
+
+    def encode(self):
+        return PSL_RES.PDU_CODE + bytearray([self.did])
+
+class DEP_REQ_RES(object):
+    PDU_SHOW = "{self.PDU_NAME} {self.pfb} DID={self.did} "\
+        "NAD={self.nad} DATA={data}"
+    
+    PFB = namedtuple("PFB", "type, nad, did, pni")
+    LastInformation, MoreInformation, PositiveAck, NegativeAck,\
+        Attention, TimeoutExtension = (0, 1, 4, 5, 8, 9)
+
+    def __init__(self, pfb, did, nad, data):
+        self.pfb, self.did, self.nad = pfb, did, nad
+        self.data = bytearray() if data is None else data
+
+    def __str__(self):
+        data = str(self.data).encode("hex")
+        return self.PDU_SHOW.format(self=self, data=data)
+    
+    @classmethod
+    def decode(cls, data):
+        if data.startswith(cls.PDU_CODE):
+            del data[0:2]
+            try:
+                pfb = data.pop(0)
+                pfb = cls.PFB(pfb >> 4, bool(pfb & 8), bool(pfb & 4), pfb & 3)
+                did = data.pop(0) if pfb.did else None
+                nad = data.pop(0) if pfb.nad else None
+            except IndexError:
+                raise ProtocolError(cls.PDU_SPEC)                
+            return cls(pfb, did, nad, data)
+
+    def encode(self):
+        pfb = self.pfb
+        pfb = (pfb.type << 4) | (pfb.nad << 3) | (pfb.did << 2) | (pfb.pni)
+        data = self.PDU_CODE + chr(pfb)
+        if self.pfb.did: data.append(self.did)
+        if self.pfb.nad: data.append(self.nad)
+        return data + self.data
+
+class DEP_REQ(DEP_REQ_RES):
+    PDU_CODE = bytearray('\xD4\x06')
+    PDU_NAME = 'DEP-REQ'
+    PDU_SPEC = 'Table-103'
+    
+class DEP_RES(DEP_REQ_RES):
+    PDU_CODE = bytearray('\xD5\x07')
+    PDU_NAME = 'DEP-RES'
+    PDU_SPEC = 'Table-104'
+    
+class DSL_REQ_RES(object):
+    def __init__(self, did):
+        self.did = did
+
+    def __str__(self):
+        return "{0} DID={1}".format(self.PDU_NAME, self.did)
+    
+    @classmethod
+    def decode(cls, data):
+        if data.startswith(cls.PDU_CODE):
+            if len(data) > 3:
+                raise ProtocolError(cls.PDU_SPEC)
+            return cls(data[2] if len(data) == 3 else None)
+        
+    def encode(self):
+        return self.PDU_CODE + ('' if self.did is None else chr(self.did))
+    
+class DSL_REQ(DSL_REQ_RES):
+    PDU_CODE = bytearray('\xD4\x08')
+    PDU_NAME = 'DSL-REQ'
+    PDU_SPEC = 'Table-110'
+    
+class DSL_RES(DSL_REQ_RES):
+    PDU_CODE = bytearray('\xD5\x09')
+    PDU_NAME = 'DSL-RES'
+    PDU_SPEC = 'Table-111'
+
+class RLS_REQ_RES(DSL_REQ_RES):
+    pass
+
+class RLS_REQ(RLS_REQ_RES):
+    PDU_CODE = bytearray('\xD4\x0A')
+    PDU_NAME = 'RLS-REQ'
+    PDU_SPEC = 'Table-112'
+    
+class RLS_RES(RLS_REQ_RES):
+    PDU_CODE = bytearray('\xD5\x0B')
+    PDU_NAME = 'RLS-RES'
+    PDU_SPEC = 'Table-113'
+
+class Counters:
+    inf_sent = 0
+    inf_rcvd = 0
+    atn_sent = 0
+    atn_rcvd = 0
+    ack_sent = 0
+    ack_rcvd = 0
+    nak_sent = 0
+    nak_rcvd = 0
+
+def fatal_error(message, retval=None):
+    log.error(message)
+    return retval
+
