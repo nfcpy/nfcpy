@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2010-2012 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2010-2013 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -92,7 +92,7 @@ class PhdcAgent(threading.Thread):
             return apdu
 
 class PhdcTagAgent(PhdcAgent):
-    def __init__(self, tag, apdu=bytearray(), flags='\x00'):
+    def __init__(self, tag, cmd, apdu=bytearray(), flags='\x00'):
         super(PhdcTagAgent, self).__init__()
         self.terminate = False
         self.mc = 1
@@ -112,6 +112,7 @@ class PhdcTagAgent(PhdcAgent):
         tag.add_service(0x0009, self.ndef_read, self.ndef_write)
         tag.add_service(0x000B, self.ndef_read, lambda: False)
         self.tag = tag
+        self.cmd = cmd
         
         self.ndef_read_lock = threading.Lock()
         self.ndef_write_lock = threading.Lock()
@@ -181,8 +182,16 @@ class PhdcTagAgent(PhdcAgent):
         
     def run(self):
         log.info("entering phdc agent run loop")
-        while self.tag.wait_command(timeout=1.0) and not self.terminate:
-            self.tag.send_response()
+        command, self.cmd = self.cmd, None
+        while not (command is None or self.terminate is True):
+            response = self.tag.process_command(command)
+            try:
+                command = self.tag.send_response(response, timeout=1)
+            except nfc.clf.TimeoutError:
+                log.info("no command received within 10 seconds")
+                break
+            except nfc.clf.TransmissionError:
+                break
         log.info("leaving phdc agent run loop")
 
     def stop(self):
@@ -225,17 +234,19 @@ def phdc_tag_agent(args):
 def phdc_tag_agent_test0(args):
     idm = bytearray.fromhex("02FE") + os.urandom(6)
     pmm = bytearray.fromhex("01E0000000FFFF00")
-    sc = bytearray.fromhex("12FC")
-    tag = nfc.tt3.Type3TagEmulation(idm, pmm, sc, "212")
+    sys = bytearray.fromhex("12FC")
+    target = nfc.clf.TTF(br=None, idm=idm, pmm=pmm, sys=sys)
                        
-    agent = PhdcTagAgent(tag)
     log.info("touch a manager")
 
     while True:
-        activated = args.clf.listen(1.0, agent.tag)
-        if activated and activated == agent.tag:
-            log.info("agent activated")
-            agent.start()
+        activated = args.clf.listen([target], timeout=1)
+        if activated:
+            log.info("tag activated")
+            target, command = activated
+            tag = nfc.tt3.Type3TagEmulation(args.clf, target)
+            agent = PhdcTagAgent(tag, command)
+            agent.start(command)
             log.info("entering ieee agent")
 
             with open("scenario.txt") as f:
@@ -257,16 +268,18 @@ def phdc_tag_agent_test0(args):
 def phdc_tag_agent_test1(args):
     idm = bytearray.fromhex("02FE") + os.urandom(6)
     pmm = bytearray.fromhex("01E0000000FFFF00")
-    sc = bytearray.fromhex("12FC")
-    tag = nfc.tt3.Type3TagEmulation(idm, pmm, sc, "212")
+    sys = bytearray.fromhex("12FC")
+    target = nfc.clf.TTF(br=None, idm=idm, pmm=pmm, sys=sys)
                        
-    agent = PhdcTagAgent(tag)
     log.info("touch a manager")
 
     while True:
-        activated = args.clf.listen(1.0, agent.tag)
-        if activated and activated == agent.tag:
-            log.info("agent activated")
+        activated = args.clf.listen([target], timeout=1)
+        if activated:
+            log.info("tag activated")
+            target, command = activated
+            tag = nfc.tt3.Type3TagEmulation(args.clf, target)
+            agent = PhdcTagAgent(tag, command)
             agent.start()
             log.info("entering ieee agent")
             
@@ -303,16 +316,18 @@ def phdc_tag_agent_test1(args):
 def phdc_tag_agent_test2(args):
     idm = bytearray.fromhex("02FE") + os.urandom(6)
     pmm = bytearray.fromhex("01E0000000FFFF00")
-    sc = bytearray.fromhex("12FC")
-    tag = nfc.tt3.Type3TagEmulation(idm, pmm, sc, "212")
+    sys = bytearray.fromhex("12FC")
+    target = nfc.clf.TTF(br=None, idm=idm, pmm=pmm, sys=sys)
                        
-    agent = PhdcTagAgent(tag)
     log.info("touch a manager")
 
     while True:
-        activated = args.clf.listen([agent.tag], timeout=1000)
-        if activated and activated == agent.tag:
-            log.info("agent activated")
+        activated = args.clf.listen([target], timeout=1)
+        if activated:
+            log.info("tag activated")
+            target, command = activated
+            tag = nfc.tt3.Type3TagEmulation(args.clf, target)
+            agent = PhdcTagAgent(tag, command)
             agent.start()
             log.info("entering ieee agent")
             
@@ -354,39 +369,46 @@ def phdc_tag_agent_test2(args):
             
             log.info("leaving ieee agent")
             agent.join(timeout=10.0)
-            
             break
         
 def phdc_tag_agent_test3(args):
     idm = bytearray.fromhex("02FE") + os.urandom(6)
     pmm = bytearray.fromhex("01E0000000FFFF00")
-    sc = bytearray.fromhex("12FC")
-    tag = nfc.tt3.Type3TagEmulation(idm, pmm, sc, "212")
+    sys = bytearray.fromhex("12FC")
+    target = nfc.clf.TTF(br=None, idm=idm, pmm=pmm, sys=sys)
                        
-    agent = PhdcTagAgent(tag, flags="\x02")
     log.info("touch a manager")
 
     while True:
-        activated = args.clf.listen([agent.tag], timeout=1000)
-        if activated and activated == agent.tag:
-            log.info("tag activated, wait 10 sec")
+        activated = args.clf.listen([target], timeout=1)
+        if activated:
+            log.info("tag activated")
+            target, command = activated
+            tag = nfc.tt3.Type3TagEmulation(args.clf, target)
+            agent = PhdcTagAgent(tag, command, flags='\x02')
+            log.info("sending with non-zero message counter")
             agent.start()
             agent.join(timeout=10.0)
+            break
         
 def phdc_tag_agent_test4(args):
     idm = bytearray.fromhex("02FE") + os.urandom(6)
     pmm = bytearray.fromhex("01E0000000FFFF00")
-    sc = bytearray.fromhex("12FC")
-    tag = nfc.tt3.Type3TagEmulation(idm, pmm, sc, "212")
-
-    agent = PhdcTagAgent(tag, flags="\x40")
+    sys = bytearray.fromhex("12FC")
+    target = nfc.clf.TTF(br=None, idm=idm, pmm=pmm, sys=sys)
+                       
     log.info("touch a manager")
 
     while True:
-        activated = args.clf.listen([agent.tag], timeout=1000)
-        if activated and activated == agent.tag:
-            log.info("agent activated")
+        activated = args.clf.listen([target], timeout=1)
+        if activated:
+            log.info("tag activated")
+            target, command = activated
+            tag = nfc.tt3.Type3TagEmulation(args.clf, target)
+            agent = PhdcTagAgent(tag, command, flags='\x40')
+            log.info("sending with non-zero reserved field")
             agent.start()
+            
             log.info("entering ieee agent")
             time.sleep(3.0)
             log.info("leaving ieee agent")
