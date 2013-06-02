@@ -24,20 +24,15 @@ import logging
 log = logging.getLogger(__name__)
 
 import nfc.clf
-import tag
-import time
 
-class NDEF(tag.NDEF):
+class NDEF(object):
     def __init__(self, tag):
         self._tag = tag
-        self._msg = None
         self._cc = tag[12:16]
         log.debug("capability container " + str(self._cc).encode("hex"))
         self._skip = set([])
-        if self._cc[3] & 0xF0 == 0:
-            offset = 16
-            while offset is not None:
-                offset = self._read_tlv(offset)
+        self._msg = None
+        self.message # reads ndef if permitted
 
     def _read_tlv(self, offset):
         read_tlv = {
@@ -110,11 +105,18 @@ class NDEF(tag.NDEF):
     @property
     def writeable(self):
         """Is True if new data can be written to the NDEF tag."""
-        return self._cc[3] == 0x00
+        return self._cc[3] & 0x0F == 0x00
+
+    @property
+    def readable(self):
+        """Is True if data can be read from the NDEF tag."""
+        return self._cc[3] & 0xF0 == 0x00
 
     @property
     def message(self):
         """A character string containing the NDEF message data."""
+        if not self.readable:
+            return str()
         offset = 16
         while offset is not None:
             offset = self._read_tlv(offset)
@@ -148,17 +150,23 @@ class NDEF(tag.NDEF):
                 tag[offset+1] = len(self._msg) / 256
                 tag[offset+2] = len(self._msg) % 256
 
-class Type2Tag(tag.TAG):
-    def __init__(self, clf, data):
+class Type2Tag(object):
+    tag_type = "Type2Tag"
+    
+    def __init__(self, clf, target):
+        clf.set_communication_mode('', check_crc='OFF')
         self.clf = clf
-        self.atq = data["ATQ"]
-        self.sak = data["SAK"]
-        self.uid = bytearray(data["UID"])
+        self.atq = target.cfg[0] << 8 | target.cfg[1]
+        self.sak = target.cfg[2]
+        self.uid = target.uid
         self._mmap = dict()
         self._sync = set()
         self._page = 0
+        self.ndef = None
         if self[12] == 0xE1:
-            self._ndef = NDEF(self)
+            try: self.ndef = NDEF(self)
+            except Exception as error:
+                log.error("while reading ndef: {0!r}".format(error))
 
     def __str__(self):
         s = "Type2Tag ATQ={0:04x} SAK={1:02x} UID={2}"
@@ -208,13 +216,13 @@ class Type2Tag(tag.TAG):
             self._mmap.clear()
         
     @property
-    def _is_present(self):
+    def is_present(self):
         """Returns True if the tag is still within communication range."""
         try: return bool(self.read(0))
         except nfc.clf.DigitalProtocolError: return False
 
     def transceive(self, data, timeout=0.1):
-        return self.clf.dev.transceive(data, timeout, check_crc=False)
+        return self.clf.exchange(data, timeout)
 
     def read(self, block):
         """Read 16-byte of data from the tag. The *block* argument

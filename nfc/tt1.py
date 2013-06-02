@@ -21,25 +21,18 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-# BUGS:
-# - does not handle type 1 tags with dynamic memory layout
-# -----------------------------------------------------------------------------
 
 import logging
 log = logging.getLogger(__name__)
 
-import tag
 import nfc.clf
 
-class NDEF(tag.NDEF):
+class NDEF(object):
     def __init__(self, tag):
         self._tag = tag
         self._msg = None
         self._cc = tag[8:12]
-        if not self._cc[0] == 0xE1:
-            raise ValueError("wrong ndef magic number")
-        if not self._cc[3] & 0xF0 == 0:
-            raise ValueError("no ndef read permissions")
+        log.debug("capability container " + str(self._cc).encode("hex"))
         self._skip = set(range(104, 120))
         offset = 12
         while offset is not None:
@@ -122,12 +115,17 @@ class NDEF(tag.NDEF):
     @property
     def writeable(self):
         """Is True if new data can be written to the NDEF tag."""
-        return self._cc[3] == 0x00
+        return self._cc[3] & 0x0F == 0x00
+
+    @property
+    def readable(self):
+        """Is True if data can be read from the NDEF tag."""
+        return self._cc[3] & 0xF0 == 0x00
 
     @property
     def message(self):
         """A character string containing the NDEF message data."""
-        return str(self._msg)
+        return str(self._msg) if self.readable else str()
 
     @message.setter
     def message(self, data):
@@ -160,15 +158,19 @@ class NDEF(tag.NDEF):
         with self._tag as tag:
             tag[8] = 0xE1
 
-class Type1Tag(tag.TAG):
-    def __init__(self, clf, data):
+class Type1Tag(object):
+    tag_type = "Type1Tag"
+    
+    def __init__(self, clf, target):
         self.clf = clf
-        self.uid = data["UID"]
+        self.uid = target.uid
         self._mmap = self.read_all()[2:]
         self._sync = set()
-        try: self._ndef = NDEF(self)
-        except Exception as e:
-            log.error("while reading ndef: " + str(e))
+        self.ndef = None
+        if self[8] == 0xE1:
+            try: self.ndef = NDEF(self)
+            except Exception as error:
+                log.error("while reading ndef: {0!r}".format(error))
 
     def __str__(self):
         return "Type1Tag UID=" + str(self.uid).encode("hex")
@@ -219,13 +221,13 @@ class Type1Tag(tag.TAG):
                     self._sync -= set(range(block<<3, (block+1)<<3))
         
     @property
-    def _is_present(self):
+    def is_present(self):
         """Returns True if the tag is still within communication range."""
-        try: return bool(self.read_byte(0))
+        try: return len(self.transceive("\x01\x00\x00"+self.uid)) == 2
         except nfc.clf.DigitalProtocolError: return False
 
     def transceive(self, data, timeout=0.1):
-        return self.clf.dev.transceive(data, timeout, check_crc=True)
+        return self.clf.exchange(data, timeout)
 
     def read_all(self):
         """Read header rom and all static memory bytes (blocks 0-14).

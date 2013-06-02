@@ -29,6 +29,8 @@ import threading
 import collections
 import random
 
+from nfc.clf import DigitalProtocolError
+
 # local imports
 from tco import *
 from pdu import *
@@ -287,14 +289,17 @@ class LogicalLinkControl(threading.Thread):
                 if pdu == link_terminate_pdu:
                     log.info("shutdown on local request")
                     log.debug("SEND " + str(pdu))
-                    try: self.mac.exchange(pdu.to_string(), timeout=0.001)
-                    except IOError: pass
+                    try:
+                        self.mac.exchange(pdu.to_string(), timeout=0.001)
+                    except IOError:
+                        pass
                     shutdown_clients(self.sap)
                     break
                 log.debug("SEND " + str(pdu))
-                try: data = self.mac.exchange(pdu.to_string(), recv_timeout)
-                except IOError as error:
-                    log.debug("in exchange => IOError {0}".format(error))
+                try:
+                    data = self.mac.exchange(pdu.to_string(), recv_timeout)
+                except DigitalProtocolError as error:
+                    log.debug("{0!r}".format(error))
                     data = None
                 if data is None or data == link_terminate_str:
                     if data: log.info("shutdown on remote request")
@@ -314,11 +319,9 @@ class LogicalLinkControl(threading.Thread):
                     pdu = self._collect()
 
         if self.mac.role == "Target":
-            while True:
-                try: data = self.mac.wait_command(recv_timeout)
-                except IOError as error:
-                    log.debug("wait_command: IOError {0}".format(str(error)))
-                    data = None
+            data = self.mac.exchange(None, recv_timeout)
+            while data is not None:
+                data = str(data)
                 if data:
                     pdu = ProtocolDataUnit.from_string(data)
                     log.debug("RECV " + str(pdu))
@@ -340,13 +343,15 @@ class LogicalLinkControl(threading.Thread):
                 if pdu is None:
                     pdu = Symmetry()
                 log.debug("SEND " + str(pdu))
-                try: self.mac.send_response(pdu.to_string(), recv_timeout)
-                except IOError as err:
+                try:
+                    data = self.mac.exchange(pdu.to_string(), recv_timeout)
+                except DigitalProtocolError as error:
+                    log.error("{0!r}".format(error)); data = None
+                if data is None:
                     if not pdu == link_terminate_pdu:
-                        log.debug("send_response: IOError {0}".format(err))
                         log.info("shutdown on link disruption")
                     shutdown_clients(self.sap)
-                    break
+            self.mac.deactivate()
 
         log.debug("llc run thread terminated")
 

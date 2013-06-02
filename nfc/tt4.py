@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2012 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2012-2013 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -23,7 +23,7 @@
 import logging
 log = logging.getLogger(__name__)
 
-import tag
+import nfc.clf
 
 ndef_app_file_v1 = bytearray("\xD2\x76\x00\x00\x85\x01\x00")
 ndef_app_file_v2 = bytearray("\xD2\x76\x00\x00\x85\x01\x01")
@@ -45,7 +45,7 @@ class Type4TagError(BaseException):
         msg = Type4TagError.errmsg.get(tuple(self.args[0]), "")
         return "{sw[0]:02X} {sw[1]:02X} {m}".format(sw=self.args[0], m=msg)
 
-class NDEF(tag.NDEF):
+class NDEF(object):
     def __init__(self, tag):
         self.tag = tag
         self.data = None
@@ -140,18 +140,23 @@ class NDEF(tag.NDEF):
         ndef_size = [(len(data) - 2) / 256, (len(data) - 2) % 256]
         self.tag.update_binary(0, bytearray(ndef_size))
 
-class Type4Tag(tag.TAG):
-    def __init__(self, clf, data):
+class Type4Tag(object):
+    tag_type = "Type4Tag"
+
+    def __init__(self, clf, target):
         self.clf = clf
-        self.atq = data["ATQ"]
-        self.sak = data["SAK"]
-        self.uid = data["UID"]
-        self.ats = data["ATS"]
+        self.ats = self.clf.exchange('\xE0\x80', timeout=0.03)
+        self.atq = target.cfg[0] << 8 | target.cfg[1]
+        self.sak = target.cfg[2]
+        self.uid = target.uid
         try: self.miu = (16,24,32,40,48,64,86,128)[self.ats[1] & 0x07]
         except IndexError: self.miu = 256
         self.pni = 0
-        try: self._ndef = NDEF(self)
-        except Exception as e: log.error(str(e))
+        self.ndef = None
+        try:
+            self.ndef = NDEF(self)
+        except Exception as error:
+            log.error("while reading ndef: {0!r}".format(error))
 
     def __str__(self):
         return "Type4Tag ATQ={0:04x} SAK={1:02x} UID={2}, ATS={3}".format(
@@ -164,10 +169,10 @@ class Type4Tag(tag.TAG):
             more = len(command) - offset > self.miu
             pfb = (0x02 if not more else 0x12) | self.pni
             data = chr(pfb) + command[offset:offset+self.miu]
-            data = self.clf.dev.transceive(data, timeout)
+            data = self.clf.exchange(data, timeout)
             while data[0] & 0b11111110 == 0b11110010: # WTX
                 log.debug("ISO-DEP waiting time extension")
-                data = self.clf.dev.transceive(data, timeout)
+                data = self.clf.exchange(data, timeout)
             if data[0] & 0x01 != self.pni:
                 log.error("ISO-DEP protocol error: block number")
                 raise IOError("ISO-DEP protocol error: block number")
@@ -187,7 +192,7 @@ class Type4Tag(tag.TAG):
 
         while bool(data[0] & 0b00010000):
             data = chr(0b10100010 | self.pni) # ack
-            data = self.clf.dev.transceive(data, timeout)
+            data = self.clf.exchange(data, timeout)
             if data[0] & 0x01 != self.pni:
                 log.error("ISO-DEP protocol error: block number")
                 raise IOError("ISO-DEP protocol error: block number")
@@ -197,7 +202,7 @@ class Type4Tag(tag.TAG):
         return response
                 
     @property
-    def _is_present(self):
+    def is_present(self):
         """True if the tag is still within communication range."""
         try:
             self.read_binary(0, 2)

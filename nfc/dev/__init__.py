@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2009-2011 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2009-2013 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -27,8 +27,6 @@ import os
 import re
 import sys
 import glob
-
-__all__ = ["pn53x"]
 
 usb_device_map = {
     (0x04cc, 0x0531) : "pn53x_usb", # Philips demo board
@@ -159,51 +157,9 @@ def connect(path=None):
         log.info("sorry, tty readers are only supported on posix systems")
 
 class Device(object):
-    def __init__(self, dev):
-        raise NotImplemented
-    
-    def close(self):
-        raise NotImplemented
-    
-    def poll(self, p2p_activation_data=None):
-        raise NotImplemented
-
-    def listen(self, general_bytes, timeout):
-        raise NotImplemented
+    def __str__(self):
+        return "{dev.vendor} {dev.product} at {dev.path}".format(dev=self)
         
-    ##
-    ## data exchange protocol
-    ##
-    def dep_exchange(self, data, timeout):
-        raise NotImplemented
-
-    def dep_get_data(self, timeout):
-        raise NotImplemented
-    
-    def dep_set_data(self, data, timeout):
-        raise NotImplemented
-
-    ##
-    ## initiator send/recv
-    ##
-    def send_command(self, data):
-        raise NotImplemented
-
-    def recv_response(self, timeout):
-        raise NotImplemented
-
-    ##
-    ## target recv/send
-    ##
-    def recv_command(self, timeout):
-        raise NotImplemented
-
-    def send_response(self, data):
-        raise NotImplemented
-        
-    ##
-    ## properties
-    ##
     @property
     def vendor(self):
         return self._vendor
@@ -216,6 +172,3 @@ class Device(object):
     def path(self):
         return self._path
 
-    def __str__(self):
-        return "{dev.vendor} {dev.product} at {dev.path}".format(dev=self)
-        

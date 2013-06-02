@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2009-2011 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2009-2013 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -23,7 +23,7 @@
 import logging
 log = logging.getLogger(__name__)
 
-import tag
+import nfc.clf
 
 ndef_read_service = 11 # service code for NDEF reading
 ndef_write_service = 9 # service code for NDEF writing
@@ -68,7 +68,7 @@ class NdefAttributeData:
         attr[15] = checksum & 0xff
         return str(attr)
     
-class NDEF(tag.NDEF):
+class NDEF(object):
 
     def __init__(self, tag):
         self.tag = tag
@@ -150,19 +150,22 @@ class NDEF(tag.NDEF):
         self.tag.write(attr, [0])
         self._attr = None
 
-class Type3Tag(tag.TAG):
+class Type3Tag(object):
+    tag_type = "Type3Tag"
+    
     def __init__(self, clf, target):
         self.clf = clf
-        self.idm = target["IDm"]
-        self.pmm = target["PMm"]
-        self.sys  = target["SYS"]
+        self.idm = target.idm
+        self.pmm = target.pmm
+        self.sys = target.sys
         rto, wto = self.pmm[5], self.pmm[6]
         self.rto = ((rto&0x07)+1, (rto>>3&0x07)+1, 302E-6 * 4**(rto >> 6))
         self.wto = ((wto&0x07)+1, (wto>>3&0x07)+1, 302E-6 * 4**(wto >> 6))
-        self._ndef = None
-        if self.sys == "\x12\xFC":
-            try: self._ndef = NDEF(self)
-            except Exception as e: log.error(str(e))
+        try:
+            self.ndef = NDEF(self) if self.sys == "\x12\xFC" else None
+        except Exception as error:
+            log.error("while reading ndef: {0!r}".format(error))
+            self.ndef = None
 
     def __str__(self):
         params = list()
@@ -172,18 +175,20 @@ class Type3Tag(tag.TAG):
         return "Type3Tag IDm=%s PMm=%s SYS=%s" % tuple(params)
 
     @property
-    def _is_present(self):
+    def is_present(self):
         """True if the tag is still within communication range."""
         rto = ((self.rto[0] + self.rto[1]) * self.rto[2]) + 5E-3
-        cmd = "\x04" + self.idm
-        rsp = None
-        if self.clf.dev.send_command(chr(len(cmd)+1) + cmd):
-            rsp = self.clf.dev.recv_response(timeout=rto)
-            if not rsp:
-                cmd = "\x00" + self.sys + "\x00\x00"
-                if self.clf.dev.send_command(chr(len(cmd)+1) + cmd):
-                    rsp = self.clf.dev.recv_response(timeout=rto)
-        return bool(rsp)
+        try:
+            cmd = "\x04" + self.idm
+            return bool(self.clf.exchange(chr(len(cmd)+1) + cmd, timeout=rto))
+        except nfc.clf.TimeoutError: pass
+        
+        try:
+            cmd = "\x00" + self.sys + "\x00\x00"
+            return bool(self.clf.exchange(chr(len(cmd)+1) + cmd, timeout=rto))
+        except nfc.clf.TimeoutError: pass
+        
+        return False
 
     def read(self, blocks, service=ndef_read_service):
         """Read service data blocks from tag. The *service* argument is the
@@ -191,7 +196,7 @@ class Type3Tag(tag.TAG):
         argument holds a list of integers representing the block numbers to
         read. The data is returned as a character string."""
 
-        log.debug("read blocks " + repr(blocks))
+        log.debug("read service {0} blocks {1}".format(service, blocks))
         cmd  = "\x06" + self.idm # ReadWithoutEncryption
         cmd += "\x01" + ("%02X%02X" % (service%256,service/256)).decode("hex")
         cmd += chr(len(blocks))
@@ -200,16 +205,15 @@ class Type3Tag(tag.TAG):
             else: cmd += "\x00" + chr(block%256) + chr(block/256)
         rto = ((self.rto[0] + self.rto[1] * len(blocks)) * self.rto[2]) + 5E-3
         log.debug("read timeout is {0} sec".format(rto))
-        if not self.clf.dev.send_command(chr(len(cmd)+1) + cmd):
-            raise IOError("tt3 send error")
-        resp = self.clf.dev.recv_response(timeout=rto)
-        if resp is None:
-            raise IOError("tt3 recv error")
-        if not resp.startswith(chr(len(resp)) + "\x07" + self.idm):
+        try:
+            rsp = self.clf.exchange(chr(len(cmd)+1) + cmd, timeout=rto)
+        except nfc.clf.DigitalProtocolError as error:
+            raise IOError(repr(error))
+        if not rsp.startswith(chr(len(rsp)) + "\x07" + self.idm):
             raise IOError("tt3 data error")
-        if resp[10] != 0 or resp[11] != 0:
-            raise IOError("tt3 cmd error {0:02x} {1:02x}".format(*resp[10:12]))
-        data = str(resp[13:])
+        if rsp[10] != 0 or rsp[11] != 0:
+            raise IOError("tt3 cmd error {0:02x} {1:02x}".format(*rsp[10:12]))
+        data = str(rsp[13:])
         log.debug("<<< {0}".format(data.encode("hex")))
         return data
 
@@ -220,7 +224,7 @@ class Type3Tag(tag.TAG):
         write. The *data* argument must be a character string with length
         equal to the number of blocks times 16."""
 
-        log.debug("write blocks " + repr(blocks))
+        log.debug("write service {0} blocks {1}".format(service, blocks))
         if len(data) != len(blocks) * 16:
             log.error("data length does not match block-count * 16")
             raise ValueError("invalid data length for given number of blocks")
@@ -234,69 +238,65 @@ class Type3Tag(tag.TAG):
         cmd += data
         wto = ((self.wto[0] + self.wto[1] * len(blocks)) * self.wto[2]) + 5E-3
         log.debug("write timeout is {0} sec".format(wto))
-        if not self.clf.dev.send_command(chr(len(cmd)+1) + cmd):
-            raise IOError("tt3 send error")
-        resp = self.clf.dev.recv_response(timeout=wto)
-        if resp is None:
-            raise IOError("tt3 recv error")
-        if not resp.startswith(chr(len(resp)) + "\x09" + self.idm):
+        try:
+            rsp = self.clf.exchange(chr(len(cmd)+1)+cmd, timeout=wto)
+        except nfc.clf.TimeoutError:
+            raise IOError("communication timeout")
+        if not rsp.startswith(chr(len(rsp)) + "\x09" + self.idm):
             raise IOError("tt3 data error")
-        if resp[10] != 0 or resp[11] != 0:
-            raise IOError("tt3 cmd error {0:02x} {1:02x}".format(*resp[10:12]))
+        if rsp[10] != 0 or rsp[11] != 0:
+            raise IOError("tt3 cmd error {0:02x} {1:02x}".format(*rsp[10:12]))
 
 class Type3TagEmulation(object):
-    def __init__(self, idm, pmm, system_code="\x12\xFC", baud_rate="424"):
-        self.clf = None
-        self.idm = bytearray(idm)
-        self.pmm = bytearray(pmm)
-        self.sc = bytearray(system_code)
-        self.br = baud_rate
+    def __init__(self, clf, target):
+        self.clf = clf
+        self.idm = target.idm
+        self.pmm = target.pmm
+        self.sys = target.sys
         self.services = dict()
 
     def __str__(self):
-        return "Type3TagEmulation IDm={0} PMm={1} SC={2} BR={3}".format(
+        return "Type3TagEmulation IDm={0} PMm={1} SYS={2}".format(
             str(self.idm).encode("hex"), str(self.pmm).encode("hex"),
-            str(self.sc).encode("hex"), self.br)
+            str(self.sys).encode("hex"))
 
     def add_service(self, service_code, block_read_func, block_write_func):
         self.services[service_code] = (block_read_func, block_write_func)
 
-    def wait_command(self, timeout):
-        """Wait *timeout* seconds for a reader command."""
-        if self.cmd is None:
-            log.debug("wait {0} sec for a tag command".format(timeout))
-            self.cmd = self.clf.dev.recv_command(timeout)
-            if self.cmd and len(self.cmd) != self.cmd[0]:
-                log.error("tt3 command length error")
-                self.cmd = None
-        return self.cmd
+    def process_command(self, cmd):
+        log.info("cmd: " + str(cmd).encode("hex"))
+        if len(cmd) != cmd[0]:
+            log.error("tt3 command length error")
+            return None
+        if tuple(cmd[0:4]) in [(6, 0, 255, 255), (6, 0) + tuple(self.sys)]:
+            log.debug("process 'polling' command")
+            rsp = self.polling(cmd[2:])
+            return bytearray([2 + len(rsp), 0x01]) + rsp
+        if cmd[2:10] == self.idm:
+            if cmd[1] == 0x04:
+                log.debug("process 'request response' command")
+                rsp = self.request_response(cmd[10:])
+                return bytearray([10 + len(rsp), 0x05]) + self.idm + rsp
+            if cmd[1] == 0x06:
+                log.debug("process 'read without encryption' command")
+                rsp = self.read_without_encryption(cmd[10:])
+                return bytearray([10 + len(rsp), 0x07]) + self.idm + rsp
+            if cmd[1] == 0x08:
+                log.debug("process 'write without encryption' command")
+                rsp = self.write_without_encryption(cmd[10:])
+                return bytearray([10 + len(rsp), 0x09]) + self.idm + rsp
+            if cmd[1] == 0x0C:
+                log.debug("process 'request system code' command")
+                rsp = self.request_system_code(cmd[10:])
+                return bytearray([10 + len(rsp), 0x0D]) + self.idm + rsp
 
-    def send_response(self):
-        rsp = None
-        log.debug("tt3: processing command " + str(self.cmd).encode("hex"))
-        if tuple(self.cmd[0:4]) in [(6, 0, 255, 255), (6, 0) + tuple(self.sc)]:
-            rsp = self.polling(self.cmd[2:])
-            rsp = bytearray([2 + len(rsp), 0x01]) + rsp
-        if self.cmd[1] == 0x04 and self.cmd[2:10] == self.idm:
-            rsp = self.request_response(self.cmd[10:])
-            rsp = bytearray([10 + len(rsp), 0x05]) + self.idm + rsp
-        elif self.cmd[1] == 0x06 and self.cmd[2:10] == self.idm:
-            rsp = self.read_without_encryption(self.cmd[10:])
-            rsp = bytearray([10 + len(rsp), 0x07]) + self.idm + rsp
-        elif self.cmd[1] == 0x08 and self.cmd[2:10] == self.idm:
-            rsp = self.write_without_encryption(self.cmd[10:])
-            rsp = bytearray([10 + len(rsp), 0x09]) + self.idm + rsp
-        elif self.cmd[1] == 0x0C and self.cmd[2:10] == self.idm:
-            rsp = self.request_system_code(self.cmd[10:])
-            rsp = bytearray([10 + len(rsp), 0x0D]) + self.idm + rsp
-        if rsp is not None:
-            log.debug("tt3: sending response " + str(rsp).encode("hex"))
-            self.clf.dev.send_response(rsp)
-        self.cmd = None
+    def send_response(self, rsp, timeout):
+        log.info("rsp: " + str(rsp).encode("hex") if rsp else str(rsp))
+        return self.clf.exchange(rsp, timeout)
 
     def polling(self, cmd_data):
         if cmd_data[2] == 1:
-            rsp = self.idm + self.pmm + self.sc
+            rsp = self.idm + self.pmm + self.sys
         else:
             rsp = self.idm + self.pmm
         return rsp
@@ -397,4 +397,4 @@ class Type3TagEmulation(object):
 
     @trace
     def request_system_code(self, cmd_data):
-        return '\x01' + self.sc
+        return '\x01' + self.sys

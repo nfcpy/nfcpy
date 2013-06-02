@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2012 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2013 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -23,9 +23,7 @@
 import sys, os
 sys.path.insert(1, os.path.split(sys.path[0])[0])
 
-import nfc.clf
-import nfc.dep
-import nfc.llcp
+import nfc
 
 from nose.tools import raises
 from string import maketrans
@@ -49,24 +47,33 @@ class ContactlessFrontend(nfc.clf.ContactlessFrontend):
 
     def listen(self, targets, timeout):
         for target in targets:
-            if target.tec == "424F":
-                return None
-            elif target.tec in ("106A", "212F"):
-                recv = self.packets.next()
-                return target, bytearray.fromhex(recv)
-        assert False, "invalid target specified"
+            if type(target) == nfc.clf.TTA:
+                return target, bytearray.fromhex(self.packets.next())
+            elif type(target) == nfc.clf.TTF:
+                if target.br == 212:
+                    atr_req = bytearray.fromhex(self.packets.next())
+                    print target
+                    print repr(atr_req)
+                    atr_req[3:11] = target.idm
+                    return target, atr_req
+                elif target.br == 424:
+                    pass
+                else:
+                    assert False, "invalid bit rate for nfcf"
+            else:
+                assert False, "invalid target type"
     
-    def sense(self, options):
-        for option in options:
-            if option[0] == "106A":
-                uid = bytearray.fromhex("11223344")
+    def sense(self, targets):
+        for target in targets:
+            if type(target) == nfc.clf.TTA and target.br == 106:
+                uid = bytearray.fromhex("08112233")
                 cfg = bytearray.fromhex("010C40")
-                return nfc.clf.TTA('106A', cfg, uid)
-            if option[0] == "212F":
+                return nfc.clf.TTA(106, cfg, uid)
+            if type(target) == nfc.clf.TTF and target.br == 212:
                 idm = bytearray.fromhex("01FE000102030405")
                 pmm = bytearray.fromhex("0000000000000000")
                 sys = bytearray.fromhex("FFFF")
-                return nfc.clf.TTF('212F', idm, pmm, sys)
+                return nfc.clf.TTF(212, idm, pmm, sys)
 
     def exchange(self, data, timeout):
         send, wait, recv = self.packets.next()
@@ -90,6 +97,9 @@ class ContactlessFrontend(nfc.clf.ContactlessFrontend):
             recv = bytearray.fromhex(recv)
             print "<< " + str(recv).encode("hex")
             return recv
+
+    def set_communication_mode(self, brm, **kwargs):
+        pass
 
 #
 # NFC Forum Test Cases for Digital Protocol
@@ -158,7 +168,6 @@ def test_bv_p2p_in_nfcf_exchange_release():
 
 def test_bv_p2p_in_nfcf_atr_res_wt_14():
     """TC_POL_NFCF_P2P_BV_3_0_0"""
-    # NOTE: WT=14 is actually invalid according to DIGITAL 1.0
     rwt = 4096/13.56E6 * 2**14
     seq  = [("11D40001FE000102030405XXXX000X0X30", None,
              "12D50101FE00010203040500000000000E00"),
@@ -173,8 +182,7 @@ def test_bv_p2p_in_nfcf_atr_res_wt_14():
 
 def test_bv_p2p_in_nfcf_atr_res_wt_15():
     """TC_POL_NFCF_P2P_BV_3_1_0"""
-    # NOTE: WT=15 is actually invalid according to DIGITAL 1.0
-    rwt = 4096/13.56E6 * 2**15
+    rwt = 4096/13.56E6 * 2**14
     seq = [("11D40001FE000102030405XXXX000X0X30", None,
             "12D50101FE00010203040500000000000F00"),
            ("0CD40600 004000011002010E", (rwt, eq),
@@ -188,7 +196,6 @@ def test_bv_p2p_in_nfcf_atr_res_wt_15():
 
 def test_bv_p2p_in_nfcf_psl_req_res_min_time():
     """TC_POL_NFCF_P2P_BV_4_0"""
-    # NOTE: WT=14 is actually invalid according to DIGITAL 1.0
     seq  = [("11D40001FE000102030405XXXX000X0X30", None,
              "12D50101FE00010203040500000000000E00"),
             ("06D404001203", None, "04D50500"),
@@ -202,7 +209,6 @@ def test_bv_p2p_in_nfcf_psl_req_res_min_time():
 
 def test_bv_p2p_in_nfcf_exchange_with_did():
     """TC_POL_NFCF_P2P_BV_5_0"""
-    # NOTE: WT=14 is actually invalid according to DIGITAL 1.0
     seq = [("11D40001FE000102030405XXXX010X0X30", None,
             "12D50101FE00010203040500000100000E00"),
            ("0DD4060401 004000011002010E", None, "0DD5070401 0001020304050607"),
@@ -564,8 +570,9 @@ def test_bv_p2p_in_nfcf_transmission_error_inf_no_chaining():
 def test_bv_p2p_tg_nfcf_frame_format_and_timing_with_dsl_req():
     """TC_LIS_NFCF_P2P_BV_3_0_0"""
     seq = ["11D40001FE010203040506000000000000",
-           ("12D50101FE01020304050600000000000830", (0.1, ge), "06D404001200"),
-           ("04D50500", None, "0CD40600 0001020304050607"),
+           ("12D50101FEXXXXXXXXXXXX00000000000830", (0.1, ge), "06D404001200"),
+           ("04D50500", (0, eq), None),
+           (None, (0.1, ge), "0CD40600 0001020304050607"),
            ("0CD50700 0001020304050607", None, "0CD40601 08090A0B0C0D0E0F"),
            ("0CD50701 08090A0B0C0D0E0F", None, "0CD40602 1011121314151617"),
            ("0CD50702 1011121314151617", None, "0CD40603 18191A1B1C1D1E1F"),
@@ -586,8 +593,9 @@ def test_bv_p2p_tg_nfcf_frame_format_and_timing_with_dsl_req():
 def test_bv_p2p_tg_nfcf_frame_format_and_timing_with_rls_req():
     """TC_LIS_NFCF_P2P_BV_3_1_0"""
     seq = ["11D40001FE010203040506000000000000",
-           ("12D50101FE01020304050600000000000830", (0.1, ge), "06D404001200"),
-           ("04D50500", None, "0CD40600 0001020304050607"),
+           ("12D50101FEXXXXXXXXXXXX00000000000830", (0.1, ge), "06D404001200"),
+           ("04D50500", (0, eq), None),
+           (None, (0.1, ge), "0CD40600 0001020304050607"),
            ("0CD50700 0001020304050607", None, "0CD40601 08090A0B0C0D0E0F"),
            ("0CD50701 08090A0B0C0D0E0F", None, "0CD40602 1011121314151617"),
            ("0CD50702 1011121314151617", None, "0CD40603 18191A1B1C1D1E1F"),
@@ -608,7 +616,7 @@ def test_bv_p2p_tg_nfcf_frame_format_and_timing_with_rls_req():
 def test_bv_p2p_tg_nfcf_attribute_request_parameters():
     """TC_LIS_NFCF_P2P_BV_4_0"""
     seq = ["11D40001FE010203040506000000000000",
-           ("12D50101FE01020304050600000000000830", (0.1, ge), "06D40600 0000"),
+           ("12D50101FEXXXXXXXXXXXX00000000000830", (0.1, ge), "06D40600 0000"),
            ("06D50700 0000", None, "03D40A"),
            ("03D50B", None, None)]
     dep = nfc.dep.Target(ContactlessFrontend(seq))
@@ -618,7 +626,7 @@ def test_bv_p2p_tg_nfcf_attribute_request_parameters():
     assert dep.exchange(loop, 1.0) == None
 
 @raises(nfc.clf.ProtocolError)
-def test_bv_p2p_tg_nfcf_atr_req_with_different_nfcid2():
+def _test_bv_p2p_tg_nfcf_atr_req_with_different_nfcid2():
     """TC_LIS_NFCF_P2P_BV_4_1"""
     seq = ["11D40001FE102030405060000000000000"]
     dep = nfc.dep.Target(ContactlessFrontend(seq))
@@ -629,8 +637,9 @@ def test_bv_p2p_tg_nfcf_atr_req_with_different_nfcid2():
 def test_bv_p2p_tg_nfcf_psl_req_with_same_did():
     """TC_LIS_NFCF_P2P_BV_5_0"""
     seq = ["11D40001FE010203040506000001000000",
-           ("12D50101FE01020304050600000100000830", (0.1, ge), "06D404010900"),
-           ("04D50501", None, "0DD4060401 0001020304050607"),
+           ("12D50101FEXXXXXXXXXXXX00000100000830", (0.1, ge), "06D404010900"),
+           ("04D50501", (0, eq), None),
+           (None, (0.1, ge), "0DD4060401 0001020304050607"),
            ("0DD5070401 0001020304050607", None, "04D40A01"),
            ("04D50B01", None, None)]
     dep = nfc.dep.Target(ContactlessFrontend(seq))
@@ -642,17 +651,14 @@ def test_bv_p2p_tg_nfcf_psl_req_with_same_did():
 def test_bv_p2p_tg_nfcf_psl_req_with_different_did():
     """TC_LIS_NFCF_P2P_BV_5_1"""
     seq = ["11D40001FE010203040506000001000000",
-           ("12D50101FE01020304050600000100000830", (0.1, ge), "06D404020900"),
-           ("04D50501", None, "0DD4060401 0001020304050607"),
-           ("0DD5070401 0001020304050607", None, "04D40A01"),
-           ("04D50B01", None, None)]
+           ("12D50101FEXXXXXXXXXXXX00000100000830", (0.1, ge), "06D404020900")]
     dep = nfc.dep.Target(ContactlessFrontend(seq))
     assert dep.activate(timeout=0.5, brs=1) == None
 
 def test_bv_p2p_tg_nfcf_exchange_dep_with_incorrect_did_1():
     """TC_LIS_NFCF_P2P_BV_6_0"""
     seq = ["11D40001FE010203040506000000000000",
-           ("12D50101FE01020304050600000000000830", None,
+           ("12D50101FEXXXXXXXXXXXX00000000000830", None,
             "0DD4060401 0001020304050607")]
     dep = nfc.dep.Target(ContactlessFrontend(seq))
     assert dep.activate(timeout=0.5, brs=1) == None
@@ -660,7 +666,7 @@ def test_bv_p2p_tg_nfcf_exchange_dep_with_incorrect_did_1():
 def test_bv_p2p_tg_nfcf_exchange_dep_with_incorrect_did_2():
     """TC_LIS_NFCF_P2P_BV_6_1"""
     seq = ["11D40001FE010203040506000001000000",
-           ("12D50101FE01020304050600000100000830", None,
+           ("12D50101FEXXXXXXXXXXXX00000100000830", None,
             "0DD4060402 0001020304050607")]
     dep = nfc.dep.Target(ContactlessFrontend(seq))
     assert dep.activate(timeout=0.5, brs=1) == None
@@ -668,7 +674,7 @@ def test_bv_p2p_tg_nfcf_exchange_dep_with_incorrect_did_2():
 def test_bv_p2p_tg_nfcf_rtox_request():
     """TC_LIS_NFCF_P2P_BV_7"""
     seq = ["11D40001FE010203040506000000000000",
-           ("12D50101FE01020304050600000000000830", None,
+           ("12D50101FEXXXXXXXXXXXX00000000000830", None,
             "09D40600 FFFFFF0103"), # DTA Wait Command
            ("05D5079002", None, "05D4069002"),
            ("09D50700 FFFFFF0103", None, "0CD40601 0001020304050607"),
@@ -686,7 +692,7 @@ def test_bv_p2p_tg_nfcf_rtox_request():
 def test_bv_p2p_tg_nfcf_dsl_req_without_did():
     """TC_LIS_NFCF_P2P_BV_8_0"""
     seq = ["11D40001FE010203040506000000000000",
-           ("12D50101FE01020304050600000000000830", None,
+           ("12D50101FEXXXXXXXXXXXX00000000000830", None,
             "0CD40600 0001020304050607"),
            ("0CD50700 0001020304050607", None, "03D408"),
            ("03D509", None, None)]
@@ -700,7 +706,7 @@ def test_bv_p2p_tg_nfcf_dsl_req_without_did():
 def test_bv_p2p_tg_nfcf_atr_with_did_0_dsl_with_did_1():
     """TC_LIS_NFCF_P2P_BV_8_1"""
     seq = ["11D40001FE010203040506000000000000",
-           ("12D50101FE01020304050600000000000830", None,
+           ("12D50101FEXXXXXXXXXXXX00000000000830", None,
             "0CD40600 0001020304050607"),
            ("0CD50700 0001020304050607", None, "04D40800"),
            (None, (0, gt), "TimeoutError")]
@@ -713,7 +719,7 @@ def test_bv_p2p_tg_nfcf_atr_with_did_0_dsl_with_did_1():
 def test_bv_p2p_tg_nfcf_dsl_req_same_did():
     """TC_LIS_NFCF_P2P_BV_8_2"""
     seq = ["11D40001FE010203040506000001000000",
-           ("12D50101FE01020304050600000100000830", None,
+           ("12D50101FEXXXXXXXXXXXX00000100000830", None,
             "0DD4060401 0001020304050607"),
            ("0DD5070401 0001020304050607", None, "04D40801"),
            ("04D50901", None, None)]
@@ -727,7 +733,7 @@ def test_bv_p2p_tg_nfcf_dsl_req_same_did():
 def test_bv_p2p_tg_nfcf_atr_with_did_1_dsl_with_did_2():
     """TC_LIS_NFCF_P2P_BV_8_3"""
     seq = ["11D40001FE010203040506000001000000",
-           ("12D50101FE01020304050600000100000830", None,
+           ("12D50101FEXXXXXXXXXXXX00000100000830", None,
             "0DD4060401 0001020304050607"),
            ("0DD5070401 0001020304050607", None, "04D40802"),
            (None, (0, gt), "TimeoutError")]
@@ -740,7 +746,7 @@ def test_bv_p2p_tg_nfcf_atr_with_did_1_dsl_with_did_2():
 def test_bv_p2p_tg_nfcf_rls_req_without_did():
     """TC_LIS_NFCF_P2P_BV_9_0"""
     seq = ["11D40001FE010203040506000000000000",
-           ("12D50101FE01020304050600000000000830", None,
+           ("12D50101FEXXXXXXXXXXXX00000000000830", None,
             "0CD40600 0001020304050607"),
            ("0CD50700 0001020304050607", None, "03D40A"),
            ("03D50B", None, None)]
@@ -753,7 +759,7 @@ def test_bv_p2p_tg_nfcf_rls_req_without_did():
 def test_bv_p2p_tg_nfcf_rls_req_same_did():
     """TC_LIS_NFCF_P2P_BV_9_1"""
     seq = ["11D40001FE010203040506000001000000",
-           ("12D50101FE01020304050600000100000830", None,
+           ("12D50101FEXXXXXXXXXXXX00000100000830", None,
             "0DD4060401 0001020304050607"),
            ("0DD5070401 0001020304050607", None, "04D40A01"),
            ("04D50B01", None, None)]
@@ -830,7 +836,7 @@ def test_bv_p2p_tg_nfcf_chaining_lr_3():
 def test_bv_p2p_tg_nfcf_pdu_numbering_rules_attention():
     """TC_LIS_NFCF_P2P_BV_11_0"""
     seq = ["11D40001FE010203040506000000000000",
-           ("12D50101FE01020304050600000000000830", None,
+           ("12D50101FEXXXXXXXXXXXX00000000000830", None,
             "0CD40600 0001020304050607"),
            ("0CD50700 0001020304050607", None, "0CD40601 08090A0B0C0D0E0F"),
            ("0CD50701 08090A0B0C0D0E0F", None, "04D40680"),
@@ -848,7 +854,7 @@ def test_bv_p2p_tg_nfcf_pdu_numbering_rules_attention():
 def test_bv_p2p_tg_nfcf_pdu_numbering_rules_erroneous_transaction():
     """TC_LIS_NFCF_P2P_BV_11_1"""
     seq = ["11D40001FE010203040506000000000000",
-           ("12D50101FE01020304050600000000000830", None,
+           ("12D50101FEXXXXXXXXXXXX00000000000830", None,
             "0CD40610 0001020304050607"),
            ("04D50740", None, "0CD40611 08090A0B0C0D0E0F"),
            ("04D50741", None, "04D40680"),
@@ -932,7 +938,7 @@ def test_bv_p2p_tg_nfcf_pdu_handling_rules_transmission_error():
 def test_bv_p2p_tg_nfcf_max_min_payload_size_lr_0():
     """TC_LIS_NFCF_P2P_BV_13_0"""
     seq = ["11D40001FE010203040506000000000000",
-           ("12D50101FE01020304050600000000000800", None,
+           ("12D50101FEXXXXXXXXXXXX00000000000800", None,
             "41D40600" + sequence("01 02 ... 3D")),
            ("41D50700" + sequence("01 02 ... 3D"), None, "03D40A"),
            ("03D50B", None, None)]
@@ -945,7 +951,7 @@ def test_bv_p2p_tg_nfcf_max_min_payload_size_lr_0():
 def test_bv_p2p_tg_nfcf_max_min_payload_size_lr_1():
     """TC_LIS_NFCF_P2P_BV_13_1"""
     seq = ["11D40001FE010203040506000000000010",
-           ("12D50101FE01020304050600000000000810", None,
+           ("12D50101FEXXXXXXXXXXXX00000000000810", None,
             "81D40600" + sequence("01 02 ... 7D")),
            ("81D50700" + sequence("01 02 ... 7D"), None, "03D40A"),
            ("03D50B", None, None)]
@@ -958,7 +964,7 @@ def test_bv_p2p_tg_nfcf_max_min_payload_size_lr_1():
 def test_bv_p2p_tg_nfcf_max_min_payload_size_lr_2():
     """TC_LIS_NFCF_P2P_BV_13_2"""
     seq = ["11D40001FE010203040506000000000020",
-           ("12D50101FE01020304050600000000000820", None,
+           ("12D50101FEXXXXXXXXXXXX00000000000820", None,
             "C1D40600" + sequence("01 02 ... BD")),
            ("C1D50700" + sequence("01 02 ... BD"), None, "03D40A"),
            ("03D50B", None, None)]
@@ -971,7 +977,7 @@ def test_bv_p2p_tg_nfcf_max_min_payload_size_lr_2():
 def test_bv_p2p_tg_nfcf_max_min_payload_size_lr_3():
     """TC_LIS_NFCF_P2P_BV_13_3"""
     seq = ["11D40001FE010203040506000000000030",
-           ("12D50101FE01020304050600000000000830", None,
+           ("12D50101FEXXXXXXXXXXXX00000000000830", None,
             "FFD40600" + sequence("01 02 ... FB")),
            ("FFD50700" + sequence("01 02 ... FB"), None, "03D40A"),
            ("03D50B", None, None)]
@@ -984,7 +990,7 @@ def test_bv_p2p_tg_nfcf_max_min_payload_size_lr_3():
 def _test_bv_p2p_tg_nfcf_reactivation_after_deselect():
     """TC_LIS_NFCF_P2P_BV_14_0_0"""
     seq = ["11D40001FE010203040506000000000010",
-           ("12D50101FE01020304050600000000000830", None, "03D408"),
+           ("12D50101FEXXXXXXXXXXXX00000000000830", None, "03D408"),
            ("03D509", None, None)]
     dep = nfc.dep.Target(ContactlessFrontend(seq))
     assert dep.activate(timeout=0.5, brs=1) == None
@@ -992,7 +998,7 @@ def _test_bv_p2p_tg_nfcf_reactivation_after_deselect():
 def _test_bv_p2p_tg_nfcf_reactivation_after_release():
     """TC_LIS_NFCF_P2P_BV_14_1_0"""
     seq = ["11D40001FE010203040506000000000010",
-           ("12D50101FE01020304050600000000000830", None, "03D40A"),
+           ("12D50101FEXXXXXXXXXXXX00000000000830", None, "03D40A"),
            ("03D50B", None, None)]
     dep = nfc.dep.Target(ContactlessFrontend(seq))
     assert dep.activate(timeout=0.5, brs=1) == None
@@ -1000,7 +1006,7 @@ def _test_bv_p2p_tg_nfcf_reactivation_after_release():
 def _test_bi_p2p_tg_nfcf_transmission_error_with_atr_req():
     """TC_LIS_NFCF_P2P_BI_1_0"""
     seq = ["11D40001FE010203040506000000000010",
-           ("12D50101FE01020304050600000000000830", None, "03D40A"),
+           ("12D50101FEXXXXXXXXXXXX00000000000830", None, "03D40A"),
            ("03D50B", None, None)]
     dep = nfc.dep.Target(ContactlessFrontend(seq))
     assert dep.activate(timeout=0.5, brs=1) == None
@@ -1008,7 +1014,7 @@ def _test_bi_p2p_tg_nfcf_transmission_error_with_atr_req():
 def test_bi_p2p_tg_nfcf_transmission_error_with_psl_req():
     """TC_LIS_NFCF_P2P_BI_1_1"""
     seq = ["11D40001FE010203040506000000000010",
-           ("12D50101FE01020304050600000000000830", None, "TransmissionError"),
+           ("12D50101FEXXXXXXXXXXXX00000000000830", None, "TransmissionError"),
            (None, None, "0CD40600 0102030405060708"),
            ("0CD50700 0102030405060708", None, "03D40A"),
            ("03D50B", None, None)]
@@ -1021,7 +1027,7 @@ def test_bi_p2p_tg_nfcf_transmission_error_with_psl_req():
 def test_bi_p2p_tg_nfcf_transmission_error_with_dep_req():
     """TC_LIS_NFCF_P2P_BI_1_2"""
     seq = ["11D40001FE010203040506000000000000",
-           ("12D50101FE01020304050600000000000830", None, "TransmissionError"),
+           ("12D50101FEXXXXXXXXXXXX00000000000830", None, "TransmissionError"),
            (None, None, "0CD40600 0102030405060708"),
            ("0CD50700 0102030405060708", None, "03D40A"),
            ("03D50B", None, None)]
@@ -1034,7 +1040,7 @@ def test_bi_p2p_tg_nfcf_transmission_error_with_dep_req():
 def test_bi_p2p_tg_nfcf_transmission_error_with_dsl_req():
     """TC_LIS_NFCF_P2P_BI_1_3"""
     seq = ["11D40001FE010203040506000000000000",
-           ("12D50101FE01020304050600000000000830", None, "TransmissionError"),
+           ("12D50101FEXXXXXXXXXXXX00000000000830", None, "TransmissionError"),
            (None, None, "0CD40600 0102030405060708"),
            ("0CD50700 0102030405060708", None, "03D40A"),
            ("03D50B", None, None)]
@@ -1047,7 +1053,7 @@ def test_bi_p2p_tg_nfcf_transmission_error_with_dsl_req():
 def test_bi_p2p_tg_nfcf_transmission_error_with_rls_req():
     """TC_LIS_NFCF_P2P_BI_1_4"""
     seq = ["11D40001FE010203040506000000000000",
-           ("12D50101FE01020304050600000000000830", None, "TransmissionError"),
+           ("12D50101FEXXXXXXXXXXXX00000000000830", None, "TransmissionError"),
            (None, None, "0CD40600 0102030405060708"),
            ("0CD50700 0102030405060708", None, "03D40A"),
            ("03D50B", None, None)]
@@ -1057,11 +1063,11 @@ def test_bi_p2p_tg_nfcf_transmission_error_with_rls_req():
     assert loop == "0102030405060708".decode("hex")
     assert dep.exchange(send_data=loop, timeout=1.0) == None
 
-def test_bi_p2p_tg_nfcf_protocol_error_atr_req():
+def _test_bi_p2p_tg_nfcf_protocol_error_atr_req():
     """TC_LIS_NFCF_P2P_BI_2"""
     seq = ["42D40001FE010203040506000000000002" + sequence("01 02 ... 31"),
            (None, None, "11D40001FE010203040506000000000000"),
-           ("12D50101FE01020304050600000000000830", None, "04D40600")]
+           ("12D50101FEXXXXXXXXXXXX00000000000830", None, "04D40600")]
     dep = nfc.dep.Target(ContactlessFrontend(seq))
     assert dep.activate(timeout=0.5, brs=1) == ""
 
