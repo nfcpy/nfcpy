@@ -160,9 +160,11 @@ class ParameterExchange(ProtocolDataUnit):
         version = self.version[0]<<4 | self.version[1]
         s  = struct.pack("!BB", self.dsap<<2|0b00, 0b01<<6|self.ssap)
         s += struct.pack("!BBB", Parameter.VERSION, 1, version)
-        s += struct.pack("!BBH", Parameter.MIUX, 2, self.miu - 128)
+        if self.miu > 128:
+            s += struct.pack("!BBH", Parameter.MIUX, 2, self.miu - 128)
         s += struct.pack("!BBH", Parameter.WKS, 2, self.wks)
-        s += struct.pack("!BBB", Parameter.LTO, 1, self.lto / 10)
+        if self.lto != 100:
+            s += struct.pack("!BBB", Parameter.LTO, 1, self.lto / 10)
         s += struct.pack("!BBB", Parameter.OPT, 1, self.lsc)
         return s
 
