@@ -298,7 +298,7 @@ class Device(nfc.dev.Device):
             target = self._sense_a()
         except CommunicationError as error:
             if error != "RECEIVE_TIMEOUT_ERROR":
-                log.error(error)
+                log.debug(error)
         if target is None:
             self.chipset.switch_rf("off")
         return target
@@ -362,7 +362,7 @@ class Device(nfc.dev.Device):
             target = self._sense_b()
         except CommunicationError as error:
             if error != "RECEIVE_TIMEOUT_ERROR":
-                log.error(error)
+                log.debug(error)
         if target is None:
             self.chipset.switch_rf("off")
         return target
@@ -381,7 +381,7 @@ class Device(nfc.dev.Device):
             target = self._sense_f(br, sc, rc)
         except CommunicationError as error:
             if error != "RECEIVE_TIMEOUT_ERROR":
-                log.error(error)
+                log.debug(error)
         if target is None:
             self.chipset.switch_rf("off")
         return target
@@ -410,12 +410,6 @@ class Device(nfc.dev.Device):
         if not targets:
             return None
 
-#        if len(targets) == 1:
-#            if type(target) == TTA:
-#                return self.listen_a(target, timeout)
-#            if type(target) == TTF:
-#                return self.listen_f(target, timeout)
-        
         timeout_msec = int(timeout * 1000)
         log.debug("listen for {0} msec".format(timeout_msec))
 
@@ -452,7 +446,7 @@ class Device(nfc.dev.Device):
                     break
             except CommunicationError as error:
                 if error != "RECEIVE_TIMEOUT_ERROR":
-                    log.error(error)
+                    log.debug(error)
             timeout -= time() - start_time
         else:
             return None
@@ -470,7 +464,7 @@ class Device(nfc.dev.Device):
         try:
             return self.chipset.in_comm_rf(data, timeout_msec)
         except CommunicationError as error:
-            log.error(error)
+            log.debug(error)
             if error == "RECEIVE_TIMEOUT_ERROR": raise TimeoutError
             else: raise TransmissionError
 
@@ -482,7 +476,7 @@ class Device(nfc.dev.Device):
                 guard_time=500, recv_timeout=timeout_msec, transmit_data=data)
             return data[7:]
         except CommunicationError as error:
-            log.error(error)
+            log.debug(error)
             if error == "RECEIVE_TIMEOUT_ERROR": raise TimeoutError
             else: raise TransmissionError
 
