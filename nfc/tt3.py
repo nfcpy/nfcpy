@@ -151,7 +151,7 @@ class NDEF(object):
         self._attr = None
 
 class Type3Tag(object):
-    tag_type = "Type3Tag"
+    type = "Type3Tag"
     
     def __init__(self, clf, target):
         self.clf = clf

@@ -141,7 +141,7 @@ class NDEF(object):
         self.tag.update_binary(0, bytearray(ndef_size))
 
 class Type4Tag(object):
-    tag_type = "Type4Tag"
+    type = "Type4Tag"
 
     def __init__(self, clf, target):
         self.clf = clf

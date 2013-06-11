@@ -53,47 +53,50 @@ def add_show_parser(parser):
     parser.set_defaults(func=show_tag)
         
 def show_tag(args):
-    if args.clf.connect({"tag": {}}) != 'tag':
-        raise SystemExit(1)
+    def show(tag):
+        print(tag)
+        if args.verbose:
+            if tag.type == "Type1Tag":
+                memory_dump = tag[0:8+tag[10]*8]
+                print("TAG memory dump:")
+                print(format_data(memory_dump, w=8))
+            elif tag.type == "Type2Tag":
+                memory_dump = tag[0:16+tag[14]*8]
+                print("TAG memory dump:")
+                print(format_data(memory_dump))
+            elif tag.type == "Type3Tag":
+                tt3_card_map = {
+                    "\x00\xF0": "FeliCa Lite RC-S965",
+                    "\x00\xF1": "FeliCa Lite-S RC-S966",
+                    "\x01\xE0": "FeliCa Plug RC-S801/RC-S802",
+                    "\x01\x20": "FeliCa Card RC-S962 [424 kbps, 4KB FRAM]",
+                    "\x03\x01": "FeliCa Card RC-S860 [212 kbps, 4KB FEPROM]",
+                    "\x0f\x0d": "FeliCa Card RC-S889 [424 kbps, 9KB FRAM]",
+                    }
+                icc = str(tag.pmm[0:2]) # ic code
+                print("  " + tt3_card_map.get(icc, "unknown card"))
+        if tag.ndef:
+            print("NDEF attribute data:")
+            if args.verbose and tag.type == "Type3Tag":
+                attr = ["{0:02x}".format(b) for b in tag.ndef.attr]
+                print("  " + " ".join(attr))
+            print("  version   = %s" % tag.ndef.version)
+            print("  writeable = %s" % ("no", "yes")[tag.ndef.writeable])
+            print("  capacity  = %d byte" % tag.ndef.capacity)
+            print("  data size = %d byte" % len(tag.ndef.message))
+            if len(tag.ndef.message):
+                print("NDEF message dump:")
+                print(format_data(tag.ndef.message))
+                message = nfc.ndef.Message(tag.ndef.message)
+                print("NDEF record list:")
+                print(message.pretty())
 
-    print(nfc.tag.tag)
-    if args.verbose:
-        if nfc.tag.get_type() == "Type1Tag":
-            memory_dump = nfc.tag.tt1[0:8+nfc.tag.tt1[10]*8]
-            print("TAG memory dump:")
-            print(format_data(memory_dump, w=8))
-        elif nfc.tag.get_type() == "Type2Tag":
-            memory_dump = nfc.tag.tt2[0:16+nfc.tag.tt2[14]*8]
-            print("TAG memory dump:")
-            print(format_data(memory_dump))
-        elif nfc.tag.get_type() == "Type3Tag":
-            tt3_card_map = {
-                "\x00\xF0": "FeliCa Lite RC-S965",
-                "\x00\xF1": "FeliCa Lite-S RC-S966",
-                "\x01\xE0": "FeliCa Plug RC-S801/RC-S802",
-                "\x01\x20": "FeliCa Card RC-S976F [424 kbps]",
-                "\x03\x01": "FeliCa Card RC-S860 [212 kbps, 4KB FEPROM]",
-                "\x0f\x0d": "FeliCa Card RC-S889 [424 kbps, 9KB FRAM]",
-                }
-            pmm = nfc.tag.tt3.pmm
-            print("  " + tt3_card_map.get(str(pmm[0:2]), "unknown card"))
-    ndef = nfc.tag.get_ndef()
-    if ndef:
-        print("NDEF attribute data:")
-        if nfc.tag.get_type() == "Type3Tag":
-            attr = ["{0:02x}".format(b) for b in ndef.attr]
-            print("  " + " ".join(attr))
-        print("  version   = %s" % ndef.version)
-        print("  writeable = %s" % ("no", "yes")[ndef.writeable])
-        print("  capacity  = %d byte" % ndef.capacity)
-        print("  data size = %d byte" % len(ndef.message))
-        if len(ndef.message):
-            print("NDEF message dump:")
-            print(format_data(ndef.message))
-            message = nfc.ndef.Message(ndef.message)
-            print("NDEF record list:")
-            print(message.pretty())
+        return args.wait or args.loop
         
+    log.info("touch a tag")
+    while args.clf.connect(tag={'on-connected': show}) and args.loop:
+        log.info("touch a tag")
+
 def add_dump_parser(parser):
     #parser.description = ""
     parser.set_defaults(func=dump_tag)
@@ -103,20 +106,22 @@ def add_dump_parser(parser):
         help="save ndef to FILE (writes binary data)")
         
 def dump_tag(args):
-    if args.clf.connect({"tag": {}}) != 'tag':
-        raise SystemExit(1)
-
-    ndef = nfc.tag.get_ndef()
-    if ndef:
-        data = ndef.message
-        if args.output.name == "<stdout>":
-            args.output.write(str(data).encode("hex"))
-            if args.loop:
-                args.output.write('\n')
+    def dump(tag):
+        if tag.ndef:
+            data = tag.ndef.message
+            if args.output.name == "<stdout>":
+                args.output.write(str(data).encode("hex"))
+                if args.loop:
+                    args.output.write('\n')
+                else:
+                    args.output.flush()
             else:
-                args.output.flush()
-        else:
-            args.output.write(str(data))                    
+                args.output.write(str(data))
+        return args.wait or args.loop
+        
+    log.info("touch a tag")
+    while args.clf.connect(tag={'on-connected': dump}) and args.loop:
+        log.info("touch a tag")
 
 def add_load_parser(parser):
     #parser.description = ""
@@ -132,142 +137,133 @@ def load_tag(args):
         try: args.data = args.data.decode("hex")
         except TypeError: pass
     
-    if args.clf.connect({"tag": {}}) != 'tag':
-        raise SystemExit(1)
-
-    ndef = nfc.tag.get_ndef()
-    if ndef is not None:
-        log.info("old: " + ndef.message.encode("hex"))
-        ndef.message = args.data
-        log.info("new: " + ndef.message.encode("hex"))
-    else:
-        log.info("not an ndef tag")
+    def load(tag):
+        if tag.ndef is not None:
+            log.info("old: " + tag.ndef.message.encode("hex"))
+            tag.ndef.message = args.data
+            log.info("new: " + tag.ndef.message.encode("hex"))
+        else:
+            log.info("not an ndef tag")
+        return args.wait or args.loop
+        
+    log.info("touch a tag")
+    while args.clf.connect(tag={'on-connected': load}) and args.loop:
+        log.info("touch a tag")
 
 def add_format_parser(parser):
+    subparsers = parser.add_subparsers(title="tags")
+    add_format_tt3_parser(subparsers.add_parser(
+            'tt3', help='format type 3 tag'))
+
+def add_format_tt3_parser(parser):
     #parser.description = ""
-    parser.set_defaults(func=format_tag)
+    parser.set_defaults(func=tt3_format)
     parser.add_argument(
-        "--tt3-ver", metavar="STR", default="1.0",
+        "--ver", metavar="STR", default="1.0",
         help="ndef mapping version number (default: %(default)s)")
     parser.add_argument(
-        "--tt3-nbr", metavar="INT", type=int,
+        "--nbr", metavar="INT", type=int,
         help="number of blocks that can be written at once")
     parser.add_argument(
-        "--tt3-nbw", metavar="INT", type=int,
+        "--nbw", metavar="INT", type=int,
         help="number of blocks that can be read at once")
     parser.add_argument(
-        "--tt3-max", metavar="INT", type=int,
+        "--max", metavar="INT", type=int,
         help="maximum number of blocks (nmaxb x 16 == capacity)")
     parser.add_argument(
-        "--tt3-rfu", metavar="INT", type=int, default=0,
+        "--rfu", metavar="INT", type=int, default=0,
         help="value to set for reserved bytes (default: %(default)s)")
     parser.add_argument(
-        "--tt3-wf", metavar="INT", type=int, default=0,
+        "--wf", metavar="INT", type=int, default=0,
         help="write-flag attribute value (default: %(default)s)")
     parser.add_argument(
-        "--tt3-rw", metavar="INT", type=int, default=1,
+        "--rw", metavar="INT", type=int, default=1,
         help="read-write flag attribute value (default: %(default)s)")
     parser.add_argument(
-        "--tt3-len", metavar="INT", type=int, default=0,
+        "--len", metavar="INT", type=int, default=0,
         help="ndef length attribute value (default: %(default)s)")
     parser.add_argument(
-        "--tt3-crc", metavar="INT", type=int,
+        "--crc", metavar="INT", type=int,
         help="checksum attribute value (default: computed)")
         
-def format_tag(args):
-    if args.clf.connect({"tag": {}}) != 'tag':
-        raise SystemExit(1)
-
-    if nfc.tag.get_type() == "Type1Tag":
-        tt1_format(args)
-    elif nfc.tag.get_type() == "Type2Tag":
-        tt2_format(args)
-    elif nfc.tag.get_type() == "Type3Tag":
-        tt3_format(args)
-    elif nfc.tag.get_type() == "Type4Tag":
-        tt4_format(args)
-
-def tt1_format(args):
-    print("unable to format a type 1 tag")
-    
-def tt2_format(args):
-    print("unable to format a type 2 tag")
-    
 def tt3_format(args):
-    def determine_block_count():
+    def determine_block_count(tag):
         block = 0
         try:
             while True:
-                data = nfc.tag.tt3.read([block], 9)
+                data = tag.read([block], 9)
                 block += 1
         except Exception:
-            if nfc.tag.tt3.pmm[0:2] == "\x00\xF0":
+            if tag.pmm[0:2] == "\x00\xF0":
                 block -= 1 # last block on FeliCa Lite is unusable
             return block
 
-    def determine_block_read_count(block_count):
+    def determine_block_read_count(tag, block_count):
         try:
             for i in range(block_count):
-                nfc.tag.tt3.read(range(i+1))
+                tag.read(range(i+1))
             else:
                 return block_count
         except Exception:
             return i
 
-    def determine_block_write_count(block_count):
+    def determine_block_write_count(tag, block_count):
         try:
             for i in range(block_count):
                 data = tag.read(range(i+1))
-                nfc.tag.tt3.write(data, range(i+1))
+                tag.write(data, range(i+1))
             else:
                 return block_count
         except Exception:
             return i
 
-    block_count = determine_block_count()
-    print("tag has %d user data blocks" % block_count)
+    def format(tag):
+        block_count = determine_block_count(tag)
+        print("tag has %d user data blocks" % block_count)
 
-    nbr = determine_block_read_count(block_count)
-    print("%d block(s) can be read at once" % nbr)
+        nbr = determine_block_read_count(tag, block_count)
+        print("%d block(s) can be read at once" % nbr)
 
-    nbw = determine_block_write_count(block_count)
-    print("%d block(s) can be written at once" % nbw)
+        nbw = determine_block_write_count(tag, block_count)
+        print("%d block(s) can be written at once" % nbw)
 
-    if not args.tt3_max is None:
-        block_count = args.tt3_max + 1
-    if not args.tt3_nbw is None:
-        nbw = args.tt3_nbw
-    if not args.tt3_nbr is None:
-        nbr = args.tt3_nbr
-    rfu = args.tt3_rfu
-    wf = args.tt3_wf
-    rw = args.tt3_rw
-    ver = map(int, args.tt3_ver.split('.'))
-    ver = ver[0] << 4 | ver[1]
+        if not args.max is None:
+            block_count = args.max + 1
+        if not args.nbw is None:
+            nbw = args.nbw
+        if not args.nbr is None:
+            nbr = args.nbr
+        rfu = args.rfu
+        wf = args.wf
+        rw = args.rw
+        ver = map(int, args.ver.split('.'))
+        ver = ver[0] << 4 | ver[1]
+
+        nmaxb_msb = (block_count - 1) / 256
+        nmaxb_lsb = (block_count - 1) % 256
+        attr = bytearray([ver, nbr, nbw, nmaxb_msb, nmaxb_lsb, 
+                          rfu, rfu, rfu, rfu, wf, rw, 0, 0, 0, 0, 0])
+        attr[11:14] = bytearray(struct.pack('!I', args.len)[1:])
+        csum = sum(attr[0:14]) if args.crc is None else args.crc
+        attr[14] = csum / 256
+        attr[15] = csum % 256
+
+        log.info("writing attribute data block:")
+        log.info(" ".join(["%02x" % x for x in attr]))
+        log.info("  Ver = {0}".format(args.ver))
+        log.info("  Nbr = {0}".format(nbr))
+        log.info("  Nbw = {0}".format(nbw))
+        log.info("  WF  = {0}".format(wf))
+        log.info("  RW  = {0}".format(rw))
+        log.info("  Ln  = {0}".format(args.len))
+        log.info("  CRC = {0}".format(csum))
+
+        tag.write(str(attr), [0])
+        return args.wait or args.loop
         
-    nmaxb_msb = (block_count - 1) / 256
-    nmaxb_lsb = (block_count - 1) % 256
-    attr = bytearray([ver, nbr, nbw, nmaxb_msb, nmaxb_lsb, 
-                      rfu, rfu, rfu, rfu, wf, rw, 0, 0, 0, 0, 0])
-    attr[11:14] = bytearray(struct.pack('!I', args.tt3_len)[1:])
-    csum = sum(attr[0:14]) if args.tt3_crc is None else args.tt3_crc
-    attr[14] = csum / 256
-    attr[15] = csum % 256
-
-    log.info("writing attribute data block:")
-    log.info(" ".join(["%02x" % x for x in attr]))
-    log.info("  Ver = {0}".format(args.tt3_ver))
-    log.info("  Nbr = {0}".format(nbr))
-    log.info("  Nbw = {0}".format(nbw))
-    log.info("  WF  = {0}".format(wf))
-    log.info("  RW  = {0}".format(rw))
-    log.info("  Ln  = {0}".format(args.tt3_len))
-    log.info("  CRC = {0}".format(csum))
-
-    nfc.tag.tt3.write(str(attr), [0])
-
-def tt4_format(args):
-    print("unable to format a type 4 tag")
+    log.info("touch a type 3 tag to format")
+    while args.clf.connect(tag={'on-connected': format}) and args.loop:
+        log.info("touch a type 3 tag to format")
 
 def add_emulate_parser(parser):
     parser.description = """Emulate an ndef tag."""    
@@ -344,25 +340,29 @@ def emulate_tt3(args):
     pmm = bytearray.fromhex(args.pmm)
     sys = bytearray.fromhex(args.sys)
     target = nfc.clf.TTF(br=args.br, idm=idm, pmm=pmm, sys=sys)
-    log.info("touch a reader")
-    while True:
-        activated = args.clf.listen([target], timeout=1)
-        if activated:
-            log.info("tag activated")
-            target, command = activated
-            tag = nfc.tt3.Type3TagEmulation(args.clf, target)
-            tag.add_service(0x0009, ndef_read, ndef_write)
-            tag.add_service(0x000B, ndef_read, lambda: False)
-            while command is not None:
-                response = tag.process_command(command)
-                try:
-                    command = tag.send_response(response, timeout=10)
-                except nfc.clf.TimeoutError:
-                    log.info("no command received within 10 seconds")
-                except nfc.clf.TransmissionError:
-                    break
-            log.info("tag released")
-            #break
+    try:
+        log.info("touch a reader")
+        while True:
+            activated = args.clf.listen([target], timeout=1)
+            if activated:
+                log.info("tag activated")
+                target, command = activated
+                tag = nfc.tt3.Type3TagEmulation(args.clf, target)
+                tag.add_service(0x0009, ndef_read, ndef_write)
+                tag.add_service(0x000B, ndef_read, lambda: False)
+                while command is not None:
+                    response = tag.process_command(command)
+                    try:
+                        command = tag.send_response(response, timeout=10)
+                    except nfc.clf.TimeoutError:
+                        log.info("no command received within 10 seconds")
+                    except nfc.clf.TransmissionError:
+                        break
+                log.info("tag released")
+                if not args.loop: break
+                log.info("touch a reader")
+    except KeyboardInterrupt:
+        return
 
 if __name__ == '__main__':
     import argparse
@@ -380,8 +380,8 @@ if __name__ == '__main__':
         "-l", "--loop", action='store_true',
         help="repeat command until Control-C")
     parser.add_argument(
-        "--no-wait", action='store_true',
-        help="do not wait for tag removal")
+        "--wait", action='store_true',
+        help="wait until tag is removed")
     parser.add_argument(
         "--device", metavar="NAME", action="append",
         help="use specified contactless reader(s): "\
@@ -433,18 +433,7 @@ if __name__ == '__main__':
         raise SystemExit(1)
 
     try:
-        while True:
-            if not args.subparser == "emulate":
-                print("touch a tag", file=sys.stderr)
-            args.func(args)
-            if not args.subparser == "emulate" and not args.no_wait:
-                print("\nremove tag", file=sys.stderr)
-                while nfc.tag.is_present():
-                    time.sleep(0.5)
-            if not args.loop:
-                break
-    except KeyboardInterrupt:
-        raise SystemExit
+        args.func(args)
     finally:
         args.clf.close()
     

@@ -159,7 +159,7 @@ class NDEF(object):
             tag[8] = 0xE1
 
 class Type1Tag(object):
-    tag_type = "Type1Tag"
+    type = "Type1Tag"
     
     def __init__(self, clf, target):
         self.clf = clf

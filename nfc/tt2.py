@@ -151,7 +151,7 @@ class NDEF(object):
                 tag[offset+2] = len(self._msg) % 256
 
 class Type2Tag(object):
-    tag_type = "Type2Tag"
+    type = "Type2Tag"
     
     def __init__(self, clf, target):
         clf.set_communication_mode('', check_crc='OFF')

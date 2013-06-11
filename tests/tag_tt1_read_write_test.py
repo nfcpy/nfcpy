@@ -24,6 +24,7 @@ import sys, os
 sys.path.insert(1, os.path.split(sys.path[0])[0])
 
 import nfc
+import nfc.ndef
 
 from nose.tools import raises
 from string import maketrans
@@ -97,9 +98,18 @@ class ContactlessFrontend(nfc.clf.ContactlessFrontend):
 
 def test_tt1_read_bv_1():
     """TC_T1T_READ_BV_1"""
+    def connected(tag):
+        assert tag.ndef.version == "1.0"
+        assert tag.ndef.capacity == 90
+        assert tag.ndef.writeable == True
+        assert tag.ndef.readable == True
+        uri = 'http://www.abcdefghijklmnopqrstuvwxyzabcdefg.com'
+        uri_record = nfc.ndef.UriRecord(uri)
+        assert tag.ndef.message == str(nfc.ndef.Message(uri_record))
+        
     seq = [("00000000112233", None, "1100" + t1t_static_memory_layout_1),
-           ("01000000112233", None, "0000")]
+           ("01000000112233", None, "0000"),
+           ("01000000112233", None, "TimeoutError")]
     cfg, uid = bytearray.fromhex("000C"), bytearray.fromhex("00112233")
     clf = ContactlessFrontend(nfc.clf.TTA(106, cfg, uid), seq)
-    assert clf.connect({'tag': {}}) == 'tag'
-    assert nfc.tag.is_present() == True
+    assert clf.connect(tag={'on-connected': connected}) == True

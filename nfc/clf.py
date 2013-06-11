@@ -26,7 +26,9 @@ log = logging.getLogger(__name__)
 import dev
 import nfc.dep
 import nfc.tag
+import nfc.llcp
 
+from time import sleep
 from collections import namedtuple
 
 TTA = namedtuple("TTA", "br, cfg, uid")
@@ -77,48 +79,56 @@ class ContactlessFrontend(object):
         self.dev.close()
         self.dev = None
 
-    def connect(self, options):
-        while True:
-            try:
-                connected = self._connect(options)
-                if connected: return connected
-            except KeyboardInterrupt:
-                break
-    
-    def _connect(self, options):
-        if 'llcp' in options:
-            llcp_parameters = {
-                'recv-miu': options['llcp'].get('link-miu', 128),
-                'send-lto': options['llcp'].get('link-timeout', 500),
-                }
-            if 'listen' in options['llcp']:
-                gbt = nfc.llcp.startup(llcp_parameters)
-                dep = nfc.dep.Target(self)
-                gbi = dep.activate(gbt=gbt)
-                if gbi is not None:
-                    nfc.llcp.activate(dep)
-                    return 'llcp'
-            if 'poll' in options['llcp']:
-                gbi = nfc.llcp.startup(llcp_parameters)
-                dep = nfc.dep.Initiator(self)
-                gbt = dep.activate(gbi=gbi)
-                if gbt is not None:
-                    nfc.llcp.activate(dep)
-                    return 'llcp'
+    def connect(self, **options):
+        log.debug("connect({0})".format(options))
+        
+        tag_options = options.get('tag')
+        p2p_options = options.get('p2p')
+        assert tag_options or p2p_options
+        
+        if tag_options and not tag_options.get('targets'):
+            tag_options['targets'] = [
+                TTA(br=106, cfg=None, uid=None), TTB(br=106),
+                TTF(br=424, idm=None, pmm=None, sys=None),
+                TTF(br=212, idm=None, pmm=None, sys=None)]
+        if p2p_options and type(p2p_options) != dict:
+            p2p_options = dict()
 
-        if 'tag' in options:
-            targets = []
-            targets.append(TTA(br=106, cfg=None, uid=None))
-            targets.append(TTB(br=106))
-            targets.append(TTF(br=424, idm=None, pmm=None, sys=None))
-            targets.append(TTF(br=212, idm=None, pmm=None, sys=None))
-            target = self.sense(targets)
-            if target:
-                log.debug("found target {0}".format(target))
-                nfc.tag.activate(self, target)
-                return 'tag'
-            import time
-            time.sleep(1)
+        try:
+            while True:
+                if ((tag_options and self._connect_tag(tag_options)) or
+                    (p2p_options and self._connect_p2p(p2p_options))):
+                    return True
+        except KeyboardInterrupt:
+            return False
+
+    def _connect_tag(self, options):
+        target = self.sense(options.get('targets', []))
+        if target is not None:
+            log.debug("found target {0}".format(target))
+            tag = nfc.tag.activate(self, target)
+            if tag is not None:
+                log.debug("connected {0}".format(tag))
+                on_connected_callback = options.get('on-connected')
+                if on_connected_callback is not None:
+                    if on_connected_callback(tag) == True:
+                        while tag.is_present:
+                            sleep(0.1)
+                return True
+        
+    def _connect_p2p(self, options):
+        nfc.llcp.init(recv_miu=options.get('miu', 128),
+                      send_lto=options.get('lto', 100),
+                      send_agf=options.get('agf', True))
+        try: options['register-services']()
+        except KeyError: pass
+        for role in ('target', 'initiator'):
+            if role == options.get('role') or options.get('role') is None:
+                DEP = eval("nfc.dep." + role.capitalize())
+                if nfc.llcp.activate(mac=DEP(clf=self)):
+                    try: p2p['activate-services']()
+                    except KeyError: pass
+                    return True
         
     def sense(self, targets):
         """Discover a contactless target device. Potential targets to
