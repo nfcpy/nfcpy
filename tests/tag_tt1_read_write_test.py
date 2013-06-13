@@ -96,20 +96,28 @@ class ContactlessFrontend(nfc.clf.ContactlessFrontend):
     def set_communication_mode(self, brm, **kwargs):
         pass
 
-def test_tt1_read_bv_1():
-    """TC_T1T_READ_BV_1"""
-    def connected(tag):
+class TestWithStaticMemoryLayout1:
+    uri = str(nfc.ndef.Message(nfc.ndef.UriRecord(
+            'http://www.abcdefghijklmnopqrstuvwxyzabcdefg.com')))
+    
+    def setup(self):
+        seq = [("00000000112233", None, "1100" + t1t_static_memory_layout_1),
+               ("01000000112233", None, "0000"),
+               ("01000000112233", None, "TimeoutError")]
+        cfg, uid = bytearray.fromhex("000C"), bytearray.fromhex("00112233")
+        self.clf = ContactlessFrontend(nfc.clf.TTA(106, cfg, uid), seq)
+        
+    def read_ndef(self, tag):
         assert tag.ndef.version == "1.0"
         assert tag.ndef.capacity == 90
         assert tag.ndef.writeable == True
         assert tag.ndef.readable == True
-        uri = 'http://www.abcdefghijklmnopqrstuvwxyzabcdefg.com'
-        uri_record = nfc.ndef.UriRecord(uri)
-        assert tag.ndef.message == str(nfc.ndef.Message(uri_record))
+        self.ndef_message = tag.ndef.message
+        return True
         
-    seq = [("00000000112233", None, "1100" + t1t_static_memory_layout_1),
-           ("01000000112233", None, "0000"),
-           ("01000000112233", None, "TimeoutError")]
-    cfg, uid = bytearray.fromhex("000C"), bytearray.fromhex("00112233")
-    clf = ContactlessFrontend(nfc.clf.TTA(106, cfg, uid), seq)
-    assert clf.connect(tag={'on-connected': connected}) == True
+    @raises(StopIteration)
+    def test_tt1_read_bv_1(self):
+        """TC_T1T_READ_BV_1"""
+        self.clf.connect(tag={'on-connect': self.read_ndef})
+        assert self.ndef_message == self.uri
+        self.clf.packets.next()
