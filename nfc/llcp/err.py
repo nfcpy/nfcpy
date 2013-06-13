@@ -23,21 +23,21 @@
 from os import strerror
 import errno
 
-class Error(Exception):
-    def __init__(self, err, info=None):
-        self.args = (err, strerror(err) if not info else info)
+class Error(IOError):
+    def __init__(self, errno):
+        super(Error, self).__init__(errno, strerror(errno))
 
     def __str__(self):
-        return "nfc.llcp.Error: [{errno}] {info}".format(
-            errno=errno.errorcode[self.args[0]], info=self.args[1])
+        return "nfc.llcp.Error: [{0}] {1}".format(
+            errno.errorcode[self.errno], self.strerror)
 
 class ConnectRefused(Error):
     def __init__(self, reason):
-        self.args = (errno.ECONNREFUSED, strerror(errno.ECONNREFUSED))
+        super(ConnectRefused, self).__init__(errno.ECONNREFUSED)
         self.reason = reason
 
     def __str__(self):
         return "nfc.llcp.ConnectRefused: [{0}] {1} with reason {2}".format(
-            errno.errorcode[self.args[0]], self.args[1], self.reason)
+            errno.errorcode[self.errno], self.strerror, self.reason)
 
     
