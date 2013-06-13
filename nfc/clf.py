@@ -28,12 +28,12 @@ import nfc.dep
 import nfc.tag
 import nfc.llcp
 
-from time import sleep
-from collections import namedtuple
+import time
+import collections
 
-TTA = namedtuple("TTA", "br, cfg, uid")
-TTB = namedtuple("TTB", "br")
-TTF = namedtuple("TTF", "br, idm, pmm, sys")
+TTA = collections.namedtuple("TTA", "br, cfg, uid")
+TTB = collections.namedtuple("TTB", "br")
+TTF = collections.namedtuple("TTF", "br, idm, pmm, sys")
 
 def __target__str__(self):
     s = "{0} br={1}".format(self.__class__.__name__, self[0])
@@ -86,18 +86,28 @@ class ContactlessFrontend(object):
         p2p_options = options.get('p2p')
         assert tag_options or p2p_options
         
-        if tag_options and not tag_options.get('targets'):
-            tag_options['targets'] = [
-                TTA(br=106, cfg=None, uid=None), TTB(br=106),
-                TTF(br=424, idm=None, pmm=None, sys=None),
-                TTF(br=212, idm=None, pmm=None, sys=None)]
-        if p2p_options and type(p2p_options) != dict:
-            p2p_options = dict()
+        if tag_options:
+            if not 'targets' in tag_options:
+                tag_options['targets'] = [
+                    TTA(br=106, cfg=None, uid=None), TTB(br=106),
+                    TTF(br=424, idm=None, pmm=None, sys=None),
+                    TTF(br=212, idm=None, pmm=None, sys=None)]
+            if not 'on-connect' in tag_options:
+                tag_options['on-connect'] = lambda tag: True
+        if p2p_options:
+            llc = nfc.llcp.llc.LogicalLinkController(
+                recv_miu=p2p_options.get('miu', 128),
+                send_lto=p2p_options.get('lto', 100),
+                send_agf=p2p_options.get('agf', True))
+            if 'on-startup' in p2p_options:
+                p2p_options['on-startup'](llc)
+            if not 'on-connect' in p2p_options:
+                p2p_options['on-connect'] = lambda llc: True
 
         try:
             while True:
                 if ((tag_options and self._connect_tag(tag_options)) or
-                    (p2p_options and self._connect_p2p(p2p_options))):
+                    (p2p_options and self._connect_p2p(p2p_options, llc))):
                     return True
         except KeyboardInterrupt:
             return False
@@ -109,25 +119,17 @@ class ContactlessFrontend(object):
             tag = nfc.tag.activate(self, target)
             if tag is not None:
                 log.debug("connected {0}".format(tag))
-                on_connected_callback = options.get('on-connected')
-                if on_connected_callback is not None:
-                    if on_connected_callback(tag) == True:
-                        while tag.is_present:
-                            sleep(0.1)
+                if options['on-connect'](tag):
+                    while tag.is_present: time.sleep(0.1)
                 return True
         
-    def _connect_p2p(self, options):
-        nfc.llcp.init(recv_miu=options.get('miu', 128),
-                      send_lto=options.get('lto', 100),
-                      send_agf=options.get('agf', True))
-        try: options['register-services']()
-        except KeyError: pass
+    def _connect_p2p(self, options, llc):
         for role in ('target', 'initiator'):
-            if role == options.get('role') or options.get('role') is None:
+            if options.get('role') is None or options.get('role') == role:
                 DEP = eval("nfc.dep." + role.capitalize())
-                if nfc.llcp.activate(mac=DEP(clf=self)):
-                    try: p2p['activate-services']()
-                    except KeyError: pass
+                if llc.activate(mac=DEP(clf=self)):
+                    log.debug("connected {0}".format(llc))
+                    if options['on-connect'](llc): llc.run()
                     return True
         
     def sense(self, targets):
@@ -202,9 +204,9 @@ class DigitalProtocolError(Exception):
         "14.12.5.4" : "[NFC-DEP] unrecoverable transmission error",
         "14.12.5.6" : "[NFC-DEP] unrecoverable timeout error",
         
-        "Table-86"  : "[NFC-DEP] invalid target response",
-        "Table-98"  : "[NFC-DEP]: invalid format of PSL_REQ",
-        "Table-102" : "[NFC-DEP]: invalid format of PSL_RES",
+        "Table-86"  : "[NFC-DEP] invalid command/response code",
+        "Table-98"  : "[NFC-DEP] invalid format of PSL_REQ",
+        "Table-102" : "[NFC-DEP] invalid format of PSL_RES",
     }
 
     def __init__(self, requirement=None):
