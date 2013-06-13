@@ -32,10 +32,10 @@ import argparse
 
 import nfc
 
-class TestBase(object):
+class CommandLineInterface(object):
     def __init__(self, argument_parser):
-        self.add_info_options(argument_parser)
-        self.add_llcp_options(argument_parser)
+        self.add_dbg_options(argument_parser)
+        self.add_p2p_options(argument_parser)
         self.add_clf_options(argument_parser)
         self.add_iop_options(argument_parser)
         
@@ -74,7 +74,7 @@ class TestBase(object):
                 log.info("enable debug output for module '{0}'".format(module))
                 logging.getLogger(module).setLevel(logging.DEBUG)
 
-    def add_info_options(self, argument_parser):
+    def add_dbg_options(self, argument_parser):
         group = argument_parser.add_argument_group()
         group.add_argument(
             "-q", "--quiet", dest="quiet", action="store_true",
@@ -86,11 +86,11 @@ class TestBase(object):
             "-f", dest="logfile", metavar="FILE",
             help="write log messages to file")
         
-    def add_llcp_options(self, argument_parser):
+    def add_p2p_options(self, argument_parser):
         group = argument_parser.add_argument_group()
         group.add_argument(
             "--mode", choices=["t","target","i","initiator"], metavar="{t,i}",
-            help="connect as Target 't' or Initiator 'i' (default: both)")
+            help="connect as 'target' or 'initiator' (default: both)")
         group.add_argument(
             "--miu", dest="miu", metavar="INT", type=int, default=1024,
             help="set LLCP Link MIU (default: %(default)s octets)")
@@ -122,72 +122,42 @@ class TestBase(object):
         #    "--strict", action="store_true",
         #    help="apply strict standards interpretation")
         
-    def connect_reader(self):
+    def register_llcp_services(self, llc):
+        return True
+    
+    def startup_llcp_services(self, llc):
+        return True
+    
+    def run(self):
         if self.options.device is None:
             self.options.device = ['']
             
         for device in self.options.device:
-            try:
-                self.clf = nfc.ContactlessFrontend(device);
-                return True
-            except LookupError:
-                pass
-            
-        return False
-
-    def connect_peer(self, llcp_option_string):
-        while True:
-            if self.options.mode is None or self.options.mode[0] == "t":
-                listen_time = self.options.listen_time + ord(os.urandom(1))
-                listen_time = listen_time / 1E3
-                llcp_target = nfc.dep.Target(llcp_option_string)
-                peer = self.clf.listen(listen_time, llcp_target)
-                if isinstance(peer, nfc.DEP):
-                    if peer.general_bytes.startswith("Ffm"):
-                        return peer
-            if self.options.mode is None or self.options.mode[0] == "i":
-                peer = self.clf.poll(llcp_option_string)
-                if isinstance(peer, nfc.DEP):
-                    if peer.general_bytes.startswith("Ffm"):
-                        return peer
-            if not self.options.debug and not self.options.quiet:
-                sys.stdout.write('.')
-                sys.stdout.flush()
-
-    def register_llcp_services(self):
-        pass
-    
-    def startup_llcp_services(self):
-        pass
-    
-    def start(self):
-        if not self.connect_reader():
-            log.info("contactless frontend not found")
+            try: clf = nfc.ContactlessFrontend(device)
+            except LookupError: pass
+            else: break
+        else:
+            log.info("no contactless frontend found")
             raise SystemExit(1)
 
-        llcp_configuration = {
-            'recv-miu': self.options.miu,
-            'send-lto': self.options.lto,
-            'send-agf': not self.options.no_aggregation,
-            }
+        if self.options.mode is None:
+            self.options.role = None
+        elif self.options.mode == 't':
+            self.options.role = 'target'
+        elif self.options.mode == 'i':
+            self.options.role = 'initiator'
         
+        p2p_options = {
+            'on-startup': self.register_llcp_services,
+            'on-connect': self.startup_llcp_services,
+            'role': self.options.role,
+            'miu': self.options.miu,
+            'lto': self.options.lto,
+            'agf': not self.options.no_aggregation,
+            }
+
         try:
-            while True:
-                nfc.llcp.startup(llcp_configuration)
-                self.register_llcp_services()
-                self.peer = self.connect_peer(str(nfc.llcp.config))
-                log.info("I am the " + self.peer.role)
-                nfc.llcp.activate(self.peer)
-                try:
-                    self.startup_llcp_services()
-                    self.main()
-                except Exception as e:
-                    log.error(e)
-                finally:
-                    nfc.llcp.shutdown()
-                    log.info("I was the " + self.peer.role)
-        except KeyboardInterrupt:
-            log.info("aborted by user")
+            clf.connect(p2p=p2p_options)
         finally:
-            self.clf.close()
+            clf.close()
             
