@@ -477,7 +477,8 @@ class Device(nfc.dev.Device):
             return data[7:]
         except CommunicationError as error:
             log.debug(error)
-            if error == "RECEIVE_TIMEOUT_ERROR": raise TimeoutError
+            if error in ("RECEIVE_TIMEOUT_ERROR", "RF_OFF_ERROR"):
+                raise TimeoutError
             else: raise TransmissionError
 
     def set_communication_mode(self, brm, **kwargs):
