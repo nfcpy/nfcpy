@@ -29,7 +29,8 @@ import threading
 import collections
 import random
 
-from nfc.clf import DigitalProtocolError
+import nfc.clf
+import nfc.dep
 
 # local imports
 from tco import *
@@ -209,153 +210,139 @@ class ServiceDiscovery(object):
             self.snl = None
             self.resp.notify_all()
 
-class LogicalLinkControl(threading.Thread):
-    def __init__(self, config):
-        super(LogicalLinkControl, self).__init__()
+class LogicalLinkController(object):
+    def __init__(self, recv_miu=248, send_lto=500, send_agf=True):
+        #super(LogicalLinkControl, self).__init__()
         self.lock = threading.RLock()
         self.cfg = dict()
-        self.cfg['recv-miu'] = config.get('recv-miu', 248)
-        self.cfg['send-lto'] = config.get('send-lto', 500)
-        self.cfg['send-agf'] = config.get('send-agf', True)
+        self.cfg['recv-miu'] = recv_miu
+        self.cfg['send-lto'] = send_lto
+        self.cfg['send-agf'] = send_agf
         self.snl = dict({"urn:nfc:sn:sdp" : 1})
         self.sap = 64 * [None]
         self.sap[0] = ServiceAccessPoint(0, self)
         self.sap[1] = ServiceDiscovery(self)
 
-    @property
-    def parameter_string(self):
+    def activate(self, mac):
+        assert type(mac) in (nfc.dep.Initiator, nfc.dep.Target)
+        self.mac = None
+        
         miu = self.cfg['recv-miu']
         lto = self.cfg['send-lto']
         wks = 1+sum(sorted([1<<sap for sap in self.snl.values() if sap < 15]))
         pax = ParameterExchange(version=(1,1), miu=miu, lto=lto, wks=wks)
-        return "Ffm" + pax.to_string().lstrip("\x00\x40")
+        
+        if type(mac) == nfc.dep.Initiator:
+            role = "Initiator"
+            gb = mac.activate(gbi='Ffm'+pax.to_string()[2:])
+        if type(mac) == nfc.dep.Target:
+            role = "Target"
+            gb = mac.activate(gbt='Ffm'+pax.to_string()[2:], wt=8)
 
-    def activate(self, mac):
-        info = ["LLCP Link established, I'm the DEP {0}".format(mac.role)]
+        if gb is not None and gb.startswith('Ffm') and len(gb) >= 6:
+            info = ["LLCP Link established as NFC-DEP {0}".format(role)]
 
-        pax = "\x00\x40" + self.parameter_string.lstrip("Ffm")
-        pax = ProtocolDataUnit.from_string(pax)
-        info.append("Local LLCP Settings")
-        info.append("  LLCP Version: {0[0]}.{0[1]}".format(pax.version))
-        info.append("  Link Timeout: {0} ms".format(pax.lto))
-        info.append("  Max Inf Unit: {0} octet".format(pax.miu))
-        info.append("  Service List: {0:016b}".format(pax.wks))
+            info.append("Local LLCP Settings")
+            info.append("  LLCP Version: {0[0]}.{0[1]}".format(pax.version))
+            info.append("  Link Timeout: {0} ms".format(pax.lto))
+            info.append("  Max Inf Unit: {0} octet".format(pax.miu))
+            info.append("  Service List: {0:016b}".format(pax.wks))
 
-        pax = "\x00\x40" + mac.general_bytes.lstrip("Ffm")
-        pax = ProtocolDataUnit.from_string(pax)
-        info.append("Remote LLCP Settings")
-        info.append("  LLCP Version: {0[0]}.{0[1]}".format(pax.version))
-        info.append("  Link Timeout: {0} ms".format(pax.lto))
-        info.append("  Max Inf Unit: {0} octet".format(pax.miu))
-        info.append("  Service List: {0:016b}".format(pax.wks))
+            pax = ProtocolDataUnit.from_string("\x00\x40" + str(gb[3:]))
+            info.append("Remote LLCP Settings")
+            info.append("  LLCP Version: {0[0]}.{0[1]}".format(pax.version))
+            info.append("  Link Timeout: {0} ms".format(pax.lto))
+            info.append("  Max Inf Unit: {0} octet".format(pax.miu))
+            info.append("  Service List: {0:016b}".format(pax.wks))
+            log.info('\n'.join(info))
 
-        self.mac = mac
-        self.cfg['rcvd-ver'] = pax.version
-        self.cfg['send-miu'] = pax.miu
-        self.cfg['recv-lto'] = pax.lto
-        self.cfg['send-wks'] = pax.wks
-        self.cfg['send-lsc'] = pax.lsc
-        log.debug("llc cfg {0}".format(self.cfg))
-        log.info('\n'.join(info))
+            self.cfg['rcvd-ver'] = pax.version
+            self.cfg['send-miu'] = pax.miu
+            self.cfg['recv-lto'] = pax.lto
+            self.cfg['send-wks'] = pax.wks
+            self.cfg['send-lsc'] = pax.lsc
+            log.debug("llc cfg {0}".format(self.cfg))
+            
+            self.mac = mac
 
-    def shutdown(self):
-        log.debug("shutdown requested")
-        if self.sap[0]:
-            self.sap[0].send(Disconnect(dsap=0, ssap=0))
+        return bool(self.mac)
+
+    def terminate(self, reason):
+        log.debug("llcp link termination caused by {0}".format(reason))
+        if reason == "local choice":
+            recv_timeout = 1E-3 * (self.cfg['recv-lto'] + 10)
+            if self.exchange(Disconnect(dsap=0, ssap=0), recv_timeout):
+                self.mac.deactivate()
+        elif reason == "remote choice":
+            self.mac.deactivate()
+        # shutdown local services
+        for i in range(63, -1, -1):
+            if not self.sap[i] is None:
+                log.debug("closing service access point %d" % i)
+                self.sap[i].shutdown()
+                self.sap[i] = None
+        
+    def exchange(self, pdu, timeout):
+        try:
+            log.debug("SEND {0}".format(pdu))
+            data = pdu.to_string() if pdu else None
+            data = self.mac.exchange(data, timeout)
+        except nfc.clf.DigitalProtocolError as error:
+            log.debug("{0!r}".format(error))
+        else:
+            if data is not None:
+                pdu = ProtocolDataUnit.from_string(data)
+                log.debug("RECV {0}".format(pdu))
+                return pdu
 
     def run(self):
-        def shutdown_clients(sap):
-            for i in range(63, -1, -1):
-                if not sap[i] is None:
-                    log.debug("closing service access point %d" % i)
-                    sap[i].shutdown()
-                    sap[i] = None
-
-        link_terminate_pdu = Disconnect(dsap=0, ssap=0)
-        link_terminate_str = link_terminate_pdu.to_string()
-        link_symmetry_pdu = Symmetry()
-
-        recv_timeout = 1E-3 * (self.cfg['recv-lto'] + 50)
+        recv_timeout = 1E-3 * (self.cfg['recv-lto'] + 10)
         send_timeout = 1E-3 * (self.cfg['send-lto'] / 2)
 
-        recv_symm_count = 0
-        recv_symm_level = 10
+        symm = 0
 
-        if self.mac.role == "Initiator":
-            pdu = self._collect()
-            while True:
-                if pdu is None:
-                    pdu = Symmetry()
-                if pdu == link_terminate_pdu:
-                    log.info("shutdown on local request")
-                    log.debug("SEND " + str(pdu))
-                    try:
-                        self.mac.exchange(pdu.to_string(), timeout=0.001)
-                    except IOError:
-                        pass
-                    shutdown_clients(self.sap)
-                    break
-                log.debug("SEND " + str(pdu))
-                try:
-                    data = self.mac.exchange(pdu.to_string(), recv_timeout)
-                except DigitalProtocolError as error:
-                    log.debug("{0!r}".format(error))
-                    data = None
-                if data is None or data == link_terminate_str:
-                    if data: log.info("shutdown on remote request")
-                    else: log.info("shutdown on link disruption")
-                    shutdown_clients(self.sap)
-                    break
-                pdu = ProtocolDataUnit.from_string(data)
-                log.debug("RECV " + str(pdu))
-                if pdu == link_symmetry_pdu:
-                    recv_symm_count += 1
-                else:
-                    recv_symm_count = 0
-                self._dispatch(pdu)
-                pdu = self._collect()
-                if pdu is None and recv_symm_count >= recv_symm_level:
-                    time.sleep(send_timeout)
-                    pdu = self._collect()
+        if type(self.mac) == nfc.dep.Initiator:
+            try:
+                pdu = self.collect(delay=0.01)
+                while True:
+                    if pdu is None: pdu = Symmetry()
+                    pdu = self.exchange(pdu, recv_timeout)
+                    if pdu is None:
+                        return self.terminate(reason="link disruption")
+                    if pdu == Disconnect(0, 0):
+                        return self.terminate(reason="remote choice")
+                    symm = symm + 1 if type(pdu) == Symmetry else 0
+                    self.dispatch(pdu)
+                    pdu = self.collect(delay=0.01)
+                    if pdu is None and symm >= 10:
+                        pdu = self.collect(delay=0.02)
+            except KeyboardInterrupt:
+                print # move to new line
+                return self.terminate(reason="local choice")
 
-        if self.mac.role == "Target":
-            data = self.mac.exchange(None, recv_timeout)
-            while data is not None:
-                data = str(data)
-                if data:
-                    pdu = ProtocolDataUnit.from_string(data)
-                    log.debug("RECV " + str(pdu))
-                if data is None or data == link_terminate_str:
-                    if data: log.info("shutdown on remote request")
-                    else: log.info("shutdown on link disruption")
-                    shutdown_clients(self.sap)
-                    break
-                #FIXME: must be coordinated with DEP RWT
-                #if pdu == link_symmetry_pdu:
-                #    recv_symm_count += 1
-                #else:
-                #    recv_symm_count = 0
-                self._dispatch(pdu)
-                pdu = self._collect()
-                if pdu is None and recv_symm_count >= recv_symm_level:
-                    time.sleep(send_timeout)
-                    pdu = self._collect()
-                if pdu is None:
-                    pdu = Symmetry()
-                log.debug("SEND " + str(pdu))
-                try:
-                    data = self.mac.exchange(pdu.to_string(), recv_timeout)
-                except DigitalProtocolError as error:
-                    log.error("{0!r}".format(error)); data = None
-                if data is None:
-                    if not pdu == link_terminate_pdu:
-                        log.info("shutdown on link disruption")
-                    shutdown_clients(self.sap)
-            self.mac.deactivate()
+        if type(self.mac) == nfc.dep.Target:
+            pdu = None
+            try:
+                while True:
+                    pdu = self.exchange(pdu, recv_timeout)
+                    if pdu is None:
+                        return self.terminate(reason="link disruption")
+                    if pdu == Disconnect(0, 0):
+                        return self.terminate(reason="remote choice")
+                    #symm = symm + 1 if type(pdu) == Symmetry else 0
+                    self.dispatch(pdu)
+                    pdu = self.collect(delay=0.01)
+                    if pdu is None and symm >= 10:
+                        pdu = self.collect(delay=0.02)
+                    if pdu is None: pdu = Symmetry()
+            except KeyboardInterrupt:
+                print # move to new line
+                return self.terminate(reason="local choice")
 
-        log.debug("llc run thread terminated")
+        log.debug("llc run loop terminated")
 
-    def _collect(self):
+    def collect(self, delay=None):
+        if delay: time.sleep(delay)
         pdu_list = list()
         max_data = None
         with self.lock:
@@ -364,7 +351,7 @@ class LogicalLinkControl(threading.Thread):
                 #log.debug("query sap {0}, max_data={1}"
                 #          .format(sap, max_data))
                 pdu = sap.dequeue(max_data if max_data else 2179)
-                if not pdu is None:
+                if pdu is not None:
                     if self.cfg['send-agf'] == False:
                         return pdu
                     pdu_list.append(pdu)
@@ -392,7 +379,7 @@ class LogicalLinkControl(threading.Thread):
             return pdu_list[0]
         return None
 
-    def _dispatch(self, pdu):
+    def dispatch(self, pdu):
         if isinstance(pdu, Symmetry):
             return
 
@@ -422,9 +409,22 @@ class LogicalLinkControl(threading.Thread):
         return
 
     def resolve(self, name):
+        """Resolve a service name into an address. This may involve
+        conversation with the remote service discovery instance if the
+        name has not be resolved before. The return value is the
+        service access point address of the service *name* if
+        available at the remote device, zero if not available, and
+        None if the link was terminated.
+        """
         return self.sap[1].resolve(name)
 
     def socket(self, socket_type):
+        """Create an endpoint for communication and return a socket
+        descriptor. The *socket_type* may be either
+        nfc.llcp.LOGICAL_DATA_LINK (for unreliable, connectionless
+        transport) or nfc.llcp.DATA_LINK_CONNECTION (for reliable,
+        connection-oriented transport).
+        """
         if socket_type == RAW_ACCESS_POINT:
             return RawAccessPoint(self.cfg["send-miu"], self.cfg["recv-miu"])
         if socket_type == LOGICAL_DATA_LINK:
@@ -448,7 +448,15 @@ class LogicalLinkControl(threading.Thread):
         return socket.getsockopt(option)
 
     def bind(self, socket, addr_or_name=None):
-        """Bind a socket to an address or service name. 
+        """Bind a socket to an address or service name. The parameter
+        *addr_or_name* may be either an integer value specifying the
+        local addr to use or a fully qualified service name string. If
+        *addr_or_name* is a valid service name string the address
+        assignment will be from the well-known address range is the
+        name is well-known, otherwise it will be from the dynamic
+        service address range (16-31). If *addr_or_name* is an
+        integer it must be within the private address range
+        (32-63).
         """
         if not isinstance(socket, TransmissionControlObject):
             raise Error(errno.ENOTSOCK)
@@ -499,6 +507,10 @@ class LogicalLinkControl(threading.Thread):
             self.snl[name] = addr
 
     def connect(self, socket, dest):
+        """Establish a data link connection with the destination
+        service *dest*. The destination service may be specified as a
+        service access point address or a service name.
+        """
         if not isinstance(socket, TransmissionControlObject):
             raise Error(errno.ENOTSOCK)
         if not socket.is_bound:
@@ -508,6 +520,12 @@ class LogicalLinkControl(threading.Thread):
                   .format(dlc=socket))
 
     def listen(self, socket, backlog):
+        """Mark a socket as a socket that will be used to accept
+        incoming connection requests using accept(). The *backlog*
+        defines the maximum length to which the queue of pending
+        connections for the socket may grow. A backlog of zero
+        disables queuing of connection requests.
+        """
         if not isinstance(socket, TransmissionControlObject):
             raise Error(errno.ENOTSOCK)
         if not isinstance(socket, DataLinkConnection):
@@ -522,6 +540,13 @@ class LogicalLinkControl(threading.Thread):
         socket.listen(backlog)
 
     def accept(self, socket):
+        """Extract the first connection request from the queue of
+        pending connections for the listening *socket* (which must be
+        a connection-based socket), then create and return a new
+        connected socket. The newly created socket is not in the
+        listening state. The original socket continues to be in the
+        listening state.
+        """
         if not isinstance(socket, TransmissionControlObject):
             raise Error(errno.ENOTSOCK)
         if not isinstance(socket, DataLinkConnection):
@@ -539,9 +564,17 @@ class LogicalLinkControl(threading.Thread):
                 super(DataLinkConnection, socket).send(pdu)
 
     def send(self, socket, message):
+        """Send a message on a socket. The socket must be in connected
+        state so that the intended recipient is known.
+        """
         return self.sendto(socket, message, socket.peer)
 
     def sendto(self, socket, message, dest):
+        """Send a message on a socket. For a connection-mode socket
+        the destination *dest* is ignored. For a connection-less
+        socket the destination *dest* is the service access point
+        address to which the *message* shall be sent.
+        """
         if not isinstance(socket, TransmissionControlObject):
             raise Error(errno.ENOTSOCK)
         if isinstance(socket, RawAccessPoint):
@@ -585,6 +618,10 @@ class LogicalLinkControl(threading.Thread):
         return socket.poll(event, timeout)
 
     def close(self, socket):
+        """Close a socket. For a connection-mode socket close() will
+        perform termination of the data link connection if it was
+        established before and not closed by the remote endpoint.
+        """
         if not isinstance(socket, TransmissionControlObject):
             raise Error(errno.ENOTSOCK)
         if socket.is_bound:
@@ -592,11 +629,17 @@ class LogicalLinkControl(threading.Thread):
         else: socket.close()
 
     def getsockname(self, socket):
+        """Obtain the address to which the socket is bound. For an
+        unbound socket the returned value is None.
+        """
         if not isinstance(socket, TransmissionControlObject):
             raise Error(errno.ENOTSOCK)
         return socket.addr
 
     def getpeername(self, socket):
+        """Obtain the address of the peer connected on the socket. For
+        an unconnected socket the returned value is None.
+        """
         if not isinstance(socket, TransmissionControlObject):
             raise Error(errno.ENOTSOCK)
         return socket.peer
