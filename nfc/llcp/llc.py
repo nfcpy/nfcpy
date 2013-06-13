@@ -337,7 +337,8 @@ class LogicalLinkController(object):
                     if pdu is None: pdu = Symmetry()
             except KeyboardInterrupt:
                 print # move to new line
-                return self.terminate(reason="local choice")
+                self.terminate(reason="local choice")
+                raise KeyboardInterrupt
 
         log.debug("llc run loop terminated")
 
