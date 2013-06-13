@@ -64,7 +64,7 @@ class DataExchangeProtocol(object):
 class Initiator(DataExchangeProtocol):
     def __init__(self, clf):
         DataExchangeProtocol.__init__(self, clf)
-        self.brm = None # bit-rate modulation (106A, 212F, 424F)
+        self.brm = None # bit-rate modulation ('106A', '212F', '424F')
         self.miu = None # maximum information unit size
         self.did = None # dep device identifier
         self.nad = None # dep node address
@@ -314,6 +314,7 @@ class Target(DataExchangeProtocol):
         self.nad = None # dep node address
         self.gbi = None # general bytes from initiator
         self.pni = None # dep packet number information
+        self.rwt = None # target response waiting time
         self.req = None # first dep-req received in activation
 
     def __str__(self):
@@ -377,6 +378,7 @@ class Target(DataExchangeProtocol):
                       .format(self.brm))
 
         if type(req) == DEP_REQ and req.did == self.did:
+            self.rwt = 4096/13.56E6 * pow(2, wt)
             self.pni = 0
             self.req = req
             return atr_req.gb
