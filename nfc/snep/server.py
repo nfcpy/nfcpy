@@ -33,37 +33,38 @@ import nfc.llcp
 class SnepServer(Thread):
     """ NFC Forum Simple NDEF Exchange Protocol server
     """
-    def __init__(self, service_name, max_ndef_msg_recv_size=1024):
-        super(SnepServer, self).__init__(name=service_name)
+    def __init__(self, llc, service_name, max_ndef_msg_recv_size=1024):
         self.acceptable_length = max_ndef_msg_recv_size
-        self.socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
-        nfc.llcp.bind(self.socket, service_name)
+        socket = llc.socket(nfc.llcp.DATA_LINK_CONNECTION)
+        llc.bind(socket, service_name)
+        Thread.__init__(self, name=service_name,
+                        target=self.listen, args=(llc, socket))
 
-    def run(self):
+    def listen(self, llc, socket):
         try:
-            addr = nfc.llcp.getsockname(self.socket)
+            addr = llc.getsockname(socket)
             log.info("snep server bound to port {0}".format(addr))
-            nfc.llcp.setsockopt(self.socket, nfc.llcp.SO_RCVBUF, 2)
-            nfc.llcp.listen(self.socket, backlog=2)
+            llc.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
+            llc.listen(socket, backlog=2)
             while True:
-                client_socket = nfc.llcp.accept(self.socket)
+                client_socket = llc.accept(socket)
                 client_thread = Thread(target=SnepServer.serve,
-                                       args=[client_socket, self])
+                                       args=[llc, client_socket, self])
                 client_thread.start()
         except nfc.llcp.Error as e:
-            log.error(str(e))
+            (log.debug if e.errno == nfc.llcp.errno.EPIPE else log.error)(e)
         finally:
-            nfc.llcp.close(self.socket)
+            llc.close(socket)
         pass
 
     @staticmethod
-    def serve(socket, snep_server):
-        peer_sap = nfc.llcp.getpeername(socket)
+    def serve(llc, socket, snep_server):
+        peer_sap = llc.getpeername(socket)
         log.info("serving snep client on remote sap {0}".format(peer_sap))
-        send_miu = nfc.llcp.getsockopt(socket, nfc.llcp.SO_SNDMIU)
+        send_miu = llc.getsockopt(socket, nfc.llcp.SO_SNDMIU)
         try:
             while True:
-                data = nfc.llcp.recv(socket)
+                data = llc.recv(socket)
                 if not data:
                     break # connection closed
 
@@ -74,20 +75,20 @@ class SnepServer(Thread):
                 version, opcode, length = unpack(">BBL", data[:6])
                 if (version >> 4) > 1:
                     log.debug("unsupported version {0}".format(version>>4))
-                    nfc.llcp.send(socket, "\x10\xE1\x00\x00\x00\x00")
+                    llc.send(socket, "\x10\xE1\x00\x00\x00\x00")
                     continue
                 
                 if length > snep_server.acceptable_length:
                     log.debug("snep msg exceeds acceptable length")
-                    nfc.llcp.send(socket, "\x10\xFF\x00\x00\x00\x00")
+                    llc.send(socket, "\x10\xFF\x00\x00\x00\x00")
                     continue
 
                 snep_request = data
                 if len(snep_request) - 6 < length:
                     # request remaining fragments
-                    nfc.llcp.send(socket, "\x10\x80\x00\x00\x00\x00")
+                    llc.send(socket, "\x10\x80\x00\x00\x00\x00")
                     while len(snep_request) - 6 < length:
-                        data = nfc.llcp.recv(socket)
+                        data = llc.recv(socket)
                         if data: snep_request += data
                         else: break # connection closed
 
@@ -102,19 +103,19 @@ class SnepServer(Thread):
 
                 # send the snep response, fragment if needed
                 if len(snep_response) <= send_miu:
-                    nfc.llcp.send(socket, snep_response)
+                    llc.send(socket, snep_response)
                 else:
-                    nfc.llcp.send(socket, snep_response[0:send_miu])
-                    if nfc.llcp.recv(socket) == "\x10\x00\x00\x00\x00\x00":
+                    llc.send(socket, snep_response[0:send_miu])
+                    if llc.recv(socket) == "\x10\x00\x00\x00\x00\x00":
                         parts = range(send_miu, len(snep_response), send_miu)
                         for offset in parts:
                             fragment = snep_response[offset:offset+send_miu]
-                            nfc.llcp.send(socket, fragment)
+                            llc.send(socket, fragment)
 
         except nfc.llcp.Error as e:
-            log.debug("caught exception {0}".format(e))
+            (log.debug if e.errno == nfc.llcp.errno.EPIPE else log.error)(e)
         finally:
-            nfc.llcp.close(socket)
+            llc.close(socket)
 
     def _get(self, snep_request):
         acceptable_length = unpack(">L", snep_request[6:10])[0]
