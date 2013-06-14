@@ -31,7 +31,6 @@ from nfc.clf import ProtocolError, TransmissionError, TimeoutError
 from nfc.clf import TTA, TTB, TTF
 import nfc.dev
 
-from collections import namedtuple
 from struct import pack, unpack
 from time import time
 from os import urandom
@@ -305,7 +304,6 @@ class Device(nfc.dev.Device):
 
     def _sense_a(self):
         log.debug("polling for NFC-A technology")
-        self.technology = None
         self.chipset.switch_rf("off")
         
         self.chipset.in_set_rf("106A")
@@ -404,7 +402,7 @@ class Device(nfc.dev.Device):
             
     @trace
     def listen(self, targets, timeout):
-        """Listen for multiple targets. This hardware supports
+        """Listen for some targets. This hardware supports
         listening for Type A and Type F activation."""
         
         if not targets:
@@ -429,7 +427,7 @@ class Device(nfc.dev.Device):
         assert len(nfca_params) == 6
         assert len(nfcf_params) == 18
         
-        self.chipset.tg_set_rf("212F")
+        self.chipset.tg_set_rf("106A")
         self.chipset.tg_set_protocol("0001 0100 0207")
 
         start_time = time()
