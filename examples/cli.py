@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2012 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2012-2013 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -33,11 +33,10 @@ import argparse
 import nfc
 
 class CommandLineInterface(object):
-    def __init__(self, argument_parser):
-        self.add_dbg_options(argument_parser)
-        self.add_p2p_options(argument_parser)
-        self.add_clf_options(argument_parser)
-        self.add_iop_options(argument_parser)
+    def __init__(self, argument_parser, groups=None):
+        if groups is None: groups = "dbg p2p clf iop"
+        for group in groups.split():
+            eval("self.add_{0}_options".format(group))(argument_parser)
         
         self.options = argument_parser.parse_args()
         
@@ -122,10 +121,10 @@ class CommandLineInterface(object):
         #    "--strict", action="store_true",
         #    help="apply strict standards interpretation")
         
-    def register_llcp_services(self, llc):
+    def on_startup(self, llc):
         return True
     
-    def startup_llcp_services(self, llc):
+    def on_connect(self, llc):
         return True
     
     def run(self):
@@ -148,8 +147,8 @@ class CommandLineInterface(object):
             self.options.role = 'initiator'
         
         p2p_options = {
-            'on-startup': self.register_llcp_services,
-            'on-connect': self.startup_llcp_services,
+            'on-startup': self.on_startup,
+            'on-connect': self.on_connect,
             'role': self.options.role,
             'miu': self.options.miu,
             'lto': self.options.lto,
@@ -157,7 +156,7 @@ class CommandLineInterface(object):
             }
 
         try:
-            clf.connect(p2p=p2p_options)
+            while clf.connect(p2p=p2p_options): pass
         finally:
             clf.close()
             
