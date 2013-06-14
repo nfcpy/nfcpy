@@ -115,8 +115,10 @@ class Initiator(DataExchangeProtocol):
         atr_req = ATR_REQ(nfcid3, did, 0, 0, ppi, gbi)
         if len(atr_req) > 64:
             raise nfc.clf.ProtocolError("14.6.1.1")
+
+        try: atr_res = self.send_req_recv_res(atr_req, timeout=2**24/13.56E6)
+        except nfc.clf.TimeoutError: return
         
-        atr_res = self.send_req_recv_res(atr_req, timeout=pow(2,24)/13.56E6)
         if type(atr_res) != ATR_RES:
             raise nfc.clf.ProtocolError("Table-86")
         if len(atr_res) > 64:
@@ -364,7 +366,8 @@ class Target(DataExchangeProtocol):
         if len(atr_res) > 64:
             raise nfc.clf.ProtocolError("14.6.1.4")
 
-        req = self.send_res_recv_req(atr_res, max(deadline, time()+1.0))
+        try: req = self.send_res_recv_req(atr_res, max(deadline, time()+1.0))
+        except nfc.clf.TimeoutError: return
         
         if type(req) == PSL_REQ and req.did == atr_req.did:
             self.miu = req.lr - 3
