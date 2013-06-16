@@ -319,6 +319,9 @@ class LogicalLinkController(object):
             except KeyboardInterrupt:
                 print # move to new line
                 return self.terminate(reason="local choice")
+                raise KeyboardInterrupt
+            finally:
+                log.debug("llc run loop terminated on initiator")
 
         if type(self.mac) == nfc.dep.Target:
             pdu = None
@@ -339,8 +342,8 @@ class LogicalLinkController(object):
                 print # move to new line
                 self.terminate(reason="local choice")
                 raise KeyboardInterrupt
-
-        log.debug("llc run loop terminated")
+            finally:
+                log.debug("llc run loop terminated on target")
 
     def collect(self, delay=None):
         if delay: time.sleep(delay)
