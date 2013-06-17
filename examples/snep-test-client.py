@@ -28,7 +28,7 @@ import os
 import sys
 import time
 import argparse
-import threading
+from threading import Thread
 
 sys.path.insert(1, os.path.split(sys.path[0])[0])
 from cli import CommandLineInterface
@@ -282,13 +282,13 @@ def test_07(llc):
     finally:
         snep.close()
 
-class TestRunner(threading.Thread):
-    def __init__(self, llc, options):
+class TestRunner(Thread):
+    def __init__(self, llc, program):
         super(TestRunner, self).__init__(name="TestRunner")
-        self.options = options
+        self.program = program
         self.llc = llc
     
-    def run():
+    def run(self):
         for test in self.options.test:
             try:
                 eval("test_{N:02d}".format(N=test))(self.llc)
@@ -297,6 +297,7 @@ class TestRunner(threading.Thread):
                 info("invalid test number '{0}'".format(test))
             except TestError as error:
                 info("Test {N:02d}: FAIL ({E})".format(N=test, E=error))
+        test_completed = True
 
 class TestProgram(CommandLineInterface):
     def __init__(self):
@@ -307,16 +308,30 @@ class TestProgram(CommandLineInterface):
         super(TestProgram, self).__init__(parser, groups="dbg p2p clf")
 
     def on_startup(self, llc):
-        if len(options.test) == 0:
+        if len(self.options.test) == 0:
             info("no test specified")
             return False
         else:
-            self.test_runner = TestRunner()
             return True
         
     def on_connect(self, llc):
-        self.test_runner.start()
-        return True
+        self.test_completed = False
+        Thread(target=self.run_tests, args=(llc,)).start()
+        llc.run(terminate=self.terminate)
+
+    def terminate(self):
+        return self.test_completed
+
+    def run_tests(self, llc):
+        for test in self.options.test:
+            try:
+                eval("test_{N:02d}".format(N=test))(llc)
+                info("Test {N:02d}: PASS".format(N=test))
+            except NameError:
+                info("invalid test number '{0}'".format(test))
+            except TestError as error:
+                info("Test {N:02d}: FAIL ({E})".format(N=test, E=error))
+        self.test_completed = True
 
 if __name__ == '__main__':
     TestProgram().run()

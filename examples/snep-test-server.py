@@ -38,7 +38,8 @@ import nfc.ndef
 
 class DefaultServer(nfc.snep.SnepServer):
     def __init__(self, llc):
-        super(DefaultServer, self).__init__(llc, 'urn:nfc:sn:snep')
+        service_name = 'urn:nfc:sn:snep'
+        super(DefaultServer, self).__init__(llc, service_name)
 
     def put(self, ndef_message):
         log.info("default snep server got put request")
