@@ -282,23 +282,6 @@ def test_07(llc):
     finally:
         snep.close()
 
-class TestRunner(Thread):
-    def __init__(self, llc, program):
-        super(TestRunner, self).__init__(name="TestRunner")
-        self.program = program
-        self.llc = llc
-    
-    def run(self):
-        for test in self.options.test:
-            try:
-                eval("test_{N:02d}".format(N=test))(self.llc)
-                info("Test {N:02d}: PASS".format(N=test))
-            except NameError:
-                info("invalid test number '{0}'".format(test))
-            except TestError as error:
-                info("Test {N:02d}: FAIL ({E})".format(N=test, E=error))
-        test_completed = True
-
 class TestProgram(CommandLineInterface):
     def __init__(self):
         parser = argparse.ArgumentParser()
