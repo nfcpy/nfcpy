@@ -233,11 +233,13 @@ class LogicalLinkController(object):
         pax = ParameterExchange(version=(1,1), miu=miu, lto=lto, wks=wks)
         
         if type(mac) == nfc.dep.Initiator:
-            role = "Initiator"
             gb = mac.activate(gbi='Ffm'+pax.to_string()[2:])
+            self.run = self.run_as_initiator
+            role = "Initiator"
         if type(mac) == nfc.dep.Target:
-            role = "Target"
             gb = mac.activate(gbt='Ffm'+pax.to_string()[2:], wt=8)
+            self.run = self.run_as_target
+            role = "Target"
 
         if gb is not None and gb.startswith('Ffm') and len(gb) >= 6:
             info = ["LLCP Link established as NFC-DEP {0}".format(role)]
@@ -295,55 +297,55 @@ class LogicalLinkController(object):
                 log.debug("RECV {0}".format(pdu))
                 return pdu
 
-    def run(self):
+    def run_as_initiator(self):
         recv_timeout = 1E-3 * (self.cfg['recv-lto'] + 10)
-        send_timeout = 1E-3 * (self.cfg['send-lto'] / 2)
-
         symm = 0
 
-        if type(self.mac) == nfc.dep.Initiator:
-            try:
+        try:
+            pdu = self.collect(delay=0.01)
+            while True:
+                if pdu is None: pdu = Symmetry()
+                pdu = self.exchange(pdu, recv_timeout)
+                if pdu is None:
+                    return self.terminate(reason="link disruption")
+                if pdu == Disconnect(0, 0):
+                    return self.terminate(reason="remote choice")
+                symm = symm + 1 if type(pdu) == Symmetry else 0
+                self.dispatch(pdu)
                 pdu = self.collect(delay=0.01)
-                while True:
-                    if pdu is None: pdu = Symmetry()
-                    pdu = self.exchange(pdu, recv_timeout)
-                    if pdu is None:
-                        return self.terminate(reason="link disruption")
-                    if pdu == Disconnect(0, 0):
-                        return self.terminate(reason="remote choice")
-                    symm = symm + 1 if type(pdu) == Symmetry else 0
-                    self.dispatch(pdu)
-                    pdu = self.collect(delay=0.01)
-                    if pdu is None and symm >= 10:
-                        pdu = self.collect(delay=0.02)
-            except KeyboardInterrupt:
-                print # move to new line
-                return self.terminate(reason="local choice")
-                raise KeyboardInterrupt
-            finally:
-                log.debug("llc run loop terminated on initiator")
+                if pdu is None and symm >= 10:
+                    pdu = self.collect(delay=0.02)
+        except KeyboardInterrupt:
+            print # move to new line
+            self.terminate(reason="local choice")
+            raise KeyboardInterrupt
+        finally:
+            log.debug("llc run loop terminated on initiator")
 
-        if type(self.mac) == nfc.dep.Target:
+    def run_as_target(self):
+        recv_timeout = 1E-3 * (self.cfg['recv-lto'] + 10)
+        symm = 0
+        
+        try:
             pdu = None
-            try:
-                while True:
-                    pdu = self.exchange(pdu, recv_timeout)
-                    if pdu is None:
-                        return self.terminate(reason="link disruption")
-                    if pdu == Disconnect(0, 0):
-                        return self.terminate(reason="remote choice")
-                    #symm = symm + 1 if type(pdu) == Symmetry else 0
-                    self.dispatch(pdu)
-                    pdu = self.collect(delay=0.01)
-                    if pdu is None and symm >= 10:
-                        pdu = self.collect(delay=0.02)
-                    if pdu is None: pdu = Symmetry()
-            except KeyboardInterrupt:
-                print # move to new line
-                self.terminate(reason="local choice")
-                raise KeyboardInterrupt
-            finally:
-                log.debug("llc run loop terminated on target")
+            while True:
+                pdu = self.exchange(pdu, recv_timeout)
+                if pdu is None:
+                    return self.terminate(reason="link disruption")
+                if pdu == Disconnect(0, 0):
+                    return self.terminate(reason="remote choice")
+                #symm = symm + 1 if type(pdu) == Symmetry else 0
+                self.dispatch(pdu)
+                pdu = self.collect(delay=0.01)
+                if pdu is None and symm >= 10:
+                    pdu = self.collect(delay=0.02)
+                if pdu is None: pdu = Symmetry()
+        except KeyboardInterrupt:
+            print # move to new line
+            self.terminate(reason="local choice")
+            raise KeyboardInterrupt
+        finally:
+            log.debug("llc run loop terminated on target")
 
     def collect(self, delay=None):
         if delay: time.sleep(delay)
