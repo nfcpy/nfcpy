@@ -297,13 +297,13 @@ class LogicalLinkController(object):
                 log.debug("RECV {0}".format(pdu))
                 return pdu
 
-    def run_as_initiator(self):
+    def run_as_initiator(self, terminate=lambda: False):
         recv_timeout = 1E-3 * (self.cfg['recv-lto'] + 10)
         symm = 0
 
         try:
             pdu = self.collect(delay=0.01)
-            while True:
+            while not terminate():
                 if pdu is None: pdu = Symmetry()
                 pdu = self.exchange(pdu, recv_timeout)
                 if pdu is None:
@@ -315,6 +315,8 @@ class LogicalLinkController(object):
                 pdu = self.collect(delay=0.01)
                 if pdu is None and symm >= 10:
                     pdu = self.collect(delay=0.02)
+            else:
+                self.terminate(reason="local choice")
         except KeyboardInterrupt:
             print # move to new line
             self.terminate(reason="local choice")
@@ -322,13 +324,13 @@ class LogicalLinkController(object):
         finally:
             log.debug("llc run loop terminated on initiator")
 
-    def run_as_target(self):
+    def run_as_target(self, terminate=lambda: False):
         recv_timeout = 1E-3 * (self.cfg['recv-lto'] + 10)
         symm = 0
         
         try:
             pdu = None
-            while True:
+            while not terminate():
                 pdu = self.exchange(pdu, recv_timeout)
                 if pdu is None:
                     return self.terminate(reason="link disruption")
@@ -340,6 +342,8 @@ class LogicalLinkController(object):
                 if pdu is None and symm >= 10:
                     pdu = self.collect(delay=0.02)
                 if pdu is None: pdu = Symmetry()
+            else:
+                self.terminate(reason="local choice")
         except KeyboardInterrupt:
             print # move to new line
             self.terminate(reason="local choice")
