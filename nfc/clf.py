@@ -100,7 +100,8 @@ class ContactlessFrontend(object):
                 send_lto=p2p_options.get('lto', 100),
                 send_agf=p2p_options.get('agf', True))
             if 'on-startup' in p2p_options:
-                p2p_options['on-startup'](llc)
+                if p2p_options['on-startup'](llc) == False:
+                    return False
             if not 'on-connect' in p2p_options:
                 p2p_options['on-connect'] = lambda llc: True
 
