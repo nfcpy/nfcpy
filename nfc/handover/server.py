@@ -36,14 +36,14 @@ class HandoverServer(Thread):
         llc.setsockopt(socket, nfc.llcp.SO_RCVBUF, recv_buf)
         llc.setsockopt(socket, nfc.llcp.SO_RCVMIU, recv_miu)
         llc.bind(socket, 'urn:nfc:sn:handover')
+        addr = llc.getsockname(socket)
+        log.info("handover server bound to port {0}".format(addr))
+        llc.listen(socket, backlog=2)
         Thread.__init__(self, name='urn:nfc:sn:handover',
                         target=self.listen, args=(llc, socket))
 
     def listen(self, llc, socket):
         try:
-            addr = llc.getsockname(socket)
-            log.info("handover server bound to port {0}".format(addr))
-            llc.listen(socket, backlog=2)
             while True:
                 client_socket = llc.accept(socket)
                 print "client_socket =", client_socket

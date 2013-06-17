@@ -37,15 +37,15 @@ class SnepServer(Thread):
         self.acceptable_length = max_ndef_msg_recv_size
         socket = llc.socket(nfc.llcp.DATA_LINK_CONNECTION)
         llc.bind(socket, service_name)
+        addr = llc.getsockname(socket)
+        log.info("snep server bound to port {0}".format(addr))
+        llc.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
+        llc.listen(socket, backlog=2)
         Thread.__init__(self, name=service_name,
                         target=self.listen, args=(llc, socket))
 
     def listen(self, llc, socket):
         try:
-            addr = llc.getsockname(socket)
-            log.info("snep server bound to port {0}".format(addr))
-            llc.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
-            llc.listen(socket, backlog=2)
             while True:
                 client_socket = llc.accept(socket)
                 client_thread = Thread(target=SnepServer.serve,
