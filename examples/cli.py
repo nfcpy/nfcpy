@@ -38,6 +38,10 @@ class CommandLineInterface(object):
         for group in groups.split():
             eval("self.add_{0}_options".format(group))(argument_parser)
         
+        argument_parser.add_argument(
+            "-l", "--loop", action="store_true",
+            help="restart after termination")
+        
         self.options = argument_parser.parse_args()
         
         logformat = '%(message)s'
@@ -127,7 +131,7 @@ class CommandLineInterface(object):
     def on_connect(self, llc):
         return True
     
-    def run(self):
+    def run_once(self):
         if self.options.device is None:
             self.options.device = ['']
             
@@ -141,9 +145,9 @@ class CommandLineInterface(object):
 
         if self.options.mode is None:
             self.options.role = None
-        elif self.options.mode == 't':
+        elif self.options.mode in ('t', 'target'):
             self.options.role = 'target'
-        elif self.options.mode == 'i':
+        elif self.options.mode in ('i', 'initiator'):
             self.options.role = 'initiator'
         
         p2p_options = {
@@ -156,7 +160,10 @@ class CommandLineInterface(object):
             }
 
         try:
-            while clf.connect(p2p=p2p_options): pass
+            return clf.connect(p2p=p2p_options)
         finally:
             clf.close()
             
+    def run(self):
+        while self.run_once() and self.options.loop:
+            pass
