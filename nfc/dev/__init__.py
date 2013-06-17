@@ -29,16 +29,16 @@ import sys
 import glob
 
 usb_device_map = {
-    (0x04cc, 0x0531) : "pn53x_usb", # Philips demo board
-    (0x054c, 0x0193) : "pn53x_usb", # Sony demo board
-    (0x04cc, 0x2533) : "pn53x_usb", # NXP PN533 demo board
-    (0x04cc, 0x0531) : "pn53x_usb", # SCM SCL3710
-    (0x04e6, 0x5591) : "pn53x_usb", # SCM SCL3711
-    (0x04e6, 0x5593) : "pn53x_usb", # SCM SCL3712
-    (0x054c, 0x02e1) : "rcs956_usb", # Sony RC-S330/360/370
+    #(0x04cc, 0x0531) : "pn53x_usb", # Philips demo board
+    #(0x054c, 0x0193) : "pn53x_usb", # Sony demo board
+    #(0x04cc, 0x2533) : "pn53x_usb", # NXP PN533 demo board
+    #(0x04cc, 0x0531) : "pn53x_usb", # SCM SCL3710
+    #(0x04e6, 0x5591) : "pn53x_usb", # SCM SCL3711
+    #(0x04e6, 0x5593) : "pn53x_usb", # SCM SCL3712
+    #(0x054c, 0x02e1) : "rcs956_usb", # Sony RC-S330/360/370
     (0x054c, 0x06c1) : "rcs380", # Sony RC-S380
     (0x054c, 0x06c3) : "rcs380", # Sony RC-S380
-    (0x072f, 0x2200) : "acr122_usb", # Arygon ACR122U
+    #(0x072f, 0x2200) : "acr122_usb", # Arygon ACR122U
     }
 
 def connect(path=None):
@@ -155,6 +155,15 @@ def connect(path=None):
     
     elif path.startswith("tty"):
         log.info("sorry, tty readers are only supported on posix systems")
+
+    if path.startswith("udp"):
+        path = path.split(':')
+        host = str(path[1]) if len(path) > 1 and path[1] else 'localhost'
+        port = int(path[2]) if len(path) > 2 and path[2] else 54321
+        driver = import_driver("udp")
+        device = driver.init(host, port)
+        device._path = "udp:{0}:{1}".format(host, port)
+        return device
 
 class Device(object):
     def __str__(self):
