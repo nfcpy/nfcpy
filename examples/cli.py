@@ -30,6 +30,7 @@ import os.path
 import inspect
 import argparse
 import itertools
+from threading import Thread
 
 import nfc
 
@@ -43,7 +44,8 @@ class CommandLineInterface(object):
     def __init__(self, argument_parser, groups=None):
         if groups is None:
             groups = "dbg p2p clf iop"
-        for group in groups.split():
+        self.groups = groups.split()
+        for group in self.groups:
             eval("self.add_{0}_options".format(group))(argument_parser)
         
         argument_parser.add_argument(
@@ -52,7 +54,7 @@ class CommandLineInterface(object):
         
         self.options = argument_parser.parse_args()
 
-        if "tst" in groups.split() and self.options.test_all:
+        if "tst" in self.groups and self.options.test_all:
             self.options.test = []
             for i in itertools.count(1, 1):
                 try: eval("self.test_{0:02d}".format(i))
@@ -153,11 +155,21 @@ class CommandLineInterface(object):
                 int(test_name.split('_')[1]), test_info)
         
     def on_startup(self, llc):
+        if "tst" in self.groups and len(self.options.test) == 0:
+            log.error("no test specified")
+            return False
         return True
     
     def on_connect(self, llc):
+        if "tst" in self.groups:
+            self.test_completed = False
+            Thread(target=self.run_tests, args=(llc,)).start()
+            llc.run(terminate=self.terminate)
         return True
-    
+
+    def terminate(self):
+        return self.test_completed
+
     def run_tests(self, llc):
         if len(self.options.test) > 1:
             log.info("run tests: {0}".format(self.options.test))

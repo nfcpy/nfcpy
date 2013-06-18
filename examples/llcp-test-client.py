@@ -67,21 +67,6 @@ class TestProgram(CommandLineInterface):
             help="connection-oriented echo server address")
         super(TestProgram, self).__init__(parser, groups="tst dbg p2p clf")
 
-    def on_startup(self, llc):
-        if len(self.options.test) == 0:
-            info("no test specified")
-            return False
-        else:
-            return True
-        
-    def on_connect(self, llc):
-        self.test_completed = False
-        Thread(target=self.run_tests, args=(llc,)).start()
-        llc.run(terminate=self.terminate)
-
-    def terminate(self):
-        return self.test_completed
-
     def test_01(self, llc):
         """Link activation, symmetry and deactivation
 
