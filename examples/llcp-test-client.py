@@ -845,6 +845,8 @@ class TestProgram(CommandLineInterface):
                 info("Test {N:02d}: FAIL ({E})".format(N=test, E=error))
             else:
                 info("{0}: PASS".format(test_name))
+            if self.options.test.index(test) < len(self.options.test) - 1:
+                time.sleep(1)
         self.test_completed = True
 
 if __name__ == '__main__':
