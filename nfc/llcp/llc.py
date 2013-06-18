@@ -396,7 +396,7 @@ class LogicalLinkController(object):
         if isinstance(pdu, AggregatedFrame):
             if pdu.dsap == 0 and pdu.ssap == 0:
                 [log.debug("     " + str(p)) for p in pdu]
-                [self._dispatch(p) for p in pdu]
+                [self.dispatch(p) for p in pdu]
             return
 
         if isinstance(pdu, Connect) and pdu.dsap == 1:
