@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2012 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2012-2013 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -96,6 +96,12 @@ class DefaultSnepServer(nfc.snep.SnepServer):
         super(DefaultSnepServer, self).__init__(llc, 'urn:nfc:sn:snep')
         self.select_carrier = select_carrier_func
 
+    def put(self, ndef_message):
+        log.info("default snep server got put request")
+        log.info("ndef message length is {0} octets".format(len(ndef_message)))
+        log.info(nfc.ndef.Message(ndef_message).pretty())
+        return nfc.snep.Success
+
     def get(self, acceptable_length, data):
         log.info("default snep server got GET request")
         message = nfc.ndef.Message(data)
@@ -110,11 +116,15 @@ class DefaultSnepServer(nfc.snep.SnepServer):
             return str(hs)
         return nfc.snep.NotFound
 
-class HandoverServerTest(CommandLineInterface):
+description = """
+Run a connection handover server component with various test options.
+"""
+class TestProgram(CommandLineInterface):
     def __init__(self):
         parser = argparse.ArgumentParser(
             usage='%(prog)s [OPTION]... [CARRIER]...',
-            description="")
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            description=description)
         parser.add_argument(
             "carriers", metavar="CARRIER", nargs="*",
             type=argparse.FileType('r'),
@@ -147,7 +157,7 @@ class HandoverServerTest(CommandLineInterface):
             "--recv-buf", type=buf, metavar="INT", default=2,
             help="data link connection receive window (default: %(default)s)")
         
-        super(HandoverTestServer, self).__init__(parser)
+        super(TestProgram, self).__init__(parser, groups="dbg p2p clf iop")
 
         if sum([1 for f in self.options.carriers if f.name == "<stdin>"]) > 1:
             log.error("only one carrier file may be read from stdin")
@@ -189,7 +199,7 @@ class HandoverServerTest(CommandLineInterface):
 
         self.select_carrier_lock = threading.Lock()
         
-    def register_llcp_services(self, llc):
+    def on_startup(self, llc):
         self.handover_service = HandoverServer(
             llc, self.select_carrier, self.options)
         if self.options.quirks:
@@ -197,7 +207,7 @@ class HandoverServerTest(CommandLineInterface):
                 llc, self.select_carrier)
         return True
         
-    def startup_llcp_services(self, llc):
+    def on_connect(self, llc):
         self.handover_service.start()
         if self.options.quirks:
             self.snep_service.start()
@@ -259,4 +269,4 @@ class HandoverServerTest(CommandLineInterface):
         return handover_select
 
 if __name__ == '__main__':
-    HandoverServerTest().run()
+    TestProgram().run()
