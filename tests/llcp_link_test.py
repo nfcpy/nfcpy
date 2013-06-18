@@ -115,7 +115,7 @@ def test_p2p_pol_connect_and_terminate_locally():
            ("06D406000140", None, "06D507000000"),
            ("03D40A", None, "03D50B")]
     clf = ContactlessFrontend(seq)
-    assert clf.connect(p2p={'role': 'initiator'}) == True
+    assert clf.connect(p2p={'role': 'initiator'}) == False
     clf.packets.next()
 
 @raises(StopIteration)
@@ -162,7 +162,7 @@ def test_p2p_lis_connect_and_terminate_locally():
            ("06D507000000", None, "KeyboardInterrupt"),
            ("06D507000140", None, "03D40A"), ("03D50B", None, None)]
     clf = ContactlessFrontend(seq)
-    assert clf.connect(p2p={'role': 'target'}) == True
+    assert clf.connect(p2p={'role': 'target'}) == False
     clf.packets.next()
 
 @raises(StopIteration)
