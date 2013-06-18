@@ -29,12 +29,20 @@ import time
 import os.path
 import inspect
 import argparse
+import itertools
 
 import nfc
 
+class TestError(Exception):
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return str(self.value)
+
 class CommandLineInterface(object):
     def __init__(self, argument_parser, groups=None):
-        if groups is None: groups = "dbg p2p clf iop"
+        if groups is None:
+            groups = "dbg p2p clf iop"
         for group in groups.split():
             eval("self.add_{0}_options".format(group))(argument_parser)
         
@@ -43,7 +51,14 @@ class CommandLineInterface(object):
             help="restart after termination")
         
         self.options = argument_parser.parse_args()
-        
+
+        if "tst" in groups.split() and self.options.test_all:
+            self.options.test = []
+            for i in itertools.count(1, 1):
+                try: eval("self.test_{0:02d}".format(i))
+                except AttributeError: break
+                else: self.options.test.append(i)
+
         logformat = '%(message)s'
         verbosity = logging.ERROR if self.options.quiet else logging.INFO
         
@@ -117,13 +132,25 @@ class CommandLineInterface(object):
                 "tty[:(usb|com)[:port]] (usb virtual or com port)")
         
     def add_iop_options(self, argument_parser):
-        group = argument_parser.add_mutually_exclusive_group()
+        group = argument_parser.add_argument_group()
         group.add_argument(
             "--quirks", action="store_true",
             help="support non-compliant implementations")
-        #group.add_argument(
-        #    "--strict", action="store_true",
-        #    help="apply strict standards interpretation")
+        
+    def add_tst_options(self, argument_parser):
+        group = argument_parser.add_argument_group()
+        group.add_argument(
+            "-t", "--test", type=int, default=[], action="append",
+            metavar="N", help="run test number <N>")
+        group.add_argument(
+            "-T", "--test-all", action="store_true",
+            help="run all available tests")
+        argument_parser.description += "\nTests:\n"
+        for test_name in [m for m in dir(self) if m.startswith("test_")]:
+            test_func = eval("self."+test_name)
+            test_info = test_func.__doc__.splitlines()[0]
+            argument_parser.description += "  {0:2d} - {1}\n".format(
+                int(test_name.split('_')[1]), test_info)
         
     def on_startup(self, llc):
         return True
@@ -131,6 +158,29 @@ class CommandLineInterface(object):
     def on_connect(self, llc):
         return True
     
+    def run_tests(self, llc):
+        if len(self.options.test) > 1:
+            log.info("run tests: {0}".format(self.options.test))
+        for test in self.options.test:
+            test_name = "test_{0:02d}".format(test)
+            try:
+                test_func = eval("self." + test_name)
+            except NameError:
+                log.error("invalid test number '{0}'".format(test))
+                continue
+            test_info = test_func.__doc__.splitlines()[0]
+            test_name = test_name.capitalize().replace('_', ' ')
+            log.info("{0}: {1}".format(test_name, test_info))
+            try:
+                test_func(llc)
+            except TestError as error:
+                log.info("Test {N:02d}: FAIL ({E})".format(N=test, E=error))
+            else:
+                log.info("{0}: PASS".format(test_name))
+            if self.options.test.index(test) < len(self.options.test) - 1:
+                time.sleep(1)
+        self.test_completed = True
+
     def run_once(self):
         if self.options.device is None:
             self.options.device = ['']
