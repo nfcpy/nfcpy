@@ -74,7 +74,8 @@ class ConnectionLessEchoServer(Thread):
                 time.sleep(2.0)
                 while llc.poll(socket, "recv", timeout=0):
                     data, addr = llc.recvfrom(socket)
-                    #if data and addr:
+                    log.info("received {0} byte from sap {1}"
+                             .format(len(data), addr))
                     llc.sendto(socket, data, addr)
                 log.info("no more data, start waiting")
         except nfc.llcp.Error as e:
