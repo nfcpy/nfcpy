@@ -177,7 +177,7 @@ class CommandLineInterface(object):
             test_name = "test_{0:02d}".format(test)
             try:
                 test_func = eval("self." + test_name)
-            except NameError:
+            except AttributeError:
                 log.error("invalid test number '{0}'".format(test))
                 continue
             test_info = test_func.__doc__.splitlines()[0]
