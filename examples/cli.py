@@ -182,13 +182,13 @@ class CommandLineInterface(object):
                 continue
             test_info = test_func.__doc__.splitlines()[0]
             test_name = test_name.capitalize().replace('_', ' ')
-            log.info("{0}: {1}".format(test_name, test_info))
+            print("{0}: {1}".format(test_name, test_info))
             try:
                 test_func(llc)
             except TestError as error:
-                log.info("Test {N:02d}: FAIL ({E})".format(N=test, E=error))
+                print("Test {N:02d}: FAIL ({E})".format(N=test, E=error))
             else:
-                log.info("{0}: PASS".format(test_name))
+                print("{0}: PASS".format(test_name))
             if self.options.test.index(test) < len(self.options.test) - 1:
                 time.sleep(1)
         self.test_completed = True
