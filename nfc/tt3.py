@@ -264,7 +264,7 @@ class Type3TagEmulation(object):
         self.services[service_code] = (block_read_func, block_write_func)
 
     def process_command(self, cmd):
-        log.info("cmd: " + str(cmd).encode("hex"))
+        log.debug("cmd: " + (str(cmd).encode("hex") if cmd else str(cmd)))
         if len(cmd) != cmd[0]:
             log.error("tt3 command length error")
             return None
@@ -291,7 +291,7 @@ class Type3TagEmulation(object):
                 return bytearray([10 + len(rsp), 0x0D]) + self.idm + rsp
 
     def send_response(self, rsp, timeout):
-        log.info("rsp: " + str(rsp).encode("hex") if rsp else str(rsp))
+        log.debug("rsp: " + (str(rsp).encode("hex") if rsp else str(rsp)))
         return self.clf.exchange(rsp, timeout)
 
     def polling(self, cmd_data):
