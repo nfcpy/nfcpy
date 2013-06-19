@@ -44,9 +44,11 @@ import dbus.mainloop.glib
 mime_btoob = "application/vnd.bluetooth.ep.oob"
 mime_wfasc = "application/vnd.wfa.wsc"
 
+dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+gobject.threads_init()
+
 class BluetoothAdapter(object):
     def __init__(self):
-	dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
 	self.mainloop = gobject.MainLoop()
 	bus = dbus.SystemBus()
         proxy = bus.get_object("org.bluez", "/")
@@ -84,10 +86,12 @@ class BluetoothAdapter(object):
     def create_pairing(self, bdaddr, ssp_hash=None, ssp_rand=None):
         def create_device_reply(device):
             log.info("Bluetooth pairing succeeded!")
+            self.connected = True
             self.mainloop.quit()
 
         def create_device_error(error):
-            log.error("Bluetooth pairing failed!")
+            log.info("Bluetooth pairing failed!")
+            self.connected = False
             self.mainloop.quit()
 
         if ssp_hash and ssp_rand:
@@ -101,7 +105,9 @@ class BluetoothAdapter(object):
             reply_handler=create_device_reply,
             error_handler=create_device_error)
 
+        self.connected = False
         self.mainloop.run()
+        return self.connected
     
 def handover_connect(llc, options):
     client = nfc.handover.HandoverClient(llc)
@@ -399,7 +405,9 @@ class TestProgram(CommandLineInterface):
             client.close()
 
         hci0 = BluetoothAdapter()
-        hci0.create_pairing(record.device_address)
+        connected = hci0.create_pairing(record.device_address)
+        if not connected:
+            raise TestError("Bluetooth connection was not established")
 
     def test_05(self, llc):
         """Bluetooth secure pairing"""
@@ -464,7 +472,10 @@ class TestProgram(CommandLineInterface):
 
         ssp_hash = record.simple_pairing_hash
         ssp_rand = record.simple_pairing_rand
-        hci0.create_pairing(record.device_address, ssp_hash, ssp_rand)
+        connected = hci0.create_pairing(record.device_address,
+                                        ssp_hash, ssp_rand)
+        if not connected:
+            raise TestError("Bluetooth connection was not established")
 
     def test_06(self, llc):
         """Unknown carrier type"""
@@ -632,34 +643,5 @@ class TestProgram(CommandLineInterface):
         finally:
             client.close()
 
-    def __main__disabled__(self):
-        test_suite = sorted([globals().get(k) for k in globals().keys()
-                             if k.startswith("test_")])
-    
-        for test in self.options.test:
-            if test > 0 and test <= len(test_suite):
-                test_mode = ("in quirks mode" if self.options.quirks else
-                             "in relax mode" if self.options.relax else "")
-                try:
-                    test_func = test_suite[test-1]
-                    test_name = test_func.__doc__.splitlines()[0]
-                    test_name = test_name.lower().strip('.')
-                    log.info("*** test scenario {0!r} ***".format(test_name))
-                    test_func(self.options)
-                    log.info("PASSED {0!r} {1}".format(test_name, test_mode))
-                except TestError as error:
-                    log.error("FAILED {0!r} because {1}"
-                              .format(test_name, error))
-            else:
-                log.info("invalid test number '{0}'".format(test))
-
-        if self.options.quirks:
-            log.warning("[quirks] waiting for device removal to avoid Android "
-                        "(before 4.1) crash on intentional link deactivation")
-            while nfc.llcp.connected():
-                time.sleep(1)
-                
-        raise SystemExit
-        
 if __name__ == '__main__':
     TestProgram().run()
