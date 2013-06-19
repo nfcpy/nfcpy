@@ -69,7 +69,6 @@ class Device(nfc.dev.Device):
             return None
         
         self.exchange = self.send_cmd_recv_rsp
-        print target
         return target
 
     def sense_a(self):
@@ -81,13 +80,12 @@ class Device(nfc.dev.Device):
     def sense_f(self, br, sc, rc):
         cmd = "0600{sc[0]:02x}{sc[1]:02x}{rc:02x}03".format(sc=sc, rc=rc)
         log.debug("poll NFC-F {0} to {1}".format(cmd, self.addr))
-        print("poll NFC-F {0} to {1}".format(cmd, self.addr))
         cmd = bytearray.fromhex(cmd)
 
         self.socket.sendto(cmd, self.addr)
         if len(select.select([self.socket], [], [], 1.0)[0]) == 1:
             data, addr = self.socket.recvfrom(1024)
-            print data.encode("hex"), addr
+            log.debug("{0} {1}".format(data.encode("hex"), addr))
             rsp = bytearray(data)
             if len(rsp) >= 18 and rsp[0] == len(rsp) and rsp[1] == 1:
                 if len(rsp) == 18: rsp += "\xff\xff"
@@ -119,7 +117,7 @@ class Device(nfc.dev.Device):
         
         try: self.socket.bind(self.addr)
         except socket.error: return
-        print "bound socket to", self.addr
+        log.debug("bound socket to {0}".format(self.addr))
 
         data = ""
         while not data.startswith("\x06\x00\xFF\xFF\x00"):
