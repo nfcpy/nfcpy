@@ -120,11 +120,12 @@ class Device(nfc.dev.Device):
         log.debug("bound socket to {0}".format(self.addr))
 
         data = ""
-        while not data.startswith("\x06\x00\xFF\xFF\x00"):
+        while not data.startswith("\x06\x00"):
             data, self.addr = self.socket.recvfrom(1024)
             log.debug("<< {0} {1}".format(data.encode("hex"), self.addr))
 
-        data = "\x12\x01" + target.idm + target.pmm
+        data = ("\x12\x01" + target.idm + target.pmm
+                + target.sys if data[4] == 1 else '')
         log.debug(">> {0} {1}".format(str(data).encode("hex"), self.addr))
         self.socket.sendto(data, self.addr)
         if len(select.select([self.socket], [], [], 0.1)[0]) == 1:
