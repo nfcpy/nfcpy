@@ -411,8 +411,8 @@ class Device(nfc.dev.Device):
         timeout_msec = int(timeout * 1000)
         log.debug("listen for {0} msec".format(timeout_msec))
 
-        nfca_params = bytearray.fromhex("FFFF000000FF")
-        nfcf_params = bytearray(18) # all zero
+        nfca_params = bytearray.fromhex("FFFF 000000 FF") # 'sens uid[1-3] sel'
+        nfcf_params = bytearray(18) # all zero 'idm pmm sys'
         nfca_target = None
         nfcf_target = None
         
@@ -426,22 +426,47 @@ class Device(nfc.dev.Device):
             
         assert len(nfca_params) == 6
         assert len(nfcf_params) == 18
-        
-        self.chipset.tg_set_rf("106A")
+
+        if len(targets) == 1 and targets[0].br != None:
+            tech = str(targets[0].br) + type(targets[0]).__name__[-1]
+            mdaa = False
+        else:
+            tech = "106A"
+            mdaa = True
+
+        self.chipset.tg_set_rf(tech)
         self.chipset.tg_set_protocol("0001 0100 0207")
 
-        start_time = time()
+        data = None
         while timeout > 0:
+            start_time = time()
+            timeout_msec = int(timeout * 1000)
             try:
                 data = self.chipset.tg_comm_rf(
-                    mdaa=True, recv_timeout=timeout_msec,
+                    mdaa=mdaa, recv_timeout=timeout_msec,
                     nfca_params=str(nfca_params),
                     nfcf_params=str(nfcf_params),
-                    mf_halted=bool(nfca_target))
+                    transmit_data=data)
                 tech = ('106A', '212F', '424F')[data[0]-11]
                 log.info("{0} {1}".format(tech, str(data).encode("hex")))
-                if data[2] & 0x03 == 3:
-                    break
+                if mdaa:
+                    if data[2] & 0x03 == 3:
+                        break
+                    else: data = None
+                elif type(targets[0]) is TTA:
+                    log.error("sole Type A listen is not implemented")
+                elif type(targets[0]) is TTB:
+                    log.error("sole Type B listen is not supported by hardware")
+                elif type(targets[0]) is TTF:
+                    if data[7:].startswith("\x06\x00"):
+                        data = ("\x01" + targets[0].idm + targets[0].pmm
+                                + (targets[0].sys if data[7+4] == 1 else ''))
+                        data = chr(len(data) + 1) + data
+                        timeout = max(timeout - (time() - start_time), 0.1)
+                        continue
+                    elif data[9:].startswith(target.idm):
+                        break
+                    else: data = None
             except CommunicationError as error:
                 if error != "RECEIVE_TIMEOUT_ERROR":
                     log.debug(error)
@@ -475,7 +500,7 @@ class Device(nfc.dev.Device):
             return data[7:]
         except CommunicationError as error:
             log.debug(error)
-            if error in ("RECEIVE_TIMEOUT_ERROR", "RF_OFF_ERROR"):
+            if error == "RECEIVE_TIMEOUT_ERROR":
                 raise TimeoutError
             else: raise TransmissionError
 

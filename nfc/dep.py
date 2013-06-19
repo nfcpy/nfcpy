@@ -331,7 +331,8 @@ class Target(DataExchangeProtocol):
         ttf = {'idm':ba("01FE")+urandom(6),'pmm':ba("FF"*8),'sys':ba('FFFF')}
         
         if brs is None:
-            targets = [nfc.clf.TTA(br=106, **tta), nfc.clf.TTF(br=None, **ttf)]
+            targets = [nfc.clf.TTA(br=None, **tta),
+                       nfc.clf.TTF(br=None, **ttf)]
         elif brs == 0:
             targets = [nfc.clf.TTA(br=106, **tta)]
         elif brs == 1:
