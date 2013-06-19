@@ -43,10 +43,10 @@ class HandoverServer(Thread):
                         target=self.listen, args=(llc, socket))
 
     def listen(self, llc, socket):
+        log.debug("handover listen thread started")
         try:
             while True:
                 client_socket = llc.accept(socket)
-                print "client_socket =", client_socket
                 client_thread = Thread(target=HandoverServer.serve,
                                        args=[llc, client_socket, self])
                 client_thread.start()
@@ -54,6 +54,7 @@ class HandoverServer(Thread):
             (log.debug if e.errno == nfc.llcp.errno.EPIPE else log.error)(e)
         finally:
             llc.close(socket)
+            log.debug("handover listen thread terminated")
 
     @staticmethod
     def serve(llc, socket, handover_server):
@@ -89,6 +90,7 @@ class HandoverServer(Thread):
             (log.debug if e.errno == nfc.llcp.errno.EPIPE else log.error)(e)
         finally:
             llc.close(socket)
+            log.debug("handover serve thread terminated")
 
     def _process_request(self, request):
         log.debug("rcvd handover request {0}\n{1}"
