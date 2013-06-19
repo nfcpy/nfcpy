@@ -31,13 +31,19 @@ import string
 import struct
 import os.path
 import inspect
-import threading
+import argparse
 import Queue as queue
+from threading import Thread, Lock
 
 sys.path.insert(1, os.path.split(sys.path[0])[0])
+from cli import CommandLineInterface, TestError
+
 import nfc
 import nfc.ndef
 import nfc.llcp
+
+def info(message, prefix="  "):
+    log.info(prefix + message)
 
 def trace(func):
     def traced_func(*args, **kwargs):
@@ -61,7 +67,7 @@ def format_data(data):
         s[-1] += printable(data[i:i+16])
     return '\n'.join(s)
 
-class PhdcAgent(threading.Thread):
+class PhdcAgent(Thread):
     def __init__(self):
         super(PhdcAgent, self).__init__()
         self.oqueue = queue.Queue()
@@ -114,8 +120,8 @@ class PhdcTagAgent(PhdcAgent):
         self.tag = tag
         self.cmd = cmd
         
-        self.ndef_read_lock = threading.Lock()
-        self.ndef_write_lock = threading.Lock()
+        self.ndef_read_lock = Lock()
+        self.ndef_write_lock = Lock()
 
     def ndef_read(self, block, read_begin, read_end):
         if read_begin is True:
@@ -147,7 +153,7 @@ class PhdcTagAgent(PhdcAgent):
                 apdu = self.recv_phd_message()
                 if apdu is not None:
                     self.enqueue(apdu)
-                    threading.Thread(target=self.send_phd_message).start()
+                    Thread(target=self.send_phd_message).start()
             
     def recv_phd_message(self):
         attr = nfc.tt3.NdefAttributeData(self.ndef_data_area[0:16])
@@ -471,277 +477,160 @@ def phdc_p2p_agent_test0(args):
     log.info("leaving ieee agent")
     socket.close()
     
-def phdc_p2p_agent_test1(args):
-    log.info("running p2p agent test #1")
-    llcp_config = {'recv-miu': 240, 'send-lto': 500}
-    llcp_option_string = nfc.llcp.startup(llcp_config)
-    try:
-        while True:
-            peer = args.clf.poll(llcp_option_string)
-            if isinstance(peer, nfc.dep.DEP):
-                log.info("dep target activated")
-                log.info("general bytes: {0}".
-                         format(peer.general_bytes.encode("hex")))
-                if peer.general_bytes.startswith("Ffm"):
-                    break
-    except KeyboardInterrupt:
-        pass
-    
-    if not peer:
-        return
+description = """
+Execute some Personal health Device Communication (PHDC) tests. The
+peer device must have the PHDC validation test server running.
+"""
+class TestProgram(CommandLineInterface):
+    def __init__(self):
+        parser = argparse.ArgumentParser(
+            usage='%(prog)s [OPTION]...',
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            description=description)
+        super(TestProgram, self).__init__(parser, groups="tst dbg p2p clf")
 
-    log.info("got a peer")
-    nfc.llcp.activate(peer)
-    
-    socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
-    nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
-    nfc.llcp.connect(socket, "urn:nfc:sn:phdc")
-    peer_sap = nfc.llcp.getpeername(socket)
-    log.info("connected with phdc manager at sap {0}".format(peer_sap))
-    log.info("entering ieee agent")
-    
-    apdu = bytearray.fromhex(thermometer_assoc_req)
-    apdu = struct.pack(">H", len(apdu)) + apdu
-    log.info("send thermometer association request")
-    log.info("send {0}".format(str(apdu).encode("hex")))
-    nfc.llcp.send(socket, str(apdu))
-    
-    apdu = nfc.llcp.recv(socket)
-    log.info("rcvd {0}".format(str(apdu).encode("hex")))
-    if apdu.startswith("\xE3\x00"):
-        log.info("rcvd association response")
-
-    time.sleep(3.0)
-            
-    apdu = bytearray.fromhex(assoc_release_req)
-    apdu = struct.pack(">H", len(apdu)) + apdu
-    log.info("send association release request")
-    log.info("send {0}".format(str(apdu).encode("hex")))
-    nfc.llcp.send(socket, str(apdu))
-
-    apdu = nfc.llcp.recv(socket)
-    log.info("rcvd {0}".format(str(apdu).encode("hex")))
-    if apdu.startswith("\xE5\x00"):
-        log.info("rcvd association release response")
-
-    log.info("leaving ieee agent")
-    socket.close()
-    
-def phdc_p2p_agent_test2(args):
-    log.info("running p2p agent test #2")
-    llcp_config = {'recv-miu': 240, 'send-lto': 500}
-    llcp_option_string = nfc.llcp.startup(llcp_config)
-    try:
-        while True:
-            peer = args.clf.poll(llcp_option_string)
-            if isinstance(peer, nfc.dep.DEP):
-                if peer.general_bytes.startswith("Ffm"):
-                    break
-    except KeyboardInterrupt:
-        pass
-    
-    if not peer:
-        return
-
-    log.info("got a peer")
-    nfc.llcp.activate(peer)
-    
-    socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
-    nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
-    nfc.llcp.connect(socket, "urn:nfc:sn:phdc")
-    peer_sap = nfc.llcp.getpeername(socket)
-    log.info("connected with phdc manager at sap {0}".format(peer_sap))
-    log.info("entering ieee agent")
-    
-    apdu = bytearray.fromhex(thermometer_assoc_req)
-    apdu = struct.pack(">H", len(apdu)) + apdu
-    log.info("send thermometer association request")
-    log.info("send {0}".format(str(apdu).encode("hex")))
-    nfc.llcp.send(socket, str(apdu))
-    
-    apdu = nfc.llcp.recv(socket)
-    log.info("rcvd {0}".format(str(apdu).encode("hex")))
-    if apdu.startswith("\xE3\x00"):
-        log.info("rcvd association response")
-
-    socket.close()
-    
-    socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
-    nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
-    nfc.llcp.connect(socket, "urn:nfc:sn:phdc")
-    peer_sap = nfc.llcp.getpeername(socket)
-    log.info("connected with phdc manager at sap {0}".format(peer_sap))
-    log.info("entering ieee agent")
-    
-    apdu = bytearray.fromhex(thermometer_assoc_req)
-    apdu = struct.pack(">H", len(apdu)) + apdu
-    log.info("send thermometer association request")
-    log.info("send {0}".format(str(apdu).encode("hex")))
-    nfc.llcp.send(socket, str(apdu))
-    
-    apdu = nfc.llcp.recv(socket)
-    log.info("rcvd {0}".format(str(apdu).encode("hex")))
-    if apdu.startswith("\xE3\x00"):
-        log.info("rcvd association response")
-
-    time.sleep(3.0)
-            
-    apdu = bytearray.fromhex(assoc_release_req)
-    apdu = struct.pack(">H", len(apdu)) + apdu
-    log.info("send association release request")
-    log.info("send {0}".format(str(apdu).encode("hex")))
-    nfc.llcp.send(socket, str(apdu))
-
-    apdu = nfc.llcp.recv(socket)
-    log.info("rcvd {0}".format(str(apdu).encode("hex")))
-    if apdu.startswith("\xE5\x00"):
-        log.info("rcvd association release response")
-
-    log.info("leaving ieee agent")
-    
-def phdc_p2p_agent_test3(args):
-    log.info("running p2p agent test #3")
-    llcp_config = {'recv-miu': 240, 'send-lto': 500}
-    llcp_option_string = nfc.llcp.startup(llcp_config)
-    try:
-        while True:
-            peer = args.clf.poll(llcp_option_string)
-            if isinstance(peer, nfc.dep.DEP):
-                if peer.general_bytes.startswith("Ffm"):
-                    break
-    except KeyboardInterrupt:
-        pass
-    
-    if not peer:
-        return
-
-    log.info("got a peer")
-    nfc.llcp.activate(peer)
-
-    socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
-    nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
-    nfc.llcp.connect(socket, "urn:nfc:xsn:nfc-forum.org:phdc-validation")
-    peer_sap = nfc.llcp.getpeername(socket)
-    log.info("connected with phdc manager at sap {0}".format(peer_sap))
-
-    miu = nfc.llcp.getsockopt(socket, nfc.llcp.SO_SNDMIU)
-    miu = 240
-
-    apdu = os.urandom(2176)
-    apdu = struct.pack(">H", len(apdu)) + apdu
-    log.info("send long message")
-    for i in range(0, len(apdu), miu):
-        nfc.llcp.send(socket, str(apdu[i:i+miu]))
-
-    sent_apdu = apdu
-    
-    data = nfc.llcp.recv(socket)
-    size = struct.unpack(">H", data[0:2])[0]
-    apdu = data[2:]
-    while len(apdu) < size:
-        data = nfc.llcp.recv(socket)
-        if data == None: break
-        log.info("rcvd {0} byte data".format(len(data)))
-        apdu += data
-    log.info("rcvd {0} byte apdu".format(len(apdu)))
-
-    rcvd_apdu = apdu
-    if rcvd_apdu != sent_apdu[::-1]:
-        log.error("received data does not equal sent data")
+    def test_01(self, llc):
+        """Connect, associate and release"""
         
-    socket.close()
+        socket = llc.socket(nfc.llcp.DATA_LINK_CONNECTION)
+        llc.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
+        service_name = "urn:nfc:sn:phdc"
+        try:
+            llc.connect(socket, service_name)
+        except nfc.llcp.ConnectRefused:
+            raise TestError("could not connect to {0!r}".format(service_name))
+        
+        peer_sap = llc.getpeername(socket)
+        info("connected with phdc manager at sap {0}".format(peer_sap))
+        info("entering ieee agent")
+
+        apdu = bytearray.fromhex(thermometer_assoc_req)
+        apdu = struct.pack(">H", len(apdu)) + apdu
+        info("send thermometer association request")
+        info("send {0}".format(str(apdu).encode("hex")))
+        llc.send(socket, str(apdu))
+
+        apdu = llc.recv(socket)
+        info("rcvd {0}".format(str(apdu).encode("hex")))
+        if apdu.startswith("\xE3\x00"):
+            info("rcvd association response")
+
+        time.sleep(3.0)
+
+        apdu = bytearray.fromhex(assoc_release_req)
+        apdu = struct.pack(">H", len(apdu)) + apdu
+        info("send association release request")
+        info("send {0}".format(str(apdu).encode("hex")))
+        llc.send(socket, str(apdu))
+
+        apdu = llc.recv(socket)
+        info("rcvd {0}".format(str(apdu).encode("hex")))
+        if apdu.startswith("\xE5\x00"):
+            info("rcvd association release response")
+
+        info("leaving ieee agent")
+        llc.close(socket)
+
+    def test_02(self, llc):
+        """Association after release"""
+
+        socket = llc.socket(nfc.llcp.DATA_LINK_CONNECTION)
+        llc.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
+        service_name = "urn:nfc:sn:phdc"
+        try:
+            llc.connect(socket, service_name)
+        except nfc.llcp.ConnectRefused:
+            raise TestError("could not connect to {0!r}".format(service_name))
+        
+        peer_sap = llc.getpeername(socket)
+        info("connected with phdc manager at sap {0}".format(peer_sap))
+        info("entering ieee agent")
+
+        apdu = bytearray.fromhex(thermometer_assoc_req)
+        apdu = struct.pack(">H", len(apdu)) + apdu
+        info("send thermometer association request")
+        info("send {0}".format(str(apdu).encode("hex")))
+        llc.send(socket, str(apdu))
+
+        apdu = llc.recv(socket)
+        info("rcvd {0}".format(str(apdu).encode("hex")))
+        if apdu.startswith("\xE3\x00"):
+            info("rcvd association response")
+
+        llc.close(socket)
+
+        socket = llc.socket(nfc.llcp.DATA_LINK_CONNECTION)
+        llc.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
+        llc.connect(socket, "urn:nfc:sn:phdc")
+        peer_sap = llc.getpeername(socket)
+        info("connected with phdc manager at sap {0}".format(peer_sap))
+        info("entering ieee agent")
+
+        apdu = bytearray.fromhex(thermometer_assoc_req)
+        apdu = struct.pack(">H", len(apdu)) + apdu
+        info("send thermometer association request")
+        info("send {0}".format(str(apdu).encode("hex")))
+        llc.send(socket, str(apdu))
+
+        apdu = llc.recv(socket)
+        info("rcvd {0}".format(str(apdu).encode("hex")))
+        if apdu.startswith("\xE3\x00"):
+            info("rcvd association response")
+
+        time.sleep(3.0)
+
+        apdu = bytearray.fromhex(assoc_release_req)
+        apdu = struct.pack(">H", len(apdu)) + apdu
+        info("send association release request")
+        info("send {0}".format(str(apdu).encode("hex")))
+        llc.send(socket, str(apdu))
+
+        apdu = llc.recv(socket)
+        info("rcvd {0}".format(str(apdu).encode("hex")))
+        if apdu.startswith("\xE5\x00"):
+            info("rcvd association release response")
+
+        info("leaving ieee agent")
+
+    def test_03(self, llc):
+        """Fragmentation and reassembly"""
+        
+        socket = llc.socket(nfc.llcp.DATA_LINK_CONNECTION)
+        llc.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
+        service_name = "urn:nfc:xsn:nfc-forum.org:phdc-validation"
+        try:
+            llc.connect(socket, service_name)
+        except nfc.llcp.ConnectRefused:
+            raise TestError("could not connect to {0!r}".format(service_name))
+        
+        peer_sap = llc.getpeername(socket)
+        info("connected with phdc manager at sap {0}".format(peer_sap))
+
+        miu = llc.getsockopt(socket, nfc.llcp.SO_SNDMIU)
+
+        apdu = os.urandom(2176)
+        log.info("send ieee apdu of size {0} byte".format(len(apdu)))
+        apdu = struct.pack(">H", len(apdu)) + apdu
+        for i in range(0, len(apdu), miu):
+            llc.send(socket, str(apdu[i:i+miu]))
+
+        sent_apdu = apdu[2:]
+
+        data = llc.recv(socket)
+        size = struct.unpack(">H", data[0:2])[0]
+        apdu = data[2:]
+        while len(apdu) < size:
+            data = llc.recv(socket)
+            if data == None: break
+            log.info("rcvd {0} byte data".format(len(data)))
+            apdu += data
+        info("rcvd {0} byte apdu".format(len(apdu)))
+
+        rcvd_apdu = apdu[::-1]
+        if rcvd_apdu != sent_apdu:
+            raise TestError("received data does not equal sent data")
+
+        llc.close(socket)
     
 if __name__ == '__main__':
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "-q", dest="quiet", action="store_true",
-        help="do not print any log messages'")
-    parser.add_argument(
-        "-d", metavar="MODULE", dest="debug", action="append",
-        help="print debug messages for MODULE, use '' for all")
-    parser.add_argument(
-        "-f", dest="logfile", metavar="FILE",
-        help="write log messages to file")
-    parser.add_argument(
-        "-l", "--loop", action='store_true',
-        help="repeat command until Control-C")
-    parser.add_argument(
-        "--no-wait", action='store_true',
-        help="do not wait for tag removal")
-    parser.add_argument(
-        "--device", metavar="NAME", action="append",
-        help="use specified contactless reader(s): "\
-            "usb[:vendor[:product]] (vendor and product in hex), "\
-            "usb[:bus[:dev]] (bus and device number in decimal), "\
-            "tty[:(usb|com)[:port]] (usb virtual or com port)")
-
-    parser.add_argument(
-        "-t", "--test", type=int, metavar="N", default=1,
-        help="run test number N")
-
-    subparsers = parser.add_subparsers(title="commands", dest="subparser")
-    sp = subparsers.add_parser('tag', help='run phdc tag agent')
-    sp.set_defaults(func=phdc_tag_agent)
-    sp = subparsers.add_parser('p2p', help='run phdc p2p agent')
-    sp.set_defaults(func=phdc_p2p_agent)
-
-    options = parser.parse_args()
-
-    logformat = '%(message)s'
-    verbosity = logging.ERROR if options.quiet else logging.INFO
-        
-    if options.debug:
-        logformat = '%(levelname)-5s [%(name)s] %(message)s'
-        if '' in options.debug:
-            verbosity = logging.DEBUG
-        
-    logging.basicConfig(level=verbosity, format=logformat)
-
-    if options.debug and 'nfc' in options.debug:
-        verbosity = logging.DEBUG
-            
-    if options.logfile:
-        logfile_format = \
-            '%(asctime)s %(levelname)-5s [%(name)s] %(message)s'
-        logfile = logging.FileHandler(options.logfile, "w")
-        logfile.setFormatter(logging.Formatter(logfile_format))
-        logfile.setLevel(logging.DEBUG)
-        logging.getLogger('').addHandler(logfile)
-
-    nfcpy_path = os.path.dirname(inspect.getfile(nfc))
-    for name in os.listdir(nfcpy_path):
-        if os.path.isdir(os.path.join(nfcpy_path, name)):
-            logging.getLogger("nfc."+name).setLevel(verbosity)
-        elif name.endswith(".py") and name != "__init__.py":
-            logging.getLogger("nfc."+name[:-3]).setLevel(verbosity)
-
-    if options.debug:
-        for module in options.debug:
-            log.info("enable debug output for module '{0}'".format(module))
-            logging.getLogger(module).setLevel(logging.DEBUG)
-
-    if options.device is None:
-        options.device = ['']
-            
-    for device in options.device:
-        try:
-            options.clf = nfc.ContactlessFrontend(device);
-            break
-        except LookupError:
-            pass
-    else:
-        log.warning("no contactless reader")
-        raise SystemExit(1)
-
-    try:
-        while True:
-            log.info("waiting for agent")
-            options.func(options)
-            if not options.loop:
-                break
-    except KeyboardInterrupt:
-        raise SystemExit
-    finally:
-        options.clf.close()
-    
+    TestProgram().run()

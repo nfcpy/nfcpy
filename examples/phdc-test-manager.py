@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2010-2012 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2010-2013 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -31,10 +31,13 @@ import string
 import struct
 import os.path
 import inspect
-import threading
+import argparse
+from threading import Thread
 import Queue as queue
 
 sys.path.insert(1, os.path.split(sys.path[0])[0])
+from cli import CommandLineInterface
+
 import nfc
 import nfc.ndef
 import nfc.llcp
@@ -61,7 +64,7 @@ def format_data(data):
         s[-1] += printable(data[i:i+16])
     return '\n'.join(s)
 
-class PhdcManager(threading.Thread):
+class PhdcManager(Thread):
     def __init__(self):
         super(PhdcManager, self).__init__()
         self.oqueue = queue.Queue()
@@ -198,166 +201,71 @@ def phdc_tag_manager(args):
                     manager.send(apdu)
                 log.info("leaving ieee manager")
     
-def phdc_p2p_manager(args):
-    llcp_config = {'recv-miu': 240, 'send-lto': 500}
-    llcp_option_string = nfc.llcp.startup(llcp_config)
-    try:
-        while True:
-            peer = args.clf.poll(llcp_option_string)
-            if isinstance(peer, nfc.dep.DEP):
-                if peer.general_bytes.startswith("Ffm"):
-                    break
-    except KeyboardInterrupt:
-        pass
-    
-    if not peer:
-        return
+class PhdcPeerManager(Thread):
+    def __init__(self, llc, service_name):
+        socket = llc.socket(nfc.llcp.DATA_LINK_CONNECTION)
+        llc.bind(socket, service_name)
+        addr = llc.getsockname(socket)
+        log.info("service {0!r} bound to port {1}".format(service_name, addr))
+        llc.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
+        llc.listen(socket, backlog=1)
+        super(PhdcPeerManager, self).__init__(
+            target=self.listen, args=(llc, socket))
 
-    log.info("got a peer")
-    nfc.llcp.activate(peer)
-
-    socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
-    try:
-        nfc.llcp.bind(socket, args.service_name)
-        addr = nfc.llcp.getsockname(socket)
-        log.info("phdc manager bound to port {0}".format(addr))
-        nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
-        nfc.llcp.listen(socket, backlog=1)
-        while True:
-            client = nfc.llcp.accept(socket)
-            peer = nfc.llcp.getpeername(client)
-            miu = nfc.llcp.getsockopt(socket, nfc.llcp.SO_SNDMIU)
-            log.info("serving phdc agent from sap {0}".format(peer))
-            log.info("entering ieee manager")
+    def listen(self, llc, socket):
+        try:
             while True:
-                data = nfc.llcp.recv(client)
-                if data == None: break
-                log.info("rcvd {0} byte data".format(len(data)))
-                size = struct.unpack(">H", data[0:2])[0]
-                apdu = data[2:]
-                while len(apdu) < size:
-                    data = nfc.llcp.recv(client)
+                client = llc.accept(socket)
+                peer = llc.getpeername(client)
+                miu = llc.getsockopt(socket, nfc.llcp.SO_SNDMIU)
+                log.info("serving phdc agent from sap {0}".format(peer))
+                log.info("entering ieee manager")
+                while True:
+                    data = llc.recv(client)
                     if data == None: break
                     log.info("rcvd {0} byte data".format(len(data)))
-                    apdu += data
-                log.info("[ieee] <<< {0}".format(str(apdu).encode("hex")))
-                if apdu.startswith("\xE2\x00"):
-                    apdu = bytearray.fromhex(thermometer_assoc_res)
-                elif apdu.startswith("\xE4\x00"):
-                    apdu = bytearray.fromhex(assoc_release_res)
-                else:
-                    apdu = apdu[::-1]
-                time.sleep(0.2)
-                log.info("[ieee] >>> {0}".format(str(apdu).encode("hex")))
-                data = struct.pack(">H", len(apdu)) + apdu
-                for i in range(0, len(data), miu):
-                    nfc.llcp.send(client, str(data[i:i+miu]))
-            log.info("remote peer {0} closed connection".format(peer))
-            log.info("leaving ieee manager")
-        
-    except nfc.llcp.Error as e:
-        log.error(str(e))
-    finally:
-        nfc.llcp.close(socket)
+                    size = struct.unpack(">H", data[0:2])[0]
+                    apdu = data[2:]
+                    while len(apdu) < size:
+                        data = llc.recv(client)
+                        if data == None: break
+                        log.info("rcvd {0} byte data".format(len(data)))
+                        apdu += data
+                    log.info("[ieee] <<< {0}".format(str(apdu).encode("hex")))
+                    if apdu.startswith("\xE2\x00"):
+                        apdu = bytearray.fromhex(thermometer_assoc_res)
+                    elif apdu.startswith("\xE4\x00"):
+                        apdu = bytearray.fromhex(assoc_release_res)
+                    else:
+                        apdu = apdu[::-1]
+                    time.sleep(0.2)
+                    log.info("[ieee] >>> {0}".format(str(apdu).encode("hex")))
+                    data = struct.pack(">H", len(apdu)) + apdu
+                    for i in range(0, len(data), miu):
+                        llc.send(client, str(data[i:i+miu]))
+                log.info("remote peer {0} closed connection".format(peer))
+                log.info("leaving ieee manager")
 
-def poll(clf):
-    try:
-        while True:
-            tag = clf.poll()
-            if tag: return tag
-            else: time.sleep(0.5)
-    except KeyboardInterrupt:
-        return None
+        except nfc.llcp.Error as e:
+            (log.debug if e.errno == nfc.llcp.errno.EPIPE else log.error)(e)
+        finally:
+            llc.close(socket)
+
+class TestProgram(CommandLineInterface):
+    def __init__(self):
+        parser = argparse.ArgumentParser()
+        super(TestProgram, self).__init__(parser, groups="dbg p2p clf")
+
+    def on_startup(self, llc):
+        validation_service_name = "urn:nfc:xsn:nfc-forum.org:phdc-validation"
+        self.phdc_manager_1 = PhdcPeerManager(llc, "urn:nfc:sn:phdc")
+        self.phdc_manager_2 = PhdcPeerManager(llc, validation_service_name)
+        return True
+        
+    def on_connect(self, llc):
+        self.phdc_manager_1.start()
+        self.phdc_manager_2.start()
+        return True
 
 if __name__ == '__main__':
-    import argparse
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "-q", dest="quiet", action="store_true",
-        help="do not print any log messages'")
-    parser.add_argument(
-        "-d", metavar="MODULE", dest="debug", action="append",
-        help="print debug messages for MODULE, use '' for all")
-    parser.add_argument(
-        "-f", dest="logfile", metavar="FILE",
-        help="write log messages to file")
-    parser.add_argument(
-        "-l", "--loop", action='store_true',
-        help="repeat command until Control-C")
-    parser.add_argument(
-        "--no-wait", action='store_true',
-        help="do not wait for tag removal")
-    parser.add_argument(
-        "--device", metavar="NAME", action="append",
-        help="use specified contactless reader(s): "\
-            "usb[:vendor[:product]] (vendor and product in hex), "\
-            "usb[:bus[:dev]] (bus and device number in decimal), "\
-            "tty[:(usb|com)[:port]] (usb virtual or com port)")
-
-    parser.add_argument("--service-name", default="urn:nfc:sn:phdc")
-    
-    subparsers = parser.add_subparsers(title="modes", dest="subparser")
-    subparsers.add_parser('tag', help='run phdc tag manager')\
-        .set_defaults(func=phdc_tag_manager)
-    subparsers.add_parser('p2p', help='run phdc p2p manager')\
-        .set_defaults(func=phdc_p2p_manager)
-
-    options = parser.parse_args()
-
-    logformat = '%(message)s'
-    verbosity = logging.ERROR if options.quiet else logging.INFO
-        
-    if options.debug:
-        logformat = '%(levelname)-5s [%(name)s] %(message)s'
-        if '' in options.debug:
-            verbosity = logging.DEBUG
-        
-    logging.basicConfig(level=verbosity, format=logformat)
-
-    if options.debug and 'nfc' in options.debug:
-        verbosity = logging.DEBUG
-            
-    if options.logfile:
-        logfile_format = \
-            '%(asctime)s %(levelname)-5s [%(name)s] %(message)s'
-        logfile = logging.FileHandler(options.logfile, "w")
-        logfile.setFormatter(logging.Formatter(logfile_format))
-        logfile.setLevel(logging.DEBUG)
-        logging.getLogger('').addHandler(logfile)
-
-    nfcpy_path = os.path.dirname(inspect.getfile(nfc))
-    for name in os.listdir(nfcpy_path):
-        if os.path.isdir(os.path.join(nfcpy_path, name)):
-            logging.getLogger("nfc."+name).setLevel(verbosity)
-        elif name.endswith(".py") and name != "__init__.py":
-            logging.getLogger("nfc."+name[:-3]).setLevel(verbosity)
-
-    if options.debug:
-        for module in options.debug:
-            log.info("enable debug output for module '{0}'".format(module))
-            logging.getLogger(module).setLevel(logging.DEBUG)
-
-    if options.device is None:
-        options.device = ['']
-            
-    for device in options.device:
-        try:
-            options.clf = nfc.ContactlessFrontend(device);
-            break
-        except LookupError:
-            pass
-    else:
-        log.warning("no contactless reader")
-        raise SystemExit(1)
-
-    try:
-        while True:
-            log.info("waiting for agent")
-            options.func(options)
-            if not options.loop:
-                break
-    except KeyboardInterrupt:
-        raise SystemExit
-    finally:
-        options.clf.close()
-    
+    TestProgram().run()
