@@ -39,7 +39,7 @@ import nfc.ndef
 
 validation_server = "urn:nfc:xsn:nfc-forum.org:snep-validation"
 
-def info(message, prefix="   "):
+def info(message, prefix="  "):
     log.info(prefix + message)
 
 description = """
