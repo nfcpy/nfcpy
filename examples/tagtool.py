@@ -283,7 +283,7 @@ def emulate_tt3_parser(parser):
         "--sys", "--sc", metavar="HEX", default="12FC",
         help="system code (default: %(default)s)")
     parser.add_argument(
-        "--br", choices=["212", "424"], default="424",
+        "--br", choices=["212", "424"], default="212",
         help="baud rate (default: %(default)s)")
     parser.add_argument(
         "-s", dest="size", type=int, default="1024",
