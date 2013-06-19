@@ -37,6 +37,7 @@ import nfc.ndef
 import nfc.snep
 import nfc.handover
 import threading
+from copy import deepcopy
 
 import gobject
 import dbus.mainloop.glib
@@ -236,7 +237,7 @@ class TestProgram(CommandLineInterface):
                     remote_carrier_type = remote_carrier.type[12:]
                     
                     
-            for local_carrier in self.options.selectable.carriers:
+            for local_carrier in deepcopy(self.options.selectable.carriers):
                 if remote_carrier_type == local_carrier.type:
                     if len(handover_select.carriers) < self.options.select:
                         log.info("match for {0}".format(local_carrier.type))
