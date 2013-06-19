@@ -21,7 +21,7 @@
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
 import logging
-log = logging.getLogger('root')
+log = logging.getLogger(__name__)
 
 import os
 import sys
@@ -228,4 +228,5 @@ class CommandLineInterface(object):
             
     def run(self):
         while self.run_once() and self.options.loop:
+            log.info("*** RESTART ***")
             pass
