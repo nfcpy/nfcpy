@@ -421,17 +421,6 @@ def phdc_tag_agent_test4(args):
             agent.join(timeout=10.0)
             break
         
-def phdc_p2p_agent(args):
-    log.info("performing as p2p agent")
-    if args.test == 0:
-        phdc_p2p_agent_test0(args)
-    if args.test == 1:
-        phdc_p2p_agent_test1(args)
-    if args.test == 2:
-        phdc_p2p_agent_test2(args)
-    if args.test == 3:
-        phdc_p2p_agent_test3(args)
-
 description = """
 Execute some Personal health Device Communication (PHDC) tests. The
 peer device must have the PHDC validation test server running.
