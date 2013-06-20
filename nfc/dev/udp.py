@@ -115,6 +115,7 @@ class Device(nfc.dev.Device):
         assert len(nfca_params) == 6
         assert len(nfcf_params) == 18
         
+        log.debug("bind socket to {0}".format(self.addr))
         try: self.socket.bind(self.addr)
         except socket.error: return
         log.debug("bound socket to {0}".format(self.addr))
@@ -125,7 +126,7 @@ class Device(nfc.dev.Device):
             log.debug("<< {0} {1}".format(data.encode("hex"), self.addr))
 
         data = ("\x12\x01" + target.idm + target.pmm
-                + target.sys if data[4] == 1 else '')
+                + (target.sys if data[4] == 1 else ''))
         log.debug(">> {0} {1}".format(str(data).encode("hex"), self.addr))
         self.socket.sendto(data, self.addr)
         if len(select.select([self.socket], [], [], 0.1)[0]) == 1:
