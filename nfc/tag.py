@@ -26,7 +26,7 @@ log = logging.getLogger(__name__)
 import nfc.clf
 from nfc.tt1 import Type1Tag
 from nfc.tt2 import Type2Tag
-from nfc.tt3 import Type3Tag
+from nfc.tt3 import Type3Tag, Type3TagEmulation
 from nfc.tt4 import Type4Tag
 
 def activate(clf, target):
@@ -43,3 +43,10 @@ def activate(clf, target):
     elif type(target) == nfc.clf.TTF:
         return Type3Tag(clf, target)
 
+def emulate(clf, target):
+    if type(target) == nfc.clf.TTA:
+        log.debug("can't emulate TTA target'")
+    elif type(target) == nfc.clf.TTB:
+        log.debug("can't emulate TTB target'")
+    elif type(target) == nfc.clf.TTF:
+        return Type3TagEmulation(clf, target)
