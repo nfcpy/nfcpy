@@ -44,7 +44,7 @@ class HandoverClient(object):
         self.llc.setsockopt(socket, nfc.llcp.SO_RCVBUF, recv_buf)
         self.llc.setsockopt(socket, nfc.llcp.SO_RCVMIU, recv_miu)
         self.llc.connect(socket, "urn:nfc:sn:handover")
-        log.info("handover client connected to remote sap {0}"
+        log.debug("handover client connected to remote sap {0}"
                  .format(self.llc.getsockname(socket)))
         self.socket = socket
 
