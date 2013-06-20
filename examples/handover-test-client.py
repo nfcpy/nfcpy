@@ -47,6 +47,9 @@ mime_wfasc = "application/vnd.wfa.wsc"
 dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
 gobject.threads_init()
 
+def info(message, prefix="  "):
+    log.info(prefix + message)
+
 class BluetoothAdapter(object):
     def __init__(self):
 	self.mainloop = gobject.MainLoop()
@@ -85,12 +88,12 @@ class BluetoothAdapter(object):
         
     def create_pairing(self, bdaddr, ssp_hash=None, ssp_rand=None):
         def create_device_reply(device):
-            log.info("Bluetooth pairing succeeded!")
+            info("Bluetooth pairing succeeded!")
             self.connected = True
             self.mainloop.quit()
 
         def create_device_error(error):
-            log.info("Bluetooth pairing failed!")
+            info("Bluetooth pairing failed!")
             self.connected = False
             self.mainloop.quit()
 
@@ -113,7 +116,7 @@ def handover_connect(llc, options):
     client = nfc.handover.HandoverClient(llc)
     try:
         client.connect(recv_miu=options.recv_miu, recv_buf=options.recv_buf)
-        log.info("connected to the remote handover server")
+        info("connected to the remote handover server")
         return client
     except nfc.llcp.ConnectRefused:
         if not options.quirks:
@@ -124,7 +127,7 @@ def handover_connect(llc, options):
     client = nfc.snep.SnepClient()
     try:
         client.connect("urn:nfc:sn:snep")
-        log.info("[quirks] connected to the remote default snep server")
+        info("[quirks] connected to the remote default snep server")
         return client
     except nfc.llcp.ConnectRefused:
         raise TestError("unable to connect to the default snep server")
@@ -219,7 +222,8 @@ class TestProgram(CommandLineInterface):
             "--recv-buf", type=buf, metavar="INT", default=2,
             help="data link connection receive window (default: %(default)s)")
         
-        super(TestProgram, self).__init__(parser, groups="tst dbg p2p clf iop")
+        super(TestProgram, self).__init__(
+            parser, groups="test llcp dbg clf iop")
 
         if sum([1 for f in self.options.carriers if f.name == "<stdin>"]) > 1:
             log.error("only one carrier file may be read from stdin")
@@ -264,10 +268,10 @@ class TestProgram(CommandLineInterface):
     def test_01(self, llc):
         """Presence and connectivity"""
 
-        log.info("1st attempt to connect to the remote handover server")
+        info("1st attempt to connect to the remote handover server")
         client = handover_connect(llc, self.options)
         client.close()
-        log.info("2nd attempt to connect to the remote handover server")
+        info("2nd attempt to connect to the remote handover server")
         client = handover_connect(llc, self.options)
         client.close()
 
@@ -293,7 +297,7 @@ class TestProgram(CommandLineInterface):
 
         client = handover_connect(llc, self.options)
         try:
-            log.info("send handover request message with version 1.2")
+            info("send handover request message with version 1.2")
             message = nfc.ndef.HandoverRequestMessage(version="1.2")
             message.nonce = random.randint(0, 0xffff)
             message.add_carrier(record, "active")
@@ -301,26 +305,26 @@ class TestProgram(CommandLineInterface):
             message = handover_recv(client, timeout=3.0)
             if message.version.major != 1 and message.version.minor != 2:
                 raise TestError("handover select message version is not 1.2")
-            log.info("received handover select message version 1.2")
+            info("received handover select message version 1.2")
         finally:
             client.close()
 
         client = handover_connect(llc, self.options)
         try:
-            log.info("send handover request message with version 1.1")
+            info("send handover request message with version 1.1")
             message = nfc.ndef.HandoverRequestMessage(version="1.1")
             message.add_carrier(record, "active")
             handover_send(client, message)
             message = handover_recv(client, timeout=3.0)
             if message.version.major != 1 and message.version.minor != 2:
                 raise TestError("handover select message version is not 1.2")
-            log.info("received handover select message version 1.2")
+            info("received handover select message version 1.2")
         finally:
             client.close()
 
         client = handover_connect(llc, self.options)
         try:
-            log.info("send handover request message with version 1.15")
+            info("send handover request message with version 1.15")
             message = nfc.ndef.HandoverRequestMessage(version="1.15")
             message.nonce = random.randint(0, 0xffff)
             message.add_carrier(record, "active")
@@ -328,13 +332,13 @@ class TestProgram(CommandLineInterface):
             message = handover_recv(client, timeout=3.0)
             if message.version.major != 1 and message.version.minor != 2:
                 raise TestError("handover select message version is not 1.2")
-            log.info("received handover select message version 1.2")
+            info("received handover select message version 1.2")
         finally:
             client.close()
 
         client = handover_connect(llc, self.options)
         try:
-            log.info("send handover request message with version 15.0")
+            info("send handover request message with version 15.0")
             message = nfc.ndef.HandoverRequestMessage(version="1.2")
             message.nonce = random.randint(0, 0xffff)
             message.add_carrier(record, "active")
@@ -344,7 +348,7 @@ class TestProgram(CommandLineInterface):
             message = handover_recv(client, timeout=3.0)
             if message.version.major != 1 and message.version.minor != 2:
                 raise TestError("handover select message version is not 1.2")
-            log.info("received handover select message version 1.2")
+            info("received handover select message version 1.2")
         finally:
             client.close()
 
@@ -372,7 +376,7 @@ class TestProgram(CommandLineInterface):
             message.add_carrier(record, "active")
             handover_send(client, message)
             message = handover_recv(client, timeout=3.0)
-            log.info("received {0!r}\n".format(message.type)
+            info("received {0!r}\n".format(message.type)
                      + message.pretty(2))
 
             if len(message.carriers) != 1:
@@ -438,7 +442,7 @@ class TestProgram(CommandLineInterface):
             message.add_carrier(record, "active")
             handover_send(client, message)
             message = handover_recv(client, timeout=3.0)
-            log.info("received {0!r}\n".format(message.type)
+            info("received {0!r}\n".format(message.type)
                      + message.pretty(2))
 
             if len(message.carriers) != 1:
@@ -490,7 +494,7 @@ class TestProgram(CommandLineInterface):
 
             handover_send(client, message)
             message = handover_recv(client, timeout=3.0)
-            log.info("received {0!r}\n".format(message.type)
+            info("received {0!r}\n".format(message.type)
                      + message.pretty(2))
 
             if message.version.major != 1:
@@ -511,10 +515,10 @@ class TestProgram(CommandLineInterface):
             record = nfc.ndef.Record(unknown_carrier)
             message.add_carrier(record, "active")
 
-            log.info("propose carrier {0!r}".format(message.carriers[0].type))
+            info("propose carrier {0!r}".format(message.carriers[0].type))
             handover_send(client, message)
             message = handover_recv(client, timeout=3.0)
-            log.info("received {0!r}\n".format(message.type)
+            info("received {0!r}\n".format(message.type)
                      + message.pretty(2))
 
             if message.version.major != 1:
@@ -538,10 +542,10 @@ class TestProgram(CommandLineInterface):
                     record = carrier.record
             message.add_carrier(record, "active")
 
-            log.info("propose carrier {0!r}".format(message.carriers[0].type))
+            info("propose carrier {0!r}".format(message.carriers[0].type))
             handover_send(client, message)
             message = handover_recv(client, timeout=3.0)
-            log.info("received {0!r}\n".format(message.type)
+            info("received {0!r}\n".format(message.type)
                      + message.pretty(2))
 
         finally:
@@ -572,7 +576,7 @@ class TestProgram(CommandLineInterface):
             handover_send(client, message)
             message = handover_recv(client, timeout=3.0, raw=True)
             try:
-                log.info("received {0!r}\n".format(message.type) +
+                info("received {0!r}\n".format(message.type) +
                          nfc.ndef.HandoverSelectMessage(message).pretty(2))
             except nfc.ndef.DecodeError:
                 raise TestError("decoding errors in received message")
@@ -633,7 +637,7 @@ class TestProgram(CommandLineInterface):
 
             handover_send(client, message)
             message = handover_recv(client, timeout=3.0)
-            log.info("received {0!r}\n".format(message.type)
+            info("received {0!r}\n".format(message.type)
                      + message.pretty(2))
 
             if len(message.carriers) != 1:

@@ -41,9 +41,7 @@ class TestError(Exception):
         return str(self.value)
 
 class CommandLineInterface(object):
-    def __init__(self, argument_parser, groups=None):
-        if groups is None:
-            groups = "dbg p2p clf iop"
+    def __init__(self, argument_parser, groups=''):
         self.groups = groups.split()
         for group in self.groups:
             eval("self.add_{0}_options".format(group))(argument_parser)
@@ -54,13 +52,11 @@ class CommandLineInterface(object):
         
         self.options = argument_parser.parse_args()
 
-        if "tst" in self.groups and self.options.test_all:
+        if "test" in self.groups and self.options.test_all:
             self.options.test = []
-            for i in itertools.count(1, 1):
-                try: eval("self.test_{0:02d}".format(i))
-                except AttributeError: break
-                else: self.options.test.append(i)
-
+            for test_name in [m for m in dir(self) if m.startswith("test_")]:
+                self.options.test.append(int(test_name.split('_')[1]))
+        
         logformat = '%(message)s'
         verbosity = logging.ERROR if self.options.quiet else logging.INFO
         
@@ -96,7 +92,7 @@ class CommandLineInterface(object):
 
     def add_dbg_options(self, argument_parser):
         group = argument_parser.add_argument_group(
-            title="Debug options")
+            title="Debug Options")
         group.add_argument(
             "-q", "--quiet", dest="quiet", action="store_true",
             help="do not print anything except errors")
@@ -107,9 +103,9 @@ class CommandLineInterface(object):
             "-f", dest="logfile", metavar="FILE",
             help="write log messages to file")
         
-    def add_p2p_options(self, argument_parser):
+    def add_llcp_options(self, argument_parser):
         group = argument_parser.add_argument_group(
-            title="P2P Options")
+            title="Peer Mode Options")
         group.add_argument(
             "--mode", choices=["t","target","i","initiator"], metavar="{t,i}",
             help="connect as 'target' or 'initiator' (default: both)")
@@ -126,31 +122,36 @@ class CommandLineInterface(object):
             "--no-aggregation", action="store_true",
             help="disable outbound packet aggregation")
 
-    def add_tag_options(self, argument_parser):
+    def add_rdwr_options(self, argument_parser):
         group = argument_parser.add_argument_group(
-            title="R/W options")
+            title="Reader Mode Options")
         group.add_argument(
             "--no-wait", dest="wait", action="store_false",
             help="wait for tag removal before return")
 
+    def add_card_options(self, argument_parser):
+        group = argument_parser.add_argument_group(
+            title="Card Mode Options")
+
     def add_clf_options(self, argument_parser):
         group = argument_parser.add_argument_group(
-            title="Device options")
+            title="Device Options")
         group.add_argument(
             "--device", metavar="NAME", action="append",
             help="use specified contactless reader(s): "\
                 "usb[:vendor[:product]] (vendor and product in hex), "\
                 "usb[:bus[:dev]] (bus and device number in decimal), "\
-                "tty[:(usb|com)[:port]] (usb virtual or com port)")
+                "tty[:(usb|com)[:port]] (usb virtual or com port), "\
+                "udp[:host[:port]] (defaults to 'udp:localhost:54321')")
         
     def add_iop_options(self, argument_parser):
         group = argument_parser.add_argument_group(
-            title="IOP options")
+            title="Interoperability Options")
         group.add_argument(
             "--quirks", action="store_true",
             help="support non-compliant implementations")
         
-    def add_tst_options(self, argument_parser):
+    def add_test_options(self, argument_parser):
         group = argument_parser.add_argument_group(
             title="Test options")
         group.add_argument(
@@ -166,27 +167,43 @@ class CommandLineInterface(object):
             argument_parser.description += "  {0:2d} - {1}\n".format(
                 int(test_name.split('_')[1]), test_info)
         
-    def on_tag_connect(self, llc):
+    def on_rdwr_startup(self, clf, targets):
+        return targets
+
+    def on_rdwr_connect(self, tag):
         log.info(tag)
         return True
 
-    def on_p2p_startup(self, llc):
-        if "tst" in self.groups and len(self.options.test) == 0:
+    def on_llcp_startup(self, clf, llc):
+        if "test" in self.groups and len(self.options.test) == 0:
             log.error("no test specified")
-            return False
-        return True
+            return None
+        return llc
     
-    def on_p2p_connect(self, llc):
-        if "tst" in self.groups:
+    def on_llcp_connect(self, llc):
+        if "test" in self.groups:
             self.test_completed = False
             Thread(target=self.run_tests, args=(llc,)).start()
             llc.run(terminate=self.terminate)
         return True
 
+    def on_card_startup(self, clf, targets):
+        log.warning("on_card_startup should be customized")
+        return targets
+
+    def on_card_connect(self, tag, command):
+        log.info("activated as {0}".format(tag))
+        if "test" in self.groups:
+            self.test_completed = False
+            self.run_tests(tag, command)
+            #Thread(target=self.run_tests, args=(target, command)).start()
+            #llc.run(terminate=self.terminate)
+        return True
+
     def terminate(self):
         return self.test_completed
 
-    def run_tests(self, llc):
+    def run_tests(self, *args):
         if len(self.options.test) > 1:
             log.info("run tests: {0}".format(self.options.test))
         for test in self.options.test:
@@ -200,7 +217,7 @@ class CommandLineInterface(object):
             test_name = test_name.capitalize().replace('_', ' ')
             print("{0}: {1}".format(test_name, test_info))
             try:
-                test_func(llc)
+                test_func(*args)
             except TestError as error:
                 print("Test {N:02d}: FAIL ({E})".format(N=test, E=error))
             else:
@@ -221,32 +238,49 @@ class CommandLineInterface(object):
             log.info("no contactless frontend found")
             raise SystemExit(1)
 
-        if self.options.mode is None:
-            self.options.role = None
-        elif self.options.mode in ('t', 'target'):
-            self.options.role = 'target'
-        elif self.options.mode in ('i', 'initiator'):
-            self.options.role = 'initiator'
+        if "rdwr" in self.groups:
+            rdwr_options = {
+                'on-startup': self.on_rdwr_startup,
+                'on-connect': self.on_rdwr_connect,
+                }
+        else:
+            rdwr_options = None
         
-        tag_options = {
-            'on-connect': self.on_tag_connect,
-            }
-
-        p2p_options = {
-            'on-startup': self.on_p2p_startup,
-            'on-connect': self.on_p2p_connect,
-            'role': self.options.role,
-            'miu': self.options.miu,
-            'lto': self.options.lto,
-            'agf': not self.options.no_aggregation,
-            }
+        if "llcp" in self.groups:
+            if self.options.mode is None:
+                self.options.role = None
+            elif self.options.mode in ('t', 'target'):
+                self.options.role = 'target'
+            elif self.options.mode in ('i', 'initiator'):
+                self.options.role = 'initiator'
+            llcp_options = {
+                'on-startup': self.on_llcp_startup,
+                'on-connect': self.on_llcp_connect,
+                'role': self.options.role,
+                'miu': self.options.miu,
+                'lto': self.options.lto,
+                'agf': not self.options.no_aggregation,
+                }
+        else:
+            llcp_options = None
+            
+        if "card" in self.groups:
+            card_options = {
+                'on-startup': self.on_card_startup,
+                'on-connect': self.on_card_connect,
+                'targets': [],
+                }
+        else:
+            card_options = None
 
         try:
-            return clf.connect(p2p=p2p_options, tag=tag_options)
+            kwargs = {'llcp': llcp_options,
+                      'rdwr': rdwr_options,
+                      'card': card_options}
+            return clf.connect(**kwargs)
         finally:
             clf.close()
             
     def run(self):
         while self.run_once() and self.options.loop:
             log.info("*** RESTART ***")
-            pass

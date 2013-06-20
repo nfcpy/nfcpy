@@ -118,6 +118,6 @@ class TestWithStaticMemoryLayout1:
     @raises(StopIteration)
     def test_tt1_read_bv_1(self):
         """TC_T1T_READ_BV_1"""
-        self.clf.connect(tag={'on-connect': self.read_ndef})
+        self.clf.connect(rdwr={'on-connect': self.read_ndef})
         assert self.ndef_message == self.uri
         self.clf.packets.next()

@@ -218,15 +218,15 @@ class ConnectionModeDumpServer(Thread):
 class TestProgram(CommandLineInterface):
     def __init__(self):
         parser = argparse.ArgumentParser()
-        super(TestProgram, self).__init__(parser, "dbg p2p clf")
+        super(TestProgram, self).__init__(parser, "llcp dbg clf")
 
-    def on_startup(self, llc):
+    def on_llcp_startup(self, clf, llc):
         self.cl_echo_server = ConnectionLessEchoServer(llc)
         self.cm_echo_server = ConnectionModeEchoServer(llc)
         self.cm_dump_server = ConnectionModeDumpServer(llc)
-        return True
+        return llc
         
-    def on_connect(self, llc):
+    def on_llcp_connect(self, llc):
         self.cl_echo_server.start()
         self.cm_echo_server.start()
         self.cm_dump_server.start()

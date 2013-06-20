@@ -52,7 +52,8 @@ class TestProgram(CommandLineInterface):
             usage='%(prog)s [OPTION]...',
             formatter_class=argparse.RawDescriptionHelpFormatter,
             description=description)
-        super(TestProgram, self).__init__(parser, groups="tst dbg p2p clf")
+        super(TestProgram, self).__init__(
+            parser, groups="test llcp dbg clf")
 
     def test_01(self, llc):
         """Connect and terminate"""

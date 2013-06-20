@@ -158,7 +158,8 @@ class TestProgram(CommandLineInterface):
             "--recv-buf", type=buf, metavar="INT", default=2,
             help="data link connection receive window (default: %(default)s)")
         
-        super(TestProgram, self).__init__(parser, groups="dbg p2p clf iop")
+        super(TestProgram, self).__init__(
+            parser, groups="llcp dbg clf iop")
 
         if sum([1 for f in self.options.carriers if f.name == "<stdin>"]) > 1:
             log.error("only one carrier file may be read from stdin")
@@ -200,15 +201,15 @@ class TestProgram(CommandLineInterface):
 
         self.select_carrier_lock = threading.Lock()
         
-    def on_startup(self, llc):
+    def on_llcp_startup(self, clf, llc):
         self.handover_service = HandoverServer(
             llc, self.select_carrier, self.options)
         if self.options.quirks:
             self.snep_service = DefaultSnepServer(
                 llc, self.select_carrier)
-        return True
+        return llc
         
-    def on_connect(self, llc):
+    def on_llcp_connect(self, llc):
         self.handover_service.start()
         if self.options.quirks:
             self.snep_service.start()

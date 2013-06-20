@@ -78,14 +78,15 @@ class ValidationServer(nfc.snep.SnepServer):
 class TestProgram(CommandLineInterface):
     def __init__(self):
         parser = argparse.ArgumentParser()
-        super(TestProgram, self).__init__(parser, groups="dbg p2p clf")
+        super(TestProgram, self).__init__(
+            parser, groups="llcp dbg clf")
 
-    def on_startup(self, llc):
+    def on_llcp_startup(self, clf, llc):
         self.default_snep_server = DefaultServer(llc)
         self.validation_snep_server = ValidationServer(llc)
-        return True
+        return llc
         
-    def on_connect(self, llc):
+    def on_llcp_connect(self, llc):
         self.default_snep_server.start()
         self.validation_snep_server.start()
         return True

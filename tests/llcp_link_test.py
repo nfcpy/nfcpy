@@ -46,8 +46,10 @@ class ContactlessFrontend(nfc.clf.ContactlessFrontend):
         self.packets = packet_generator(packets)
 
     def listen(self, targets, timeout):
+        print targets
         for target in targets:
             if type(target) == nfc.clf.TTA:
+                target = nfc.clf.TTA(106, *target[1:])
                 return target, bytearray.fromhex(self.packets.next())
             elif type(target) == nfc.clf.TTF:
                 if target.br == 212:
@@ -115,7 +117,7 @@ def test_p2p_pol_connect_and_terminate_locally():
            ("06D406000140", None, "06D507000000"),
            ("03D40A", None, "03D50B")]
     clf = ContactlessFrontend(seq)
-    assert clf.connect(p2p={'role': 'initiator'}) == False
+    assert clf.connect(llcp={'role': 'initiator'}) == False
     clf.packets.next()
 
 @raises(StopIteration)
@@ -130,7 +132,7 @@ def test_p2p_pol_connect_and_terminate_remotely():
            ("06D406000000", None, "06D507000140"),
            ("03D40A", None, "03D50B")]
     clf = ContactlessFrontend(seq)
-    assert clf.connect(p2p={'role': 'initiator'}) == True
+    assert clf.connect(llcp={'role': 'initiator'}) == True
     clf.packets.next()
 
 @raises(StopIteration)
@@ -146,7 +148,7 @@ def test_p2p_pol_connect_and_terminate_disrupted():
            ("04D40680", None, "TimeoutError"),
            ("04D40680", None, "TimeoutError")]
     clf = ContactlessFrontend(seq)
-    assert clf.connect(p2p={'role': 'initiator'}) == True
+    assert clf.connect(llcp={'role': 'initiator'}) == True
     clf.packets.next()
 
 @raises(StopIteration)
@@ -162,7 +164,7 @@ def test_p2p_lis_connect_and_terminate_locally():
            ("06D507000000", None, "KeyboardInterrupt"),
            ("06D507000140", None, "03D40A"), ("03D50B", None, None)]
     clf = ContactlessFrontend(seq)
-    assert clf.connect(p2p={'role': 'target'}) == False
+    assert clf.connect(llcp={'role': 'target'}) == False
     clf.packets.next()
 
 @raises(StopIteration)
@@ -178,7 +180,7 @@ def test_p2p_lis_connect_and_terminate_remotely():
            ("06D507000000", None, "06D406000140"),
            ("06D507000000", None, "03D40A"), ("03D50B", None, None)]
     clf = ContactlessFrontend(seq)
-    assert clf.connect(p2p={'role': 'target'}) == True
+    assert clf.connect(llcp={'role': 'target'}) == True
     clf.packets.next()
 
 @raises(StopIteration)
@@ -193,6 +195,6 @@ def test_p2p_lis_connect_and_terminate_disrupted():
            ("06D507030000", None, "06D406000000"),
            ("06D507000000", None, "TimeoutError")]
     clf = ContactlessFrontend(seq)
-    assert clf.connect(p2p={'role': 'target'}) == True
+    assert clf.connect(llcp={'role': 'target'}) == True
     clf.packets.next()
 

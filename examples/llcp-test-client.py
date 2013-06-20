@@ -65,7 +65,8 @@ class TestProgram(CommandLineInterface):
         parser.add_argument(
             "--co-echo", type=int, dest="co_echo_sap", metavar="SAP",
             help="connection-oriented echo server address")
-        super(TestProgram, self).__init__(parser, groups="tst dbg p2p clf")
+        super(TestProgram, self).__init__(
+            parser, groups="test llcp dbg clf")
 
     def test_01(self, llc):
         """Link activation, symmetry and deactivation

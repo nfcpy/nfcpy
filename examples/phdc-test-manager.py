@@ -236,20 +236,21 @@ class PhdcPeerManager(Thread):
 class TestProgram(CommandLineInterface):
     def __init__(self):
         parser = argparse.ArgumentParser()
-        super(TestProgram, self).__init__(parser, groups="p2p tag dbg clf")
+        super(TestProgram, self).__init__(
+            parser, groups="llcp rdwr dbg clf")
 
-    def on_p2p_startup(self, llc):
+    def on_llcp_startup(self, clf, llc):
         validation_service_name = "urn:nfc:xsn:nfc-forum.org:phdc-validation"
         self.phdc_manager_1 = PhdcPeerManager(llc, "urn:nfc:sn:phdc")
         self.phdc_manager_2 = PhdcPeerManager(llc, validation_service_name)
-        return True
+        return llc
         
-    def on_p2p_connect(self, llc):
+    def on_llcp_connect(self, llc):
         self.phdc_manager_1.start()
         self.phdc_manager_2.start()
         return True
 
-    def on_tag_connect(self, tag):
+    def on_rdwr_connect(self, tag):
         log.info(tag)
         if tag.ndef:
             log.info("NDEF attribute data:")
