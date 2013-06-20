@@ -45,28 +45,6 @@ import nfc.llcp
 def info(message, prefix="  "):
     log.info(prefix + message)
 
-def trace(func):
-    def traced_func(*args, **kwargs):
-        _args = "{0}".format(args[1:]).strip("(),")
-        if kwargs:
-            _args = ', '.join([_args, "{0}".format(kwargs).strip("{}")])
-        log.info("{func}({args})".format(func=func.__name__, args=_args))
-        return func(*args, **kwargs)
-    return traced_func
-
-def printable(data):
-    printable = string.digits + string.letters + string.punctuation + ' '
-    return ''.join([c if c in printable else '.' for c in data])
-
-def format_data(data):
-    s = []
-    for i in range(0, len(data), 16):
-        s.append("  %04x: " % i)
-        s[-1] += ' '.join(["%02x" % ord(c) for c in data[i:i+16]]) + ' '
-        s[-1] += (8 + 16*3 - len(s[-1])) * ' '
-        s[-1] += printable(data[i:i+16])
-    return '\n'.join(s)
-
 class PhdcAgent(Thread):
     def __init__(self):
         super(PhdcAgent, self).__init__()
@@ -158,7 +136,7 @@ class PhdcTagAgent(PhdcAgent):
     def recv_phd_message(self):
         attr = nfc.tt3.NdefAttributeData(self.ndef_data_area[0:16])
         if attr.valid and not attr.writing and attr.length > 0:
-            print str(self.ndef_data_area[16:16+attr.length]).encode("hex")
+            #print str(self.ndef_data_area[16:16+attr.length]).encode("hex")
             try:
                 message = nfc.ndef.Message(
                     self.ndef_data_area[16:16+attr.length])
@@ -224,37 +202,34 @@ thermometer_assoc_res = \
 assoc_release_req = "E40000020000"
 assoc_release_res = "E50000020000"
 
-def phdc_tag_agent(args):
-    log.info("performing as tag agent")
-    if args.test == 0:
-        phdc_tag_agent_test0(args)
-    if args.test == 1:
-        phdc_tag_agent_test1(args)
-    if args.test == 2:
-        phdc_tag_agent_test2(args)
-    if args.test == 3:
-        phdc_tag_agent_test3(args)
-    if args.test == 4:
-        phdc_tag_agent_test4(args)
+phdc_tag_agent_description = """
+Execute some Personal Health Device Communication (PHDC) tests running
+as a Tag Agent. The reader device must have the PHDC validation R/W
+Mode Test Manager running.
+"""
+class PhdcTagAgentTest(CommandLineInterface):
+    def __init__(self):
+        parser = argparse.ArgumentParser(
+            usage='%(prog)s [OPTION]...',
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            description=phdc_tag_agent_description)
+        super(PhdcTagAgentTest, self).__init__(
+            parser, groups="test card dbg clf")
 
-def phdc_tag_agent_test0(args):
-    idm = bytearray.fromhex("02FE") + os.urandom(6)
-    pmm = bytearray.fromhex("01E0000000FFFF00")
-    sys = bytearray.fromhex("12FC")
-    target = nfc.clf.TTF(br=None, idm=idm, pmm=pmm, sys=sys)
-                       
-    log.info("touch a manager")
+    def on_card_startup(self, clf, targets):
+        idm = bytearray.fromhex("02FE") + os.urandom(6)
+        pmm = bytearray.fromhex("01E0000000FFFF00")
+        sys = bytearray.fromhex("12FC")
+        return [nfc.clf.TTF(br=212, idm=idm, pmm=pmm, sys=sys)]
+    
+    def test_00(self, tag, command):
+        """Send data read from scenario file"""
 
-    while True:
-        activated = args.clf.listen([target], timeout=1)
-        if activated:
-            log.info("tag activated")
-            target, command = activated
-            tag = nfc.tt3.Type3TagEmulation(args.clf, target)
-            agent = PhdcTagAgent(tag, command)
-            agent.start(command)
-            log.info("entering ieee agent")
+        agent = PhdcTagAgent(tag, command)
+        agent.start()
+        info("entering ieee agent")
 
+        try:
             with open("scenario.txt") as f:
                 for line in f:
                     if line.startswith('#'):
@@ -263,175 +238,132 @@ def phdc_tag_agent_test0(args):
                     agent.send(apdu)
                     apdu = agent.recv(timeout=5.0)
                     if apdu is None:
-                        break
-            
-            log.info("leaving ieee agent")
-            break
+                        raise TestError("no data received")
+        except IOError as e:
+            log.error(e)
 
-    if agent.is_alive():
-        agent.stop()
+        info("leaving ieee agent")
+
+        if agent.is_alive():
+            agent.stop()
+
+    def test_01(self, tag, command):
+        """Discovery, association and release"""
         
-def phdc_tag_agent_test1(args):
-    idm = bytearray.fromhex("02FE") + os.urandom(6)
-    pmm = bytearray.fromhex("01E0000000FFFF00")
-    sys = bytearray.fromhex("12FC")
-    target = nfc.clf.TTF(br=None, idm=idm, pmm=pmm, sys=sys)
-                       
-    log.info("touch a manager")
+        agent = PhdcTagAgent(tag, command)
+        agent.start()
+        info("entering ieee agent")
 
-    while True:
-        activated = args.clf.listen([target], timeout=1)
-        if activated:
-            log.info("tag activated")
-            target, command = activated
-            tag = nfc.tt3.Type3TagEmulation(args.clf, target)
-            agent = PhdcTagAgent(tag, command)
-            agent.start()
-            log.info("entering ieee agent")
-            
-            apdu = bytearray.fromhex(thermometer_assoc_req)
-            log.info("send thermometer association request")
-            agent.send(apdu)
+        apdu = bytearray.fromhex(thermometer_assoc_req)
+        info("send thermometer association request")
+        agent.send(apdu)
 
-            apdu = agent.recv(timeout=5.0)
-            if apdu is None:
-                break
-            
-            if apdu.startswith("\xE3\x00"):
-                log.info("rcvd association response")
-            
-            time.sleep(3.0)
-            
-            apdu = bytearray.fromhex(assoc_release_req)
-            log.info("send association release request")
-            agent.send(apdu)
-                
-            apdu = agent.recv(timeout=5.0)
-            if apdu is None:
-                break
-            
-            if apdu.startswith("\xE5\x00"):
-                log.info("rcvd association release response")
-            
-            log.info("leaving ieee agent")
-            break
+        apdu = agent.recv(timeout=5.0)
+        if apdu is None:
+            raise TestError("no data received")
 
-    if agent.is_alive():
-        agent.stop()
+        if apdu.startswith("\xE3\x00"):
+            info("rcvd association response")
+
+        time.sleep(3.0)
+
+        apdu = bytearray.fromhex(assoc_release_req)
+        info("send association release request")
+        agent.send(apdu)
+
+        apdu = agent.recv(timeout=5.0)
+        if apdu is None:
+            raise TestError("no data received")
+
+        if apdu.startswith("\xE5\x00"):
+            info("rcvd association release response")
+
+        info("leaving ieee agent")
+
+        if agent.is_alive():
+            agent.stop()
         
-def phdc_tag_agent_test2(args):
-    idm = bytearray.fromhex("02FE") + os.urandom(6)
-    pmm = bytearray.fromhex("01E0000000FFFF00")
-    sys = bytearray.fromhex("12FC")
-    target = nfc.clf.TTF(br=None, idm=idm, pmm=pmm, sys=sys)
-                       
-    log.info("touch a manager")
-
-    while True:
-        activated = args.clf.listen([target], timeout=1)
-        if activated:
-            log.info("tag activated")
-            target, command = activated
-            tag = nfc.tt3.Type3TagEmulation(args.clf, target)
-            agent = PhdcTagAgent(tag, command)
-            agent.start()
-            log.info("entering ieee agent")
-            
-            apdu = bytearray.fromhex(thermometer_assoc_req)
-            log.info("send thermometer association request")
-            agent.send(apdu)
-            
-            apdu = agent.recv(timeout=5.0)
-            if apdu is None: break
-            if apdu.startswith("\xE3\x00"):
-                log.info("rcvd association response")
-            
-            apdu = bytearray.fromhex(assoc_release_req)
-            log.info("send association release request")
-            agent.send(apdu)
-                
-            apdu = agent.recv(timeout=5.0)
-            if apdu is None: break
-            if apdu.startswith("\xE5\x00"):
-                log.info("rcvd association release response")
-            
-            log.info("leaving ieee agent")
-
-            time.sleep(3.0)
-
-            log.info("entering ieee agent")
-            
-            apdu = bytearray.fromhex(thermometer_assoc_req)
-            log.info("send thermometer association request")
-            agent.send(apdu)
-            
-            apdu = agent.recv(timeout=5.0)
-            if apdu is None: break
-            if apdu.startswith("\xE3\x00"):
-                log.info("rcvd association response")
-            
-            time.sleep(1.0)
-            log.info("now move devices out of communication range")
-            
-            log.info("leaving ieee agent")
-            agent.join(timeout=10.0)
-            break
+    def test_02(self, tag, command):
+        """Association after release"""
         
-def phdc_tag_agent_test3(args):
-    idm = bytearray.fromhex("02FE") + os.urandom(6)
-    pmm = bytearray.fromhex("01E0000000FFFF00")
-    sys = bytearray.fromhex("12FC")
-    target = nfc.clf.TTF(br=None, idm=idm, pmm=pmm, sys=sys)
-                       
-    log.info("touch a manager")
+        agent = PhdcTagAgent(tag, command)
+        agent.start()
+        info("entering ieee agent")
 
-    while True:
-        activated = args.clf.listen([target], timeout=1)
-        if activated:
-            log.info("tag activated")
-            target, command = activated
-            tag = nfc.tt3.Type3TagEmulation(args.clf, target)
-            agent = PhdcTagAgent(tag, command, flags='\x02')
-            log.info("sending with non-zero message counter")
-            agent.start()
-            agent.join(timeout=10.0)
-            break
+        apdu = bytearray.fromhex(thermometer_assoc_req)
+        info("send thermometer association request")
+        agent.send(apdu)
+
+        apdu = agent.recv(timeout=5.0)
+        if apdu is None:
+            raise TestError("no data received")
+        if apdu.startswith("\xE3\x00"):
+            info("rcvd association response")
+
+        apdu = bytearray.fromhex(assoc_release_req)
+        info("send association release request")
+        agent.send(apdu)
+
+        apdu = agent.recv(timeout=5.0)
+        if apdu is None:
+            raise TestError("no data received")
+        if apdu.startswith("\xE5\x00"):
+            info("rcvd association release response")
+
+        info("leaving ieee agent")
+
+        time.sleep(3.0)
+
+        info("entering ieee agent")
+
+        apdu = bytearray.fromhex(thermometer_assoc_req)
+        info("send thermometer association request")
+        agent.send(apdu)
+
+        apdu = agent.recv(timeout=5.0)
+        if apdu is None:
+            raise TestError("no data received")
+        if apdu.startswith("\xE3\x00"):
+            info("rcvd association response")
+
+        time.sleep(1.0)
+        info("now move devices out of communication range")
+
+        info("leaving ieee agent")
+        agent.join(timeout=10.0)
         
-def phdc_tag_agent_test4(args):
-    idm = bytearray.fromhex("02FE") + os.urandom(6)
-    pmm = bytearray.fromhex("01E0000000FFFF00")
-    sys = bytearray.fromhex("12FC")
-    target = nfc.clf.TTF(br=None, idm=idm, pmm=pmm, sys=sys)
-                       
-    log.info("touch a manager")
-
-    while True:
-        activated = args.clf.listen([target], timeout=1)
-        if activated:
-            log.info("tag activated")
-            target, command = activated
-            tag = nfc.tt3.Type3TagEmulation(args.clf, target)
-            agent = PhdcTagAgent(tag, command, flags='\x40')
-            log.info("sending with non-zero reserved field")
-            agent.start()
+    def test_03(self, tag, command):
+        """Activation with invalid settings"""
+        
+        agent = PhdcTagAgent(tag, command, flags='\x02')
+        info("sending with non-zero message counter")
+        agent.start()
+        agent.join(timeout=10.0)
+        
+    def test_04(self, tag, command):
+        """Activation with invalid RFU value"""
+        
+        agent = PhdcTagAgent(tag, command, flags='\x40')
+        info("sending with non-zero reserved field")
+        agent.start()
             
-            log.info("entering ieee agent")
-            time.sleep(3.0)
-            log.info("leaving ieee agent")
-            agent.join(timeout=10.0)
-            break
+        info("entering ieee agent")
+        time.sleep(3.0)
+        info("leaving ieee agent")
+        agent.join(timeout=10.0)
         
-description = """
-Execute some Personal health Device Communication (PHDC) tests. The
-peer device must have the PHDC validation test server running.
+phdc_p2p_agent_description = """
+Execute some Personal Health Device Communication (PHDC) tests. The
+peer device must have the PHDC validation test manager running.
 """
-class TestProgram(CommandLineInterface):
+class PhdcP2pAgentTest(CommandLineInterface):
     def __init__(self):
         parser = argparse.ArgumentParser(
             usage='%(prog)s [OPTION]...',
             formatter_class=argparse.RawDescriptionHelpFormatter,
-            description=description)
-        super(TestProgram, self).__init__(parser, groups="tst p2p dbg clf")
+            description=phdc_p2p_agent_description)
+        super(PhdcP2pAgentTest, self).__init__(
+            parser, groups="test llcp dbg clf")
 
     def test_00(self, llc):
         """Send data read from scenario file"""
@@ -606,4 +538,13 @@ class TestProgram(CommandLineInterface):
         llc.close(socket)
     
 if __name__ == '__main__':
-    TestProgram().run()
+    try: mode, sys.argv = sys.argv[1], sys.argv[0:1] + sys.argv[2:]
+    except IndexError: mode = None
+
+    if mode is None or mode not in ("p2p", "tag"):
+        print("{0} requires 'p2p' or 'tag' as first argument."
+              .format(sys.argv[0]))
+    elif mode == "p2p":
+        PhdcP2pAgentTest().run()
+    elif mode == "tag":
+        PhdcTagAgentTest().run()
