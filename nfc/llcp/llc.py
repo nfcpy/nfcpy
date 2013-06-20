@@ -272,9 +272,8 @@ class LogicalLinkController(object):
     def terminate(self, reason):
         log.debug("llcp link termination caused by {0}".format(reason))
         if reason == "local choice":
-            recv_timeout = 1E-3 * (self.cfg['recv-lto'] + 10)
-            if self.exchange(Disconnect(dsap=0, ssap=0), recv_timeout):
-                self.mac.deactivate()
+            self.exchange(Disconnect(0, 0), timeout=0.1)
+            self.mac.deactivate()
         elif reason == "remote choice":
             self.mac.deactivate()
         # shutdown local services

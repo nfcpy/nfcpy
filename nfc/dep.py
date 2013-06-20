@@ -31,6 +31,7 @@ import nfc.clf
 
 class DataExchangeProtocol(object):
     def __init__(self, clf):
+        self.active = False
         self.count = Counters()
         self.clf = clf
         self.gbi = ""
@@ -141,16 +142,22 @@ class Initiator(DataExchangeProtocol):
                      .format(self.brm))
 
         self.pni = 0
+        self.active = True
         return atr_res.gb
 
     def deactivate(self, release=True):
         REQ, RES = (RLS_REQ, RLS_RES) if release else (DSL_REQ, DSL_RES)
         req = REQ(self.did)
-        res = self.send_req_recv_res(req, 0.1)
-        if type(res) != RES:
-            raise nfc.clf.ProtocolError("Table-86")
-        if res.did != req.did:
-            raise nfc.clf.ProtocolError("14.7.2.2")
+        try:
+            res = self.send_req_recv_res(req, 0.1)
+        except nfc.clf.DigitalProtocolError:
+            pass
+        else:
+            if type(res) != RES:
+                raise nfc.clf.ProtocolError("Table-86")
+            if res.did != req.did:
+                raise nfc.clf.ProtocolError("14.7.2.2")
+        self.active = False
         log.info(self.stat)
         return True
     
@@ -172,6 +179,9 @@ class Initiator(DataExchangeProtocol):
             pfb = DEP_REQ.PFB(pdu_type, nad is not None, did is not None, 0)
             return DEP_REQ(pfb, did, nad, data=bytearray([rtox]))
 
+        if not self.active:
+            return None
+        
         log.debug("dep raw >> " + str(send_data).encode("hex"))
         send_data = bytearray(send_data)
         
@@ -382,6 +392,7 @@ class Target(DataExchangeProtocol):
                       .format(self.brm))
 
         if type(req) == DEP_REQ and req.did == self.did:
+            self.active = True
             self.rwt = 4096/13.56E6 * pow(2, wt)
             self.pni = 0
             self.req = req
@@ -392,6 +403,7 @@ class Target(DataExchangeProtocol):
             self.send_res_recv_req(RLS_RES(self.did), 0)
     
     def deactivate(self):
+        self.active = False
         log.info(self.stat)
 
     def exchange(self, send_data, timeout):
@@ -404,6 +416,9 @@ class Target(DataExchangeProtocol):
             pdu_type = DEP_RES.PositiveAck
             pfb = DEP_RES.PFB(pdu_type, nad is not None, did is not None, pni)
             return DEP_RES(pfb, did, nad, data=None)
+
+        if not self.active:
+            return None
         
         if send_data is not None and len(send_data) == 0:
             raise ValueError("send_data must not be empty")
