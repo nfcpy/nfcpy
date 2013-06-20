@@ -120,23 +120,30 @@ class Device(nfc.dev.Device):
         except socket.error: return
         log.debug("bound socket to {0}".format(self.addr))
 
-        data = ""
-        while not data.startswith("\x06\x00"):
+        while True:
             data, self.addr = self.socket.recvfrom(1024)
             log.debug("<< {0} {1}".format(data.encode("hex"), self.addr))
+            if data.startswith("\x06\x00"): break
+            
+        while True:
+            cmd = bytearray(data)
+            if cmd.startswith("\x06\x00"):
+                rsp = "\x01" + target.idm + target.pmm
+                if cmd[4] == 1: rsp += target.sys
+                data = str(chr(len(rsp) + 1) + rsp)
+                log.debug(">> {0} {1}".format(data.encode("hex"), self.addr))
+                self.socket.sendto(data, self.addr)
+            else: break
+            if len(select.select([self.socket], [], [], 0.1)[0]) == 1:
+                data, self.addr = self.socket.recvfrom(1024)
+                log.debug("<< {0} {1}".format(data.encode("hex"), self.addr))
+            else: return None
 
-        data = ("\x12\x01" + target.idm + target.pmm
-                + (target.sys if data[4] == 1 else ''))
-        log.debug(">> {0} {1}".format(str(data).encode("hex"), self.addr))
-        self.socket.sendto(data, self.addr)
-        if len(select.select([self.socket], [], [], 0.1)[0]) == 1:
-            data, self.addr = self.socket.recvfrom(1024)
-            log.debug("<< {0} {1}".format(data.encode("hex"), self.addr))
-
-            target = TTF(424, *nfcf_target[1:])
-            self.exchange = self.send_rsp_recv_cmd
-            return target, bytearray(data)
-
+        bitrate = nfcf_target.br if nfcf_target.br else 424
+        target = TTF(bitrate, *nfcf_target[1:])
+        self.exchange = self.send_rsp_recv_cmd
+        return target, cmd
+        
     def send_cmd_recv_rsp(self, data, timeout):
         log.debug("send_cmd_recv_rsp with timeout {0} sec".format(timeout))
 
