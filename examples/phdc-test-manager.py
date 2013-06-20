@@ -160,46 +160,28 @@ thermometer_assoc_res = \
 assoc_release_req = "E40000020000"
 assoc_release_res = "E50000020000"
 
-def phdc_tag_manager(args):
-    tag = poll(args.clf)
-    if tag is None:
-        raise SystemExit(1)
-
-    print(tag)
-    if tag.ndef:
-        print("NDEF attribute data:")
-        print("  version   = %s" % tag.ndef.version)
-        print("  writeable = %s" % ("no", "yes")[tag.ndef.writeable])
-        print("  capacity  = %d byte" % tag.ndef.capacity)
-        print("  data size = %d byte" % len(tag.ndef.message))
-        if len(tag.ndef.message):
-            print("NDEF message dump:")
-            print(format_data(tag.ndef.message))
-            message = nfc.ndef.Message(tag.ndef.message)
-            print(message.pretty())
-
-    if tag.ndef:
-        message = nfc.ndef.Message(tag.ndef.message)
-        if message.type == "urn:nfc:wkt:PHD":
-            phd_data = bytearray(message[0].data)
-            if phd_data[0] == 0:
-                manager = PhdcTagManager(tag, apdu=phd_data[1:])
-                manager.start()
-                log.info("entering ieee manager")
-                while True:
-                    apdu = manager.recv(timeout=None)
-                    if apdu is None: break
-                    log.info("[ieee] <<< {0}".format(str(apdu).encode("hex")))
-                    if apdu.startswith("\xE2\x00"):
-                        apdu = bytearray.fromhex(thermometer_assoc_res)
-                    elif apdu.startswith("\xE4\x00"):
-                        apdu = bytearray.fromhex(assoc_release_res)
-                    else:
-                        apdu = apdu[::-1]
-                    time.sleep(0.2)
-                    log.info("[ieee] >>> {0}".format(str(apdu).encode("hex")))
-                    manager.send(apdu)
-                log.info("leaving ieee manager")
+def phdc_tag_manager(tag):
+    message = nfc.ndef.Message(tag.ndef.message)
+    if message.type == "urn:nfc:wkt:PHD":
+        phd_data = bytearray(message[0].data)
+        if phd_data[0] == 0:
+            manager = PhdcTagManager(tag, apdu=phd_data[1:])
+            manager.start()
+            log.info("entering ieee manager")
+            while True:
+                apdu = manager.recv(timeout=None)
+                if apdu is None: break
+                log.info("[ieee] <<< {0}".format(str(apdu).encode("hex")))
+                if apdu.startswith("\xE2\x00"):
+                    apdu = bytearray.fromhex(thermometer_assoc_res)
+                elif apdu.startswith("\xE4\x00"):
+                    apdu = bytearray.fromhex(assoc_release_res)
+                else:
+                    apdu = apdu[::-1]
+                time.sleep(0.2)
+                log.info("[ieee] >>> {0}".format(str(apdu).encode("hex")))
+                manager.send(apdu)
+            log.info("leaving ieee manager")
     
 class PhdcPeerManager(Thread):
     def __init__(self, llc, service_name):
@@ -254,17 +236,34 @@ class PhdcPeerManager(Thread):
 class TestProgram(CommandLineInterface):
     def __init__(self):
         parser = argparse.ArgumentParser()
-        super(TestProgram, self).__init__(parser, groups="dbg p2p clf")
+        super(TestProgram, self).__init__(parser, groups="p2p tag dbg clf")
 
-    def on_startup(self, llc):
+    def on_p2p_startup(self, llc):
         validation_service_name = "urn:nfc:xsn:nfc-forum.org:phdc-validation"
         self.phdc_manager_1 = PhdcPeerManager(llc, "urn:nfc:sn:phdc")
         self.phdc_manager_2 = PhdcPeerManager(llc, validation_service_name)
         return True
         
-    def on_connect(self, llc):
+    def on_p2p_connect(self, llc):
         self.phdc_manager_1.start()
         self.phdc_manager_2.start()
+        return True
+
+    def on_tag_connect(self, tag):
+        log.info(tag)
+        if tag.ndef:
+            log.info("NDEF attribute data:")
+            log.info("  version   = %s" % tag.ndef.version)
+            log.info("  writeable = %s" % ("no", "yes")[tag.ndef.writeable])
+            log.info("  capacity  = %d byte" % tag.ndef.capacity)
+            log.info("  data size = %d byte" % len(tag.ndef.message))
+            if len(tag.ndef.message):
+                log.info("NDEF message dump:")
+                log.info(format_data(tag.ndef.message))
+                message = nfc.ndef.Message(tag.ndef.message)
+                log.info(message.pretty())
+                phdc_tag_manager(tag)
+                return False
         return True
 
 if __name__ == '__main__':
