@@ -107,8 +107,8 @@ class ContactlessFrontend(object):
 
         try:
             while True:
-                if ((tag_options and self._connect_tag(tag_options)) or
-                    (p2p_options and self._connect_p2p(p2p_options, llc))):
+                if ((p2p_options and self._connect_p2p(p2p_options, llc) or
+                    (tag_options and self._connect_tag(tag_options)))):
                     return True
         except KeyboardInterrupt:
             return False
