@@ -95,7 +95,8 @@ class CommandLineInterface(object):
                 logging.getLogger(module).setLevel(logging.DEBUG)
 
     def add_dbg_options(self, argument_parser):
-        group = argument_parser.add_argument_group()
+        group = argument_parser.add_argument_group(
+            title="Debug options")
         group.add_argument(
             "-q", "--quiet", dest="quiet", action="store_true",
             help="do not print anything except errors")
@@ -107,7 +108,8 @@ class CommandLineInterface(object):
             help="write log messages to file")
         
     def add_p2p_options(self, argument_parser):
-        group = argument_parser.add_argument_group()
+        group = argument_parser.add_argument_group(
+            title="P2P Options")
         group.add_argument(
             "--mode", choices=["t","target","i","initiator"], metavar="{t,i}",
             help="connect as 'target' or 'initiator' (default: both)")
@@ -124,8 +126,16 @@ class CommandLineInterface(object):
             "--no-aggregation", action="store_true",
             help="disable outbound packet aggregation")
 
+    def add_tag_options(self, argument_parser):
+        group = argument_parser.add_argument_group(
+            title="R/W options")
+        group.add_argument(
+            "--no-wait", dest="wait", action="store_false",
+            help="wait for tag removal before return")
+
     def add_clf_options(self, argument_parser):
-        group = argument_parser.add_argument_group()
+        group = argument_parser.add_argument_group(
+            title="Device options")
         group.add_argument(
             "--device", metavar="NAME", action="append",
             help="use specified contactless reader(s): "\
@@ -134,13 +144,15 @@ class CommandLineInterface(object):
                 "tty[:(usb|com)[:port]] (usb virtual or com port)")
         
     def add_iop_options(self, argument_parser):
-        group = argument_parser.add_argument_group()
+        group = argument_parser.add_argument_group(
+            title="IOP options")
         group.add_argument(
             "--quirks", action="store_true",
             help="support non-compliant implementations")
         
     def add_tst_options(self, argument_parser):
-        group = argument_parser.add_argument_group()
+        group = argument_parser.add_argument_group(
+            title="Test options")
         group.add_argument(
             "-t", "--test", type=int, default=[], action="append",
             metavar="N", help="run test number <N>")
@@ -154,13 +166,17 @@ class CommandLineInterface(object):
             argument_parser.description += "  {0:2d} - {1}\n".format(
                 int(test_name.split('_')[1]), test_info)
         
-    def on_startup(self, llc):
+    def on_tag_connect(self, llc):
+        log.info(tag)
+        return True
+
+    def on_p2p_startup(self, llc):
         if "tst" in self.groups and len(self.options.test) == 0:
             log.error("no test specified")
             return False
         return True
     
-    def on_connect(self, llc):
+    def on_p2p_connect(self, llc):
         if "tst" in self.groups:
             self.test_completed = False
             Thread(target=self.run_tests, args=(llc,)).start()
@@ -212,9 +228,13 @@ class CommandLineInterface(object):
         elif self.options.mode in ('i', 'initiator'):
             self.options.role = 'initiator'
         
+        tag_options = {
+            'on-connect': self.on_tag_connect,
+            }
+
         p2p_options = {
-            'on-startup': self.on_startup,
-            'on-connect': self.on_connect,
+            'on-startup': self.on_p2p_startup,
+            'on-connect': self.on_p2p_connect,
             'role': self.options.role,
             'miu': self.options.miu,
             'lto': self.options.lto,
@@ -222,7 +242,7 @@ class CommandLineInterface(object):
             }
 
         try:
-            return clf.connect(p2p=p2p_options)
+            return clf.connect(p2p=p2p_options, tag=tag_options)
         finally:
             clf.close()
             
