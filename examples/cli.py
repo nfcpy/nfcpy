@@ -185,6 +185,7 @@ class CommandLineInterface(object):
             self.test_completed = False
             Thread(target=self.run_tests, args=(llc,)).start()
             llc.run(terminate=self.terminate)
+            return False
         return True
 
     def on_card_startup(self, clf, targets):
@@ -198,6 +199,7 @@ class CommandLineInterface(object):
             self.run_tests(tag, command)
             #Thread(target=self.run_tests, args=(target, command)).start()
             #llc.run(terminate=self.terminate)
+            return False
         return True
 
     def terminate(self):
