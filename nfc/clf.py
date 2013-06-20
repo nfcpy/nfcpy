@@ -82,56 +82,86 @@ class ContactlessFrontend(object):
     def connect(self, **options):
         log.debug("connect({0})".format(options))
         
-        tag_options = options.get('tag')
-        p2p_options = options.get('p2p')
-        assert tag_options or p2p_options
+        rdwr_options = options.get('rdwr')
+        llcp_options = options.get('llcp')
+        card_options = options.get('card')
+        assert rdwr_options or llcp_options or card_options
         
-        if tag_options:
-            if not 'targets' in tag_options:
-                tag_options['targets'] = [
+        if rdwr_options:
+            if 'on-startup' in rdwr_options:
+                targets = rdwr_options.get('targets', [])
+                targets = rdwr_options['on-startup'](self, targets)
+                if targets is None: return False
+                else: rdwr_options['targets'] = targets
+            if not rdwr_options.get('targets'):
+                rdwr_options['targets'] = [
                     TTA(br=106, cfg=None, uid=None), TTB(br=106),
                     TTF(br=424, idm=None, pmm=None, sys=None),
                     TTF(br=212, idm=None, pmm=None, sys=None)]
-            if not 'on-connect' in tag_options:
-                tag_options['on-connect'] = lambda tag: True
-        if p2p_options:
+            if not 'on-connect' in rdwr_options:
+                rdwr_options['on-connect'] = lambda tag: True
+        if llcp_options:
             llc = nfc.llcp.llc.LogicalLinkController(
-                recv_miu=p2p_options.get('miu', 128),
-                send_lto=p2p_options.get('lto', 100),
-                send_agf=p2p_options.get('agf', True))
-            if 'on-startup' in p2p_options:
-                if p2p_options['on-startup'](llc) == False:
-                    return False
-            if not 'on-connect' in p2p_options:
-                p2p_options['on-connect'] = lambda llc: True
+                recv_miu=llcp_options.get('miu', 128),
+                send_lto=llcp_options.get('lto', 100),
+                send_agf=llcp_options.get('agf', True))
+            if 'on-startup' in llcp_options:
+                llc = llcp_options['on-startup'](self, llc)
+                if llc is None: return False
+            if not 'on-connect' in llcp_options:
+                llcp_options['on-connect'] = lambda llc: True
+        if card_options:
+            if 'on-startup' in card_options:
+                targets = card_options.get('targets', [])
+                targets = card_options['on-startup'](self, targets)
+                if targets is None: return False
+                else: card_options['targets'] = targets
+            if not card_options.get('targets'):
+                log.error("a target must be specified to connect as tag")
+                return False
+            if not 'on-connect' in card_options:
+                card_options['on-connect'] = lambda tag, command: True
 
         try:
             while True:
-                if ((p2p_options and self._connect_p2p(p2p_options, llc) or
-                    (tag_options and self._connect_tag(tag_options)))):
+                if ((llcp_options and self._llcp_connect(llcp_options, llc)) or
+                    (rdwr_options and self._rdwr_connect(rdwr_options)) or
+                    (card_options and self._card_connect(card_options))):
                     return True
         except KeyboardInterrupt:
             return False
 
-    def _connect_tag(self, options):
+    def _rdwr_connect(self, options):
         target = self.sense(options.get('targets', []))
         if target is not None:
             log.debug("found target {0}".format(target))
             tag = nfc.tag.activate(self, target)
             if tag is not None:
-                log.debug("connected {0}".format(tag))
-                if options['on-connect'](tag):
+                log.debug("connected to {0}".format(tag))
+                if options['on-connect'](tag=tag):
                     while tag.is_present: time.sleep(0.1)
                 return True
         
-    def _connect_p2p(self, options, llc):
+    def _llcp_connect(self, options, llc):
         for role in ('target', 'initiator'):
             if options.get('role') is None or options.get('role') == role:
                 DEP = eval("nfc.dep." + role.capitalize())
                 if llc.activate(mac=DEP(clf=self)):
                     log.debug("connected {0}".format(llc))
-                    if options['on-connect'](llc): llc.run()
+                    if options['on-connect'](llc=llc): llc.run()
                     return True
+        
+    def _card_connect(self, options):
+        timeout = options.get('timeout', 1.0)
+        activated = self.listen(options.get('targets', []), timeout)
+        if activated:
+            target, command = activated
+            log.debug("activated as target {0}".format(target))
+            tag = nfc.tag.emulate(self, target)
+            if tag is not None:
+                log.debug("connected as {0}".format(tag))
+                options['on-connect'](tag=tag, command=command)
+            return True
         
     def sense(self, targets):
         """Discover a contactless target device. Potential targets to
