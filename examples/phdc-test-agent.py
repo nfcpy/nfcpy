@@ -432,51 +432,6 @@ def phdc_p2p_agent(args):
     if args.test == 3:
         phdc_p2p_agent_test3(args)
 
-def phdc_p2p_agent_test0(args):
-    log.info("running p2p agent test #1")
-    llcp_config = {'recv-miu': 240, 'send-lto': 500}
-    llcp_option_string = nfc.llcp.startup(llcp_config)
-    try:
-        while True:
-            peer = args.clf.poll(llcp_option_string)
-            if isinstance(peer, nfc.dep.DEP):
-                log.info("dep target activated")
-                log.info("general bytes: {0}".
-                         format(peer.general_bytes.encode("hex")))
-                if peer.general_bytes.startswith("Ffm"):
-                    break
-    except KeyboardInterrupt:
-        pass
-    
-    if not peer:
-        return
-
-    log.info("got a peer")
-    nfc.llcp.activate(peer)
-    
-    socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
-    nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
-    nfc.llcp.connect(socket, "urn:nfc:sn:phdc")
-    peer_sap = nfc.llcp.getpeername(socket)
-    log.info("connected with phdc manager at sap {0}".format(peer_sap))
-    log.info("entering ieee agent")
-
-    with open("scenario.txt") as f:
-        for line in f:
-            if line.startswith('#'):
-                continue
-            
-            apdu = bytearray.fromhex(line)
-            apdu = struct.pack(">H", len(apdu)) + apdu
-            log.info("send {0}".format(str(apdu).encode("hex")))
-            nfc.llcp.send(socket, str(apdu))
-            
-            apdu = nfc.llcp.recv(socket)
-            log.info("rcvd {0}".format(str(apdu).encode("hex")))
-            
-    log.info("leaving ieee agent")
-    socket.close()
-    
 description = """
 Execute some Personal health Device Communication (PHDC) tests. The
 peer device must have the PHDC validation test server running.
@@ -487,7 +442,36 @@ class TestProgram(CommandLineInterface):
             usage='%(prog)s [OPTION]...',
             formatter_class=argparse.RawDescriptionHelpFormatter,
             description=description)
-        super(TestProgram, self).__init__(parser, groups="tst dbg p2p clf")
+        super(TestProgram, self).__init__(parser, groups="tst p2p dbg clf")
+
+    def test_00(self, llc):
+        """Send data read from scenario file"""
+
+        socket = llc.socket(nfc.llcp.DATA_LINK_CONNECTION)
+        llc.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
+        llc.connect(socket, "urn:nfc:sn:phdc")
+        peer_sap = llc.getpeername(socket)
+        log.info("connected with phdc manager at sap {0}".format(peer_sap))
+        log.info("entering ieee agent")
+
+        try:
+            with open("scenario.txt") as f:
+                for line in f:
+                    if line.startswith('#'):
+                        continue
+
+                    apdu = bytearray.fromhex(line)
+                    apdu = struct.pack(">H", len(apdu)) + apdu
+                    log.info("send {0}".format(str(apdu).encode("hex")))
+                    llc.send(socket, str(apdu))
+
+                    apdu = llc.recv(socket)
+                    log.info("rcvd {0}".format(str(apdu).encode("hex")))
+        except IOError as e:
+            log.error(e)
+
+        log.info("leaving ieee agent")
+        llc.close(socket)
 
     def test_01(self, llc):
         """Connect, associate and release"""
@@ -607,7 +591,7 @@ class TestProgram(CommandLineInterface):
         info("connected with phdc manager at sap {0}".format(peer_sap))
 
         miu = llc.getsockopt(socket, nfc.llcp.SO_SNDMIU)
-
+        
         apdu = os.urandom(2176)
         log.info("send ieee apdu of size {0} byte".format(len(apdu)))
         apdu = struct.pack(">H", len(apdu)) + apdu
