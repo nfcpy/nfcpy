@@ -24,10 +24,10 @@ import logging
 log = logging.getLogger(__name__)
 
 import nfc.clf
-from nfc.tt1 import Type1Tag
-from nfc.tt2 import Type2Tag
-from nfc.tt3 import Type3Tag, Type3TagEmulation
-from nfc.tt4 import Type4Tag
+from tt1 import Type1Tag
+from tt2 import Type2Tag
+from tt3 import Type3Tag, Type3TagEmulation
+from tt4 import Type4Tag
 
 def activate(clf, target):
     if type(target) == nfc.clf.TTA:

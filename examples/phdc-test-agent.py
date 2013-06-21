@@ -80,7 +80,7 @@ class PhdcTagAgent(PhdcAgent):
         super(PhdcTagAgent, self).__init__()
         self.terminate = False
         self.mc = 1
-        attr = nfc.tt3.NdefAttributeData()
+        attr = nfc.tag.tt3.NdefAttributeData()
         attr.version = "1.0"
         attr.nbr, attr.nbw = 12, 8
         attr.capacity = 1024
@@ -134,7 +134,7 @@ class PhdcTagAgent(PhdcAgent):
                     Thread(target=self.send_phd_message).start()
             
     def recv_phd_message(self):
-        attr = nfc.tt3.NdefAttributeData(self.ndef_data_area[0:16])
+        attr = nfc.tag.tt3.NdefAttributeData(self.ndef_data_area[0:16])
         if attr.valid and not attr.writing and attr.length > 0:
             #print str(self.ndef_data_area[16:16+attr.length]).encode("hex")
             try:
@@ -159,7 +159,7 @@ class PhdcTagAgent(PhdcAgent):
         with self.ndef_read_lock:
             log.info("[phdc] >>> " + str(data).encode("hex"))
             data = bytearray(str(nfc.ndef.Message(record)))
-            attr = nfc.tt3.NdefAttributeData(self.ndef_data_area[0:16])
+            attr = nfc.tag.tt3.NdefAttributeData(self.ndef_data_area[0:16])
             attr.length = len(data)
             self.ndef_data_area[0:16+attr.length] = str(attr) + data
             self.mc += 1
@@ -241,6 +241,7 @@ class PhdcTagAgentTest(CommandLineInterface):
                         raise TestError("no data received")
         except IOError as e:
             log.error(e)
+            time.sleep(0.1)
 
         info("leaving ieee agent")
 

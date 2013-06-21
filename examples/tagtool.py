@@ -33,7 +33,6 @@ import struct
 
 sys.path.insert(1, os.path.split(sys.path[0])[0])
 import nfc
-import nfc.tag
 import nfc.ndef
 
 def format_data(data, w=16):
@@ -94,7 +93,7 @@ def show_tag(args):
         return args.wait or args.loop
         
     log.info("touch a tag")
-    while args.clf.connect(tag={'on-connect': show}) and args.loop:
+    while args.clf.connect(rdwr={'on-connect': show}) and args.loop:
         log.info("touch a tag")
 
 def add_dump_parser(parser):
@@ -120,7 +119,7 @@ def dump_tag(args):
         return args.wait or args.loop
         
     log.info("touch a tag")
-    while args.clf.connect(tag={'on-connect': dump}) and args.loop:
+    while args.clf.connect(rdwr={'on-connect': dump}) and args.loop:
         log.info("touch a tag")
 
 def add_load_parser(parser):
@@ -147,7 +146,7 @@ def load_tag(args):
         return args.wait or args.loop
         
     log.info("touch a tag")
-    while args.clf.connect(tag={'on-connect': load}) and args.loop:
+    while args.clf.connect(rdwr={'on-connect': load}) and args.loop:
         log.info("touch a tag")
 
 def add_format_parser(parser):
@@ -262,7 +261,7 @@ def tt3_format(args):
         return args.wait or args.loop
         
     log.info("touch a type 3 tag to format")
-    while args.clf.connect(tag={'on-connect': format}) and args.loop:
+    while args.clf.connect(rdwr={'on-connect': format}) and args.loop:
         log.info("touch a type 3 tag to format")
 
 def add_emulate_parser(parser):
