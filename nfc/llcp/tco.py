@@ -61,7 +61,7 @@ class TransmissionControlObject(object):
         def __getattr__(self, name):
             return self.value[name]
 
-    def __init__(self):
+    def __init__(self, send_miu, recv_miu):
         self.lock = threading.RLock()
         self.mode = TransmissionControlObject.Mode()
         self.state = TransmissionControlObject.State()
@@ -69,6 +69,8 @@ class TransmissionControlObject(object):
         self.recv_queue = collections.deque()
         self.send_ready = threading.Condition(self.lock)
         self.recv_ready = threading.Condition(self.lock)
+        self.recv_miu = recv_miu
+        self.send_miu = send_miu
         self.recv_buf = 1
         self.send_buf = 1
         self.addr = None
@@ -87,6 +89,10 @@ class TransmissionControlObject(object):
             with self.lock: self.recv_buf = int(value)
 
     def getsockopt(self, option):
+        if option == SO_SNDMIU:
+            return self.send_miu
+        if option == SO_RCVMIU:
+            return self.recv_miu
         if option == SO_SNDBUF:
             return self.send_buf
         if option == SO_RCVBUF:
@@ -160,10 +166,8 @@ class RawAccessPoint(TransmissionControlObject):
     ESTABLISHED   close()     SHUTDOWN
     ============= =========== ============
     """
-    def __init__(self, send_miu, recv_miu):
-        super(RawAccessPoint, self).__init__()
-        self.recv_miu = recv_miu
-        self.send_miu = send_miu
+    def __init__(self, recv_miu):
+        super(RawAccessPoint, self).__init__(128, recv_miu)
         self.state.ESTABLISHED = True
 
     def __str__(self):
@@ -222,10 +226,8 @@ class LogicalDataLink(TransmissionControlObject):
     ESTABLISHED   close()     SHUTDOWN
     ============= =========== ============
     """
-    def __init__(self, send_miu, recv_miu):
-        super(LogicalDataLink, self).__init__()
-        self.recv_miu = recv_miu
-        self.send_miu = send_miu
+    def __init__(self, recv_miu):
+        super(LogicalDataLink, self).__init__(128, recv_miu)
         self.state.ESTABLISHED = True
 
     def __str__(self):
@@ -312,15 +314,13 @@ class DataLinkConnection(TransmissionControlObject):
     CLOSE_WAIT    close()     SHUTDOWN
     ============= =========== ============
     """
-    def __init__(self, recv_miu=128, recv_win=1):
-        super(DataLinkConnection, self).__init__()
+    def __init__(self, recv_miu, recv_win):
+        super(DataLinkConnection, self).__init__(128, recv_miu)
         self.state.CLOSED = True
         self.acks_ready = threading.Condition(self.lock)
         self.acks_recvd = 0 # received acknowledgements
         self.recv_confs = 0 # outstanding receive confirmations
         self.send_token = threading.Condition(self.lock)
-        self.recv_miu = recv_miu
-        self.send_miu = 128
         self.recv_buf = recv_win
         self.recv_win = recv_win # RW(Local)
         self.recv_cnt = 0        # V(R)
@@ -357,10 +357,6 @@ class DataLinkConnection(TransmissionControlObject):
             super(DataLinkConnection, self).setsockopt(option, value)
 
     def getsockopt(self, option):
-        if option == SO_SNDMIU:
-            return self.send_miu
-        if option == SO_RCVMIU:
-            return self.recv_miu
         if option == SO_RCVBUF:
             return self.recv_win
         if option == SO_SNDBSY:
