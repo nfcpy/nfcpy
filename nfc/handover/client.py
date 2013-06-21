@@ -40,24 +40,24 @@ class HandoverClient(object):
         :exc:`nfc.llcp.ConnectRefused` if the remote device does not
         have a handover service or the service does not accept any
         more connections."""
-        socket = self.llc.socket(nfc.llcp.DATA_LINK_CONNECTION)
-        self.llc.setsockopt(socket, nfc.llcp.SO_RCVBUF, recv_buf)
-        self.llc.setsockopt(socket, nfc.llcp.SO_RCVMIU, recv_miu)
-        self.llc.connect(socket, "urn:nfc:sn:handover")
-        log.debug("handover client connected to remote sap {0}"
-                 .format(self.llc.getsockname(socket)))
+        socket = nfc.llcp.Socket(self.llc, nfc.llcp.DATA_LINK_CONNECTION)
+        socket.setsockopt(nfc.llcp.SO_RCVBUF, recv_buf)
+        socket.setsockopt(nfc.llcp.SO_RCVMIU, recv_miu)
+        socket.connect("urn:nfc:sn:handover")
+        server = socket.getpeername()
+        log.debug("handover client connected to remote sap {0}".format(server))
         self.socket = socket
 
     def close(self):
         """Disconnect from the remote handover server."""
         if self.socket:
-            self.llc.close(self.socket)
+            self.socket.close()
             self.socket = None
 
     def send(self, message):
         """Send a handover request message to the remote server."""
         log.debug("sending '{0}' message".format(message.type))
-        send_miu = self.llc.getsockopt(self.socket, nfc.llcp.SO_SNDMIU)
+        send_miu = self.socket.getsockopt(nfc.llcp.SO_SNDMIU)
         try:
             data = str(message)
         except nfc.llcp.EncodeError as e:
@@ -67,7 +67,7 @@ class HandoverClient(object):
         
     def _send(self, data, miu):
         while len(data) > 0:
-            if self.llc.send(self.socket, data[0:miu]):
+            if self.socket.send(data[0:miu]):
                 data = data[miu:]
             else: break
         return bool(len(data) == 0)
@@ -85,9 +85,9 @@ class HandoverClient(object):
     def _recv(self, timeout=None):
         data = ''
         started = time.time()
-        while self.llc.poll(self.socket, "recv", timeout):
+        while self.socket.poll("recv", timeout):
             try:
-                data += self.llc.recv(self.socket)
+                data += self.socket.recv()
                 message = nfc.ndef.Message(data)
                 log.debug("received message\n" + message.pretty())
                 return message

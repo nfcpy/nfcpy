@@ -57,32 +57,31 @@ class ConnectionLessEchoServer(Thread):
     for the next service data unit.
     """
     def __init__(self, llc):
+        socket = nfc.llcp.Socket(llc, nfc.llcp.LOGICAL_DATA_LINK)
+        socket.bind('urn:nfc:sn:cl-echo')
+        log.info("bound connection-less echo server to port {0}"
+                 .format(socket.getsockname()))
         super(ConnectionLessEchoServer, self).__init__(
-            target=self.listen, args=(llc,))
+            target=self.listen, args=(socket,))
         self.name = "ConnectionLessEchoServerThread"
-        self.daemon = True
 
-    def listen(self, llc):
-        socket = llc.socket(nfc.llcp.LOGICAL_DATA_LINK)
+    def listen(self, socket):
         try:
-            llc.bind(socket, 'urn:nfc:sn:cl-echo')
-            log.info("bound connection-less echo server to port {0}"
-                     .format(llc.getsockname(socket)))
-            llc.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
-            while llc.poll(socket, "recv"):
+            socket.setsockopt(nfc.llcp.SO_RCVBUF, 2)
+            while socket.poll("recv"):
                 log.info("data available, start delay time")
                 time.sleep(2.0)
-                while llc.poll(socket, "recv", timeout=0):
-                    data, addr = llc.recvfrom(socket)
+                while socket.poll("recv", timeout=0):
+                    data, addr = socket.recvfrom()
                     log.info("received {0} byte from sap {1}"
                              .format(len(data), addr))
-                    llc.sendto(socket, data, addr)
+                    socket.sendto(data, addr)
                 log.info("no more data, start waiting")
         except nfc.llcp.Error as e:
             (log.debug if e.errno == nfc.llcp.errno.EPIPE else log.error)(e)
         finally:
             log.info("close connection-less echo server socket")
-            llc.close(socket)
+            socket.close()
 
 class ConnectionModeEchoServer(Thread):
     """The connection-oriented mode echo server waits for a connect
@@ -105,13 +104,16 @@ class ConnectionModeEchoServer(Thread):
     accept further incoming service data units.
     """
     def __init__(self, llc):
+        socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
+        socket.bind('urn:nfc:sn:co-echo')
+        log.info("bound connection-mode echo server to port {0}"
+                 .format(socket.getsockname()))
         super(ConnectionModeEchoServer, self).__init__(
-            target=self.listen, args=(llc,))
+            target=self.listen, args=(socket,))
         self.name = "ConnectionModeEchoServerThread"
-        self.daemon = True
 
-    def echo(self, llc, socket, echo_queue):
-        peer = llc.getpeername(socket)
+    def echo(self, socket, echo_queue):
+        peer = socket.getpeername()
         while True:
             data = echo_queue.get()
             if data == 0:
@@ -122,9 +124,9 @@ class ConnectionModeEchoServer(Thread):
                 time.sleep(2.0)
             while data != None:
                 if not echo_queue.full():
-                    llc.setsockopt(socket, nfc.llcp.SO_RCVBSY, False)
+                    socket.setsockopt(nfc.llcp.SO_RCVBSY, False)
                 try:
-                    if llc.send(socket, data):
+                    if socket.send(data):
                         log.info("sent {0} byte to sap {1}"
                                  .format(len(data), peer))
                 except nfc.llcp.Error:
@@ -140,80 +142,75 @@ class ConnectionModeEchoServer(Thread):
                 if data != None:
                     log.info("more data available")
 
-    def serve(self, llc, socket):
+    def serve(self, socket):
         echo_queue = queue.Queue(2)
-        echo_thread = Thread(target=self.echo, args=(llc, socket, echo_queue))
+        echo_thread = Thread(target=self.echo, args=(socket, echo_queue))
         echo_thread.start()
-        peer = llc.getpeername(socket)
+        peer = socket.getpeername()
         log.info("serving connection from sap {0}".format(peer))
-        while llc.poll(socket, "recv"):
-            data = llc.recv(socket)
+        while socket.poll("recv"):
+            data = socket.recv()
             if data == None: break
             log.info("rcvd {0} byte from sap {1}".format(len(data), peer))
             if echo_queue.full():
-                llc.setsockopt(socket, nfc.llcp.SO_RCVBSY, True)
+                socket.setsockopt(nfc.llcp.SO_RCVBSY, True)
             echo_queue.put(data)
         log.info("remote peer {0} closed closed connection".format(peer))
         try: echo_queue.put_nowait(int(0))
         except queue.Full: pass
         echo_thread.join()
-        llc.close(socket)
+        socket.close()
         log.info("serve thread terminated")
 
-    def listen(self, llc):
-        socket = llc.socket(nfc.llcp.DATA_LINK_CONNECTION)
+    def listen(self, socket):
         try:
-            llc.bind(socket, 'urn:nfc:sn:co-echo')
-            log.info("bound connection-mode echo server to port {0}"
-                     .format(llc.getsockname(socket)))
-            llc.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
-            llc.listen(socket, backlog=0)
+            socket.setsockopt(nfc.llcp.SO_RCVBUF, 2)
+            socket.listen(backlog=0)
             while True:
-                client_socket = llc.accept(socket)
-                peer = llc.getpeername(client_socket)
+                client_socket = socket.accept()
+                peer = client_socket.getpeername()
                 log.info("client sap {0} connected".format(peer))
-                self.serve(llc, client_socket)
+                self.serve(client_socket)
         except nfc.llcp.Error as e:
             (log.debug if e.errno == nfc.llcp.errno.EPIPE else log.error)(e)
         finally:
             log.info("close connection-mode echo server socket")
-            llc.close(socket)
+            socket.close()
 
 class ConnectionModeDumpServer(Thread):
     def __init__(self, llc):
+        socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
+        socket.bind('urn:nfc:sn:cm-dump')
+        log.info("bound connection-mode dump server to port {0}"
+                 .format(socket.getsockname()))
         super(ConnectionModeDumpServer, self).__init__(
-            target=self.listen, args=(llc,))
+            target=self.listen, args=(socket,))
         self.name = "ConnectionModeEchoDumpThread"
-        self.daemon = True
 
-    def serve(self, llc, socket):
-        peer = llc.getpeername(socket)
+    def serve(self, socket):
+        peer = socket.getpeername()
         log.info("serving connection from sap {0}".format(peer))
-        while llc.poll(socket, "recv"):
-            data = llc.recv(socket)
+        while socket.poll("recv"):
+            data = socket.recv()
             if data == None: break
-            log.info("dump: got {0} byte from sap {1}".format(len(data), peer))
-        llc.close(socket)
+            log.info("dump: {0} byte from sap {1}".format(len(data), peer))
+        socket.close()
         log.info("server thread terminated")
 
-    def listen(self, llc):
-        socket = llc.socket(nfc.llcp.DATA_LINK_CONNECTION)
+    def listen(self, socket):
         try:
-            llc.bind(socket, 'urn:nfc:sn:cm-dump')
-            log.info("bound connection-mode dump server to port {0}"
-                     .format(llc.getsockname(socket)))
-            llc.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
-            llc.listen(socket, backlog=4)
+            socket.setsockopt(nfc.llcp.SO_RCVBUF, 2)
+            socket.listen(backlog=4)
             while True:
-                client_socket = llc.accept(socket)
-                peer = llc.getpeername(client_socket)
+                client_socket = socket.accept()
+                peer = client_socket.getpeername()
                 log.info("client sap {0} connected".format(peer))
-                Thread(target=self.serve, args=(llc, client_socket)).start()
+                Thread(target=self.serve, args=(client_socket,)).start()
         except nfc.llcp.Error as e:
             (log.debug if e.errno == nfc.llcp.errno.EPIPE else log.error)(e)
         finally:
             log.info("close connection-mode dump server socket")
-            llc.close(socket)
+            socket.close()
 
 class TestProgram(CommandLineInterface):
     def __init__(self):

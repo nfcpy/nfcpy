@@ -28,20 +28,20 @@ log = logging.getLogger(__name__)
 import struct
 import nfc.llcp
 
-def send_request(llc, socket, snep_request, send_miu):
+def send_request(socket, snep_request, send_miu):
     if len(snep_request) <= send_miu:
-        return llc.send(socket, snep_request)
+        return socket.send(snep_request)
     else:
-        if llc.send(socket, snep_request[0:send_miu]):
-            if llc.recv(socket) == "\x10\x80\x00\x00\x00\x00":
+        if socket.send(snep_request[0:send_miu]):
+            if socket.recv() == "\x10\x80\x00\x00\x00\x00":
                 for offset in xrange(send_miu, len(snep_request), send_miu):
                     fragment = snep_request[offset:offset+send_miu]
-                    if not llc.send(socket, fragment): break
+                    if not socket.send(fragment): break
                 else: return True
 
-def recv_response(llc, socket, acceptable_length, timeout):
-    if llc.poll(socket, "recv", timeout):
-        snep_response = llc.recv(socket)
+def recv_response(socket, acceptable_length, timeout):
+    if socket.poll("recv", timeout):
+        snep_response = socket.recv()
         if len(snep_response) < 6:
             log.debug("snep response initial fragment too short")
             return None
@@ -51,10 +51,10 @@ def recv_response(llc, socket, acceptable_length, timeout):
             return None
         if len(snep_response) - 6 < length:
             # request remaining fragments
-            llc.send(socket, "\x10\x00\x00\x00\x00\x00")
+            socket.send("\x10\x00\x00\x00\x00\x00")
             while len(snep_response) - 6 < length:
-                if llc.poll(socket, "recv", timeout):
-                    snep_response += llc.recv(socket)
+                if socket.poll("recv", timeout):
+                    snep_response += socket.recv()
                 else: return None                
         return snep_response
 
@@ -67,14 +67,14 @@ class SnepClient(object):
         self.llc = llc
 
     def connect(self, service_name):
-        if self.socket: self.close()
-        self.socket = self.llc.socket(nfc.llcp.DATA_LINK_CONNECTION)
-        self.llc.connect(self.socket, service_name)
-        self.send_miu = self.llc.getsockopt(self.socket, nfc.llcp.SO_SNDMIU)
+        self.close()
+        self.socket = nfc.llcp.Socket(self.llc, nfc.llcp.DATA_LINK_CONNECTION)
+        self.socket.connect(service_name)
+        self.send_miu = self.socket.getsockopt(nfc.llcp.SO_SNDMIU)
 
     def close(self):
         if self.socket:
-            self.llc.close(self.socket)
+            self.socket.close()
             self.socket = None
 
     def get(self, ndef_message='', timeout=1.0):
@@ -86,15 +86,14 @@ class SnepClient(object):
             self.release_connection = True
         else:
             self.release_connection = False
-        llc, socket = self.llc, self.socket
         try:
             snep_request = '\x10\x01'
             snep_request += struct.pack('>L', 4 + len(ndef_message))
             snep_request += struct.pack('>L', self.acceptable_length)
             snep_request += ndef_message
-            if send_request(llc, socket, snep_request, self.send_miu):
+            if send_request(self.socket, snep_request, self.send_miu):
                 snep_response = recv_response(
-                    llc, socket, self.acceptable_length, timeout)
+                    self.socket, self.acceptable_length, timeout)
                 if snep_response is not None:
                     response_code = ord(snep_response[1])
                     if response_code != 0x81:
@@ -113,12 +112,11 @@ class SnepClient(object):
             self.release_connection = True
         else:
             self.release_connection = False
-        llc, socket = self.llc, self.socket
         try:
             ndef_msgsize = struct.pack('>L', len(ndef_message))
             snep_request = '\x10\x02' + ndef_msgsize + ndef_message
-            if send_request(llc, socket, snep_request, self.send_miu):
-                snep_response = recv_response(llc, socket, 0, timeout)
+            if send_request(self.socket, snep_request, self.send_miu):
+                snep_response = recv_response(self.socket, 0, timeout)
                 if snep_response is not None:
                     response_code = ord(snep_response[1])
                     if response_code != 0x81:
@@ -126,6 +124,13 @@ class SnepClient(object):
         finally:
             if self.release_connection:
                 self.close()
+
+    def __enter__(self):
+        self.connect()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
 
 class SnepError(Exception):
     strerr = {0xC0: "resource not found",

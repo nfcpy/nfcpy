@@ -35,36 +35,36 @@ class SnepServer(Thread):
     """
     def __init__(self, llc, service_name, max_ndef_msg_recv_size=1024):
         self.acceptable_length = max_ndef_msg_recv_size
-        socket = llc.socket(nfc.llcp.DATA_LINK_CONNECTION)
-        llc.bind(socket, service_name)
-        addr = llc.getsockname(socket)
+        socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
+        socket.bind(service_name)
+        addr = socket.getsockname()
         log.info("snep server bound to port {0}".format(addr))
-        llc.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
-        llc.listen(socket, backlog=2)
+        socket.setsockopt(nfc.llcp.SO_RCVBUF, 2)
+        socket.listen(backlog=2)
         Thread.__init__(self, name=service_name,
-                        target=self.listen, args=(llc, socket))
+                        target=self.listen, args=(socket,))
 
-    def listen(self, llc, socket):
+    def listen(self, socket):
         try:
             while True:
-                client_socket = llc.accept(socket)
+                client_socket = socket.accept()
                 client_thread = Thread(target=SnepServer.serve,
-                                       args=[llc, client_socket, self])
+                                       args=(client_socket, self))
                 client_thread.start()
         except nfc.llcp.Error as e:
             (log.debug if e.errno == nfc.llcp.errno.EPIPE else log.error)(e)
         finally:
-            llc.close(socket)
+            socket.close()
         pass
 
     @staticmethod
-    def serve(llc, socket, snep_server):
-        peer_sap = llc.getpeername(socket)
+    def serve(socket, snep_server):
+        peer_sap = socket.getpeername()
         log.info("serving snep client on remote sap {0}".format(peer_sap))
-        send_miu = llc.getsockopt(socket, nfc.llcp.SO_SNDMIU)
+        send_miu = socket.getsockopt(nfc.llcp.SO_SNDMIU)
         try:
             while True:
-                data = llc.recv(socket)
+                data = socket.recv()
                 if not data:
                     break # connection closed
 
@@ -75,20 +75,20 @@ class SnepServer(Thread):
                 version, opcode, length = unpack(">BBL", data[:6])
                 if (version >> 4) > 1:
                     log.debug("unsupported version {0}".format(version>>4))
-                    llc.send(socket, "\x10\xE1\x00\x00\x00\x00")
+                    socket.send("\x10\xE1\x00\x00\x00\x00")
                     continue
                 
                 if length > snep_server.acceptable_length:
                     log.debug("snep msg exceeds acceptable length")
-                    llc.send(socket, "\x10\xFF\x00\x00\x00\x00")
+                    socket.send("\x10\xFF\x00\x00\x00\x00")
                     continue
 
                 snep_request = data
                 if len(snep_request) - 6 < length:
                     # request remaining fragments
-                    llc.send(socket, "\x10\x80\x00\x00\x00\x00")
+                    socket.send("\x10\x80\x00\x00\x00\x00")
                     while len(snep_request) - 6 < length:
-                        data = llc.recv(socket)
+                        data = socket.recv()
                         if data: snep_request += data
                         else: break # connection closed
 
@@ -103,19 +103,19 @@ class SnepServer(Thread):
 
                 # send the snep response, fragment if needed
                 if len(snep_response) <= send_miu:
-                    llc.send(socket, snep_response)
+                    socket.send(snep_response)
                 else:
-                    llc.send(socket, snep_response[0:send_miu])
-                    if llc.recv(socket) == "\x10\x00\x00\x00\x00\x00":
+                    socket.send(snep_response[0:send_miu])
+                    if socket.recv() == "\x10\x00\x00\x00\x00\x00":
                         parts = range(send_miu, len(snep_response), send_miu)
                         for offset in parts:
                             fragment = snep_response[offset:offset+send_miu]
-                            llc.send(socket, fragment)
+                            socket.send(fragment)
 
         except nfc.llcp.Error as e:
             (log.debug if e.errno == nfc.llcp.errno.EPIPE else log.error)(e)
         finally:
-            llc.close(socket)
+            socket.close()
 
     def _get(self, snep_request):
         acceptable_length = unpack(">L", snep_request[6:10])[0]

@@ -23,7 +23,7 @@
 import logging
 log = logging.getLogger(__name__)
 
-import llc
+from socket import Socket
 from llc import LOGICAL_DATA_LINK, DATA_LINK_CONNECTION
 from err import *
 from opt import *

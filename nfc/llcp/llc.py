@@ -75,7 +75,7 @@ class ServiceAccessPoint(object):
             if insertable:
                 socket.bind(self.addr)
                 self.sock_list.appendleft(socket)
-            else: log.error("can't insert socket of differing type")
+            else: log.error("can't insert socket of different type")
             return insertable
 
     def remove_socket(self, socket):
@@ -418,28 +418,15 @@ class LogicalLinkController(object):
         return
 
     def resolve(self, name):
-        """Resolve a service name into an address. This may involve
-        conversation with the remote service discovery instance if the
-        name has not be resolved before. The return value is the
-        service access point address of the service *name* if
-        available at the remote device, zero if not available, and
-        None if the link was terminated.
-        """
         return self.sap[1].resolve(name)
 
     def socket(self, socket_type):
-        """Create an endpoint for communication and return a socket
-        descriptor. The *socket_type* may be either
-        nfc.llcp.LOGICAL_DATA_LINK (for unreliable, connectionless
-        transport) or nfc.llcp.DATA_LINK_CONNECTION (for reliable,
-        connection-oriented transport).
-        """
         if socket_type == RAW_ACCESS_POINT:
-            return RawAccessPoint(self.cfg["send-miu"], self.cfg["recv-miu"])
+            return RawAccessPoint(recv_miu=self.cfg["recv-miu"])
         if socket_type == LOGICAL_DATA_LINK:
-            return LogicalDataLink(self.cfg["send-miu"], self.cfg["recv-miu"])
+            return LogicalDataLink(recv_miu=self.cfg["recv-miu"])
         if socket_type == DATA_LINK_CONNECTION:
-            return DataLinkConnection()
+            return DataLinkConnection(recv_miu=128, recv_win=1)
 
     def setsockopt(self, socket, option, value):
         if not isinstance(socket, TransmissionControlObject):
@@ -450,23 +437,14 @@ class LogicalLinkController(object):
         if not isinstance(socket, TransmissionControlObject):
             raise Error(errno.ENOTSOCK)
         if isinstance(socket, LogicalDataLink):
-            if option == SO_SNDMIU:
-                return self.cfg["send-miu"]
-            if option == SO_RCVMIU:
-                return self.cfg["recv-miu"]
+            # FIXME: set socket send miu when activated
+            socket.send_miu = self.cfg['send-miu']
+        if isinstance(socket, RawAccessPoint):
+            # FIXME: set socket send miu when activated
+            socket.send_miu = self.cfg['send-miu']
         return socket.getsockopt(option)
 
     def bind(self, socket, addr_or_name=None):
-        """Bind a socket to an address or service name. The parameter
-        *addr_or_name* may be either an integer value specifying the
-        local addr to use or a fully qualified service name string. If
-        *addr_or_name* is a valid service name string the address
-        assignment will be from the well-known address range is the
-        name is well-known, otherwise it will be from the dynamic
-        service address range (16-31). If *addr_or_name* is an
-        integer it must be within the private address range
-        (32-63).
-        """
         if not isinstance(socket, TransmissionControlObject):
             raise Error(errno.ENOTSOCK)
         if not socket.addr is None:
@@ -516,25 +494,14 @@ class LogicalLinkController(object):
             self.snl[name] = addr
 
     def connect(self, socket, dest):
-        """Establish a data link connection with the destination
-        service *dest*. The destination service may be specified as a
-        service access point address or a service name.
-        """
         if not isinstance(socket, TransmissionControlObject):
             raise Error(errno.ENOTSOCK)
         if not socket.is_bound:
             self.bind(socket)
         socket.connect(dest)
-        log.debug("connected ({dlc.addr} ===> {dlc.peer})"
-                  .format(dlc=socket))
+        log.debug("connected ({0} ===> {1})".format(socket.addr, socket.peer))
 
     def listen(self, socket, backlog):
-        """Mark a socket as a socket that will be used to accept
-        incoming connection requests using accept(). The *backlog*
-        defines the maximum length to which the queue of pending
-        connections for the socket may grow. A backlog of zero
-        disables queuing of connection requests.
-        """
         if not isinstance(socket, TransmissionControlObject):
             raise Error(errno.ENOTSOCK)
         if not isinstance(socket, DataLinkConnection):
@@ -549,13 +516,6 @@ class LogicalLinkController(object):
         socket.listen(backlog)
 
     def accept(self, socket):
-        """Extract the first connection request from the queue of
-        pending connections for the listening *socket* (which must be
-        a connection-based socket), then create and return a new
-        connected socket. The newly created socket is not in the
-        listening state. The original socket continues to be in the
-        listening state.
-        """
         if not isinstance(socket, TransmissionControlObject):
             raise Error(errno.ENOTSOCK)
         if not isinstance(socket, DataLinkConnection):
@@ -573,17 +533,9 @@ class LogicalLinkController(object):
                 super(DataLinkConnection, socket).send(pdu)
 
     def send(self, socket, message):
-        """Send a message on a socket. The socket must be in connected
-        state so that the intended recipient is known.
-        """
         return self.sendto(socket, message, socket.peer)
 
     def sendto(self, socket, message, dest):
-        """Send a message on a socket. For a connection-mode socket
-        the destination *dest* is ignored. For a connection-less
-        socket the destination *dest* is the service access point
-        address to which the *message* shall be sent.
-        """
         if not isinstance(socket, TransmissionControlObject):
             raise Error(errno.ENOTSOCK)
         if isinstance(socket, RawAccessPoint):
@@ -591,6 +543,8 @@ class LogicalLinkController(object):
                 raise TypeError("message must be a pdu on raw access point")
             if not socket.is_bound:
                 self.bind(socket)
+            # FIXME: set socket send miu when activated
+            socket.send_miu = self.cfg['send-miu']
             return socket.send(message)
         if not type(message) == StringType:
             raise TypeError("sendto() argument *message* must be a string")
@@ -599,6 +553,8 @@ class LogicalLinkController(object):
                 raise Error(errno.EDESTADDRREQ)
             if not socket.is_bound:
                 self.bind(socket)
+            # FIXME: set socket send miu when activated
+            socket.send_miu = self.cfg['send-miu']
             return socket.sendto(message, dest)
         if isinstance(socket, DataLinkConnection):
             return socket.send(message)
@@ -627,10 +583,6 @@ class LogicalLinkController(object):
         return socket.poll(event, timeout)
 
     def close(self, socket):
-        """Close a socket. For a connection-mode socket close() will
-        perform termination of the data link connection if it was
-        established before and not closed by the remote endpoint.
-        """
         if not isinstance(socket, TransmissionControlObject):
             raise Error(errno.ENOTSOCK)
         if socket.is_bound:
@@ -638,17 +590,11 @@ class LogicalLinkController(object):
         else: socket.close()
 
     def getsockname(self, socket):
-        """Obtain the address to which the socket is bound. For an
-        unbound socket the returned value is None.
-        """
         if not isinstance(socket, TransmissionControlObject):
             raise Error(errno.ENOTSOCK)
         return socket.addr
 
     def getpeername(self, socket):
-        """Obtain the address of the peer connected on the socket. For
-        an unconnected socket the returned value is None.
-        """
         if not isinstance(socket, TransmissionControlObject):
             raise Error(errno.ENOTSOCK)
         return socket.peer

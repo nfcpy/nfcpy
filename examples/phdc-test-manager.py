@@ -185,31 +185,31 @@ def phdc_tag_manager(tag):
     
 class PhdcPeerManager(Thread):
     def __init__(self, llc, service_name):
-        socket = llc.socket(nfc.llcp.DATA_LINK_CONNECTION)
-        llc.bind(socket, service_name)
-        addr = llc.getsockname(socket)
+        socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
+        socket.bind(service_name)
+        addr = socket.getsockname()
         log.info("service {0!r} bound to port {1}".format(service_name, addr))
-        llc.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
-        llc.listen(socket, backlog=1)
+        socket.setsockopt(nfc.llcp.SO_RCVBUF, 2)
+        socket.listen(backlog=1)
         super(PhdcPeerManager, self).__init__(
-            target=self.listen, args=(llc, socket))
+            target=self.listen, args=(socket,))
 
-    def listen(self, llc, socket):
+    def listen(self, socket):
         try:
             while True:
-                client = llc.accept(socket)
-                peer = llc.getpeername(client)
-                miu = llc.getsockopt(socket, nfc.llcp.SO_SNDMIU)
+                client = socket.accept()
+                peer = client.getpeername()
+                miu = client.getsockopt(nfc.llcp.SO_SNDMIU)
                 log.info("serving phdc agent from sap {0}".format(peer))
                 log.info("entering ieee manager")
                 while True:
-                    data = llc.recv(client)
+                    data = client.recv()
                     if data == None: break
                     log.info("rcvd {0} byte data".format(len(data)))
                     size = struct.unpack(">H", data[0:2])[0]
                     apdu = data[2:]
                     while len(apdu) < size:
-                        data = llc.recv(client)
+                        data = client.recv()
                         if data == None: break
                         log.info("rcvd {0} byte data".format(len(data)))
                         apdu += data
@@ -224,14 +224,15 @@ class PhdcPeerManager(Thread):
                     log.info("[ieee] >>> {0}".format(str(apdu).encode("hex")))
                     data = struct.pack(">H", len(apdu)) + apdu
                     for i in range(0, len(data), miu):
-                        llc.send(client, str(data[i:i+miu]))
+                        client.send(str(data[i:i+miu]))
                 log.info("remote peer {0} closed connection".format(peer))
                 log.info("leaving ieee manager")
+                client.close()
 
         except nfc.llcp.Error as e:
             (log.debug if e.errno == nfc.llcp.errno.EPIPE else log.error)(e)
         finally:
-            llc.close(socket)
+            socket.close()
 
 class TestProgram(CommandLineInterface):
     def __init__(self):

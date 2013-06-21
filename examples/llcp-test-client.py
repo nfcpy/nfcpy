@@ -86,14 +86,16 @@ class TestProgram(CommandLineInterface):
            the remote Link Management component. Verify that SYMM PDUs
            are no longer exchanged.
         """
-        socket = llc.socket(nfc.llcp.LOGICAL_DATA_LINK)
-        llc.bind(socket)
-        for i in range(5):
-            try:
-                llc.poll(socket, "recv", timeout=1)
+        socket = nfc.llcp.Socket(llc, nfc.llcp.LOGICAL_DATA_LINK)
+        socket.bind()
+        try:
+            for i in range(5):
+                socket.poll("recv", timeout=1)
                 info("connected seconds: {0}".format(i+1))
-            except nfc.llcp.Error:
-                raise TestError("connection lost before test completion")
+        except nfc.llcp.Error:
+            raise TestError("connection lost before test completion")
+        finally:
+            socket.close()
 
     def test_02(self, llc):
         """Connection-less information transfer
@@ -134,25 +136,25 @@ class TestProgram(CommandLineInterface):
         """
         TestData = collections.namedtuple("TestData", "send recv")
 
-        def send_and_receive(llc, socket, send_count, packet_length):
+        def send_and_receive(socket, send_count, packet_length):
             test_data = TestData(send=[], recv=[])
-            cl_server = llc.getpeername(socket)
+            cl_server = socket.getpeername()
             for i in range(1, send_count + 1):
                 data, addr = packet_length * chr(i), cl_server
-                llc.sendto(socket, data, addr)
+                socket.sendto(data, addr)
                 info("sent message {0}".format(i), prefix="    ")
                 test_data.send.append((data, addr, time.time()))
                 time.sleep(0.5)
-            while llc.poll(socket, "recv", timeout=5):
-                data, addr = llc.recvfrom(socket)
+            while socket.poll("recv", timeout=5):
+                data, addr = socket.recvfrom()
                 test_data.recv.append((data, addr, time.time()))
             if len(test_data.recv) == 0:
                 raise TestError("did not receive any data within 5 seconds")
             return test_data
 
-        def run_step_1(llc, socket):
+        def run_step_1(socket):
             info("Step 1: Send one default size datagram")
-            test_data = send_and_receive(llc, socket, 1, default_miu)
+            test_data = send_and_receive(socket, 1, default_miu)
             if not len(test_data.recv) == len(test_data.send):
                 raise TestError("received wrong number of datagrams")
             for i in range(len(test_data.recv)):
@@ -166,9 +168,9 @@ class TestProgram(CommandLineInterface):
                      .format(i+1, int((recv_time - send_time) * 1000)), "    ")
             return True
 
-        def run_step_2(llc, socket):
+        def run_step_2(socket):
             info("Step 2: Send two default size datagrams")
-            test_data = send_and_receive(llc, socket, 2, default_miu)
+            test_data = send_and_receive(socket, 2, default_miu)
             if not len(test_data.recv) == len(test_data.send):
                 raise TestError("received wrong number of datagrams")
             for i in range(len(test_data.recv)):
@@ -182,9 +184,9 @@ class TestProgram(CommandLineInterface):
                      .format(i+1, int((recv_time - send_time) * 1000)), "    ")
             return True
 
-        def run_step_3(llc, socket):
+        def run_step_3(socket):
             info("Step 3: Send three default size datagrams")
-            test_data = send_and_receive(llc, socket, 3, default_miu)
+            test_data = send_and_receive(socket, 3, default_miu)
             if not len(test_data.recv) == len(test_data.send) - 1:
                 raise TestError("received wrong number of datagrams")
             for i in range(len(test_data.recv)):
@@ -198,9 +200,9 @@ class TestProgram(CommandLineInterface):
                      .format(i+1, int((recv_time - send_time) * 1000)), "    ")
             return True
 
-        def run_step_4(llc, socket):
+        def run_step_4(socket):
             info("Step 4: Send one zero-length datagram")
-            test_data = send_and_receive(llc, socket, 1, packet_length=0)
+            test_data = send_and_receive(socket, 1, packet_length=0)
             if not len(test_data.recv) == len(test_data.send):
                 raise TestError("received wrong number of datagrams")
             for i in range(len(test_data.recv)):
@@ -214,10 +216,10 @@ class TestProgram(CommandLineInterface):
                      .format(i+1, int((recv_time - send_time) * 1000)), "    ")
             return True
 
-        def run_step_5(llc, socket):
+        def run_step_5(socket):
             info("Step 5: Send one maximum length packet")
-            miu = llc.getsockopt(socket, nfc.llcp.SO_SNDMIU)
-            test_data = send_and_receive(llc, socket, 1, packet_length=miu)
+            miu = socket.getsockopt(nfc.llcp.SO_SNDMIU)
+            test_data = send_and_receive(socket, 1, packet_length=miu)
             if not len(test_data.recv) == len(test_data.send):
                 raise TestError("received wrong number of datagrams")
             for i in range(len(test_data.recv)):
@@ -231,9 +233,9 @@ class TestProgram(CommandLineInterface):
                      .format(i+1, int((recv_time - send_time) * 1000)), "    ")
             return True
 
-        socket = llc.socket(nfc.llcp.LOGICAL_DATA_LINK)
-        llc.setsockopt(socket, nfc.llcp.SO_RCVBUF, 10)
-        if llc.getsockopt(socket, nfc.llcp.SO_RCVBUF) == 10:
+        socket = nfc.llcp.Socket(llc, nfc.llcp.LOGICAL_DATA_LINK)
+        socket.setsockopt(nfc.llcp.SO_RCVBUF, 10)
+        if socket.getsockopt(nfc.llcp.SO_RCVBUF) == 10:
             info("socket recv buffer set to 10")
         else: raise TestError("could not set the socket recv buffer")
         cl_echo_server = self.options.cl_echo_sap
@@ -242,15 +244,15 @@ class TestProgram(CommandLineInterface):
         if not cl_echo_server:
             raise TestError("no connection-less echo server on peer device")
         info("connection-less echo server on sap {0}".format(cl_echo_server))
-        llc.connect(socket, cl_echo_server)
+        socket.connect(cl_echo_server)
         try:
-            if run_step_1(llc, socket): info("PASS", prefix="    ")
-            if run_step_2(llc, socket): info("PASS", prefix="    ")
-            if run_step_3(llc, socket): info("PASS", prefix="    ")
-            if run_step_4(llc, socket): info("PASS", prefix="    ")
-            if run_step_5(llc, socket): info("PASS", prefix="    ")
+            if run_step_1(socket): info("PASS", prefix="    ")
+            if run_step_2(socket): info("PASS", prefix="    ")
+            if run_step_3(socket): info("PASS", prefix="    ")
+            if run_step_4(socket): info("PASS", prefix="    ")
+            if run_step_5(socket): info("PASS", prefix="    ")
         finally:
-            llc.close(socket)
+            socket.close()
             
     def test_03(self, llc):
         """Connection-oriented information transfer
@@ -276,9 +278,9 @@ class TestProgram(CommandLineInterface):
         3. Send a DISC PDU to terminate the data link connection and
            verify that the echo service responds with a correct DM PDU.
         """
-        socket = llc.socket(nfc.llcp.DATA_LINK_CONNECTION)
-        llc.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
-        if llc.getsockopt(socket, nfc.llcp.SO_RCVBUF) == 2:
+        socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
+        socket.setsockopt(nfc.llcp.SO_RCVBUF, 2)
+        if socket.getsockopt(nfc.llcp.SO_RCVBUF) == 2:
             info("socket recv window set 2")
         else: raise TestError("could not set the socket recv window")
         co_echo_server = self.options.co_echo_sap
@@ -287,24 +289,24 @@ class TestProgram(CommandLineInterface):
         if not co_echo_server:
             raise TestError("no connection-mode echo server on peer device")
         info("connection-mode echo server on sap {0}".format(co_echo_server))
-        llc.connect(socket, co_echo_server)
-        peer_sap = llc.getpeername(socket)
+        socket.connect(co_echo_server)
+        peer_sap = socket.getpeername()
         info("connected with sap {0}".format(peer_sap))
-        llc.send(socket, default_miu * "\xFF")
+        socket.send(default_miu * "\xFF")
         t0 = time.time()
         info("sent one information pdu")
-        if llc.poll(socket, "acks", timeout = 5):
+        if socket.poll("acks", timeout = 5):
             elapsed = time.time() - t0
             info("got confirm after {0:.3f}".format(elapsed))
             if not elapsed < 1.9:
                 raise TestError("no confirmation within 1.9 seconds")
-            llc.recv(socket)
+            socket.recv()
             elapsed = time.time() - t0
             info("got message after {0:.3f}".format(time.time() - t0))
             if not elapsed > 2.0:
                 raise TestError("echo'd data received too early")
         else: raise TestError("no data received within 5 seconds")
-        llc.close(socket)
+        socket.close()
 
     def test_04(self, llc):
         """Send and receive sequence number handling
@@ -334,13 +336,13 @@ class TestProgram(CommandLineInterface):
         rcvd_data = []
 
         def receiver(llc, socket, rcvd_data):
-            while llc.poll(socket, "recv", timeout=5):
-                data = llc.recv(socket)
+            while socket.poll("recv", timeout=5):
+                data = socket.recv()
                 if data: rcvd_data.append((data, time.time()))
 
-        socket = llc.socket(nfc.llcp.DATA_LINK_CONNECTION)
-        llc.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
-        if llc.getsockopt(socket, nfc.llcp.SO_RCVBUF) == 2:
+        socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
+        socket.setsockopt(nfc.llcp.SO_RCVBUF, 2)
+        if socket.getsockopt(nfc.llcp.SO_RCVBUF) == 2:
             info("receive window set to 2")
         else: raise TestError("failed to set receive window to 2")
         co_echo_server = self.options.co_echo_sap
@@ -351,15 +353,15 @@ class TestProgram(CommandLineInterface):
         info("connection-mode echo server on sap {0}".format(co_echo_server))
         recv_thread = Thread(target=receiver, args=(llc, socket, rcvd_data))
         try:
-            llc.connect(socket, co_echo_server)
-            peer_sap = llc.getpeername(socket)
+            socket.connect(co_echo_server)
+            peer_sap = socket.getpeername()
             info("connected with sap {0}".format(peer_sap))
             recv_thread.start()
             count = 20
             info("now sending {0} messages".format(count))
             for i in range(count):
                 data = default_miu * chr(i)
-                if llc.send(socket, data):
+                if socket.send(data):
                     info("sent message {0}".format(i+1))
                     sent_data.append((data, time.time()))
             recv_thread.join()
@@ -371,7 +373,7 @@ class TestProgram(CommandLineInterface):
         finally:
             try: recv_thread.join()
             except RuntimeError: pass # wasn't started
-            llc.close(socket)
+            socket.close()
 
     def test_05(self, llc):
         """Handling of receiver busy condition
@@ -396,9 +398,9 @@ class TestProgram(CommandLineInterface):
         3. Send a DISC PDU to terminate the data link connection and
            verify that the echo service responds with a correct DM PDU.
         """
-        socket = llc.socket(nfc.llcp.DATA_LINK_CONNECTION)
-        llc.setsockopt(socket, nfc.llcp.SO_RCVBUF, 0)
-        if llc.getsockopt(socket, nfc.llcp.SO_RCVBUF) == 0:
+        socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
+        socket.setsockopt(nfc.llcp.SO_RCVBUF, 0)
+        if socket.getsockopt(nfc.llcp.SO_RCVBUF) == 0:
             info("receive window set to 0")
         else: raise TestError("failed to set receive window to 0")
         co_echo_server = self.options.co_echo_sap
@@ -408,23 +410,23 @@ class TestProgram(CommandLineInterface):
             raise TestError("no connection-mode echo server on peer device")
         info("connection-mode echo server on sap {0}".format(co_echo_server))
         try:
-            llc.connect(socket, co_echo_server)
-            peer_sap = llc.getpeername(socket)
+            socket.connect(co_echo_server)
+            peer_sap = socket.getpeername()
             info("connected with sap {0}".format(peer_sap))
             info("now sending 4 messages")
             for i in range(4):
                 data = default_miu * chr(i)
-                if llc.send(socket, data):
+                if socket.send(data):
                     info("sent message {0}".format(i+1))
             for i in range(4):
                 time.sleep(1.0)
-                if llc.getsockopt(socket, nfc.llcp.SO_SNDBSY):
+                if socket.getsockopt(nfc.llcp.SO_SNDBSY):
                     info("connection-mode echo server entered busy state")
                     break
             else:
                 raise TestError("did not recognize server busy state")
         finally:
-            llc.close(socket)
+            socket.close()
 
     def test_06(self, llc):
         """Rejection of connect request
@@ -449,8 +451,8 @@ class TestProgram(CommandLineInterface):
            verify that the echo service responds with a correct DM PDU.
 
         """
-        socket1 = llc.socket(nfc.llcp.DATA_LINK_CONNECTION)
-        socket2 = llc.socket(nfc.llcp.DATA_LINK_CONNECTION)
+        socket1 = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
+        socket2 = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
         co_echo_server = self.options.co_echo_sap
         if not co_echo_server:
             co_echo_server = llc.resolve("urn:nfc:sn:co-echo")
@@ -458,19 +460,19 @@ class TestProgram(CommandLineInterface):
             raise TestError("no connection-mode echo server on peer device")
         info("connection-mode echo server on sap {0}".format(co_echo_server))
         try:
-            llc.connect(socket1, co_echo_server)
-            peer_sap = llc.getpeername(socket1)
+            socket1.connect(co_echo_server)
+            peer_sap = socket1.getpeername()
             info("first connection established with sap {0}".format(peer_sap))
-            try: llc.connect(socket2, co_echo_server)
+            try: socket2.connect(co_echo_server)
             except nfc.llcp.ConnectRefused as e:
                 info("second connection rejected with reason {0}"
                      .format(e.reason))
             else:
                 raise TestError("second connection not rejected")
             finally:
-                llc.close(socket2)
+                socket2.close()
         finally:
-            llc.close(socket1)
+            socket1.close()
 
     def test_07(self, llc):
         """Connect by service name
@@ -491,19 +493,19 @@ class TestProgram(CommandLineInterface):
         3. Send a DISC PDU to terminate the data link connection and
            verify that the echo service responds with a correct DM PDU.
         """
-        socket = llc.socket(nfc.llcp.DATA_LINK_CONNECTION)
+        socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
         try:
-            llc.connect(socket, "urn:nfc:sn:co-echo")
+            socket.connect("urn:nfc:sn:co-echo")
             info("connected to service 'urn:nfc:sn:co-echo'")
-            peer_sap = llc.getpeername(socket)
+            peer_sap = socket.getpeername()
             if peer_sap == 1:
                 raise TestError("connection established with SDP port")
             info("connection established with sap {0}".format(peer_sap))
-            if llc.send(socket, "here's nfcpy"):
+            if socket.send("here's nfcpy"):
                 t0 = time.time()
                 info("sent test message")
-                if llc.poll(socket, "recv", timeout=5):
-                    if llc.recv(socket) == "here's nfcpy":
+                if socket.poll("recv", timeout=5):
+                    if socket.recv() == "here's nfcpy":
                         info("got echo after {0:.3f} sec"
                              .format(time.time()-t0))
                     else:
@@ -513,7 +515,7 @@ class TestProgram(CommandLineInterface):
             else:
                 raise TestError("failed to send data")
         finally:
-            llc.close(socket)
+            socket.close()
 
     def test_08(self, llc):
         """Aggregation and disaggregation
@@ -536,20 +538,21 @@ class TestProgram(CommandLineInterface):
            correctly and the third SDU is discarded.
         """
         import nfc.llcp.pdu
+        socket = nfc.llcp.Socket(llc, nfc.llcp.llc.RAW_ACCESS_POINT)
         try:
-            socket = llc.socket(nfc.llcp.llc.RAW_ACCESS_POINT)
-            llc.bind(socket, None)
-            llc.setsockopt(socket, nfc.llcp.SO_RCVBUF, 10)
-            if llc.getsockopt(socket, nfc.llcp.SO_RCVBUF) != 10:
+            socket.bind()
+            socket.setsockopt(nfc.llcp.SO_RCVBUF, 10)
+            if socket.getsockopt(nfc.llcp.SO_RCVBUF) != 10:
                 raise TestError("could not set the socket recv buffer")
             info("socket recv buffer set to 10")
             cl_echo_server = self.options.cl_echo_sap
             if not cl_echo_server:
                 cl_echo_server = llc.resolve("urn:nfc:sn:cl-echo")
             if not cl_echo_server:
-                raise TestError("no connection-less echo server on peer device")
-            info("connection-less echo server on sap {0}".format(cl_echo_server))
-            addr = llc.getsockname(socket)
+                raise TestError("connection-less echo server not available")
+            info("connection-less echo server on sap {0}"
+                 .format(cl_echo_server))
+            addr = socket.getsockname()
             UI = nfc.llcp.pdu.UnnumberedInformation
             pdu1 = UI(cl_echo_server, addr, 50*"\x01")
             pdu2 = UI(cl_echo_server, addr, 50*"\x02")
@@ -557,36 +560,36 @@ class TestProgram(CommandLineInterface):
 
             info("step 1: send two datagrams with 50 byte payload")
             agf = nfc.llcp.pdu.AggregatedFrame(aggregate=[pdu1, pdu2])
-            llc.send(socket, agf)
-            if not llc.poll(socket, "recv", timeout=5):
+            socket.send(agf)
+            if not socket.poll("recv", timeout=5):
                 raise TestError("did not receive first message within 5 sec")
-            if not llc.recv(socket).sdu == 50*"\x01":
+            if not socket.recv().sdu == 50*"\x01":
                 raise TestError("first message came back wrong")
             info("received first message")
-            if not llc.poll(socket, "recv", timeout=5):
+            if not socket.poll("recv", timeout=5):
                 raise TestError("did not receive second message within 5 sec")
-            if not llc.recv(socket).sdu == 50*"\x02":
+            if not socket.recv().sdu == 50*"\x02":
                 raise TestError("second message came back wrong")
             info("received second message")
 
             info("step2: send three datagrams with 50 byte payload")
             agf = nfc.llcp.pdu.AggregatedFrame(aggregate=[pdu1, pdu2, pdu3])
-            llc.send(socket, agf)
-            if not llc.poll(socket, "recv", timeout=5):
+            socket.send(agf)
+            if not socket.poll("recv", timeout=5):
                 raise TestError("did not receive first message within 5 sec")
-            if not llc.recv(socket).sdu == 50*"\x01":
+            if not socket.recv().sdu == 50*"\x01":
                 raise TestError("first message came back wrong")
             info("received first message")
-            if not llc.poll(socket, "recv", timeout=5):
+            if not socket.poll("recv", timeout=5):
                 raise TestError("did not receive second message within 5 sec")
-            if not llc.recv(socket).sdu == 50*"\x02":
+            if not socket.recv().sdu == 50*"\x02":
                 raise TestError("second message came back wrong")
             info("received second message")
-            if llc.poll(socket, "recv", timeout=5):
+            if socket.poll("recv", timeout=5):
                 raise TestError("received third message")
             info("did not receive third message within 5 sec")
         finally:
-            llc.close(socket)
+            socket.close()
 
     def test_09(self, llc):
         """Service name lookup
@@ -633,13 +636,13 @@ class TestProgram(CommandLineInterface):
         if not addr:
             raise TestError("no answer for 'urn:nfc:sn:cl-echo' lookup")
         info("step 2: resolved 'urn:nfc:sn:cl-echo' to sap {0}".format(addr))
-        socket = llc.socket(nfc.llcp.LOGICAL_DATA_LINK)
+        socket = nfc.llcp.Socket(llc, nfc.llcp.LOGICAL_DATA_LINK)
         t0 = time.time()
-        if llc.sendto(socket, 128 * "\xA9", addr):
+        if socket.sendto(128 * "\xA9", addr):
             info("step 3: sent 128 byte message to sap {0}".format(addr))
-            if not llc.poll(socket, "recv", timeout=5):
+            if not socket.poll("recv", timeout=5):
                 raise TestError("did not receive echo within 5 seconds")
-            data, peer = llc.recvfrom(socket)
+            data, peer = socket.recvfrom()
             if not data == 128 * "\xA9":
                 raise TestError("received wrong data in step 3")
             if not peer == addr:
@@ -660,25 +663,25 @@ class TestProgram(CommandLineInterface):
         if not co_echo_server:
             raise TestError("no connection-mode echo server on peer device")
         info("connection-mode echo server on sap {0}".format(co_echo_server))
-        dlc_socket = llc.socket(nfc.llcp.DATA_LINK_CONNECTION)
-        raw_socket = llc.socket(nfc.llcp.llc.RAW_ACCESS_POINT)
+        dlc_socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
+        raw_socket = nfc.llcp.Socket(llc, nfc.llcp.llc.RAW_ACCESS_POINT)
         try:
-            llc.connect(dlc_socket, co_echo_server)
-            addr = llc.getsockname(dlc_socket)
-            peer = llc.getpeername(dlc_socket)
+            dlc_socket.connect(co_echo_server)
+            addr = dlc_socket.getsockname()
+            peer = dlc_socket.getpeername()
             info("connected with sap {0}".format(peer))
-            send_miu = llc.getsockopt(dlc_socket, nfc.llcp.SO_SNDMIU)
+            send_miu = dlc_socket.getsockopt(nfc.llcp.SO_SNDMIU)
             info("the peers receive MIU is {0} octets".format(send_miu))
             sdu = (send_miu + 1) * '\x00'
             pdu = nfc.llcp.pdu.Information(dsap=peer, ssap=addr, sdu=sdu)
             pdu.ns, pdu.nr = 0, 0
-            llc.send(raw_socket, pdu)
-            llc.recv(dlc_socket)
+            raw_socket.send(pdu)
+            dlc_socket.recv()
         except nfc.llcp.Error as e:
             info(str(e))
         finally:
-            llc.close(dlc_socket)
-            llc.close(raw_socket)
+            dlc_socket.close()
+            raw_socket.close()
 
     def test_11(self, llc):
         """Use invalid send sequence number"""
@@ -689,61 +692,61 @@ class TestProgram(CommandLineInterface):
         if not co_echo_server:
             raise TestError("no connection-mode echo server on peer device")
         info("connection-mode echo server on sap {0}".format(co_echo_server))
-        dlc_socket = llc.socket(nfc.llcp.DATA_LINK_CONNECTION)
-        raw_socket = llc.socket(nfc.llcp.llc.RAW_ACCESS_POINT)
+        dlc_socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
+        raw_socket = nfc.llcp.Socket(llc, nfc.llcp.llc.RAW_ACCESS_POINT)
         try:
-            llc.connect(dlc_socket, co_echo_server)
-            addr = llc.getsockname(dlc_socket)
-            peer = llc.getpeername(dlc_socket)
+            dlc_socket.connect(co_echo_server)
+            addr = dlc_socket.getsockname()
+            peer = dlc_socket.getpeername()
             info("connected with sap {0}".format(peer))
             pdu = nfc.llcp.pdu.Information(
                 dsap=peer, ssap=addr, sdu="wrong N(S)")
             pdu.ns, pdu.nr = 15, 0
-            llc.send(raw_socket, pdu)
-            llc.recv(dlc_socket)
+            raw_socket.send(pdu)
+            dlc_socket.recv()
         except nfc.llcp.Error as e:
             info(str(e))
         finally:
-            llc.close(dlc_socket)
-            llc.close(raw_socket)
+            dlc_socket.close()
+            raw_socket.close()
 
     def test_12(self, llc):
         """Use maximum data size on data link connection"""
-        socket = llc.socket(nfc.llcp.DATA_LINK_CONNECTION)
-        llc.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
-        if llc.getsockopt(socket, nfc.llcp.SO_RCVBUF) == 2:
+        socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
+        socket.setsockopt(nfc.llcp.SO_RCVBUF, 2)
+        if socket.getsockopt(nfc.llcp.SO_RCVBUF) == 2:
             info("socket recv window set 2")
         else: raise TestError("could not set the socket recv window")
-        llc.setsockopt(socket, nfc.llcp.SO_RCVMIU, 300)
+        socket.setsockopt(nfc.llcp.SO_RCVMIU, 300)
         co_echo_server = self.options.co_echo_sap
         if not co_echo_server:
             co_echo_server = llc.resolve("urn:nfc:sn:co-echo")
         if not co_echo_server:
             raise TestError("no connection-mode echo server on peer device")
         info("connection-mode echo server on sap {0}".format(co_echo_server))
-        llc.connect(socket, co_echo_server)
-        peer_sap = llc.getpeername(socket)
+        socket.connect(co_echo_server)
+        peer_sap = socket.getpeername()
         info("connected with sap {0}".format(peer_sap))
-        miu = llc.getsockopt(socket, nfc.llcp.SO_SNDMIU)
-        llc.send(socket, miu * "\xFF")
+        miu = socket.getsockopt(nfc.llcp.SO_SNDMIU)
+        socket.send(miu * "\xFF")
         t0 = time.time()
         info("sent one information pdu")
-        if llc.poll(socket, "acks", timeout = 5):
+        if socket.poll("acks", timeout = 5):
             elapsed = time.time() - t0
             info("got confirm after {0:.3f}".format(elapsed))
             if not elapsed < 1.9:
                 raise TestError("no confirmation within 1.9 seconds")
-            if not llc.poll(socket, "recv", timeout=5):
+            if not socket.poll("recv", timeout=5):
                 raise TestError("did not receive second message within 5 sec")
-            data = llc.recv(socket)
+            data = socket.recv()
             info("got message after {0:.3f}".format(time.time() - t0))
         else: raise TestError("no data received within 5 seconds")
-        llc.close(socket)
+        socket.close()
 
     def test_13(self, llc):
         """Connect, release and connect again"""
-        socket1 = llc.socket(nfc.llcp.DATA_LINK_CONNECTION)
-        socket2 = llc.socket(nfc.llcp.DATA_LINK_CONNECTION)
+        socket1 = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
+        socket2 = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
         co_echo_server = self.options.co_echo_sap
         if not co_echo_server:
             co_echo_server = llc.resolve("urn:nfc:sn:co-echo")
@@ -751,19 +754,19 @@ class TestProgram(CommandLineInterface):
             raise TestError("no connection-mode echo server on peer device")
         info("connection-mode echo server on sap {0}".format(co_echo_server))
         try:
-            llc.connect(socket1, co_echo_server)
-            peer_sap = llc.getpeername(socket1)
+            socket1.connect(co_echo_server)
+            peer_sap = socket1.getpeername()
             info("first connection established with sap {0}".format(peer_sap))
-            llc.send(socket1, "I'm the first connection")
-            assert(llc.recv(socket1) == "I'm the first connection")
-            llc.close(socket1)
+            socket1.send("I'm the first connection")
+            assert(socket1.recv() == "I'm the first connection")
+            socket1.close()
             info("first connection terminated")
-            llc.connect(socket2, co_echo_server)
-            peer_sap = llc.getpeername(socket2)
+            socket2.connect(co_echo_server)
+            peer_sap = socket2.getpeername()
             info("second connection established with sap {0}".format(peer_sap))
-            llc.send(socket2, "I'm the second connection")
-            assert(llc.recv(socket2) == "I'm the second connection")
-            llc.close(socket2)
+            socket2.send("I'm the second connection")
+            assert(socket2.recv() == "I'm the second connection")
+            socket2.close()
         finally:
             pass
 
@@ -780,10 +783,10 @@ class TestProgram(CommandLineInterface):
            access point address and verify that the connect request is
            rejected.
         """
-        socket = llc.socket(nfc.llcp.DATA_LINK_CONNECTION)
+        socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
         service_name = "urn:nfc:sn:co-echo-invalid"
         try:
-            llc.connect(socket, service_name)
+            socket.connect(service_name)
             raise TestError("connect to '" + service_name +"' not rejected")
         except nfc.llcp.ConnectRefused as e:
             info("connect to '{0}' rejected with reason {1}".format(
@@ -791,7 +794,7 @@ class TestProgram(CommandLineInterface):
             if not e.reason in (0x02, 0x10, 0x11):
                 raise TestError("invalid DM reason code {0}".format(e.reason))
         finally:
-            llc.close(socket)
+            socket.close()
 
 if __name__ == '__main__':
     TestProgram().run()

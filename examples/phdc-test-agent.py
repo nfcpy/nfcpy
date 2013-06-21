@@ -368,10 +368,10 @@ class PhdcP2pAgentTest(CommandLineInterface):
     def test_00(self, llc):
         """Send data read from scenario file"""
 
-        socket = llc.socket(nfc.llcp.DATA_LINK_CONNECTION)
-        llc.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
-        llc.connect(socket, "urn:nfc:sn:phdc")
-        peer_sap = llc.getpeername(socket)
+        socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
+        socket.setsockopt(nfc.llcp.SO_RCVBUF, 2)
+        socket.connect("urn:nfc:sn:phdc")
+        peer_sap = socket.getpeername()
         log.info("connected with phdc manager at sap {0}".format(peer_sap))
         log.info("entering ieee agent")
 
@@ -384,28 +384,28 @@ class PhdcP2pAgentTest(CommandLineInterface):
                     apdu = bytearray.fromhex(line)
                     apdu = struct.pack(">H", len(apdu)) + apdu
                     log.info("send {0}".format(str(apdu).encode("hex")))
-                    llc.send(socket, str(apdu))
+                    socket.send(str(apdu))
 
-                    apdu = llc.recv(socket)
+                    apdu = socket.recv()
                     log.info("rcvd {0}".format(str(apdu).encode("hex")))
         except IOError as e:
             log.error(e)
 
         log.info("leaving ieee agent")
-        llc.close(socket)
+        socket.close()
 
     def test_01(self, llc):
         """Connect, associate and release"""
         
-        socket = llc.socket(nfc.llcp.DATA_LINK_CONNECTION)
-        llc.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
+        socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
+        socket.setsockopt(nfc.llcp.SO_RCVBUF, 2)
         service_name = "urn:nfc:sn:phdc"
         try:
-            llc.connect(socket, service_name)
+            socket.connect(service_name)
         except nfc.llcp.ConnectRefused:
             raise TestError("could not connect to {0!r}".format(service_name))
         
-        peer_sap = llc.getpeername(socket)
+        peer_sap = socket.getpeername()
         info("connected with phdc manager at sap {0}".format(peer_sap))
         info("entering ieee agent")
 
@@ -413,9 +413,9 @@ class PhdcP2pAgentTest(CommandLineInterface):
         apdu = struct.pack(">H", len(apdu)) + apdu
         info("send thermometer association request")
         info("send {0}".format(str(apdu).encode("hex")))
-        llc.send(socket, str(apdu))
+        socket.send(str(apdu))
 
-        apdu = llc.recv(socket)
+        apdu = socket.recv()
         info("rcvd {0}".format(str(apdu).encode("hex")))
         if apdu.startswith("\xE3\x00"):
             info("rcvd association response")
@@ -426,28 +426,28 @@ class PhdcP2pAgentTest(CommandLineInterface):
         apdu = struct.pack(">H", len(apdu)) + apdu
         info("send association release request")
         info("send {0}".format(str(apdu).encode("hex")))
-        llc.send(socket, str(apdu))
+        socket.send(str(apdu))
 
-        apdu = llc.recv(socket)
+        apdu = socket.recv()
         info("rcvd {0}".format(str(apdu).encode("hex")))
         if apdu.startswith("\xE5\x00"):
             info("rcvd association release response")
 
         info("leaving ieee agent")
-        llc.close(socket)
+        socket.close()
 
     def test_02(self, llc):
         """Association after release"""
 
-        socket = llc.socket(nfc.llcp.DATA_LINK_CONNECTION)
-        llc.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
+        socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
+        socket.setsockopt(nfc.llcp.SO_RCVBUF, 2)
         service_name = "urn:nfc:sn:phdc"
         try:
-            llc.connect(socket, service_name)
+            socket.connect(service_name)
         except nfc.llcp.ConnectRefused:
             raise TestError("could not connect to {0!r}".format(service_name))
         
-        peer_sap = llc.getpeername(socket)
+        peer_sap = socket.getpeername()
         info("connected with phdc manager at sap {0}".format(peer_sap))
         info("entering ieee agent")
 
@@ -455,19 +455,19 @@ class PhdcP2pAgentTest(CommandLineInterface):
         apdu = struct.pack(">H", len(apdu)) + apdu
         info("send thermometer association request")
         info("send {0}".format(str(apdu).encode("hex")))
-        llc.send(socket, str(apdu))
+        socket.send(str(apdu))
 
-        apdu = llc.recv(socket)
+        apdu = socket.recv()
         info("rcvd {0}".format(str(apdu).encode("hex")))
         if apdu.startswith("\xE3\x00"):
             info("rcvd association response")
 
-        llc.close(socket)
+        socket.close()
 
-        socket = llc.socket(nfc.llcp.DATA_LINK_CONNECTION)
-        llc.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
-        llc.connect(socket, "urn:nfc:sn:phdc")
-        peer_sap = llc.getpeername(socket)
+        socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
+        socket.setsockopt(nfc.llcp.SO_RCVBUF, 2)
+        socket.connect("urn:nfc:sn:phdc")
+        peer_sap = socket.getpeername()
         info("connected with phdc manager at sap {0}".format(peer_sap))
         info("entering ieee agent")
 
@@ -475,9 +475,9 @@ class PhdcP2pAgentTest(CommandLineInterface):
         apdu = struct.pack(">H", len(apdu)) + apdu
         info("send thermometer association request")
         info("send {0}".format(str(apdu).encode("hex")))
-        llc.send(socket, str(apdu))
+        socket.send(str(apdu))
 
-        apdu = llc.recv(socket)
+        apdu = socket.recv()
         info("rcvd {0}".format(str(apdu).encode("hex")))
         if apdu.startswith("\xE3\x00"):
             info("rcvd association response")
@@ -488,9 +488,9 @@ class PhdcP2pAgentTest(CommandLineInterface):
         apdu = struct.pack(">H", len(apdu)) + apdu
         info("send association release request")
         info("send {0}".format(str(apdu).encode("hex")))
-        llc.send(socket, str(apdu))
+        socket.send(str(apdu))
 
-        apdu = llc.recv(socket)
+        apdu = socket.recv()
         info("rcvd {0}".format(str(apdu).encode("hex")))
         if apdu.startswith("\xE5\x00"):
             info("rcvd association release response")
@@ -500,32 +500,32 @@ class PhdcP2pAgentTest(CommandLineInterface):
     def test_03(self, llc):
         """Fragmentation and reassembly"""
         
-        socket = llc.socket(nfc.llcp.DATA_LINK_CONNECTION)
-        llc.setsockopt(socket, nfc.llcp.SO_RCVBUF, 2)
+        socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
+        socket.setsockopt(nfc.llcp.SO_RCVBUF, 2)
         service_name = "urn:nfc:xsn:nfc-forum.org:phdc-validation"
         try:
-            llc.connect(socket, service_name)
+            socket.connect(service_name)
         except nfc.llcp.ConnectRefused:
             raise TestError("could not connect to {0!r}".format(service_name))
         
-        peer_sap = llc.getpeername(socket)
+        peer_sap = socket.getpeername()
         info("connected with phdc manager at sap {0}".format(peer_sap))
 
-        miu = llc.getsockopt(socket, nfc.llcp.SO_SNDMIU)
+        miu = socket.getsockopt(nfc.llcp.SO_SNDMIU)
         
         apdu = os.urandom(2176)
         log.info("send ieee apdu of size {0} byte".format(len(apdu)))
         apdu = struct.pack(">H", len(apdu)) + apdu
         for i in range(0, len(apdu), miu):
-            llc.send(socket, str(apdu[i:i+miu]))
+            socket.send(str(apdu[i:i+miu]))
 
         sent_apdu = apdu[2:]
 
-        data = llc.recv(socket)
+        data = socket.recv()
         size = struct.unpack(">H", data[0:2])[0]
         apdu = data[2:]
         while len(apdu) < size:
-            data = llc.recv(socket)
+            data = socket.recv()
             if data == None: break
             log.info("rcvd {0} byte data".format(len(data)))
             apdu += data
@@ -535,7 +535,7 @@ class PhdcP2pAgentTest(CommandLineInterface):
         if rcvd_apdu != sent_apdu:
             raise TestError("received data does not equal sent data")
 
-        llc.close(socket)
+        socket.close()
     
 if __name__ == '__main__':
     try: mode, sys.argv = sys.argv[1], sys.argv[0:1] + sys.argv[2:]
