@@ -488,7 +488,8 @@ class Device(nfc.dev.Device):
             return self.chipset.in_comm_rf(data, timeout_msec)
         except CommunicationError as error:
             log.debug(error)
-            if error == "RECEIVE_TIMEOUT_ERROR": raise TimeoutError
+            if error == "RECEIVE_TIMEOUT_ERROR":
+                raise TimeoutError
             else: raise TransmissionError
 
     @trace
@@ -502,6 +503,8 @@ class Device(nfc.dev.Device):
             log.debug(error)
             if error == "RECEIVE_TIMEOUT_ERROR":
                 raise TimeoutError
+            elif error == "RF_OFF_ERROR":
+                return None
             else: raise TransmissionError
 
     def set_communication_mode(self, brm, **kwargs):
