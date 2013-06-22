@@ -91,15 +91,17 @@ class ContactlessFrontend(object):
             if 'on-startup' in rdwr_options:
                 targets = rdwr_options.get('targets', [])
                 targets = rdwr_options['on-startup'](self, targets)
-                if targets is None: return False
+                if targets is None: rdwr_options = None
                 else: rdwr_options['targets'] = targets
+        if rdwr_options:
             if not rdwr_options.get('targets'):
                 rdwr_options['targets'] = [
                     TTA(br=106, cfg=None, uid=None), TTB(br=106),
                     TTF(br=424, idm=None, pmm=None, sys=None),
                     TTF(br=212, idm=None, pmm=None, sys=None)]
             if not 'on-connect' in rdwr_options:
-                rdwr_options['on-connect'] = lambda tag: True
+                rdwr_options['on-connect'] = lambda tag: True#
+
         if llcp_options:
             llc = nfc.llcp.llc.LogicalLinkController(
                 recv_miu=llcp_options.get('miu', 128),
@@ -107,23 +109,27 @@ class ContactlessFrontend(object):
                 send_agf=llcp_options.get('agf', True))
             if 'on-startup' in llcp_options:
                 llc = llcp_options['on-startup'](self, llc)
-                if llc is None: return False
+                if llc is None: llcp_options = None
+        if llcp_options:
             if not 'on-connect' in llcp_options:
                 llcp_options['on-connect'] = lambda llc: True
+
         if card_options:
             if 'on-startup' in card_options:
                 targets = card_options.get('targets', [])
                 targets = card_options['on-startup'](self, targets)
-                if targets is None: return False
+                if targets is None: card_options = None
                 else: card_options['targets'] = targets
+        if card_options:
             if not card_options.get('targets'):
                 log.error("a target must be specified to connect as tag")
                 return False
             if not 'on-connect' in card_options:
                 card_options['on-connect'] = lambda tag, command: True
 
+        some_options = rdwr_options or llcp_options or card_options
         try:
-            while True:
+            while some_options:
                 if ((llcp_options and self._llcp_connect(llcp_options, llc)) or
                     (rdwr_options and self._rdwr_connect(rdwr_options)) or
                     (card_options and self._card_connect(card_options))):
