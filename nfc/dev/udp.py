@@ -42,6 +42,8 @@ class Device(nfc.dev.Device):
         self.addr = (host, port)
     
     def close(self):
+        if self.exchange == self.send_cmd_recv_rsp:
+            self.socket.sendto("", self.addr)
         self.socket.close()
     
     def sense(self, targets):
@@ -163,7 +165,7 @@ class Device(nfc.dev.Device):
             if rfd and rfd[0] == self.socket:
                 data, self.addr = self.socket.recvfrom(1024)
                 log.debug("<< {0}".format(data.encode("hex")))
-                return bytearray(data)
+                return bytearray(data) if len(data) else None
             else: log.debug("TimeoutError"); raise TimeoutError
 
     def send_rsp_recv_cmd(self, data, timeout):
@@ -185,7 +187,7 @@ class Device(nfc.dev.Device):
             if rfd and rfd[0] == self.socket:
                 data, self.addr = self.socket.recvfrom(1024)
                 log.debug("<< {0}".format(data.encode("hex")))
-                return bytearray(data)
+                return bytearray(data) if len(data) else None
             else: log.debug("TimeoutError"); raise TimeoutError
 
     def set_communication_mode(self, brm, **kwargs):
