@@ -42,8 +42,10 @@ class Device(nfc.dev.Device):
         self.addr = (host, port)
     
     def close(self):
-        if self.exchange == self.send_cmd_recv_rsp:
-            self.socket.sendto("", self.addr)
+        try:
+            if self.exchange == self.send_cmd_recv_rsp:
+                self.socket.sendto("", self.addr)
+        except AttributeError: pass
         self.socket.close()
     
     def sense(self, targets):
