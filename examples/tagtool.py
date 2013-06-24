@@ -145,8 +145,21 @@ def add_format_tt3_parser(parser):
 def add_emulate_parser(parser):
     parser.description = "Emulate an ndef tag."    
     parser.add_argument(
+        "-l", "--loop", action="store_true",
+        help="continue (restart) after tag release")
+    parser.add_argument(
+        "-k", "--keep", action="store_true",
+        help="keep tag memory (when --loop is set)")
+    parser.add_argument(
         "-s", dest="size", type=int, default="1024",
         help="ndef data area size (default: %(default)s)")
+    parser.add_argument(
+        "-p", dest="preserve", metavar="FILE", type=argparse.FileType('wb'),
+        help="preserve tag memory when released")
+    parser.add_argument(
+        "input", metavar="FILE", type=argparse.FileType('r'),
+        nargs="?", default=None,
+        help="ndef message to serve ('-' reads from stdin)")
     subparsers = parser.add_subparsers(title="Tag Types", dest="tagtype")
     add_emulate_tt3_parser(subparsers.add_parser(
             'tt3', help='emulate a type 3 tag'))
@@ -164,13 +177,6 @@ def add_emulate_tt3_parser(parser):
     parser.add_argument(
         "--bitrate", choices=["212", "424"], default="212",
         help="bitrate to listen (default: %(default)s)")
-    parser.add_argument(
-        "-s", dest="size", type=int, default="1024",
-        help="ndef data area size (default: %(default)s)")
-    parser.add_argument(
-        "input", metavar="FILE", type=argparse.FileType('r'),
-        nargs="?", default=None,
-        help="ndef message to serve ('-' reads from stdin)")
     
 class TagTool(CommandLineInterface):
     def __init__(self):
@@ -258,15 +264,15 @@ class TagTool(CommandLineInterface):
                 self.options.output.write(str(data))
 
     def load_tag(self, tag):
-        try: selfoptions.data
+        try: self.options.data
         except AttributeError:
-            self.self.options.data = self.options.input.read()
+            self.options.data = self.options.input.read()
             try: self.options.data = self.options.data.decode("hex")
             except TypeError: pass
 
         if tag.ndef is not None:
             log.info("old: " + tag.ndef.message.encode("hex"))
-            tag.ndef.message = args.data
+            tag.ndef.message = self.options.data
             log.info("new: " + tag.ndef.message.encode("hex"))
         else:
             log.info("not an ndef tag")
@@ -323,21 +329,29 @@ class TagTool(CommandLineInterface):
             else:
                 self.options.data = ""
 
-        if self.options.input:
-            self.options.ndef_data_area = \
-                bytearray(16) + bytearray(self.options.data) + \
-                bytearray(max(0, self.options.size - len(self.options.data)))
-        else:
-            self.options.ndef_data_area = bytearray(16 + self.options.size)
+        if not (hasattr(self.options, "ndef_data_area") and self.options.keep):
+            if self.options.input:
+                self.options.ndef_data_area = \
+                    bytearray(16) + bytearray(self.options.data) + \
+                    bytearray(max(0, self.options.size-len(self.options.data)))
+            #elif self.options.preserve:
+            #    log.info("reading tag data from {0!r}"
+            #             .format(self.options.preserve.name))
+            #    data = self.options.preserve.read()
+            #    if len(data) % 16 != 0:
+            #        log.warning("memory data truncated to 16 byte boundary")
+            #    self.options.ndef_data_area = bytearray(data)
+            else:
+                self.options.ndef_data_area = bytearray(16 + self.options.size)
 
-        # set attribute data
-        attr = nfc.tag.tt3.NdefAttributeData()
-        attr.version = "1.0"
-        attr.nbr, attr.nbw = (12, 8)
-        attr.capacity = len(self.options.ndef_data_area) - 16
-        attr.writeable = True
-        attr.length = len(self.options.data)
-        self.options.ndef_data_area[0:16] = str(attr)
+            # set attribute data
+            attr = nfc.tag.tt3.NdefAttributeData()
+            attr.version = "1.0"
+            attr.nbr, attr.nbw = (12, 8)
+            attr.capacity = len(self.options.ndef_data_area) - 16
+            attr.writeable = True
+            attr.length = len(self.options.data)
+            self.options.ndef_data_area[0:16] = str(attr)
 
         idm = bytearray.fromhex(self.options.idm)
         pmm = bytearray.fromhex(self.options.pmm)
@@ -347,6 +361,9 @@ class TagTool(CommandLineInterface):
     def emulate_tag(self, tag, command):
         if self.options.tagtype == "tt3":
             self.emulate_tt3_tag(tag, command)
+        if self.options.preserve:
+            self.options.preserve.seek(0)
+            self.options.preserve.write(self.options.ndef_data_area)
 
     def emulate_tt3_tag(self, tag, command):
         def ndef_read(block_number, rb, re):
@@ -372,6 +389,8 @@ class TagTool(CommandLineInterface):
                 log.info("no command received within 10 seconds")
             except nfc.clf.TransmissionError:
                 break
+
+        print(str(self.options.ndef_data_area).encode("hex"))
 
 if __name__ == '__main__':
     TagTool().run()
