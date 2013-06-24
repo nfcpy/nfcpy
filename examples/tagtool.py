@@ -172,40 +172,6 @@ def add_emulate_tt3_parser(parser):
         nargs="?", default=None,
         help="ndef message to serve ('-' reads from stdin)")
     
-def emulate_tt3_prepare(options):
-    if options.size % 16 != 0:
-        options.size = ((options.size + 15) // 16) * 16
-        log.warning("ndef data area size rounded to {0}".format(options.size))
-    
-    try: options.data
-    except AttributeError:
-        if options.input:
-            options.data = options.input.read()
-            try: options.data = options.data.decode("hex")
-            except TypeError: pass
-        else:
-            options.data = ""
-    
-    if options.input:
-        options.ndef_data_area = bytearray(16) + bytearray(options.data) + \
-            bytearray(max(0, options.size - len(options.data)))
-    else:
-        options.ndef_data_area = bytearray(16 + options.size)
-
-    # set attribute data
-    attr = nfc.tag.tt3.NdefAttributeData()
-    attr.version = "1.0"
-    attr.nbr, attr.nbw = (12, 8)
-    attr.capacity = len(options.ndef_data_area) - 16
-    attr.writeable = True
-    attr.length = len(options.data)
-    options.ndef_data_area[0:16] = str(attr)
-    
-    idm = bytearray.fromhex(options.idm)
-    pmm = bytearray.fromhex(options.pmm)
-    sys = bytearray.fromhex(options.sys)
-    return nfc.clf.TTF(options.bitrate, idm, pmm, sys)
-
 class TagTool(CommandLineInterface):
     def __init__(self):
         parser = argparse.ArgumentParser(
@@ -241,10 +207,9 @@ class TagTool(CommandLineInterface):
     
     def on_card_startup(self, clf, targets):
         if self.options.command == "emulate":
+            target = self.prepare_tag()
             log.info("touch a reader")
-            if self.options.tagtype == "tt3":
-                target = emulate_tt3_prepare(self.options)
-                return [target]
+            return [target]
 
     def on_card_connect(self, tag, command):
         log.info("tag activated")
@@ -339,6 +304,46 @@ class TagTool(CommandLineInterface):
         tag.write(attr, [0])
         attr = nfc.tag.tt3.NdefAttributeData(tag.read([0]))
         log.info("wrote attribute data: " + attr.pretty())
+
+    def prepare_tag(self):
+        if self.options.tagtype == "tt3":
+            return self.prepare_tt3_tag()
+
+    def prepare_tt3_tag(self):
+        if self.options.size % 16 != 0:
+            self.options.size = ((self.options.size + 15) // 16) * 16
+            log.warning("tt3 ndef data area size rounded to {0}"
+                        .format(self.options.size))
+
+        try: self.options.data
+        except AttributeError:
+            if self.options.input:
+                self.options.data = self.options.input.read()
+                try: self.options.data = self.options.data.decode("hex")
+                except TypeError: pass
+            else:
+                self.options.data = ""
+
+        if self.options.input:
+            self.options.ndef_data_area = \
+                bytearray(16) + bytearray(self.options.data) + \
+                bytearray(max(0, self.options.size - len(self.options.data)))
+        else:
+            self.options.ndef_data_area = bytearray(16 + self.options.size)
+
+        # set attribute data
+        attr = nfc.tag.tt3.NdefAttributeData()
+        attr.version = "1.0"
+        attr.nbr, attr.nbw = (12, 8)
+        attr.capacity = len(self.options.ndef_data_area) - 16
+        attr.writeable = True
+        attr.length = len(self.options.data)
+        self.options.ndef_data_area[0:16] = str(attr)
+
+        idm = bytearray.fromhex(self.options.idm)
+        pmm = bytearray.fromhex(self.options.pmm)
+        sys = bytearray.fromhex(self.options.sys)
+        return nfc.clf.TTF(self.options.bitrate, idm, pmm, sys)
 
     def emulate_tag(self, tag, command):
         if self.options.tagtype == "tt3":
