@@ -50,12 +50,6 @@ class usb(object):
         self.dh.releaseInterface()
         self.dh = None
 
-    #def __del__(self):
-    #    if self.dh and self.usb_out and self.usb_inp:
-    #        rf_off = "\x00\x00\xff\x04\xfc\xd4\x32\x01\x00\xf9\x00"
-    #        self.dh.bulkWrite(self.usb_out, rf_off)
-    #        self.dh.bulkRead(self.usb_inp, 256, 100)
-        
     def write(self, frame):
         if self.dh is not None and self.usb_out is not None:
             log.debug(">>> " + str(frame).encode("hex"))

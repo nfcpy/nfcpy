@@ -133,6 +133,10 @@ class Chipset():
         self.get_pd_data_version()
         self.switch_rf("off")
 
+    def close(self):
+        self.switch_rf("off")
+        self.transport.close()
+        
     #@trace
     def send_command(self, cmd_code, cmd_data, timeout):
         cmd = bytearray([0xD6, cmd_code]) + bytearray(cmd_data)
@@ -260,8 +264,7 @@ class Device(nfc.dev.Device):
         self.chipset = chipset
     
     def close(self):
-        self.chipset.switch_rf("off")
-        pass
+        self.chipset.close()
     
     @trace
     def sense(self, targets):
