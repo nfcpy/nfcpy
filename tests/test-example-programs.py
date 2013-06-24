@@ -37,13 +37,17 @@ test_programs = [
     ("phdc-test-manager.py --mode i", "phdc-test-agent.py tag"),
     ]
 
+examples = os.path.split(sys.path[0])[0] + "/examples/"
+
 for server, client in test_programs:
     print "*** {0} ***".format(client)
     
-    server = sys.path[0] + "/{0} --device udp -q".format(server)
+    server = examples + "{0} --device udp -q".format(server)
+    print server
     server = Popen(shlex.split(server), stderr=PIPE, stdout=PIPE)
 
-    client = sys.path[0] + "/{0} --device udp -q -T".format(client)
+    client = examples + "{0} --device udp -q -T".format(client)
+    print client
     client = Popen(shlex.split(client), stderr=STDOUT)
 
     client.wait()
