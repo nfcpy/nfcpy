@@ -100,7 +100,7 @@ class CommandLineInterface(object):
             "-d", metavar="MODULE", dest="debug", action="append",
             help="print debug messages for MODULE, use '' for all")
         group.add_argument(
-            "-f", dest="logfile", metavar="FILE",
+            "-f", dest="logfile", metavar="LOGFILE",
             help="write log messages to file")
         
     def add_llcp_options(self, argument_parser):

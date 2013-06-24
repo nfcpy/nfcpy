@@ -175,7 +175,6 @@ def add_emulate_tt3_parser(parser):
 class TagTool(CommandLineInterface):
     def __init__(self):
         parser = argparse.ArgumentParser(
-            usage='%(prog)s [OPTION]...',
             formatter_class=argparse.RawDescriptionHelpFormatter,
             description="")
         subparsers = parser.add_subparsers(
