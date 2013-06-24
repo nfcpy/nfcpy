@@ -109,7 +109,7 @@ def add_load_parser(parser):
         help="ndef data file ('-' reads from stdin)")
         
 def add_format_parser(parser):
-    subparsers = parser.add_subparsers(title="tags")
+    subparsers = parser.add_subparsers(title="Tag Types", dest="tagtype")
     add_format_tt3_parser(subparsers.add_parser(
             'tt3', help='format type 3 tag'))
 
@@ -147,12 +147,11 @@ def add_emulate_parser(parser):
     parser.add_argument(
         "-s", dest="size", type=int, default="1024",
         help="ndef data area size (default: %(default)s)")
-    subparsers = parser.add_subparsers(dest="tagtype")
+    subparsers = parser.add_subparsers(title="Tag Types", dest="tagtype")
     add_emulate_tt3_parser(subparsers.add_parser(
             'tt3', help='emulate a type 3 tag'))
     
 def add_emulate_tt3_parser(parser):
-    parser.set_defaults(func=emulate_tt3)
     parser.add_argument(
         "--idm", metavar="HEX", default="03FEFFE011223344",
         help="manufacture identifier (default: %(default)s)")
@@ -207,31 +206,6 @@ def emulate_tt3_prepare(options):
     sys = bytearray.fromhex(options.sys)
     return nfc.clf.TTF(options.bitrate, idm, pmm, sys)
 
-def emulate_tt3(tag, command, options):
-    def ndef_read(block_number, rb, re):
-        log.debug("tt3 read block #{0}".format(block_number))
-        if block_number < len(options.ndef_data_area) / 16:
-            first, last = block_number*16, (block_number+1)*16
-            block_data = options.ndef_data_area[first:last]
-            return block_data
-    def ndef_write(block_number, block_data, wb, we):
-        log.debug("tt3 write block #{0}".format(block_number))
-        if block_number < len(ndef_data_area) / 16:
-            first, last = block_number*16, (block_number+1)*16
-            options.ndef_data_area[firs:last] = block_data
-            return True
-
-    tag.add_service(0x0009, ndef_read, ndef_write)
-    tag.add_service(0x000B, ndef_read, lambda: False)
-    while command is not None:
-        response = tag.process_command(command)
-        try:
-            command = tag.send_response(response, timeout=10)
-        except nfc.clf.TimeoutError:
-            log.info("no command received within 10 seconds")
-        except nfc.clf.TransmissionError:
-            break
-
 class TagTool(CommandLineInterface):
     def __init__(self):
         parser = argparse.ArgumentParser(
@@ -274,7 +248,7 @@ class TagTool(CommandLineInterface):
 
     def on_card_connect(self, tag, command):
         log.info("tag activated")
-        self.options.func(tag, command, self.options)
+        self.emulate_tag(tag, command)
         log.info("tag released")
         return self.options.wait
 
@@ -293,10 +267,9 @@ class TagTool(CommandLineInterface):
                 icc = str(tag.pmm[0:2]) # ic code
                 print("  " + tt3_card_map.get(icc, "unknown card"))
         if tag.ndef:
-            print("NDEF attribute data:")
+            print("NDEF capabilities:")
             if self.options.verbose and tag.type == "Type3Tag":
-                attr = ["{0:02x}".format(b) for b in tag.ndef.attr]
-                print("  " + " ".join(attr))
+                print("  [%s]" % tag.ndef.attr.pretty())
             print("  version   = %s" % tag.ndef.version)
             print("  writeable = %s" % ("no", "yes")[tag.ndef.writeable])
             print("  capacity  = %d byte" % tag.ndef.capacity)
@@ -346,39 +319,56 @@ class TagTool(CommandLineInterface):
         print("%d block(s) can be read at once" % nbr)
         nbw = tt3_determine_block_write_once_count(tag, block_count)
         print("%d block(s) can be written at once" % nbw)
+        if self.options.max is not None: block_count = self.options.max + 1
+        if self.options.nbw is not None: nbw = self.options.nbw
+        if self.options.nbr is not None: nbr = self.options.nbr
+        
+        attr = nfc.tag.tt3.NdefAttributeData()
+        attr.version = self.options.ver
+        attr.nbr, attr.nbw = (nbr, nbw)
+        attr.capacity = (block_count - 1) * 16
+        attr.rfu = 4 * [self.options.rfu]
+        attr.wf = self.options.wf
+        attr.writing = bool(self.options.wf)
+        attr.rw = self.options.rw
+        attr.writeable = bool(self.options.rw)
+        attr.length = self.options.len
+        attr = bytearray(str(attr))
+        if self.options.crc is not None:
+            attr[14:16] = (self.options.crc / 256, self.options.crc % 256)
+    
+        tag.write(attr, [0])
+        attr = nfc.tag.tt3.NdefAttributeData(tag.read([0]))
+        log.info("wrote attribute data: " + attr.pretty())
 
-        if self.options.max is not None:
-            block_count = self.options.max + 1
-        if self.options.nbw is not None:
-            nbw = self.options.nbw
-        if self.options.nbr is not None:
-            nbr = self.options.nbr
-        rfu = self.options.rfu
-        wf = self.options.wf
-        rw = self.options.rw
-        ver = map(int, self.options.ver.split('.'))
-        ver = ver[0] << 4 | ver[1]
+    def emulate_tag(self, tag, command):
+        if self.options.tagtype == "tt3":
+            self.emulate_tt3_tag(tag, command)
 
-        nmaxb_msb = (block_count - 1) / 256
-        nmaxb_lsb = (block_count - 1) % 256
-        attr = bytearray([ver, nbr, nbw, nmaxb_msb, nmaxb_lsb, 
-                          rfu, rfu, rfu, rfu, wf, rw, 0, 0, 0, 0, 0])
-        attr[11:14] = bytearray(struct.pack('!I', self.options.len)[1:])
-        csum = sum(attr[0:14]) if self.options.crc is None else self.options.crc
-        attr[14] = csum / 256
-        attr[15] = csum % 256
+    def emulate_tt3_tag(self, tag, command):
+        def ndef_read(block_number, rb, re):
+            log.debug("tt3 read block #{0}".format(block_number))
+            if block_number < len(self.options.ndef_data_area) / 16:
+                first, last = block_number*16, (block_number+1)*16
+                block_data = self.options.ndef_data_area[first:last]
+                return block_data
+        def ndef_write(block_number, block_data, wb, we):
+            log.debug("tt3 write block #{0}".format(block_number))
+            if block_number < len(self.options.ndef_data_area) / 16:
+                first, last = block_number*16, (block_number+1)*16
+                self.options.ndef_data_area[first:last] = block_data
+                return True
 
-        log.info("writing attribute data block:")
-        log.info(" ".join(["%02x" % x for x in attr]))
-        log.info("  Ver = {0}".format(self.options.ver))
-        log.info("  Nbr = {0}".format(nbr))
-        log.info("  Nbw = {0}".format(nbw))
-        log.info("  WF  = {0}".format(wf))
-        log.info("  RW  = {0}".format(rw))
-        log.info("  Ln  = {0}".format(self.options.len))
-        log.info("  CRC = {0}".format(csum))
-
-        tag.write(str(attr), [0])
+        tag.add_service(0x0009, ndef_read, ndef_write)
+        tag.add_service(0x000B, ndef_read, lambda: False)
+        while command is not None:
+            response = tag.process_command(command)
+            try:
+                command = tag.send_response(response, timeout=10)
+            except nfc.clf.TimeoutError:
+                log.info("no command received within 10 seconds")
+            except nfc.clf.TransmissionError:
+                break
 
 if __name__ == '__main__':
     TagTool().run()
