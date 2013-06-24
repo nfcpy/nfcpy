@@ -38,16 +38,20 @@ def trace(func):
     return traced_func
 
 class NdefAttributeData:
-    def __init__(self, attr=16):
-        attr = bytearray(attr)
+    def __init__(self, init=16):
+        attr = bytearray(init)
         self.version = "{0}.{1}".format(attr[0] >> 4, attr[0] & 15)
         self.nbr = attr[1]
         self.nbw = attr[2]
         self.capacity = (attr[3] * 256 + attr[4]) * 16
+        self.rfu = attr[5:9]
         self.writing = bool(attr[9])
         self.writeable = bool(attr[10])
         self.length = attr[11]<<16 | attr[12]<<8 | attr[13]
+        self.checksum = attr[14:16]
         self.valid = sum(attr[0:14]) == attr[14] << 8 | attr[15]
+        self.wf = 0x0F
+        self.rw = 0x01
 
     def __str__(self):
         attr = bytearray(16)
@@ -58,8 +62,9 @@ class NdefAttributeData:
         attr[2] = self.nbw
         attr[3] = maxb >> 8
         attr[4] = maxb & 0xff
-        attr[9] = 15 if self.writing else 0
-        attr[10] = 1 if self.writeable else 0
+        attr[5:9] = self.rfu
+        attr[9] = self.wf if self.writing else 0
+        attr[10] = self.rw if self.writeable else 0
         attr[11] = self.length >> 16 & 0xff
         attr[12] = self.length >> 8 & 0xff
         attr[13] = self.length & 0xff
@@ -67,9 +72,14 @@ class NdefAttributeData:
         attr[14] = checksum >> 8
         attr[15] = checksum & 0xff
         return str(attr)
+
+    def pretty(self):
+        return ("Ver={a.version!r} Nbr={a.nbr} Nbw={a.nbw} Nmaxb={nmaxb} "
+                "WF={a.wf:02X}h RW={a.rw:02X}h Ln={a.length} Checksum={cs}h"
+                .format(a=self, nmaxb=self.capacity/16,
+                        cs=str(self.checksum).encode("hex").upper()))
     
 class NDEF(object):
-
     def __init__(self, tag):
         self.tag = tag
         self._attr = None
@@ -309,11 +319,13 @@ class Type3TagEmulation(object):
         for i in range(len(service_list)):
             service_code = cmd_data[1] << 8 | cmd_data[0]
             if not service_code in self.services.keys():
-                return bytearray([255, 0xA1])
+                return bytearray([0xFF, 0xA1])
             service_list[i] = [service_code, 0]
             del cmd_data[0:2]
         
         service_block_list = cmd_data.pop(0) * [None]
+        if len(service_block_list) > 15:
+            return bytearray([0xFF, 0xA2])
         for i in range(len(service_block_list)):
             try:
                 service_list_item = service_list[cmd_data[0] & 0x0F]
