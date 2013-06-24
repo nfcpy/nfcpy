@@ -126,8 +126,8 @@ class CommandLineInterface(object):
         group = argument_parser.add_argument_group(
             title="Reader Mode Options")
         group.add_argument(
-            "--no-wait", dest="wait", action="store_false",
-            help="wait for tag removal before return")
+            "--wait", action="store_true",
+            help="wait until tag removed (implicit with '-l')")
 
     def add_card_options(self, argument_parser):
         group = argument_parser.add_argument_group(
@@ -197,8 +197,6 @@ class CommandLineInterface(object):
         if "test" in self.groups:
             self.test_completed = False
             self.run_tests(tag, command)
-            #Thread(target=self.run_tests, args=(target, command)).start()
-            #llc.run(terminate=self.terminate)
             return False
         return True
 
