@@ -138,7 +138,7 @@ class NDEF(object):
 
         self.attr.writing = True
         self.attr.length = len(data)
-        self.tag.write(str(attr), [0])
+        self.tag.write(str(self.attr), [0])
 
         blocks = range(1, (len(data)+15)/16 + 1)
         nb_max = self.attr.nbw # blocks to write at once
@@ -153,7 +153,7 @@ class NDEF(object):
             self.tag.write(data[offset:], blocks)
 
         self.attr.writing = False # writing finished
-        self.tag.write(str(attr), [0])
+        self.tag.write(str(self.attr), [0])
         self._attr = None
 
 class Type3Tag(object):
