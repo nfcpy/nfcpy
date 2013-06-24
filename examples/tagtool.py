@@ -237,7 +237,7 @@ class TagTool(CommandLineInterface):
         commands = {"show": self.show_tag, "dump": self.dump_tag,
                     "load": self.load_tag, "format": self.format_tag}
         commands[self.options.command](tag)
-        return self.options.wait
+        return self.options.wait or self.options.loop
     
     def on_card_startup(self, clf, targets):
         if self.options.command == "emulate":
@@ -250,7 +250,6 @@ class TagTool(CommandLineInterface):
         log.info("tag activated")
         self.emulate_tag(tag, command)
         log.info("tag released")
-        return self.options.wait
 
     def show_tag(self, tag):
         print(tag)
