@@ -83,39 +83,38 @@ class NDEF(object):
     def __init__(self, tag):
         self.tag = tag
         self._attr = None
-        if not sum(self.attr[0:14]) == self.attr[14] << 8 | self.attr[15]:
-            log.error("checksum error in ndef attribute block")
-            raise ValueError("checksum error in NDEF attribute block")
+        if not self.attr.valid:
+            raise ValueError("invalid ndef attribute block")
             
     @property
     def version(self):
         """The version of the NDEF mapping."""
-        return "%d.%d" % (self.attr[0]>>4, self.attr[0]&0x0F)
+        return self.attr.version
 
     @property
     def capacity(self):
         """The maximum number of user bytes on the NDEF tag."""
-        return (self.attr[3] * 256 + self.attr[4]) * 16
+        return self.attr.capacity
 
     @property
     def writeable(self):
         """Is True if new data can be written to the NDEF tag."""
-        return bool(self.attr[10])
+        return self.attr.writeable
 
     @property
     def attr(self):
         if self._attr is None:
-            self._attr = bytearray(self.tag.read(blocks=[0]))
-            if not sum(self.attr[0:14]) == self.attr[14] << 8 | self.attr[15]:
+            self._attr = NdefAttributeData(self.tag.read(blocks=[0]))
+            if not self._attr.valid:
                 log.error("checksum error in ndef attribute block")
         return self._attr
 
     @property
     def message(self):
         """A 8-bit character string that contains the NDEF message data."""
-        length = self.attr[11]*65536 + self.attr[12]*256 + self.attr[13]
+        length = self.attr.length
         blocks = range(1, (length+15)/16 + 1)
-        nb_max = self.attr[1] # Nbr
+        nb_max = self.attr.nbr
         data = ""
         while len(blocks) > nb_max:
             block_list = blocks[0:nb_max]
@@ -135,16 +134,14 @@ class NDEF(object):
             raise IOError("tag writing disabled")
 
         if len(data) > self.capacity:
-            raise IOError("ndef message beyond tag capacity")
+            raise IOError("ndef message exceeds tag capacity")
 
-        attr = self.attr
-        attr[9] = 0x0F;
-        attr[11:14] = split3(len(data))
-        attr[14:16] = split2(sum(attr[0:14]))
-        self.tag.write(attr, [0])
+        self.attr.writing = True
+        self.attr.length = len(data)
+        self.tag.write(str(attr), [0])
 
         blocks = range(1, (len(data)+15)/16 + 1)
-        nb_max = attr[2] # blocks to write at once
+        nb_max = self.attr.nbw # blocks to write at once
         length = nb_max * 16  # bytes to write at once
         offset = 0
         while len(blocks) > nb_max:
@@ -155,9 +152,8 @@ class NDEF(object):
             data += (-len(data) % 16) * '\x00'
             self.tag.write(data[offset:], blocks)
 
-        attr[9] = 0x00; # Writing finished
-        attr[14:16] = split2(sum(attr[0:14]))
-        self.tag.write(attr, [0])
+        self.attr.writing = False # writing finished
+        self.tag.write(str(attr), [0])
         self._attr = None
 
 class Type3Tag(object):
