@@ -88,6 +88,9 @@ class Message(object):
         self._write(stream)
         stream.seek(0, 0)
         return stream.read()
+
+    def __eq__(self, other):
+        return str(self) == str(other)
     
     def __len__(self):
         return len(self._records)
@@ -169,13 +172,3 @@ class Message(object):
         lines = [" = ".join(line) for line in lines]
         return ("\n").join([line for line in lines])
         
-    # **************
-    # * deprecated *
-    # **************
-    @staticmethod
-    def fromstring(data):
-        return Message(data)
-
-    def tostring(self):
-        return str(self)
-

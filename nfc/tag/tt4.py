@@ -24,6 +24,7 @@ import logging
 log = logging.getLogger(__name__)
 
 import nfc.clf
+import nfc.ndef
 
 ndef_app_file_v1 = bytearray("\xD2\x76\x00\x00\x85\x01\x00")
 ndef_app_file_v2 = bytearray("\xD2\x76\x00\x00\x85\x01\x01")
@@ -48,7 +49,7 @@ class Type4TagError(BaseException):
 class NDEF(object):
     def __init__(self, tag):
         self.tag = tag
-        self.data = None
+        self.data = ''
         for name, le in ((ndef_app_file_v2, 0), (ndef_app_file_v1, None)):
             try: tag.select_file(4, 0, name, le)
             except Type4TagError: pass
@@ -94,7 +95,7 @@ class NDEF(object):
         except Type4TagError:
             raise RuntimeError("ndef file not found")
 
-        self.message # force read ndef data
+        self.changed # force initial read
 
     @property
     def version(self):
@@ -107,14 +108,25 @@ class NDEF(object):
         return self._ndef_file_size - 2
 
     @property
+    def readable(self):
+        """Is True if data can be read from the NDEF tag."""
+        return self._cc[13] == 0
+
+    @property
     def writeable(self):
-        """Is True if new data can be written to the NDEF tag."""
+        """Is True if data can be written to the NDEF tag."""
         return self._cc[14] == 0
 
     @property
-    def message(self):
-        """A character string containing the NDEF message data."""
-        if self.data is None and self._cc[13] == 0:
+    def length(self):
+        """NDEF message data length."""
+        return len(self.data)
+        
+    @property
+    def changed(self):
+        """True if the message has changed since last read."""
+        if self.readable:
+            old_data = self.data[:]
             data = self.tag.read_binary(0, self._max_le)
             size = data[0] * 256 + data[1] + 2
             tail = max(0, size - len(data))
@@ -122,21 +134,26 @@ class NDEF(object):
                 count = min(self._max_lc, size - len(data))
                 data += self.tag.read_binary(len(data), count)
             self.data = str(data[2:size])
-        return self.data
+            return self.data != old_data
+        return False
+
+    @property
+    def message(self):
+        """An NDEF message object (an empty record message if tag is empty)."""
+        try: return nfc.ndef.Message(str(self.data))
+        except nfc.ndef.parser_error: pass
+        return nfc.ndef.Message(nfc.ndef.Record())
 
     @message.setter
-    def message(self, data):
+    def message(self, msg):
         if not self.writeable:
             raise IOError("tag writing disabled")
-        if len(data) > self.capacity:
+        data = bytearray([0,0]) + bytearray(msg)
+        if len(data) > 2 + self.capacity:
             raise IOError("ndef message exceeds capacity")
-        self.data = None
-        
-        data = bytearray([0,0]) + bytearray(data)
         for offset in range(0, len(data), self._max_lc):
             part = slice(offset, offset + min(self._max_lc, len(data)-offset))
             self.tag.update_binary(offset, data[part])
-
         ndef_size = [(len(data) - 2) / 256, (len(data) - 2) % 256]
         self.tag.update_binary(0, bytearray(ndef_size))
 

@@ -229,9 +229,12 @@ class TagTool(CommandLineInterface):
                 print("TAG memory dump:")
                 print(format_data(memory_dump, w=8))
             elif tag.type == "Type2Tag":
-                memory_dump = tag[0:16+tag[14]*8]
                 print("TAG memory dump:")
-                print(format_data(memory_dump))
+                try:
+                    memory_dump = tag[0:16+tag[14]*8]
+                    print(format_data(memory_dump))
+                except nfc.clf.ProtocolError as e:
+                    log.error(e)
             elif tag.type == "Type3Tag":
                 icc = str(tag.pmm[0:2]) # ic code
                 print("  " + tt3_card_map.get(icc, "unknown card"))
@@ -240,16 +243,15 @@ class TagTool(CommandLineInterface):
             if self.options.verbose and tag.type == "Type3Tag":
                 print("  [%s]" % tag.ndef.attr.pretty())
             print("  version   = %s" % tag.ndef.version)
+            print("  readable  = %s" % ("no", "yes")[tag.ndef.readable])
             print("  writeable = %s" % ("no", "yes")[tag.ndef.writeable])
             print("  capacity  = %d byte" % tag.ndef.capacity)
-            print("  data size = %d byte" % len(tag.ndef.message))
-            if len(tag.ndef.message):
-                if self.options.verbose:
-                    print("NDEF message dump:")
-                    print(format_data(tag.ndef.message))
-                message = nfc.ndef.Message(tag.ndef.message)
-                print("NDEF record list:")
-                print(message.pretty())
+            print("  message   = %d byte" % tag.ndef.length)
+            if self.options.verbose:
+                print("NDEF message dump:")
+                print(format_data(tag.ndef.message))
+            print("NDEF record list:")
+            print(tag.ndef.message.pretty())
 
     def dump_tag(self, tag):
         if tag.ndef:

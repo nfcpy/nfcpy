@@ -102,29 +102,26 @@ class PhdcTagManager(PhdcManager):
         t0 = time.time()
         while True:
             time.sleep(0.01)
-            try:
-                message = nfc.ndef.Message(self.tag.ndef.message)
-            except nfc.ndef.LengthError:
-                if int((time.time() - t0) * 1000) > timeout:
-                    return None
-                continue
-            if message.type == "urn:nfc:wkt:PHD":
-                data = bytearray(message[0].data)
-                if data[0] & 0x8F == (self.mc % 16) | 0x80:
-                    log.info("[phdc] <<< {0}".format(str(data).encode("hex")))
-                    empty_ndef_message = nfc.ndef.Message(nfc.ndef.Record())
-                    self.tag.ndef.message = str(empty_ndef_message)
-                    self.mc += 1
-                    return data[1:]
-                else:
-                    log.debug("wrong flags {0:02x}".format(data[0]))
+            if self.tag.ndef.changed:
+                if self.tag.ndef.message.type == "urn:nfc:wkt:PHD":
+                    data = bytearray(self.tag.ndef.message[0].data)
+                    if data[0] & 0x8F == (self.mc % 16) | 0x80:
+                        log.info("[phdc] <<< " + str(data).encode("hex"))
+                        empty_ndef_msg = nfc.ndef.Message(nfc.ndef.Record())
+                        self.tag.ndef.message = empty_ndef_msg
+                        self.mc += 1
+                        return data[1:]
+                    else:
+                        log.debug("wrong flags {0:02x}".format(data[0]))
+            if int((time.time() - t0) * 1000) > timeout:
+                return None
 
     @trace
     def write_phd_message(self, apdu):
         data = bytearray([(self.mc % 16) | 0x80]) + apdu
         record = nfc.ndef.Record("urn:nfc:wkt:PHD", data=str(data))
         log.info("[phdc] >>> {0}".format(record.data.encode("hex")))
-        self.tag.ndef.message = str(nfc.ndef.Message(record))
+        self.tag.ndef.message = nfc.ndef.Message(record)
         self.mc += 1
         
     def run(self):
@@ -161,9 +158,8 @@ assoc_release_req = "E40000020000"
 assoc_release_res = "E50000020000"
 
 def phdc_tag_manager(tag):
-    message = nfc.ndef.Message(tag.ndef.message)
-    if message.type == "urn:nfc:wkt:PHD":
-        phd_data = bytearray(message[0].data)
+    if tag.ndef.message.type == "urn:nfc:wkt:PHD":
+        phd_data = bytearray(tag.ndef.message[0].data)
         if phd_data[0] == 0:
             manager = PhdcTagManager(tag, apdu=phd_data[1:])
             manager.start()
@@ -261,9 +257,8 @@ class TestProgram(CommandLineInterface):
             log.info("  data size = %d byte" % len(tag.ndef.message))
             if len(tag.ndef.message):
                 log.info("NDEF message dump:")
-                log.info(format_data(tag.ndef.message))
-                message = nfc.ndef.Message(tag.ndef.message)
-                log.info(message.pretty())
+                log.info(format_data(str(tag.ndef.message)))
+                log.info(tag.ndef.message.pretty())
                 phdc_tag_manager(tag)
                 return False
         return True

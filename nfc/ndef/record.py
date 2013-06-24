@@ -265,18 +265,6 @@ class Record(object):
         lines = [line[0].ljust(lwidth) + " = " + line[1] for line in lines]
         return ("\n").join([indent + line for line in lines])
         
-    # **************
-    # * deprecated *
-    # **************
-    @staticmethod
-    def fromstring(data):
-        return Record(data=data)
-
-    def tostring(self, message_begin=False, message_end=False):
-        self._message_begin = message_begin
-        self._message_end = message_end
-        return str(self)
-
 class RecordList(list):
     """A specialized list type that only accepts :class:`Record` objects."""
 

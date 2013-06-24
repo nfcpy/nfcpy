@@ -24,6 +24,7 @@ import logging
 log = logging.getLogger(__name__)
 
 import nfc.clf
+import nfc.ndef
 
 ndef_read_service = 11 # service code for NDEF reading
 ndef_write_service = 9 # service code for NDEF writing
@@ -83,8 +84,10 @@ class NDEF(object):
     def __init__(self, tag):
         self.tag = tag
         self._attr = None
+        self._data = ''
         if not self.attr.valid:
             raise ValueError("invalid ndef attribute block")
+        self.changed # force initial read
             
     @property
     def version(self):
@@ -97,10 +100,20 @@ class NDEF(object):
         return self.attr.capacity
 
     @property
+    def readable(self):
+        """Is True if data can be read from the NDEF tag."""
+        return True
+
+    @property
     def writeable(self):
-        """Is True if new data can be written to the NDEF tag."""
+        """Is True if data can be written to the NDEF tag."""
         return self.attr.writeable
 
+    @property
+    def length(self):
+        """NDEF message data length."""
+        return len(self._data)
+        
     @property
     def attr(self):
         if self._attr is None:
@@ -110,29 +123,33 @@ class NDEF(object):
         return self._attr
 
     @property
-    def message(self):
-        """A 8-bit character string that contains the NDEF message data."""
-        length = self.attr.length
-        blocks = range(1, (length+15)/16 + 1)
-        nb_max = self.attr.nbr
+    def changed(self):
+        """True if the message has changed since last read."""
+        self._attr = None
+        blocks = range(1, (self.attr.length + 15) / 16 + 1)
         data = ""
-        while len(blocks) > nb_max:
-            block_list = blocks[0:nb_max]
-            data += self.tag.read(blocks[0:nb_max])
-            del blocks[0:nb_max]
+        while len(blocks) > self.attr.nbr:
+            block_list = blocks[0:self.attr.nbr]
+            data += self.tag.read(blocks[0:self.attr.nbr])
+            del blocks[0:self.attr.nbr]
         if len(blocks) > 0:
             data += self.tag.read(blocks)
-        self._attr = None
-        return data[0:length]
+        old_data, self._data = self._data, data[0:self.attr.length]
+        return self._data != old_data
+
+    @property
+    def message(self):
+        """An NDEF message object (an empty record message if tag is empty)."""
+        try: return nfc.ndef.Message(str(self._data))
+        except nfc.ndef.parser_error: pass
+        return nfc.ndef.Message(nfc.ndef.Record())
 
     @message.setter
-    def message(self, data):
-        def split2(x): return [x/0x100, x%0x100]
-        def split3(x): return [x/0x10000, x/0x100%0x100, x%0x100]
-
+    def message(self, msg):
         if not self.writeable:
             raise IOError("tag writing disabled")
-
+        
+        data = str(msg)
         if len(data) > self.capacity:
             raise IOError("ndef message exceeds tag capacity")
 
@@ -154,7 +171,6 @@ class NDEF(object):
 
         self.attr.writing = False # writing finished
         self.tag.write(str(self.attr), [0])
-        self._attr = None
 
 class Type3Tag(object):
     type = "Type3Tag"

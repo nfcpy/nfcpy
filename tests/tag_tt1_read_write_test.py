@@ -97,8 +97,8 @@ class ContactlessFrontend(nfc.clf.ContactlessFrontend):
         pass
 
 class TestWithStaticMemoryLayout1:
-    uri = str(nfc.ndef.Message(nfc.ndef.UriRecord(
-            'http://www.abcdefghijklmnopqrstuvwxyzabcdefg.com')))
+    uri = nfc.ndef.Message(nfc.ndef.UriRecord(
+            'http://www.abcdefghijklmnopqrstuvwxyzabcdefg.com'))
     
     def setup(self):
         seq = [("00000000112233", None, "1100" + t1t_static_memory_layout_1),

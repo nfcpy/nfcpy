@@ -35,3 +35,5 @@ class DecodeError(Exception):
 class EncodeError(Exception):
     """NDEF payload encode error"""
     pass
+
+parser_error = (FormatError, LengthError, DecodeError)

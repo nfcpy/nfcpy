@@ -33,8 +33,9 @@ test_programs = [
     ("snep-test-server.py --mode i", "snep-test-client.py --mode t"),
     ("handover-test-server.py --mode t", "handover-test-client.py --mode i"),
     ("handover-test-server.py --mode i", "handover-test-client.py --mode t"),
-    ("phdc-test-manager.py --mode i", "phdc-test-agent.py p2p"),
-    ("phdc-test-manager.py --mode i", "phdc-test-agent.py tag"),
+    ("phdc-test-manager.py --mode t", "phdc-test-agent.py p2p --mode i"),
+    ("phdc-test-manager.py --mode i", "phdc-test-agent.py p2p --mode t"),
+    ("phdc-test-manager.py --mode i --loop", "phdc-test-agent.py tag"),
     ]
 
 examples = os.path.split(sys.path[0])[0] + "/examples/"
@@ -51,4 +52,4 @@ for server, client in test_programs:
     client = Popen(shlex.split(client), stderr=STDOUT)
 
     client.wait()
-    server.wait()
+    server.terminate()

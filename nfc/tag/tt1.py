@@ -26,17 +26,16 @@ import logging
 log = logging.getLogger(__name__)
 
 import nfc.clf
+import nfc.ndef
 
 class NDEF(object):
     def __init__(self, tag):
         self._tag = tag
-        self._msg = None
+        self._msg = ''
         self._cc = tag[8:12]
         log.debug("capability container " + str(self._cc).encode("hex"))
         self._skip = set(range(104, 120))
-        offset = 12
-        while offset is not None:
-            offset = self._read_tlv(offset)
+        self.changed # force initial read
 
     def _read_tlv(self, offset):
         read_tlv = {
@@ -113,30 +112,49 @@ class NDEF(object):
         return self._capacity
 
     @property
-    def writeable(self):
-        """Is True if new data can be written to the NDEF tag."""
-        return self._cc[3] & 0x0F == 0x00
-
-    @property
     def readable(self):
         """Is True if data can be read from the NDEF tag."""
         return self._cc[3] & 0xF0 == 0x00
 
     @property
+    def writeable(self):
+        """Is True if data can be written to the NDEF tag."""
+        return self._cc[3] & 0x0F == 0x00
+
+    @property
+    def length(self):
+        """NDEF message data length."""
+        return len(self._msg)
+        
+    @property
+    def changed(self):
+        """True if the message has changed since the read."""
+        if self.readable:
+            old_msg = self._msg[:] # make a copy
+            offset = 12
+            while offset is not None:
+                offset = self._read_tlv(offset)
+            return self._msg != old_msg
+        return False
+
+    @property
     def message(self):
-        """A character string containing the NDEF message data."""
-        return str(self._msg) if self.readable else str()
+        """An NDEF message object (an empty record message if tag is empty)."""
+        if self.readable:
+            try: return nfc.ndef.Message(str(self._msg))
+            except nfc.ndef.parser_error: pass
+        return nfc.ndef.Message(nfc.ndef.Record())
 
     @message.setter
-    def message(self, data):
+    def message(self, msg):
         if not self.writeable:
             raise IOError("tag writing disabled")
+        data = bytearray(str(msg))
         if len(data) > self.capacity:
             raise IOError("ndef message beyond tag capacity")
         self._msg = bytearray(data)
         if len(data) < self.capacity:
             data = data + "\xFE"
-        data = bytearray(data)
         with self._tag as tag:
             tag[0x08] = 0x00
             tag[0x09] = 0x10
