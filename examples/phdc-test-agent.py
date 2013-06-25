@@ -22,7 +22,7 @@
 # -----------------------------------------------------------------------------
 
 import logging
-log = logging.getLogger()
+log = logging.getLogger('main')
 
 import os
 import sys
@@ -157,12 +157,13 @@ class PhdcTagAgent(PhdcAgent):
         data = bytearray([0x80 | (self.mc % 16)]) + apdu
         record = nfc.ndef.Record("urn:nfc:wkt:PHD", data=str(data))
         with self.ndef_read_lock:
-            log.info("[phdc] >>> " + str(data).encode("hex"))
-            data = bytearray(str(nfc.ndef.Message(record)))
-            attr = nfc.tag.tt3.NdefAttributeData(self.ndef_data_area[0:16])
-            attr.length = len(data)
-            self.ndef_data_area[0:16+attr.length] = str(attr) + data
-            self.mc += 1
+            if not self.terminate:
+                log.info("[phdc] >>> " + str(data).encode("hex"))
+                data = bytearray(str(nfc.ndef.Message(record)))
+                attr = nfc.tag.tt3.NdefAttributeData(self.ndef_data_area[0:16])
+                attr.length = len(data)
+                self.ndef_data_area[0:16+attr.length] = str(attr) + data
+                self.mc += 1
         
     def run(self):
         log.info("entering phdc agent run loop")
@@ -172,7 +173,7 @@ class PhdcTagAgent(PhdcAgent):
             try:
                 command = self.tag.send_response(response, timeout=1)
             except nfc.clf.TimeoutError:
-                log.info("no command received within 10 seconds")
+                log.info("no command received within 1 second")
                 break
             except nfc.clf.TransmissionError:
                 break
@@ -331,7 +332,9 @@ class PhdcTagAgentTest(CommandLineInterface):
         info("now move devices out of communication range")
 
         info("leaving ieee agent")
-        agent.join(timeout=10.0)
+        
+        if agent.is_alive():
+            agent.stop()
         
     def test_03(self, tag, command):
         """Activation with invalid settings"""
@@ -339,7 +342,8 @@ class PhdcTagAgentTest(CommandLineInterface):
         agent = PhdcTagAgent(tag, command, flags='\x02')
         info("sending with non-zero message counter")
         agent.start()
-        agent.join(timeout=10.0)
+        if agent.is_alive():
+            agent.stop()
         
     def test_04(self, tag, command):
         """Activation with invalid RFU value"""
@@ -351,7 +355,8 @@ class PhdcTagAgentTest(CommandLineInterface):
         info("entering ieee agent")
         time.sleep(3.0)
         info("leaving ieee agent")
-        agent.join(timeout=10.0)
+        if agent.is_alive():
+            agent.stop()
         
 phdc_p2p_agent_description = """
 Execute some Personal Health Device Communication (PHDC) tests. The
