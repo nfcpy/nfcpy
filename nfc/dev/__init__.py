@@ -181,3 +181,54 @@ class Device(object):
     def path(self):
         return self._path
 
+    def sense(self, targets):
+        """Send discovery and activation requests to find a
+        target. Targets is a list of target specifications (TTA, TTB,
+        TTF defined in clf.py). Not all drivers may support all
+        possible target types. The return value is an activated target
+        with a possibly updated specification (bitrate) or None."""
+        log.warning("Driver.sense() should be implemented.")
+        return None
+
+    def listen(self, targets, timeout):
+        """Listen for the number of seconds given in timeout to become
+        activated as a target. Targets is a list of target
+        specifications (TTA, TTB, TTF defined in clf.py). Not all
+        drivers may support all possible target types, especially
+        combinations thereof. Generally most drivers will listen for
+        all supported activations if none of the targets was defined
+        with a specific bitrate, and listen for the first target only
+        if a bitrate is set. The return value is an activated target
+        with a possibly updated specification (bitrate) or None."""
+        log.warning("Driver.listen() should be implemented.")
+        return None
+
+    def exchange(self, data, timeout):
+        """Exchange data with an activated target (data is a command
+        frame) or as an activated target (data is a response
+        frame). Returns a target response frame (if data is send to an
+        activated target) or a next command frame (if data is send
+        from an activated target). Returns None if the communication
+        link died during exchange (if data is sent as a target). The
+        timeout is the number of seconds to wait for data to return,
+        if the timeout expires an nfc.clf.TimeoutException is
+        raised. Other nfc.clf.DigitalProtocolExceptions may be raised
+        if an error is detected during communication."""
+        log.warning("Driver.exchange() should be implemented.")
+        return None
+
+    def set_communication_mode(self, brm, **kwargs):
+        """Set the hardware communication mode. The effect of calling
+        this method depends on the hardware support, some drivers may
+        purposely ignore this function. If supported, the parameter
+        *brm* specifies the communication mode to choose as a string
+        composed of the bitrate and modulation type, for example
+        '212F' shall switch to 212 kbps Type F communication. Other
+        communication parameters may be changed with optional keyword
+        arguments. Currently implemented by the RC-S380 driver are the
+        parameters 'add-crc' and 'check-crc' when running as
+        initator. It is possible to set *brm* to an empty string if
+        bitrate and modulation shall not be changed but only optional
+        parameters executed."""
+        log.warning("Driver.set_communication_mode() should be implemented.")
+        return None
