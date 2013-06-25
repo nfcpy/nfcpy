@@ -140,6 +140,11 @@ class ContactlessFrontend(object):
           working threads to perform communication. The callback must return
           more or less immediately with :const:`True` unless the logical link
           controller run loop is handled within the callback.
+        'role': string
+          Defines which role the local LLC shall take for the data exchange
+          protocol activation. Possible values are 'initiator' and 'target'.
+          The default is to alternate between both roles until communication
+          is established.
         'miu': integer
           Defines the maximum information unit size that will be supported
           and announced to the remote LLC. The default value is 128.
