@@ -29,27 +29,33 @@ import os
 
 test_programs = [
     ("llcp-test-server.py --mode t --miu 128",
-     "llcp-test-client.py --mode i --miu 128"),
+     "llcp-test-client.py --mode i --miu 128 -T"),
     ("llcp-test-server.py --mode i --miu 128",
-     "llcp-test-client.py --mode t --miu 128"),
+     "llcp-test-client.py --mode t --miu 128 -T"),
     ("llcp-test-server.py --mode t --miu 2176",
-     "llcp-test-client.py --mode i --miu 2176"),
+     "llcp-test-client.py --mode i --miu 2176 -T"),
     ("llcp-test-server.py --mode i --miu 2176",
-     "llcp-test-client.py --mode t --miu 2176"),
+     "llcp-test-client.py --mode t --miu 2176 -T"),
     ("snep-test-server.py --mode t",
-     "snep-test-client.py --mode i"),
+     "snep-test-client.py --mode i -T"),
     ("snep-test-server.py --mode i",
-     "snep-test-client.py --mode t"),
+     "snep-test-client.py --mode t -T"),
     ("handover-test-server.py --mode t",
-     "handover-test-client.py --mode i"),
+     "handover-test-client.py --mode i -T"),
     ("handover-test-server.py --mode i",
-     "handover-test-client.py --mode t"),
+     "handover-test-client.py --mode t -T"),
     ("phdc-test-manager.py --mode t",
-     "phdc-test-agent.py p2p --mode i"),
+     "phdc-test-agent.py p2p --mode i -T"),
     ("phdc-test-manager.py --mode i",
-     "phdc-test-agent.py p2p --mode t"),
+     "phdc-test-agent.py p2p --mode t -T"),
     ("phdc-test-manager.py --mode i --loop",
-     "phdc-test-agent.py tag"),
+     "phdc-test-agent.py tag -t 1"),
+    ("phdc-test-manager.py --mode i --loop",
+     "phdc-test-agent.py tag -t 2"),
+    ("phdc-test-manager.py --mode i --loop",
+     "phdc-test-agent.py tag -t 3"),
+    ("phdc-test-manager.py --mode i --loop",
+     "phdc-test-agent.py tag -t 4"),
     ]
 
 examples = os.path.split(sys.path[0])[0] + "/examples/"
@@ -63,7 +69,7 @@ for server, client in test_programs:
     print server
     server = Popen(shlex.split(server), stderr=PIPE, stdout=PIPE)
 
-    client = examples + "{0} --device {1} -q -T".format(client, device)
+    client = examples + "{0} --device {1} -q".format(client, device)
     print client
     client = Popen(shlex.split(client), stderr=STDOUT)
 
