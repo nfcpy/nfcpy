@@ -56,6 +56,7 @@ Reference
 .. toctree::
 
     api/nfc
+    api/tag
     api/ndef
     api/llcp
     api/snep

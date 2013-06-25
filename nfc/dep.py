@@ -77,6 +77,7 @@ class Initiator(DataExchangeProtocol):
         return "NFC-DEP Initiator"
 
     def activate(self, timeout=None, brs=(0, 1, 2), gbi='', did=None, lr=3):
+        """Activate DEP communication as Initiator."""
         # brs: bit rate selection, an integer or list of integers, 0 => 106A
         if not timeout: timeout = 4096 * 2**12 / 13.56E6
         if type(brs) == int: brs = (brs,)
@@ -333,6 +334,7 @@ class Target(DataExchangeProtocol):
         return "NFC-DEP Target"
 
     def activate(self, timeout=None, brs=None, gbt='', wt=8, lr=3):
+        """Activate DEP communication as Target."""
         # brs (int): bit rate selection, 0 => 106A, 1 => 212F, 2 => 424F
         if not timeout: timeout = (372 + ord(urandom(1))) * 1E-3
 
