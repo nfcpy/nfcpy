@@ -21,5 +21,3 @@
 # -----------------------------------------------------------------------------
 
 from clf import ContactlessFrontend
-import nfc.tag
-import nfc.dep
