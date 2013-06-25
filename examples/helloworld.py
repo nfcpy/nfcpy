@@ -30,37 +30,34 @@ sys.path.insert(1, os.path.split(sys.path[0])[0])
 import nfc
 import nfc.ndef
 
+text_en = nfc.ndef.TextRecord(language="en", text="Hello World")
+text_de = nfc.ndef.TextRecord(language="de", text="Hallo Welt")
+text_fr = nfc.ndef.TextRecord(language="fr", text="Bonjour tout le monde")
+    
 def main():
+    def send_hello(tag):
+        if tag.ndef:
+            tag.ndef.message = nfc.ndef.Message([text_en, text_de, text_fr])
+            print "Remove this tag"
+        else:
+            print "Not an NDEF tag"
+        return True
+    
+    def read_hello(tag):
+        if tag.ndef:
+            for record in tag.ndef.message:
+                if record.type == "urn:nfc:wkt:T":
+                    text = nfc.ndef.TextRecord( record )
+                    print text.language + ": " + text.text
+        return True
+    
     clf = nfc.ContactlessFrontend()
 
     print "Please touch a tag to send a hello to the world"
-    while True:
-        tag = clf.poll()
-        if tag and tag.ndef:
-            break
-
-    text_en = nfc.ndef.TextRecord(language="en", text="Hello World")
-    text_de = nfc.ndef.TextRecord(language="de", text="Hallo Welt")
-    text_fr = nfc.ndef.TextRecord(language="fr", text="Bonjour tout le monde")
-    message = nfc.ndef.Message( [text_en, text_de, text_fr] )
-    
-    tag.ndef.message = str(message)
-    
-    print "Remove this tag"
-    while tag.is_present:
-        time.sleep(1)
+    clf.connect(rdwr={'on-connect': send_hello})
     
     print "Now touch it again to receive a hello from the world"
-    while True:
-        tag = clf.poll()
-        if tag and tag.ndef:
-            break
-
-    message = nfc.ndef.Message( tag.ndef.message )
-    for record in message:
-        if record.type == "urn:nfc:wkt:T":
-            text = nfc.ndef.TextRecord( record )
-            print text.language + ": " + text.text
+    clf.connect(rdwr={'on-connect': read_hello})
 
 if __name__ == '__main__':
     main()
