@@ -30,18 +30,21 @@ from tt3 import Type3Tag, Type3TagEmulation
 from tt4 import Type4Tag
 
 def activate(clf, target):
-    if type(target) == nfc.clf.TTA:
-        if target.cfg[0] & 0x1F == 0 and target.cfg[1] & 0x0F == 0x0C:
-            return Type1Tag(clf, target)
-        if len(target.cfg) == 3:
-            if target.cfg[2] & 0x64 == 0x00:
-                return Type2Tag(clf, target)
-            if target.cfg[2] & 0x24 == 0x20:
-                return Type4Tag(clf, target)
-    elif type(target) == nfc.clf.TTB:
-        return Type2Tag(clf, target)
-    elif type(target) == nfc.clf.TTF:
-        return Type3Tag(clf, target)
+    try:
+        if type(target) == nfc.clf.TTA:
+            if target.cfg[0] & 0x1F == 0 and target.cfg[1] & 0x0F == 0x0C:
+                return Type1Tag(clf, target)
+            if len(target.cfg) == 3:
+                if target.cfg[2] & 0x64 == 0x00:
+                    return Type2Tag(clf, target)
+                if target.cfg[2] & 0x24 == 0x20:
+                    return Type4Tag(clf, target)
+        elif type(target) == nfc.clf.TTB:
+            return Type2Tag(clf, target)
+        elif type(target) == nfc.clf.TTF:
+            return Type3Tag(clf, target)
+    except nfc.clf.DigitalProtocolError:
+        return None
 
 def emulate(clf, target):
     if type(target) == nfc.clf.TTA:

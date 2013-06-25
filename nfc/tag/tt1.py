@@ -152,7 +152,6 @@ class NDEF(object):
         data = bytearray(str(msg))
         if len(data) > self.capacity:
             raise IOError("ndef message beyond tag capacity")
-        self._msg = bytearray(data)
         if len(data) < self.capacity:
             data = data + "\xFE"
         with self._tag as tag:
@@ -160,13 +159,13 @@ class NDEF(object):
             tag[0x09] = 0x10
             tag[0x0B] = 0x00
             offset = self._ndef_tlv_offset + 1
-            if len(self._msg) < 255:
-                tag[offset] = len(self._msg)
+            if len(data) < 255:
+                tag[offset] = len(data)
                 offset += 1
             else:
                 tag[offset] = 255
-                tag[offset+1] = len(self._msg) / 256
-                tag[offset+2] = len(self._msg) % 256
+                tag[offset+1] = len(data) / 256
+                tag[offset+2] = len(data) % 256
                 offset += 3
             for octet in data:
                 while offset in self._skip:

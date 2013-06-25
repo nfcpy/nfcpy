@@ -148,7 +148,7 @@ class NDEF(object):
     def message(self, msg):
         if not self.writeable:
             raise IOError("tag writing disabled")
-        data = bytearray([0,0]) + bytearray(msg)
+        data = bytearray([0, 0]) + bytearray(str(msg))
         if len(data) > 2 + self.capacity:
             raise IOError("ndef message exceeds capacity")
         for offset in range(0, len(data), self._max_lc):

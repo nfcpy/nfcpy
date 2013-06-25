@@ -32,7 +32,7 @@ class NDEF(object):
         self._cc = tag[12:16]
         log.debug("capability container " + str(self._cc).encode("hex"))
         self._skip = set([])
-        self._msg = ''
+        self._msg = bytearray()
         self.changed # force initial read
 
     def _read_tlv(self, offset):
@@ -144,13 +144,12 @@ class NDEF(object):
         data = bytearray(str(msg))
         if len(data) > self.capacity:
             raise IOError("ndef message beyond tag capacity")
-        self._msg = bytearray(data)
         if len(data) < self.capacity:
             data = data + "\xFE"
         with self._tag as tag:
             offset = self._ndef_tlv_offset + 1
             tag[offset] = 0
-            offset += 1 if len(self._msg) < 255 else 3
+            offset += 1 if len(data) < 255 else 3
             for octet in data:
                 while offset in self._skip:
                     offset += 1
@@ -158,12 +157,12 @@ class NDEF(object):
                 offset += 1
         with self._tag as tag:
             offset = self._ndef_tlv_offset + 1
-            if len(self._msg) < 255:
-                tag[offset] = len(self._msg)
+            if len(data) < 255:
+                tag[offset] = len(data)
             else:
                 tag[offset] = 255
-                tag[offset+1] = len(self._msg) / 256
-                tag[offset+2] = len(self._msg) % 256
+                tag[offset+1] = len(data) / 256
+                tag[offset+2] = len(data) % 256
 
 class Type2Tag(object):
     type = "Type2Tag"

@@ -316,6 +316,7 @@ class Device(nfc.dev.Device):
         
         sens_res = self.chipset.in_comm_rf("\x26", 30)
         log.debug("SENS_RES (ATQ) = " + str(sens_res).encode("hex"))
+        if len(sens_res) != 2: return
 
         if sens_res[0] & 0x1F == 0 and sens_res[1] & 0x0F == 0b1100:
             #

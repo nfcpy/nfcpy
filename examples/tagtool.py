@@ -177,10 +177,10 @@ def add_emulate_tt3_parser(parser):
     parser.add_argument(
         "--bitrate", choices=["212", "424"], default="212",
         help="bitrate to listen (default: %(default)s)")
-    
+
 class TagTool(CommandLineInterface):
     def __init__(self):
-        parser = argparse.ArgumentParser(
+        parser = ArgumentParser(
             formatter_class=argparse.RawDescriptionHelpFormatter,
             description="")
         subparsers = parser.add_subparsers(
@@ -273,9 +273,12 @@ class TagTool(CommandLineInterface):
             except TypeError: pass
 
         if tag.ndef is not None:
-            log.info("old: " + tag.ndef.message.encode("hex"))
-            tag.ndef.message = self.options.data
-            log.info("new: " + tag.ndef.message.encode("hex"))
+            log.info("old message: \n" + tag.ndef.message.pretty())
+            tag.ndef.message = nfc.ndef.Message(self.options.data)
+            if tag.ndef.changed:
+                log.info("new message: \n" + tag.ndef.message.pretty())
+            else:
+                log.info("new message is same as old message")
         else:
             log.info("not an ndef tag")
 
@@ -394,5 +397,19 @@ class TagTool(CommandLineInterface):
 
         print(str(self.options.ndef_data_area).encode("hex"))
 
+class ArgparseError(SystemExit):
+    pass
+
+class ArgumentParser(argparse.ArgumentParser):
+    def error(self, message):
+        raise ArgparseError(2, '{0}: error: {1}'.format(self.prog, message))
+
 if __name__ == '__main__':
-    TagTool().run()
+    try:
+        TagTool().run()
+    except ArgparseError as e:
+        sys.argv = sys.argv + ['show']
+        try:
+            TagTool().run()
+        except ArgparseError:
+            print(e.args[1], file=sys.stderr)

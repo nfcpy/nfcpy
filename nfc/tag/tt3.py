@@ -102,12 +102,12 @@ class NDEF(object):
     @property
     def readable(self):
         """Is True if data can be read from the NDEF tag."""
-        return True
+        return self.attr.nbr > 0
 
     @property
     def writeable(self):
         """Is True if data can be written to the NDEF tag."""
-        return self.attr.writeable
+        return self.attr.writeable and self.attr.nbw > 0
 
     @property
     def length(self):
@@ -204,11 +204,13 @@ class Type3Tag(object):
             cmd = "\x04" + self.idm
             return bool(self.clf.exchange(chr(len(cmd)+1) + cmd, timeout=rto))
         except nfc.clf.TimeoutError: pass
+        except nfc.clf.TransmissionError: return False
         
         try:
             cmd = "\x00" + self.sys + "\x00\x00"
             return bool(self.clf.exchange(chr(len(cmd)+1) + cmd, timeout=rto))
         except nfc.clf.TimeoutError: pass
+        except nfc.clf.TransmissionError: return False
         
         return False
 
@@ -218,7 +220,7 @@ class Type3Tag(object):
         argument holds a list of integers representing the block numbers to
         read. The data is returned as a character string."""
 
-        log.debug("read service {0} blocks {1}".format(service, blocks))
+        log.debug("read blocks {1} from service {0}".format(service, blocks))
         cmd  = "\x06" + self.idm # ReadWithoutEncryption
         cmd += "\x01" + ("%02X%02X" % (service%256,service/256)).decode("hex")
         cmd += chr(len(blocks))
@@ -246,7 +248,7 @@ class Type3Tag(object):
         write. The *data* argument must be a character string with length
         equal to the number of blocks times 16."""
 
-        log.debug("write service {0} blocks {1}".format(service, blocks))
+        log.debug("write blocks {1} to service {0}".format(service, blocks))
         if len(data) != len(blocks) * 16:
             log.error("data length does not match block-count * 16")
             raise ValueError("invalid data length for given number of blocks")
