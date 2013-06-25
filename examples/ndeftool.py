@@ -22,7 +22,7 @@
 # -----------------------------------------------------------------------------
 
 import logging
-log = logging.getLogger()
+log = logging.getLogger('main')
 
 import sys, os
 import mimetypes

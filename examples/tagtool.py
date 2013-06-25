@@ -23,7 +23,7 @@
 from __future__ import print_function
 
 import logging
-log = logging.getLogger()
+log = logging.getLogger('main')
 
 import os
 import sys

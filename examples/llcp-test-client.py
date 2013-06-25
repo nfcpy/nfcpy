@@ -27,7 +27,7 @@
 # specification before final release by the NFC Forum.
 #
 import logging
-log = logging.getLogger()
+log = logging.getLogger('main')
 
 import os
 import sys
