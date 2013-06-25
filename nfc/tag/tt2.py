@@ -178,7 +178,6 @@ class Type2Tag(object):
         self._sync = set()
         self._page = 0
         self.ndef = None
-        print self[0]
         if self[12] == 0xE1:
             try: self.ndef = NDEF(self)
             except Exception as error:
