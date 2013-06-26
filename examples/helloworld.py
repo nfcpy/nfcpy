@@ -33,17 +33,18 @@ import nfc.ndef
 text_en = nfc.ndef.TextRecord(language="en", text="Hello World")
 text_de = nfc.ndef.TextRecord(language="de", text="Hallo Welt")
 text_fr = nfc.ndef.TextRecord(language="fr", text="Bonjour tout le monde")
-    
-def main():
-    def send_hello(tag):
+
+class HelloWorld(object):
+    def send_hello(self, tag):
         if tag.ndef:
             tag.ndef.message = nfc.ndef.Message([text_en, text_de, text_fr])
-            print "Remove this tag"
+            self.sent_hello = True
         else:
             print "Not an NDEF tag"
+        print "Remove the tag"
         return True
     
-    def read_hello(tag):
+    def read_hello(self, tag):
         if tag.ndef:
             for record in tag.ndef.message:
                 if record.type == "urn:nfc:wkt:T":
@@ -51,14 +52,18 @@ def main():
                     print text.language + ": " + text.text
         return True
     
-    clf = nfc.ContactlessFrontend()
+    def main(self):
+        clf = nfc.ContactlessFrontend()
 
-    print "Please touch a tag to send a hello to the world"
-    clf.connect(rdwr={'on-connect': send_hello})
-    
-    print "Now touch it again to receive a hello from the world"
-    clf.connect(rdwr={'on-connect': read_hello})
+        self.sent_hello = False
+        
+        while not self.sent_hello:
+            print "Please touch a tag to send a hello to the world"
+            clf.connect(rdwr={'on-connect': self.send_hello})
+
+        print "Now touch it again to receive a hello from the world"
+        clf.connect(rdwr={'on-connect': self.read_hello})
 
 if __name__ == '__main__':
-    main()
+    HelloWorld().main()
 
