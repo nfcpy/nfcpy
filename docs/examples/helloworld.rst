@@ -22,57 +22,85 @@ Source code
 Discussion
 ----------
 
-Line 11
+Line 10-12
 
-  The first available NFC reader is opened and stored in `clf`. This
-  line would raise a :exc:`LookupError` exception if no reader is found, and
-  should in real applications be enclosed in a try-except clause.
+  We create three :class:`nfc.ndef.TextRecord` objects to have "Hello
+  World" in different languages.
 
-Line 13-17
+Line 14
 
-  Here we wait for a tag to be touched, using the
-  :meth:`nfc.ContactlessFrontend.poll` method in an endless loop. This
-  loop will only discover tags and no peer-to-peer targets because
-  protocol_data is not provided.
+  The example is implemented as a class just because we want to easily
+  share share state (via the ``sent_data`` attribute) between
+  ``main()`` method and ``send_data()``.
 
-Line 19-22
+Line 15
 
-  This creates three different :class:`nfc.ndef.TextRecords`, which are
-  then used to initialize an :class:`nfc.ndef.Message` with a list of
-  records. An alternative way would have been to append the records::
+  The ``send_hello()`` method will be called when the first tag has
+  been activated. This is because we set as callback in our first call
+  to :meth:`nfc.ContactlessFrontend.connect`.
 
-    message = nfc.ndef.Message()
-    message.append(nfc.ndef.TextRecord(text="Hello World", language="en"))
-    ...
+Line 16
+
+  A tag may or may not have an NDEF partition. If it has, the
+  ``tag.ndef`` attribute will hold an NDEF object, otherwise it will
+  ``None``.
+
+Line 17
+
+  This creates an :class:`nfc.ndef.Message` with the three text
+  records and writes the message to the tag.
+
+Line 18
+
+  Let the ``main()`` method now that we've written the hello world
+  message. This will terminate the loop in line 37.
+
+Line 22
+
+  We want the :meth:`nfc.ContactlessFrontend.connect` method to only
+  return when the tag is moved out of range. This is achieved by
+  returning ``True``.
 
 Line 24
 
-  This is where the data gets written to the tag. The message is first
-  converted into a string of octets using Python's :func:`str`
-  function, and then by assigning the the result to the
-  :attr:`nfc.NDEF.message` object exposed by the tag's ndef attribute
-  it is immediately written to the tag.
+  The ``read_hello()`` method will be called when the second tag has
+  been activated. This is because we set as callback in our second
+  call to :meth:`nfc.ContactlessFrontend.connect`.
 
-Line 26-28
+Line 26-29
 
-  Here we just check if the tag is still in proximity using the
-  :meth:`nfc.TAG.is_present` method in a loop.
+  The ``tag.ndef.message`` attribute is guaranteed to be an
+  :class:`nfc.ndef.Message` type (with one empty record if the tag
+  doesn't actually contain NDEF data). The :class:`nfc.ndef.Message`
+  type supports sequence operations, so we can simply iterate over the
+  records. For every record that has the record type ``urn:nfc:wkt:T``
+  we'll construct a :class:`nfc.ndef.TextRecord` and print the
+  content.
 
-Line 30-34
+Line 33
 
-  Same as before, we're waiting for a tag to be touched.
+  The first available NFC reader is opened and stored in *clf*. This
+  line would raise a ``LookupError`` exception if no reader is found,
+  and should in real applications be enclosed in a try-except clause.
 
-Line 36
+Line 35
 
-  An :class:`nfc.ndef.Message` can be initialized with a string (or
-  bytearray) of raw NDEF message data. The message data is then parsed
-  into the sequence of :class:`nfc.ndef.Records` that are found within
-  the NDEF message.
+  Our synchronization flag. This will be set to ``True`` in
+  ``send_hello()`` when the NDEF message was written.
 
-Line 37-40
+Line 39
 
-  The :class:`nfc.ndef.Message` type supports :func:`list` operations,
-  so we can sequentially loop over the records. Every record that has
-  a record type "urn:nfc:wkt:T" gets passed into an
-  :class:`nfc.ndef.TextRecord` and we can finally print the language
-  and text.
+  This is where the magic happens. By calling
+  :meth:`nfc.ContactlessFrontend.connect` with the *rdwr* keyword
+  argument we'll have a tag discovery loop activated and receive a
+  callback to the function set with 'on-callback'. As we set the
+  callback to ``send_hello()`` the ``sent_hello`` attribute will
+  become ``True`` if the NDEF message was written.
+
+Line 42
+
+  We use :meth:`nfc.ContactlessFrontend.connect` again but this time
+  with the callback set to ``read_hello()``. In absence
+  of human errors we should be able to read the "hello world" NDEF
+  message back from the tag.
+
