@@ -24,18 +24,27 @@ import logging
 log = logging.getLogger(__name__)
 
 class Socket(object):
+    """
+    Create a new LLCP socket with the given socket type. The
+    socket type should be one of:
+
+    * :const:`nfc.llcp.LOGICAL_DATA_LINK` for best-effort
+      communication using LLCP connection-less PDU exchange
+        
+    * :const:`nfc.llcp.DATA_LINK_CONNECTION` for reliable
+      communication using LLCP connection-mode PDU exchange
+        
+    * :const:`nfc.llcp.llc.RAW_ACCESS_POINT` for unregulated LLCP PDU
+      exchange (useful to implement test programs)
+    """
     def __init__(self, llc, sock_type):
-        """Create an endpoint for communication and return a socket
-        descriptor. The *socket_type* may be either
-        nfc.llcp.LOGICAL_DATA_LINK (for unreliable, connectionless
-        transport) or nfc.llcp.DATA_LINK_CONNECTION (for reliable,
-        connection-oriented transport).
-        """
         self._tco = None if sock_type is None else llc.socket(sock_type)
         self._llc = llc
 
     @property
     def llc(self):
+        """The :class:`~nfc.llcp..llc.LogicalLinkController` instance
+        to which this socket belongs. This attribute is read-only."""
         return self._llc
 
     def resolve(self, name):
@@ -127,15 +136,6 @@ class Socket(object):
         """Wait for a socket event."""
         return self.llc.poll(self._tco, event, timeout)
 
-    def close(self):
-        """Close the socket. All future operations on the socket
-        object will fail. The remote end will receive no more data
-        Sockets are automatically closed when the logical link
-        controller terminates (gracefully or by link disruption). A
-        connection-mode socket will attempt to disconnect the data
-        link connection (if in connected state)."""
-        return self.llc.close(self._tco)
-
     def getsockname(self):
         """Obtain the address to which the socket is bound. For an
         unbound socket the returned value is None.
@@ -147,3 +147,12 @@ class Socket(object):
         an unconnected socket the returned value is None.
         """
         return self.llc.getpeername(self._tco)
+
+    def close(self):
+        """Close the socket. All future operations on the socket
+        object will fail. The remote end will receive no more data
+        Sockets are automatically closed when the logical link
+        controller terminates (gracefully or by link disruption). A
+        connection-mode socket will attempt to disconnect the data
+        link connection (if in connected state)."""
+        return self.llc.close(self._tco)
