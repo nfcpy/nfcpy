@@ -16,58 +16,58 @@ Source code
 -----------
 
 .. literalinclude:: ../../examples/helloworld.py
-   :lines: 24-
+   :lines: 23-
    :linenos:
 
 Discussion
 ----------
 
-Line 10-12
+Line 13-15
 
   We create three :class:`nfc.ndef.TextRecord` objects to have "Hello
   World" in different languages.
 
-Line 14
+Line 17
 
   The example is implemented as a class just because we want to easily
   share share state (via the ``sent_data`` attribute) between
   ``main()`` method and ``send_data()``.
 
-Line 15
+Line 18
 
   The ``send_hello()`` method will be called when the first tag has
   been activated. This is because we set as callback in our first call
   to :meth:`nfc.ContactlessFrontend.connect`.
 
-Line 16
+Line 19
 
   A tag may or may not have an NDEF partition. If it has, the
   ``tag.ndef`` attribute will hold an NDEF object, otherwise it will
   ``None``.
 
-Line 17
+Line 20
 
   This creates an :class:`nfc.ndef.Message` with the three text
   records and writes the message to the tag.
 
-Line 18
+Line 21
 
   Let the ``main()`` method now that we've written the hello world
   message. This will terminate the loop in line 37.
 
-Line 22
+Line 25
 
   We want the :meth:`nfc.ContactlessFrontend.connect` method to only
   return when the tag is moved out of range. This is achieved by
   returning ``True``.
 
-Line 24
+Line 27
 
   The ``read_hello()`` method will be called when the second tag has
   been activated. This is because we set as callback in our second
   call to :meth:`nfc.ContactlessFrontend.connect`.
 
-Line 26-29
+Line 29-32
 
   The ``tag.ndef.message`` attribute is guaranteed to be an
   :class:`nfc.ndef.Message` type (with one empty record if the tag
@@ -77,18 +77,18 @@ Line 26-29
   we'll construct a :class:`nfc.ndef.TextRecord` and print the
   content.
 
-Line 33
+Line 36
 
   The first available NFC reader is opened and stored in *clf*. This
   line would raise a ``LookupError`` exception if no reader is found,
   and should in real applications be enclosed in a try-except clause.
 
-Line 35
+Line 38
 
   Our synchronization flag. This will be set to ``True`` in
   ``send_hello()`` when the NDEF message was written.
 
-Line 39
+Line 42
 
   This is where the magic happens. By calling
   :meth:`nfc.ContactlessFrontend.connect` with the *rdwr* keyword
@@ -97,7 +97,7 @@ Line 39
   callback to ``send_hello()`` the ``sent_hello`` attribute will
   become ``True`` if the NDEF message was written.
 
-Line 42
+Line 45
 
   We use :meth:`nfc.ContactlessFrontend.connect` again but this time
   with the callback set to ``read_hello()``. In absence
