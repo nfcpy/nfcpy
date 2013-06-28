@@ -26,7 +26,6 @@
 import logging
 log = logging.getLogger(__name__)
 
-from transport import usb as usb_transport
 from nfc.clf import ProtocolError, TransmissionError, TimeoutError
 from nfc.clf import TTA, TTB, TTF
 import nfc.dev
@@ -534,13 +533,10 @@ class Device(nfc.dev.Device):
         if settings:
             self.chipset.in_set_protocol(settings)
 
-def init(device, transport):
-    if transport == "usb":
-        transport = usb_transport(device)
-        chipset = Chipset(transport)
-        product = transport.dh.getString(device.iProduct, 100)
-        device = Device(chipset)
-        device._vendor = "Sony"
-        device._product = product
-        return device
+def init(transport):
+    chipset = Chipset(transport)
+    device = Device(chipset)
+    device._vendor = "Sony"
+    device._product = transport.product_name
+    return device
 

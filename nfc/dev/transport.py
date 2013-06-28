@@ -26,55 +26,178 @@
 import logging
 log = logging.getLogger(__name__)
 
+import importlib
+import errno
 import sys
-from usb import USBError
+import re
 
-class usb(object):
-    def __init__(self, dev):
-        self.dh = dev.open()
+class USB(object):
+    @classmethod
+    def find(cls, path):
+        cls.pyusb_version = None
+
+        try:
+            cls.usb_core = importlib.import_module("usb.core")
+            cls.usb_util = importlib.import_module("usb.util")
+            cls.pyusb_version = 1
+        except ImportError: pass
+        
+        if cls.pyusb_version is None:
+            try: 
+                cls.usb = importlib.import_module("usb")
+                cls.pyusb_version = 0
+            except ImportError: pass
+
+        if cls.pyusb_version is None:
+            log.error("no python usb library could be loaded")
+            return None
+        
+        log.info("using pyusb version {0}.x".format(cls.pyusb_version))
+        
+        usb_or_none = re.compile(r'^(usb|)$')
+        usb_vid_pid = re.compile(r'^usb(:[0-9a-fA-F]{4})(:[0-9a-fA-F]{4})?$')
+        usb_bus_dev = re.compile(r'^usb(:[0-9]{1,3})(:[0-9]{1,3})?$')
+        match = None
+
+        for regex in (usb_vid_pid, usb_bus_dev, usb_or_none):
+            m = regex.match(path)
+            if m is not None:
+                log.debug("path matches {0!r}".format(regex.pattern))
+                if regex is usb_vid_pid:
+                    match = [int(s.strip(':'), 16) for s in m.groups() if s]
+                    match = dict(zip(['idVendor', 'idProduct'], match))
+                if regex is usb_bus_dev:
+                    match = [int(s.strip(':'), 10) for s in m.groups() if s]
+                    match = dict(zip(['bus', 'address'], match))
+                if regex is usb_or_none:
+                    match = dict()
+                break
+        else: return None
+
+        if cls.pyusb_version == 1:
+            return [(d.idVendor, d.idProduct, d.bus, d.address)
+                    for d in cls.usb_core.find(find_all=True, **match)]
+
+        if cls.pyusb_version == 0:
+            # get all devices for all busses first, then filter
+            devices = [(d, b) for b in cls.usb.busses() for d in b.devices]
+            vid, pid = match.get('idVendor'), match.get('idProduct')
+            bus, dev = match.get('bus'), match.get('address')
+            if vid is not None:
+                devices = [d for d in devices if d[0].idVendor == vid]
+            if pid is not None:
+                devices = [d for d in devices if d[0].idProduct == pid]
+            if bus is not None:
+                devices = [d for d in devices if int(d[1].dirname) == bus]
+            if dev is not None:
+                devices = [d for d in devices if int(d[0].filename) == dev]
+            return [(d[0].idVendor, d[0].idProduct, d[1].dirname,
+                     d[0].filename) for d in devices]
+
+    def __init__(self, bus_id, dev_id):
         self.usb_out = None
         self.usb_inp = None
+        
+        if self.pyusb_version == 0:
+            self.open  = self._PYUSB0_open
+            self.read  = self._PYUSB0_read
+            self.write = self._PYUSB0_write
+            self.close = self._PYUSB0_close
+        elif self.pyusb_version == 1:
+            self.open  = self._PYUSB1_open
+            self.read  = self._PYUSB1_read
+            self.write = self._PYUSB1_write
+            self.close = self._PYUSB1_close
+        else:
+            log.error("unexpected pyusb version")
+            raise SystemExit
+
+        self.open(bus_id, dev_id)
+        
+        # try to get chip into a good state
+        # FIXME: this should not be part of transport.py
+        self.write(bytearray.fromhex("0000FF00FF00")) # ack
+
+    def _PYUSB0_open(self, bus_id, dev_id):
+        bus = [b for b in self.usb.busses() if b.dirname == bus_id][0]
+        dev = [d for d in bus.devices if d.filename == dev_id][0]
+        self.usb_dev = dev.open()
         try:
-            self.dh.setConfiguration(dev.configurations[0])
-            self.dh.claimInterface(0)
-        except USBError:
+            self.usb_dev.setConfiguration(dev.configurations[0])
+            self.usb_dev.claimInterface(0)
+        except self.usb.USBError:
             raise IOError("unusable device")
+        self.product_name = self.usb_dev.getString(dev.iProduct, 100)
         intf = dev.configurations[0].interfaces[0]
         self.usb_out = intf[0].endpoints[0].address
         self.usb_inp = intf[0].endpoints[1].address
-
-        # try to get chip into a good state
-        self.write(bytearray("\x00\x00\xFF\x00\xFF\x00")) # ack
-
-    def close(self):
-        self.dh.releaseInterface()
-        self.dh = None
-
-    def write(self, frame):
-        if self.dh is not None and self.usb_out is not None:
-            log.debug(">>> " + str(frame).encode("hex"))
-            self.dh.bulkWrite(self.usb_out, frame)
-            if len(frame) % 64 == 0:
-                # send zero-length frame to end bulk transfer
-                self.dh.bulkWrite(self.usb_out, '')
-
-    def read(self, timeout):
-        if self.dh is not None and self.usb_inp is not None:
-            try: frame = self.dh.bulkRead(self.usb_inp, 300, timeout)
-            except USBError as error:
-                timeout_messages = ("No error", "Connection timed out",
-                                    "usb_reap: timeout error")
-                if error.args[0] in timeout_messages:
-                    # normal timeout conditions (#1,2 Linux, #3 Windows)
-                    return None
-                usb_err = "could not set config 1: Device or resource busy"
-                if error.args[0] == usb_err:
-                    # timeout error if two readers used on same computer
-                    return None
-                log.error(error.args[0])
-                return None
+    
+    def _PYUSB1_open(self, bus_id, dev_id):
+        self.usb_dev = self.usb_core.find(bus=bus_id, address=dev_id)
+        self.usb_dev.set_configuration()
+        intf = self.usb_util.find_descriptor(self.usb_dev[0])
+        self.usb_out = intf[0]
+        self.usb_inp = intf[1]
+        try:
+            # claim interface
+            self.usb_out.write('')
+        except self.usb_core.USBError:
+            raise IOError(errno.EACCES, os.strerror(errno.EACCES))
+        self.product_name = self.usb_util.get_string(
+            self.usb_dev, 100, self.usb_dev.iProduct)
+        
+    def _PYUSB0_read(self, timeout):
+        if self.usb_inp is not None:
+            try:
+                frame = self.usb_dev.bulkRead(self.usb_inp, 300, timeout)
+            except self.usb.USBError as e:
+                if e.message == "Connection timed out":
+                    raise IOError(e.errno, e.strerror)
+                else:
+                    log.error("{0!r}".format(e))
+                    raise IOError(errno.EIO, os.strerror(errno.EIO))
+            else:
+                frame = bytearray(frame)
+                log.debug("<<< " + str(frame).encode("hex"))
+                return frame
+    
+    def _PYUSB1_read(self, timeout):
+        if self.usb_inp is not None:
+            try:
+                frame = self.usb_inp.read(300, timeout)
+            except self.usb_core.USBError as e:
+                if e.errno != errno.ETIMEDOUT:
+                    log.error("{0!r}".format(e))
+                raise IOError(e.errno, e.strerror)
             else:
                 frame = bytearray(frame)
                 log.debug("<<< " + str(frame).encode("hex"))
                 return frame
 
+    def _PYUSB0_write(self, frame):
+        if self.usb_out is not None:
+            log.debug(">>> " + str(frame).encode("hex"))
+            self.usb_dev.bulkWrite(self.usb_out, frame)
+            if len(frame) % 64 == 0:
+                self.dh.bulkWrite('') # end transfer
+        
+    def _PYUSB1_write(self, frame):
+        if self.usb_out is not None:
+            log.debug(">>> " + str(frame).encode("hex"))
+            self.usb_out.write(frame)
+            if len(frame) % self.usb_out.wMaxPacketSize == 0:
+                self.usb_out.write('') # end transfer
+        
+    def _PYUSB0_close(self):
+        # FIXME: this should not be part of transport.py
+        #self.write(bytearray.fromhex("0000FF00FF00")) # ack
+        if self.usb_dev is not None:
+            self.usb_dev.releaseInterface()
+        self.usb_dev = self.usb_out = self.usb_inp = None
+
+    def _PYUSB1_close(self):
+        # FIXME: this should not be part of transport.py
+        #self.write(bytearray.fromhex("0000FF00FF00")) # ack
+        if self.usb_dev is not None:
+            self.usb_util.dispose_resources(self.usb_dev)
+        self.usb_dev = self.usb_out = self.usb_inp = None

@@ -27,6 +27,9 @@ import os
 import re
 import sys
 import glob
+import importlib
+
+import transport
 
 usb_device_map = {
     #(0x04cc, 0x0531) : "pn53x_usb", # Philips demo board
@@ -45,84 +48,26 @@ def connect(path=None):
     def import_driver(name):
         name = "nfc.dev.{0}".format(name)
         log.debug("import {0}".format(name))
-        __import__(name)
-        return sys.modules[name]
+        return importlib.import_module(name)
         
     if path is None:
         path = ""
-        
-    if path == "" or path.startswith("usb"):
-        log.info("searching for a usb bus reader")
-        import usb
-        #
-        # match "usb:vendor:[product]"
-        #
-        match = re.match(r"usb:([0-9a-fA-F]{4}):([0-9a-fA-F]{4})?$", path)
-        if match is not None:
-            log.debug("path match for 'usb:vendor:[product]'")
-            vendor, product = [int(x,16) if x else None for x in match.groups()]
-            for bus in usb.busses():
-                for dev in bus.devices:
-                    if dev.idVendor == vendor:
-                        if product is None or dev.idProduct == product:
-                            log.debug("trying usb:{0:04x}:{1:04x}"
-                                      .format(dev.idVendor, dev.idProduct))
-                            if (vendor, dev.idProduct) in usb_device_map:
-                                product = dev.idProduct
-                                module = usb_device_map[(vendor, product)]
-                                driver = import_driver(module)
-                                try:
-                                    device = driver.init(dev, "usb")
-                                except IOError:
-                                    continue
-                                device._path = "usb:{0}:{1}".format(
-                                    bus.dirname, dev.filename)
-                                return device
-        #
-        # match "usb:[[bus]:][devnum]" or "usb" or None
-        #
-        match = re.match("usb:([0-9]{1,3})?[:]?([0-9]{1,3})?$", path)
-        if match is not None:
-            log.debug("path match for 'usb:[[bus]:][devnum]'")
-            busnum, devnum = [int(x) if x else None for x in match.groups()]
-            for bus in usb.busses():
-                if busnum is None or int(bus.dirname) == busnum:
-                    for dev in bus.devices:
-                        if devnum is None or int(dev.filename) == devnum:
-                            log.debug("trying usb:{0}:{1}"
-                                      .format(bus.dirname, dev.filename))
-                            vendor, product = dev.idVendor, dev.idProduct
-                            if (vendor, product) in usb_device_map:
-                                module = usb_device_map[(vendor, product)]
-                                driver = import_driver(module)
-                                try:
-                                    device = driver.init(dev, "usb")
-                                except IOError:
-                                    continue
-                                device._path = "usb:{0}:{1}".format(
-                                    bus.dirname, dev.filename)
-                                return device
-        #
-        # match "usb" or ""
-        #
-        if path == "usb" or path == "":
-            log.debug("path match for 'usb' (or no path given)")
-            for bus in usb.busses():
-                for dev in bus.devices:
-                    log.debug("trying usb:{0}:{1}"
-                              .format(bus.dirname, dev.filename))
-                    vendor, product = dev.idVendor, dev.idProduct
-                    if (vendor, product) in usb_device_map:
-                        module = usb_device_map[(vendor, product)]
-                        driver = import_driver(module)
-                        try:
-                            device = driver.init(dev, "usb")
-                        except IOError:
-                            continue
-                        device._path = "usb:{0}:{1}".format(
-                            bus.dirname, dev.filename)
-                        return device
-                    
+
+    found = transport.USB.find(path)
+    if found is not None:
+        for vid, pid, bus, dev in found:
+            module = usb_device_map.get((vid, pid))
+            if module is not None:
+                log.debug("trying usb:{0:04x}:{1:04x}".format(vid, pid))
+                driver = import_driver(module)
+                try:
+                    usb = transport.USB(bus, dev)
+                    device = driver.init(usb)
+                except IOError:
+                    continue
+                device._path = "usb:{0:03}:{1:03}".format(bus, dev)
+                return device
+
     if (path == "" or path.startswith("tty")) and os.name == "posix":
         log.info("searching for a tty reader")
         #
