@@ -65,7 +65,7 @@ def connect(path=None):
                     device = driver.init(usb)
                 except IOError:
                     continue
-                device._path = "usb:{0:03}:{1:03}".format(bus, dev)
+                device._path = "usb:{0:03}:{1:03}".format(int(bus), int(dev))
                 return device
 
     if (path == "" or path.startswith("tty")) and os.name == "posix":
