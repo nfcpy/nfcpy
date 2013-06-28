@@ -114,10 +114,6 @@ class USB(object):
 
         self.open(bus_id, dev_id)
         
-        # try to get chip into a good state
-        # FIXME: this should not be part of transport.py
-        self.write(bytearray.fromhex("0000FF00FF00")) # ack
-
     def _PYUSB0_open(self, bus_id, dev_id):
         bus = [b for b in self.usb.busses() if b.dirname == bus_id][0]
         dev = [d for d in bus.devices if d.filename == dev_id][0]
@@ -189,15 +185,11 @@ class USB(object):
                 self.usb_out.write('') # end transfer
         
     def _PYUSB0_close(self):
-        # FIXME: this should not be part of transport.py
-        #self.write(bytearray.fromhex("0000FF00FF00")) # ack
         if self.usb_dev is not None:
             self.usb_dev.releaseInterface()
         self.usb_dev = self.usb_out = self.usb_inp = None
 
     def _PYUSB1_close(self):
-        # FIXME: this should not be part of transport.py
-        #self.write(bytearray.fromhex("0000FF00FF00")) # ack
         if self.usb_dev is not None:
             self.usb_util.dispose_resources(self.usb_dev)
         self.usb_dev = self.usb_out = self.usb_inp = None

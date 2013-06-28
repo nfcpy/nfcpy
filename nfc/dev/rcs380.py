@@ -125,8 +125,16 @@ class StatusError:
             return "UNKNOWN STATUS ERROR {0:02x}".format(self.errno)
     
 class Chipset():
+    ACK = bytearray.fromhex('0000FF00FF00')
+    
     def __init__(self, transport):
         self.transport = transport
+        
+        # write ack to perform a soft reset
+        # raises IOError(EACCES) if we're second
+        self.transport.write(Chipset.ACK)
+        
+        # do some basic initialization and deactivate rf
         self.set_command_type(1)
         self.get_firmware_version()
         self.get_pd_data_version()
@@ -134,9 +142,9 @@ class Chipset():
 
     def close(self):
         self.switch_rf("off")
+        self.transport.write(Chipset.ACK)
         self.transport.close()
         
-    #@trace
     def send_command(self, cmd_code, cmd_data, timeout):
         cmd = bytearray([0xD6, cmd_code]) + bytearray(cmd_data)
         self.transport.write(str(Frame(cmd)))
