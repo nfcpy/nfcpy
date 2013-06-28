@@ -544,7 +544,7 @@ class Device(nfc.dev.Device):
 def init(transport):
     chipset = Chipset(transport)
     device = Device(chipset)
-    device._vendor = "Sony"
+    device._vendor = transport.vendor_name
     device._product = transport.product_name
     return device
 

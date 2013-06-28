@@ -123,10 +123,11 @@ class USB(object):
             self.usb_dev.claimInterface(0)
         except self.usb.USBError:
             raise IOError("unusable device")
-        self.product_name = self.usb_dev.getString(dev.iProduct, 100)
         intf = dev.configurations[0].interfaces[0]
         self.usb_out = intf[0].endpoints[0].address
         self.usb_inp = intf[0].endpoints[1].address
+        self.vendor_name = self.usb_dev.getString(dev.iManufacturer, 100)
+        self.product_name = self.usb_dev.getString(dev.iProduct, 100)
     
     def _PYUSB1_open(self, bus_id, dev_id):
         self.usb_dev = self.usb_core.find(bus=bus_id, address=dev_id)
@@ -139,6 +140,8 @@ class USB(object):
             self.usb_out.write('')
         except self.usb_core.USBError:
             raise IOError(errno.EACCES, os.strerror(errno.EACCES))
+        self.vendor_name = self.usb_util.get_string(
+            self.usb_dev, 100, self.usb_dev.iManufacturer)
         self.product_name = self.usb_util.get_string(
             self.usb_dev, 100, self.usb_dev.iProduct)
         
