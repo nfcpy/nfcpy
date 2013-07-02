@@ -27,10 +27,9 @@ import logging
 log = logging.getLogger(__name__)
 
 from nfc.clf import ProtocolError, TransmissionError, TimeoutError
-from nfc.clf import TTA, TTB, TTF
+import nfc.clf
 import nfc.dev
 
-from struct import pack, unpack
 import os
 import time
 import socket
@@ -48,19 +47,23 @@ class Device(nfc.dev.Device):
         except AttributeError: pass
         self.socket.close()
     
+    @property
+    def capabilities(self):
+        return {}
+
     def sense(self, targets):
         for tg in targets:
-            if type(tg) == TTA:
+            if type(tg) == nfc.clf.TTA:
                 target = self.sense_a()
                 if (target and
                     (tg.cfg is None or target.cfg.startswith(tg.cfg)) and
                     (tg.uid is None or target.uid.startswith(tg.uid))):
                     break
-            elif type(tg) == TTB:
+            elif type(tg) == nfc.clf.TTB:
                 target = self.sense_b()
                 if target:
                     pass
-            elif type(tg) == TTF:
+            elif type(tg) == nfc.clf.TTF:
                 br, sc, rc = tg.br, tg.sys, 0
                 if sc is None: sc, rc = bytearray('\xFF\xFF'), 1
                 target = self.sense_f(br, sc, rc)
@@ -94,31 +97,14 @@ class Device(nfc.dev.Device):
             if len(rsp) >= 18 and rsp[0] == len(rsp) and rsp[1] == 1:
                 if len(rsp) == 18: rsp += "\xff\xff"
                 idm, pmm, sys = rsp[2:10], rsp[10:18], rsp[18:20]
-                return TTF(br=br, idm=idm, pmm=pmm, sys=sys)
+                return nfc.clf.TTF(br=br, idm=idm, pmm=pmm, sys=sys)
     
-    def listen(self, targets, timeout):
-        """Listen for multiple targets. This hardware supports
-        listening for Type A and Type F activation."""
+    def listen_ttf(self, target, timeout):
+        assert type(target) is nfc.clf.TTF
         
-        if not targets:
-            return None
-
-        nfca_params = bytearray.fromhex("FFFF000000FF")
-        nfcf_params = bytearray(18) # all zero
-        nfca_target = None
-        nfcf_target = None
-        
-        for target in targets:
-            if type(target) == TTA:
-                nfca_params = target.cfg[0:2] + target.uid[1:] + target.cfg[2:]
-                nfca_target = target
-            if type(target) == TTF:
-                nfcf_params = target.idm + target.pmm + target.sys
-                nfcf_target = target
+        if target.br is None:
+            target.br = 212
             
-        assert len(nfca_params) == 6
-        assert len(nfcf_params) == 18
-        
         log.debug("bind socket to {0}".format(self.addr))
         try: self.socket.bind(self.addr)
         except socket.error: return
@@ -143,8 +129,41 @@ class Device(nfc.dev.Device):
                 log.debug("<< {0} {1}".format(data.encode("hex"), self.addr))
             else: return None
 
-        bitrate = nfcf_target.br if nfcf_target.br else 424
-        target = TTF(bitrate, *nfcf_target[1:])
+        self.exchange = self.send_rsp_recv_cmd
+        return target, cmd
+        
+    def listen_dep(self, target, timeout):
+        assert type(target) is nfc.clf.DEP
+
+        target.br = 424
+        target.idm = bytearray((0x01, 0xFE)) + os.urandom(6)
+        target.pmm = bytearray(8)
+        target.sys = bytearray((0xFF, 0xFF))
+
+        log.debug("bind socket to {0}".format(self.addr))
+        try: self.socket.bind(self.addr)
+        except socket.error: return
+        log.debug("bound socket to {0}".format(self.addr))
+
+        while True:
+            data, self.addr = self.socket.recvfrom(1024)
+            log.debug("<< {0} {1}".format(data.encode("hex"), self.addr))
+            if data.startswith("\x06\x00"): break
+            
+        while True:
+            cmd = bytearray(data)
+            if cmd.startswith("\x06\x00"):
+                rsp = "\x01" + target.idm + target.pmm
+                if cmd[4] == 1: rsp += target.sys
+                data = str(chr(len(rsp) + 1) + rsp)
+                log.debug(">> {0} {1}".format(data.encode("hex"), self.addr))
+                self.socket.sendto(data, self.addr)
+            else: break
+            if len(select.select([self.socket], [], [], 0.1)[0]) == 1:
+                data, self.addr = self.socket.recvfrom(1024)
+                log.debug("<< {0} {1}".format(data.encode("hex"), self.addr))
+            else: return None
+
         self.exchange = self.send_rsp_recv_cmd
         return target, cmd
         
@@ -197,7 +216,8 @@ class Device(nfc.dev.Device):
 
 def init(host, port):
     device = Device(host, port)
-    device._vendor = os.uname()[0]
-    device._product = "TCP/IP"
+    import platform
+    device._vendor_name = platform.uname()[0]
+    device._device_name = "TCP/IP"
     return device
 

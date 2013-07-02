@@ -48,33 +48,37 @@ test_programs = [
      "phdc-test-agent.py p2p --mode i -T"),
     ("phdc-test-manager.py --mode i",
      "phdc-test-agent.py p2p --mode t -T"),
-    ("phdc-test-manager.py --mode i --loop",
+    ("phdc-test-manager.py --mode i",
      "phdc-test-agent.py tag -t 1"),
-    ("phdc-test-manager.py --mode i --loop",
+    ("phdc-test-manager.py --mode i",
      "phdc-test-agent.py tag -t 2"),
-    ("phdc-test-manager.py --mode i --loop",
+    ("phdc-test-manager.py --mode i",
      "phdc-test-agent.py tag -t 3"),
-    ("phdc-test-manager.py --mode i --loop",
+    ("phdc-test-manager.py --mode i",
      "phdc-test-agent.py tag -t 4"),
     ]
 
-examples = os.path.split(sys.path[0])[0] + "/examples/"
+examples = os.path.relpath(os.path.split(sys.path[0])[0] + "/examples")
 device = sys.argv[1] if len(sys.argv) > 1 else 'udp'
 
 started = time.time()
 for server, client in test_programs:
     print "*** {0} ***".format(client)
     
-    server = examples + "{0} --device {1} -q".format(server, device)
+    server = examples + "/{0} --device {1} -q".format(server, device)
     print server
     server = Popen(shlex.split(server), stderr=PIPE, stdout=PIPE)
 
-    client = examples + "{0} --device {1} -q".format(client, device)
+    client = examples + "/{0} --device {1} -q".format(client, device)
     print client
     client = Popen(shlex.split(client), stderr=STDOUT)
 
+    print "waiting for client to terminate"
     client.wait()
-    server.terminate()
+    print "waiting for server to terminate"
+    server.wait()
+    print "allow some time for readers to recover"
+    time.sleep(5)
 
 elapsed = int(time.time() - started)
 print("completed tests in {0} minutes {1} seconds"

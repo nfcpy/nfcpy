@@ -31,19 +31,60 @@ import nfc.llcp
 import time
 import collections
 
-TTA = collections.namedtuple("TTA", "br, cfg, uid")
-TTB = collections.namedtuple("TTB", "br")
-TTF = collections.namedtuple("TTF", "br, idm, pmm, sys")
+class TTA(object):
+    """Represents a Type A target. The integer *br* is the
+    bitrate. The bytearray *cf* is the two byte SENS_RES data plus the
+    one byte SEL_RES data for a tag type 1/4 tag. The bytearray *uid*
+    is the target UID. The bytearray *ats* is the answer to select
+    data of a type 4 tag if the chipset does activation as part of
+    discovery."""
+    def __init__(self, br=None, cfg=None, uid=None, ats=None):
+        self.br = br
+        self.cfg = cfg
+        self.uid = uid
+        self.ats = ats
 
-def __target__str__(self):
-    s = "{0} br={1}".format(self.__class__.__name__, self[0])
-    for p in zip(self._fields[1:], self[1:]):
-        s += " {0}={1}".format(p[0], str(p[1]).encode("hex"))
-    return s
+    def __str__(self):
+        hx = lambda x: str(x) if x is None else str(x).encode("hex")
+        return "TTA br={0} cfg={1} uid={2} ats={3}".format(
+            self.br, hx(self.cfg), hx(self.uid), hx(self.ats))
 
-TTA.__str__ = __target__str__
-TTB.__str__ = __target__str__
-TTF.__str__ = __target__str__
+class TTB(object):
+    """Represents a Type B target. The integer *br* is the
+    bitrate. Type B targets are not yet supported in nfcpy, for the
+    simple reason that no cards for testing are available."""
+    def __init__(self, br=None):
+        self.br = br
+
+    def __str__(self):
+        return "TTA br={0}".format(self.br)
+
+class TTF(object):
+    """Represents a Type F target. The integer *br* is the
+    bitrate. The bytearray *idm* is the 8 byte manufacture id. The
+    bytearray *pmm* is the 8 byte manufacture parameter. The bytearray
+    *sys* is the 2 byte system code."""
+    def __init__(self, br=None, idm=None, pmm=None, sys=None):
+        self.br = br
+        self.idm = idm
+        self.pmm = pmm
+        self.sys = sys
+
+    def __str__(self):
+        hx = lambda x: str(x) if x is None else str(x).encode("hex")
+        return "TTF br={0} idm={1} pmm={2} sys={3}".format(
+            self.br, hx(self.idm), hx(self.pmm), hx(self.sys))
+
+class DEP(object):
+    """Represents a DEP target. The integer *br* is the bitrate. The
+    bytearray *gb* is the ATR general bytes."""
+    def __init__(self, br=None, gb=None):
+        self.br = br
+        self.gb = gb
+
+    def __str__(self):
+        hx = lambda x: str(x) if x is None else str(x).encode("hex")
+        return "DEP br={0} gb={1}".format(self.br, hx(self.gb))
 
 class ContactlessFrontend(object):
     """The contactless frontend is the main interface class for
@@ -99,14 +140,17 @@ class ContactlessFrontend(object):
         **Reader/Writer Options**
 
         'targets': sequence
-          A list of target specifications with each target of
-          either type :class:`~nfc.clf.TTA`, :class:`~nfc.clf.TTB`, or
-          :class:`~nfc.clf.TTF`. A default set is choosen if 'targets' is
-          not provided.
+          A list of target specifications with each target of either
+          type :class:`~nfc.clf.TTA`, :class:`~nfc.clf.TTB`, or
+          :class:`~nfc.clf.TTF`. A default set is choosen if 'targets'
+          is not provided.
+          
         'on-startup': function
-          A function that will be called with the list of targets (from
-          'targets') to search for. Must return a list of targets or
-          :const:`None`. Only the targets returned are finally considered.
+          A function that will be called with the list of targets
+          (from 'targets') to search for. Must return a list of
+          targets or :const:`None`. Only the targets returned are
+          finally considered.
+          
         'on-connect': function
           A function object that will be called with an activated
           :class:`~nfc.tag.Tag` object.
@@ -124,37 +168,48 @@ class ContactlessFrontend(object):
         **Peer To Peer Options**
 
         'on-startup': function
-          A function that is called before an attempt is made to establish
-          peer to peer communication. The function receives the initialized
-          :class:`~nfc.llcp.llc.LogicalLinkController` instance as parameter,
-          which may then be used to allocate and bind communication sockets
-          for service applications. The return value must be either the
+          A function that is called before an attempt is made to
+          establish peer to peer communication. The function receives
+          the initialized :class:`~nfc.llcp.llc.LogicalLinkController`
+          instance as parameter, which may then be used to allocate
+          and bind communication sockets for service applications. The
+          return value must be either the
           :class:`~nfc.llcp.llc.LogicalLinkController` instance or
-          :const:`None` to effectively remove llcp from the options considered.
+          :const:`None` to effectively remove llcp from the options
+          considered.
+          
         'on-connect': function
-          A function that is be called when peer to peer communication was
-          established. The function receives the connected
-          :class:`~nfc.llcp.llc.LogicalLinkController` instance as parameter,
-          which may then be used to allocate communication sockets with
+          A function that is be called when peer to peer communication
+          was established. The function receives the connected
+          :class:`~nfc.llcp.llc.LogicalLinkController` instance as
+          parameter, which may then be used to allocate communication
+          sockets with
           :meth:`~nfc.llcp.llc.LogicalLinkController.socket` and spawn
-          working threads to perform communication. The callback must return
-          more or less immediately with :const:`True` unless the logical link
-          controller run loop is handled within the callback.
+          working threads to perform communication. The callback must
+          return more or less immediately with :const:`True` unless
+          the logical link controller run loop is handled within the
+          callback.
+          
         'role': string
-          Defines which role the local LLC shall take for the data exchange
-          protocol activation. Possible values are 'initiator' and 'target'.
-          The default is to alternate between both roles until communication
-          is established.
+          Defines which role the local LLC shall take for the data
+          exchange protocol activation. Possible values are
+          'initiator' and 'target'.  The default is to alternate
+          between both roles until communication is established.
+          
         'miu': integer
-          Defines the maximum information unit size that will be supported
-          and announced to the remote LLC. The default value is 128.
+          Defines the maximum information unit size that will be
+          supported and announced to the remote LLC. The default value
+          is 128.
+          
         'lto': integer
-          Defines the link timeout value (in milliseconds) that will be
-          announced to the remote LLC. The default value is 100 milliseconds.
+          Defines the link timeout value (in milliseconds) that will
+          be announced to the remote LLC. The default value is 100
+          milliseconds.
+          
         'agf': boolean
-          Defines if the local LLC performs PDU aggregation and may thus send
-          Aggregated Frame (AGF) PDUs to the remote LLC. The dafault is to use
-          aggregation.
+          Defines if the local LLC performs PDU aggregation and may
+          thus send Aggregated Frame (AGF) PDUs to the remote LLC. The
+          dafault is to use aggregation.
         
         >>> import nfc
         >>> import threading
@@ -173,17 +228,24 @@ class ContactlessFrontend(object):
         **Card Emulation Options**
 
         'targets': sequence
-          A list of target specifications with each target of
-          either type :class:`~nfc.clf.TTA`, :class:`~nfc.clf.TTB`, or
-          :class:`~nfc.clf.TTF`. Defaults to an empty list.
+          A list of target specifications with each target of either
+          type :class:`~nfc.clf.TTA`, :class:`~nfc.clf.TTB`, or
+          :class:`~nfc.clf.TTF`. The list of targets is processed
+          sequentially. Defaults to an empty list.
+          
         'on-startup': function
-          A function that will be called with the list of targets (from
-          'targets') to emulate. Must return a list of one target choosen
-          or :const:`None`.
+          A function that will be called with the list of targets
+          (from 'targets') to emulate. Must return a list of one
+          target choosen or :const:`None`.
+          
         'on-connect': function
           A function that will be called with an activated
           :class:`~nfc.tag.TagEmulation` instance as first parameter and
           the first command received as the second parameter.
+
+        'timeout': integer
+          The timeout in seconds to wait for for each target to become
+          initialized. The default value is 1 second.
 
         >>> import nfc
         >>>
@@ -281,43 +343,69 @@ class ContactlessFrontend(object):
         
     def _card_connect(self, options):
         timeout = options.get('timeout', 1.0)
-        activated = self.listen(options.get('targets', []), timeout)
-        if activated:
-            target, command = activated
-            log.debug("activated as target {0}".format(target))
-            tag = nfc.tag.emulate(self, target)
-            if tag is not None:
-                log.debug("connected as {0}".format(tag))
-                options['on-connect'](tag=tag, command=command)
-            return True
+        for target in options.get('targets'):
+            activated = self.listen(target, timeout)
+            if activated:
+                target, command = activated
+                log.debug("activated as target {0}".format(target))
+                tag = nfc.tag.emulate(self, target)
+                if tag is not None:
+                    log.debug("connected as {0}".format(tag))
+                    options['on-connect'](tag=tag, command=command)
+                return True
         
-    def sense(self, targets):
+    @property
+    def capabilities(self):
+        return self.dev.capabilities
+
+    def sense(self, targets, **kwargs):
         """Send discovery and activation requests to find a
         target. Targets is a list of target specifications (TTA, TTB,
         TTF). Not all readers may support all possible target
         types. The return value is an activated target with a possibly
         updated specification (bitrate) or None.
 
-        .. note:: This is a direct interface to the
-           driver and not needed if :meth:`connect` is used.
-        """
-        return self.dev.sense(targets)
-
-    def listen(self, targets, timeout):
-        """Listen for the number of seconds given in timeout to become
-        activated as a target. Targets is a list of target
-        specifications (TTA, TTB, TTF defined in clf.py). Not all
-        readers may support all possible target types, especially
-        combinations thereof. Generally readers may listen for all
-        supported activations if none of the targets was defined with
-        a specific bitrate, and listen for the first target only if a
-        bitrate is set. The return value is an activated target with a
-        possibly updated specification (bitrate) or None.
+        Additional keyword arguments are driver specific.
 
         .. note:: This is a direct interface to the
            driver and not needed if :meth:`connect` is used.
         """
-        return self.dev.listen(targets, timeout)
+        return self.dev.sense(targets, **kwargs)
+
+    def listen(self, target, timeout):
+        """Listen for *timeout* seconds to become initialized as a
+        *target*. The *target* must be set to one of
+        :class:`nfc.clf.TTA`, :class:`nfc.clf.TTB`,
+        :class:`nfc.clf.TTF`, or :class:`nfc.clf.DEP` (note that
+        target type support depends on the hardware capabilities). The
+        return value is :const:`None` if *timeout* elapsed without
+        activation or a tuple (target, command) where target is the
+        activated target (which may differ from the requested target,
+        see below) and command is the first command received from the
+        initiator.
+
+        If an activated target is returned, the target type and
+        attributes may differ from the *target* requested. This is
+        especically true if activation as a :class:`nfc.clf.DEP`
+        target is requested but the contactless frontend does not have
+        a hardware implementation of the data exchange protocol and
+        returns a :class:`nfc.clf.TTA` or :class:`nfc.clf.TTF` target
+        instead.
+
+        .. note:: This is a direct interface to the
+           driver and not needed if :meth:`connect` is used.
+        """
+        log.debug("listen for {0:.3f} sec as target {1}"
+                  .format(timeout, target))
+        
+        if type(target) is TTA:
+            return self.dev.listen_tta(target, timeout)
+        if type(target) is TTB:
+            return self.dev.listen_ttb(target, timeout)
+        if type(target) is TTF:
+            return self.dev.listen_ttf(target, timeout)
+        if type(target) is DEP:
+            return self.dev.listen_dep(target, timeout)
 
     def exchange(self, send_data, timeout):
         """Exchange data with an activated target (data is a command

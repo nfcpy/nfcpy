@@ -23,6 +23,7 @@
 import logging
 log = logging.getLogger(__name__)
 
+import nfc.tag
 import nfc.clf
 import nfc.ndef
 
@@ -140,10 +141,10 @@ class NDEF(object):
     @message.setter
     def message(self, msg):
         if not self.writeable:
-            raise IOError("tag writing disabled")
+            raise nfc.tag.AccessError
         data = bytearray(str(msg))
         if len(data) > self.capacity:
-            raise IOError("ndef message beyond tag capacity")
+            raise nfc.tag.CapacityError
         if len(data) < self.capacity:
             data = data + "\xFE"
         with self._tag as tag:
@@ -289,7 +290,9 @@ class Type2Tag(object):
         except nfc.clf.TimeoutError:
             raise nfc.clf.TimeoutError("9.9.1.3")
         
-        if len(rsp) == 1 and rsp[0] == 0x0A:
+        if (len(rsp) == 1 and rsp[0] == 0x0A) or (len(rsp) == 0):
+            # Case 1 is for readers who return the ack/nack.
+            # Case 2 is for readers who process the response.
             return True
         if len(rsp) == 1:
             raise nfc.clf.ProtocolError("9.7.2.1")

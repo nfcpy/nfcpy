@@ -26,6 +26,7 @@ log = logging.getLogger(__name__)
 import os
 import re
 import sys
+import time
 import glob
 import importlib
 
@@ -36,7 +37,7 @@ usb_device_map = {
     #(0x054c, 0x0193) : "pn53x_usb", # Sony demo board
     #(0x04cc, 0x2533) : "pn53x_usb", # NXP PN533 demo board
     #(0x04cc, 0x0531) : "pn53x_usb", # SCM SCL3710
-    #(0x04e6, 0x5591) : "pn53x_usb", # SCM SCL3711
+    (0x04e6, 0x5591) : "pn53x", # SCM SCL3711
     #(0x04e6, 0x5593) : "pn53x_usb", # SCM SCL3712
     #(0x054c, 0x02e1) : "rcs956_usb", # Sony RC-S330/360/370
     (0x054c, 0x06c1) : "rcs380", # Sony RC-S380
@@ -116,36 +117,58 @@ class Device(object):
         
     @property
     def vendor(self):
-        return self._vendor
+        return self._vendor_name if hasattr(self, "_vendor_name") else ''
         
     @property
     def product(self):
-        return self._product
+        return self._device_name if hasattr(self, "_device_name") else ''
         
     @property
     def path(self):
         return self._path
+
+    @property
+    def capabilities(self):
+        log.warning("Driver.capabilities should be implemented.")
+        return {}
 
     def sense(self, targets):
         """Send discovery and activation requests to find a
         target. Targets is a list of target specifications (TTA, TTB,
         TTF defined in clf.py). Not all drivers may support all
         possible target types. The return value is an activated target
-        with a possibly updated specification (bitrate) or None."""
+        with a possibly updated specification (bitrate) or None.
+        """
         log.warning("Driver.sense() should be implemented.")
+        time.sleep(1)
         return None
 
-    def listen(self, targets, timeout):
-        """Listen for the number of seconds given in timeout to become
-        activated as a target. Targets is a list of target
-        specifications (TTA, TTB, TTF defined in clf.py). Not all
-        drivers may support all possible target types, especially
-        combinations thereof. Generally most drivers will listen for
-        all supported activations if none of the targets was defined
-        with a specific bitrate, and listen for the first target only
-        if a bitrate is set. The return value is an activated target
-        with a possibly updated specification (bitrate) or None."""
-        log.warning("Driver.listen() should be implemented.")
+    def listen_tta(self, target, timeout):
+        """Wait *timeout* seconds to become initialized as a *target*
+        for Type A communication."""
+        log.warning("Driver.listen_tta() is not implemented.")
+        time.sleep(timeout)
+        return None
+
+    def listen_ttb(self, target, timeout):
+        """Wait *timeout* seconds to become initialized as a *target*
+        for Type B communication."""
+        log.warning("Driver.listen_ttb() is not implemented.")
+        time.sleep(timeout)
+        return None
+
+    def listen_ttf(self, target, timeout):
+        """Wait *timeout* seconds to become initialized as a *target*
+        for Type F communication."""
+        log.warning("Driver.listen_ttf() is not implemented.")
+        time.sleep(timeout)
+        return None
+
+    def listen_dep(self, target, timeout):
+        """Wait *timeout* seconds to become initialized as a *target*
+        for data exchange protocol."""
+        log.warning("Driver.listen_dep() is not implemented.")
+        time.sleep(timeout)
         return None
 
     def exchange(self, data, timeout):
@@ -158,7 +181,8 @@ class Device(object):
         timeout is the number of seconds to wait for data to return,
         if the timeout expires an nfc.clf.TimeoutException is
         raised. Other nfc.clf.DigitalProtocolExceptions may be raised
-        if an error is detected during communication."""
+        if an error is detected during communication.
+        """
         log.warning("Driver.exchange() should be implemented.")
         return None
 
@@ -174,6 +198,7 @@ class Device(object):
         parameters 'add-crc' and 'check-crc' when running as
         initator. It is possible to set *brm* to an empty string if
         bitrate and modulation shall not be changed but only optional
-        parameters executed."""
+        parameters executed.
+        """
         log.warning("Driver.set_communication_mode() should be implemented.")
         return None

@@ -102,8 +102,8 @@ class TestWithStaticMemoryLayout1:
     
     def setup(self):
         seq = [("00000000112233", None, "1100" + t1t_static_memory_layout_1),
-               ("01000000112233", None, "0000"),
-               ("01000000112233", None, "TimeoutError")]
+               ("78000000112233", None, "110000112233"),
+               ("78000000112233", None, "TimeoutError")]
         cfg, uid = bytearray.fromhex("000C"), bytearray.fromhex("00112233")
         self.clf = ContactlessFrontend(nfc.clf.TTA(106, cfg, uid), seq)
         

@@ -183,6 +183,9 @@ class TagTool(CommandLineInterface):
         parser = ArgumentParser(
             formatter_class=argparse.RawDescriptionHelpFormatter,
             description="")
+        parser.add_argument(
+            "-v", "--verbose", action="store_true",
+            help="show more information")
         subparsers = parser.add_subparsers(
             title="commands", dest="command")
         add_show_parser(subparsers.add_parser(
@@ -272,15 +275,21 @@ class TagTool(CommandLineInterface):
             try: self.options.data = self.options.data.decode("hex")
             except TypeError: pass
 
-        if tag.ndef is not None:
-            log.info("old message: \n" + tag.ndef.message.pretty())
+        if tag.ndef is None:
+            log.info("not an ndef tag")
+            return
+
+        log.info("old message: \n" + tag.ndef.message.pretty())
+        try:
             tag.ndef.message = nfc.ndef.Message(self.options.data)
             if tag.ndef.changed:
                 log.info("new message: \n" + tag.ndef.message.pretty())
             else:
                 log.info("new message is same as old message")
-        else:
-            log.info("not an ndef tag")
+        except nfc.tag.AccessError:
+            log.error("this tag is not writeable")
+        except nfc.tag.CapacityError:
+            log.error("message exceeds tag capacity")
 
     def format_tag(self, tag):
         if self.options.tagtype == "tt3":
@@ -313,7 +322,7 @@ class TagTool(CommandLineInterface):
     
         tag.write(attr, [0])
         attr = nfc.tag.tt3.NdefAttributeData(tag.read([0]))
-        log.info("wrote attribute data: " + attr.pretty())
+        log.info("new attribute data: " + attr.pretty())
 
     def prepare_tag(self):
         if self.options.tagtype == "tt3":
@@ -369,6 +378,8 @@ class TagTool(CommandLineInterface):
         if self.options.preserve:
             self.options.preserve.seek(0)
             self.options.preserve.write(self.options.ndef_data_area)
+            log.info("wrote tag memory to file '{0}'"
+                     .format(self.options.preserve.name))
 
     def emulate_tt3_tag(self, tag, command):
         def ndef_read(block_number, rb, re):
@@ -394,8 +405,6 @@ class TagTool(CommandLineInterface):
                 log.info("no command received within 10 seconds")
             except nfc.clf.TransmissionError:
                 break
-
-        print(str(self.options.ndef_data_area).encode("hex"))
 
 class ArgparseError(SystemExit):
     pass

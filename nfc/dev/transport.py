@@ -29,6 +29,7 @@ log = logging.getLogger(__name__)
 import importlib
 import errno
 import sys
+import os
 import re
 
 class USB(object):
@@ -103,16 +104,32 @@ class USB(object):
             self.read  = self._PYUSB0_read
             self.write = self._PYUSB0_write
             self.close = self._PYUSB0_close
+            self.get_string = self._PYUSB0_get_string
         elif self.pyusb_version == 1:
             self.open  = self._PYUSB1_open
             self.read  = self._PYUSB1_read
             self.write = self._PYUSB1_write
             self.close = self._PYUSB1_close
+            self.get_string = self._PYUSB1_get_string
         else:
             log.error("unexpected pyusb version")
             raise SystemExit
 
         self.open(bus_id, dev_id)
+
+    @property
+    def manufacturer_name(self):
+        return self.get_string(100, self.manufacturer_name_id)
+        
+    @property
+    def product_name(self):
+        return self.get_string(100, self.product_name_id)
+
+    def _PYUSB0_get_string(self, length, index, langid=-1):
+        return self.usb_dev.getString(index, length, langid)
+        
+    def _PYUSB1_get_string(self, length, index, langid=None):
+        return self.usb_util.get_string(self.usb_dev, length, index, langid)
         
     def _PYUSB0_open(self, bus_id, dev_id):
         bus = [b for b in self.usb.busses() if b.dirname == bus_id][0]
@@ -126,8 +143,8 @@ class USB(object):
         intf = dev.configurations[0].interfaces[0]
         self.usb_out = intf[0].endpoints[0].address
         self.usb_inp = intf[0].endpoints[1].address
-        self.vendor_name = self.usb_dev.getString(dev.iManufacturer, 100)
-        self.product_name = self.usb_dev.getString(dev.iProduct, 100)
+        self.manufacturer_name_id = dev.iManufacturer
+        self.product_name_id = dev.iProduct
     
     def _PYUSB1_open(self, bus_id, dev_id):
         self.usb_dev = self.usb_core.find(bus=bus_id, address=dev_id)
@@ -140,10 +157,8 @@ class USB(object):
             self.usb_out.write('')
         except self.usb_core.USBError:
             raise IOError(errno.EACCES, os.strerror(errno.EACCES))
-        self.vendor_name = self.usb_util.get_string(
-            self.usb_dev, 100, self.usb_dev.iManufacturer)
-        self.product_name = self.usb_util.get_string(
-            self.usb_dev, 100, self.usb_dev.iProduct)
+        self.manufacturer_name_id = self.usb_dev.iManufacturer
+        self.product_name_id = self.usb_dev.iProduct
         
     def _PYUSB0_read(self, timeout):
         if self.usb_inp is not None:
@@ -151,7 +166,8 @@ class USB(object):
                 frame = self.usb_dev.bulkRead(self.usb_inp, 300, timeout)
             except self.usb.USBError as e:
                 if e.message == "Connection timed out":
-                    raise IOError(e.errno, e.strerror)
+                    ETIMEDOUT = errno.ETIMEDOUT
+                    raise IOError(ETIMEDOUT, os.strerror(ETIMEDOUT))
                 else:
                     log.error("{0!r}".format(e))
                     raise IOError(errno.EIO, os.strerror(errno.EIO))
@@ -178,7 +194,7 @@ class USB(object):
             log.debug(">>> " + str(frame).encode("hex"))
             self.usb_dev.bulkWrite(self.usb_out, frame)
             if len(frame) % 64 == 0:
-                self.dh.bulkWrite('') # end transfer
+                self.usb_dev.bulkWrite(self.usb_out, '') # end transfer
         
     def _PYUSB1_write(self, frame):
         if self.usb_out is not None:

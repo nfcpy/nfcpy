@@ -25,6 +25,7 @@
 import logging
 log = logging.getLogger(__name__)
 
+import nfc.tag
 import nfc.clf
 import nfc.ndef
 
@@ -148,10 +149,10 @@ class NDEF(object):
     @message.setter
     def message(self, msg):
         if not self.writeable:
-            raise IOError("tag writing disabled")
+            raise nfc.tag.AccessError
         data = bytearray(str(msg))
         if len(data) > self.capacity:
-            raise IOError("ndef message beyond tag capacity")
+            raise nfc.tag.CapacityError
         if len(data) < self.capacity:
             data = data + "\xFE"
         with self._tag as tag:

@@ -30,9 +30,11 @@ from nfc.clf import ProtocolError, TransmissionError, TimeoutError
 from nfc.clf import TTA, TTB, TTF
 import nfc.dev
 
-from struct import pack, unpack
-from time import time
-from os import urandom
+import os
+import time
+import errno
+import struct
+import threading
 
 def trace(func):
     def traced_func(*args, **kwargs):
@@ -41,7 +43,7 @@ def trace(func):
             _args = ', '.join([_args, "{0}".format(kwargs).strip("{}")])
         log.debug("{func}({args})".format(func=func.__name__, args=_args))
         data = func(*args, **kwargs)
-        log.debug("{0} returns {1}".format(func.__name__, repr(data)))
+        #log.debug("{0} returns {1}".format(func.__name__, repr(data)))
         return data
     return traced_func
 
@@ -59,12 +61,12 @@ class Frame():
             elif frame[3:5] == bytearray("\xff\xff"):
                 self._type = "data"
             if self.type == "data":
-                length = unpack("<H", str(frame[5:7]))[0]
+                length = struct.unpack("<H", str(frame[5:7]))[0]
                 self._data = frame[8:8+length]
         else:
             frame  = bytearray([0, 0, 255, 255, 255])
-            frame += bytearray(pack("<H", len(data)))
-            frame += bytearray(pack("B", (256 - sum(frame[5:7])) % 256))
+            frame += bytearray(struct.pack("<H", len(data)))
+            frame += bytearray(struct.pack("B", (256 - sum(frame[5:7])) % 256))
             frame += bytearray(data)
             frame += bytearray([(256 - sum(frame[8:])) % 256, 0])
             self._frame = frame
@@ -98,7 +100,7 @@ class CommunicationError:
     str2err = dict([(v, k) for k, v in err2str.iteritems()])
     
     def __init__(self, status_bytes):
-        self.errno = unpack('<L', str(status_bytes))[0]
+        self.errno = struct.unpack('<L', str(status_bytes))[0]
 
     def __eq__(self, strerr):
         return self.errno & CommunicationError.str2err[strerr]
@@ -129,6 +131,7 @@ class Chipset():
     
     def __init__(self, transport):
         self.transport = transport
+        self.lock = threading.Lock()
         
         # write ack to perform a soft reset
         # raises IOError(EACCES) if we're second
@@ -141,20 +144,24 @@ class Chipset():
         self.switch_rf("off")
 
     def close(self):
-        self.switch_rf("off")
-        self.transport.write(Chipset.ACK)
-        self.transport.close()
+        with self.lock:
+            reset_frame = str(Frame(bytearray.fromhex("D6120000")))
+            self.transport.write(reset_frame)
+            self.transport.read(timeout=100)
+            self.transport.write(Chipset.ACK)
+            self.transport.close()
+            self.transport = None
         
     def send_command(self, cmd_code, cmd_data, timeout):
-        cmd = bytearray([0xD6, cmd_code]) + bytearray(cmd_data)
-        self.transport.write(str(Frame(cmd)))
-        if Frame(self.transport.read(timeout=100)).type == "ack":
-            rsp_frame = self.transport.read(timeout)
-            if rsp_frame is None:
-                raise IOError("no answer from reader within %d ms" % timeout)
-            rsp = Frame(rsp_frame).data
-            if rsp[0] == 0xD7 and rsp[1] == cmd_code + 1:
-                return rsp[2:]
+        with self.lock:
+            if self.transport is not None:
+                cmd = bytearray([0xD6, cmd_code]) + bytearray(cmd_data)
+                self.transport.write(str(Frame(cmd)))
+                if Frame(self.transport.read(timeout=100)).type == "ack":
+                    rsp = Frame(self.transport.read(timeout)).data
+                    if rsp and rsp[0] == 0xD7 and rsp[1] == cmd_code + 1:
+                        return rsp[2:]
+            else: log.debug("transport closed in send_command")
                 
     @trace
     def in_set_rf(self, comm_type):
@@ -164,35 +171,32 @@ class Chipset():
                         "212B": (0, 8,  0, 8), "424B": (0, 9,  0, 9)
                         }
         comm_type = in_comm_type[comm_type]
-        rsp_data = self.send_command(0x00, comm_type, 100)
-        if rsp_data[0] != 0:
-            log.error("in_set_rf error {0:x}".format(rsp_data[0]))
+        data = self.send_command(0x00, comm_type, 100)
+        if data and data[0] != 0:
+            raise StatusError(data[0])
         
     @trace
     def in_set_protocol(self, data):
         try: data = bytearray.fromhex(data)
         except (TypeError, ValueError): pass
         data = self.send_command(0x02, data, 100)
-        if data[0] != 0:
-            log.error("in_set_protocol error {0:x}".format(data[0]))
+        if data and data[0] != 0:
             raise StatusError(data[0])
         
     @trace
     def in_comm_rf(self, data, timeout):
-        to = pack("<H", timeout*10)
+        to = struct.pack("<H", timeout*10)
         data = self.send_command(0x04, to + str(data), timeout+500)
-        if tuple(data[0:4]) != (0, 0, 0, 0):
-            error = CommunicationError(data[0:4])
-            log.debug("in_comm_rf {0}".format(error))
-            raise error
-        return data[5:]
+        if data and tuple(data[0:4]) != (0, 0, 0, 0):
+            raise CommunicationError(data[0:4])
+        return data[5:] if data else None
         
     @trace
     def switch_rf(self, switch):
         switch = ("off", "on").index(switch)
         data = self.send_command(0x06, [switch], 100)
-        if data[0] != 0:
-            log.error("switch_rf {0:x}".format(data[0]))
+        if data and data[0] != 0:
+            raise StatusError(data[0])
         
     @trace
     def tg_set_rf(self, comm_type):
@@ -200,23 +204,23 @@ class Chipset():
                         "212A": (8, 14), "424A": (8, 15)}
         
         comm_type = tg_comm_type[comm_type]
-        rsp_data = self.send_command(0x40, comm_type, 100)
-        if rsp_data[0] != 0:
-            log.error("tg_set_rf error {0:x}".format(rsp_data[0]))
+        data = self.send_command(0x40, comm_type, 100)
+        if data and data[0] != 0:
+            raise StatusError(data[0])
         
     @trace
     def tg_set_protocol(self, data):
         try: data = bytearray.fromhex(data)
         except (TypeError, ValueError): pass
-        rsp_data = self.send_command(0x42, data, 100)
-        if rsp_data[0] != 0:
-            log.error("tg_set_protocol error {0:x}".format(rsp_data[0]))
+        data = self.send_command(0x42, data, 100)
+        if data and data[0] != 0:
+            raise StatusError(data[0])
         
     @trace
     def tg_set_auto(self, data):
-        rsp_data = self.send_command(0x44, data, 100)
-        if rsp_data[0] != 0:
-            log.error("tg_set_auto error {0:x}".format(rsp_data[0]))
+        data = self.send_command(0x44, data, 100)
+        if data and data[0] != 0:
+            raise StatusError(data[0])
         
     @trace
     def tg_comm_rf(self, guard_time=0, send_timeout=0xFFFF,
@@ -230,7 +234,7 @@ class Chipset():
         data.  If *mdaa* is True reply to Type A and Type F activation
         commands with data from *nfca_params* and *nfcf_params*.
         """
-        data = pack(
+        data = struct.pack(
             "<HH?6s18s??H", guard_time, send_timeout, mdaa, nfca_params,
             nfcf_params, mf_halted, arae, recv_timeout)
         if transmit_data:
@@ -238,42 +242,45 @@ class Chipset():
             
         data = self.send_command(0x48, data, recv_timeout+500)
         
-        if tuple(data[3:7]) != (0, 0, 0, 0):
+        if data and tuple(data[3:7]) != (0, 0, 0, 0):
             raise CommunicationError(data[3:7])
         
         return data
         
     @trace
     def get_firmware_version(self):
-        rsp_data = self.send_command(0x20, [], 100)
-        log.debug("firmware version {1:x}.{0:02x}".format(*rsp_data))
-        rsp_data = self.send_command(0x20, [0x80], 100)
-        log.debug("boot version {1:x}.{0:02x}".format(*rsp_data))
+        data = self.send_command(0x20, [], 100)
+        log.debug("firmware version {1:x}.{0:02x}".format(*data))
+        data = self.send_command(0x20, [0x80], 100)
+        log.debug("boot version {1:x}.{0:02x}".format(*data))
         
     @trace
     def get_pd_data_version(self):
-        rsp_data = self.send_command(0x22, [], 100)
-        log.debug("package data format {1:x}.{0:02x}".format(*rsp_data))
+        data = self.send_command(0x22, [], 100)
+        log.debug("package data format {1:x}.{0:02x}".format(*data))
 
     @trace
     def get_command_type(self):
-        rsp_data = self.send_command(0x28, [], 100)
-        return unpack(">Q", str(rsp_data[0:8]))
+        data = self.send_command(0x28, [], 100)
+        return struct.unpack(">Q", str(data[0:8]))
     
     @trace
     def set_command_type(self, command_type):
-        rsp_data = self.send_command(0x2A, [command_type], 100)
-        if rsp_data[0] != 0:
-            log.error("set_command_type error {0:x}".format(rsp_data[0]))
+        data = self.send_command(0x2A, [command_type], 100)
+        if data and data[0] != 0:
+            raise StatusError(data[0])
 
 class Device(nfc.dev.Device):
-    def __init__(self, chipset):
-        self.chipset = chipset
+    def __init__(self, transport):
+        self.chipset = Chipset(transport)
     
     def close(self):
         self.chipset.close()
     
-    @trace
+    @property
+    def capabilities(self):
+        return {}
+
     def sense(self, targets):
         for tg in targets:
             if type(tg) == TTA:
@@ -318,7 +325,7 @@ class Device(nfc.dev.Device):
         
         self.chipset.in_set_rf("106A")
         self.chipset.in_set_protocol(
-            "0006 0100 0200 0300 0400 0501 0600 0707 0800 0900"
+            "0006 0100 0200 0300 0400 0501 0600 0707 0800 0900 "
             "0a00 0b00 0c00 0e04 0f00 1000 1100 1200 1306")
         
         sens_res = self.chipset.in_comm_rf("\x26", 30)
@@ -411,35 +418,69 @@ class Device(nfc.dev.Device):
             idm, pmm, sys = rsp[2:10], rsp[10:18], rsp[18:20]
             return TTF(br=br, idm=idm, pmm=pmm, sys=sys)
             
-    @trace
-    def listen(self, targets, timeout):
-        """Listen for some targets. This hardware supports
-        listening for Type A and Type F activation."""
+    def listen_ttf(self, target, timeout):
+        assert type(target) == nfc.clf.TTF
         
-        if not targets:
+        timeout_msec = int(timeout * 1000)
+        log.debug("listen_ttf for {0} msec".format(timeout_msec))
+
+        if target.br is None:
+            log.warning("listen bitrate not specified, set to 212")
+            target.br = 212
+            
+        self.chipset.tg_set_rf(str(target.br) + 'F')
+        self.chipset.tg_set_protocol("0001 0100 0207")
+
+        data = None
+        while timeout > 0:
+            start_time = time.time()
+            timeout_msec = int(timeout * 1000)
+            try:
+                data = self.chipset.tg_comm_rf(
+                    mdaa=False, recv_timeout=timeout_msec,
+                    transmit_data=data)
+                tech = ('106A', '212F', '424F')[data[0]-11]
+                log.info("{0} {1}".format(tech, str(data).encode("hex")))
+                if data[7:].startswith("\x06\x00"):
+                    data = ("\x01" + target.idm + target.pmm
+                            + (target.sys if data[7+4] == 1 else ''))
+                    data = chr(len(data) + 1) + data
+                    timeout = max(start_time + timeout - time.time(), 0.1)
+                    continue
+                elif data[9:].startswith(target.idm):
+                    break
+                else:
+                    data = None
+            except CommunicationError as error:
+                if error != "RECEIVE_TIMEOUT_ERROR":
+                    log.debug(error)
+            timeout -= time.time() - start_time
+        else:
             return None
 
-        timeout_msec = int(timeout * 1000)
-        log.debug("listen for {0} msec".format(timeout_msec))
+        self.chipset.tg_set_protocol("0101") # break on rf off
+        self.exchange = self.send_rsp_recv_cmd
+        return target, data[7:]
 
-        nfca_params = bytearray.fromhex("FFFF 000000 FF") # 'sens uid[1-3] sel'
-        nfcf_params = bytearray(18) # all zero 'idm pmm sys'
-        nfca_target = None
-        nfcf_target = None
+    def listen_dep(self, target, timeout):
+        assert type(target) == nfc.clf.DEP
         
-        for target in targets:
-            if type(target) == TTA:
-                nfca_params = target.cfg[0:2] + target.uid[1:] + target.cfg[2:]
-                nfca_target = target
-            if type(target) == TTF:
-                nfcf_params = target.idm + target.pmm + target.sys
-                nfcf_target = target
-            
-        assert len(nfca_params) == 6
-        assert len(nfcf_params) == 18
+        timeout_msec = int(timeout * 1000)
+        log.debug("listen_dep for {0} msec".format(timeout_msec))
 
-        if len(targets) == 1 and targets[0].br != None:
-            tech = str(targets[0].br) + type(targets[0]).__name__[-1]
+        nfca_cfg = bytearray((0x01, 0x00, 0x40))
+        nfca_uid = bytearray(os.urandom(3))
+        nfca_target = nfc.clf.TTA(None, nfca_cfg, nfca_uid)
+        nfca_params = nfca_cfg[0:2] + nfca_uid + nfca_cfg[2:3]
+        
+        nfcf_idm = bytearray((0x01, 0xFE)) + os.urandom(6)
+        nfcf_pmm = bytearray(8)
+        nfcf_sys = bytearray((0xFF, 0xFF))
+        nfcf_target = nfc.clf.TTF(None, nfcf_idm, nfcf_pmm, nfcf_sys)
+        nfcf_params = nfcf_target.idm + nfcf_target.pmm + nfcf_target.sys
+        
+        if target.br is not None:
+            tech = str(target.br) + {106: 'A', 212: 'F', 424: 'F'}[target.br]
             mdaa = False
         else:
             tech = "106A"
@@ -450,7 +491,7 @@ class Device(nfc.dev.Device):
 
         data = None
         while timeout > 0:
-            start_time = time()
+            start_time = time.time()
             timeout_msec = int(timeout * 1000)
             try:
                 data = self.chipset.tg_comm_rf(
@@ -459,64 +500,57 @@ class Device(nfc.dev.Device):
                     nfcf_params=str(nfcf_params),
                     transmit_data=data)
                 tech = ('106A', '212F', '424F')[data[0]-11]
-                log.info("{0} {1}".format(tech, str(data).encode("hex")))
-                if mdaa:
-                    if data[2] & 0x03 == 3:
-                        break
+                log.debug("{0} {1}".format(tech, str(data).encode("hex")))
+                if mdaa is True:
+                    if data[2] & 0x03 == 3: break
                     else: data = None
-                elif type(targets[0]) is TTA:
-                    log.error("sole Type A listen is not implemented")
-                elif type(targets[0]) is TTB:
-                    log.error("sole Type B listen is not supported by hardware")
-                elif type(targets[0]) is TTF:
-                    if data[7:].startswith("\x06\x00"):
-                        data = ("\x01" + targets[0].idm + targets[0].pmm
-                                + (targets[0].sys if data[7+4] == 1 else ''))
+                elif tech in ('212F', '424F'):
+                    if data[7:].startswith("\x06\x00" + nfcf_target.sys):
+                        data = ("\x01" + nfcf_target.idm + nfcf_target.pmm
+                                + (nfcf_target.sys if data[7+4] == 1 else ''))
                         data = chr(len(data) + 1) + data
-                        timeout = max(timeout - (time() - start_time), 0.1)
+                        timeout = max(start_time + timeout - time.time(), 0.1)
                         continue
-                    elif data[9:].startswith(target.idm):
+                    elif data[8:].startswith('\xD4\x00' + nfcf_target.idm):
                         break
                     else: data = None
+                else: data = None
             except CommunicationError as error:
                 if error != "RECEIVE_TIMEOUT_ERROR":
-                    log.debug(error)
-            timeout -= time() - start_time
+                    log.warning(error)
+            timeout -= time.time() - start_time
         else:
             return None
 
         self.chipset.tg_set_protocol("0101") # break on rf off
-        if tech == "106A": target = TTA(106, *nfca_target[1:])
-        if tech == "212F": target = TTF(212, *nfcf_target[1:])
-        if tech == "424F": target = TTF(424, *nfcf_target[1:])
+        target = nfca_target if tech[-1] == 'A' else nfcf_target
+        target.br = int(tech[0:-1])
         self.exchange = self.send_rsp_recv_cmd
         return target, data[7:]
 
-    @trace
     def send_cmd_recv_rsp(self, data, timeout):
-        timeout_msec = int(timeout * 1000)
+        timeout_msec = int(timeout * 1000 * 2)
         try:
             return self.chipset.in_comm_rf(data, timeout_msec)
         except CommunicationError as error:
             log.debug(error)
             if error == "RECEIVE_TIMEOUT_ERROR":
                 raise TimeoutError
-            else: raise TransmissionError
+            raise TransmissionError
 
-    @trace
     def send_rsp_recv_cmd(self, data, timeout):
         timeout_msec = int(timeout * 1000)
         try:
             data = self.chipset.tg_comm_rf(
                 guard_time=500, recv_timeout=timeout_msec, transmit_data=data)
-            return data[7:]
+            return data[7:] if data else None
         except CommunicationError as error:
             log.debug(error)
+            if error == "RF_OFF_ERROR":
+                return None
             if error == "RECEIVE_TIMEOUT_ERROR":
                 raise TimeoutError
-            elif error == "RF_OFF_ERROR":
-                return None
-            else: raise TransmissionError
+            raise TransmissionError
 
     def set_communication_mode(self, brm, **kwargs):
         if self.exchange == self.send_rsp_recv_cmd:
@@ -542,9 +576,8 @@ class Device(nfc.dev.Device):
             self.chipset.in_set_protocol(settings)
 
 def init(transport):
-    chipset = Chipset(transport)
-    device = Device(chipset)
-    device._vendor = transport.vendor_name
-    device._product = transport.product_name
+    device = Device(transport)
+    device._vendor_name = transport.manufacturer_name
+    device._device_name = transport.product_name
     return device
 

@@ -45,23 +45,16 @@ class ContactlessFrontend(nfc.clf.ContactlessFrontend):
     def __init__(self, packets):
         self.packets = packet_generator(packets)
 
-    def listen(self, targets, timeout):
-        print targets
-        for target in targets:
-            if type(target) == nfc.clf.TTA:
-                target = nfc.clf.TTA(106, *target[1:])
-                return target, bytearray.fromhex(self.packets.next())
-            elif type(target) == nfc.clf.TTF:
-                if target.br == 212:
-                    atr_req = bytearray.fromhex(self.packets.next())
-                    atr_req[3:11] = target.idm
-                    return target, atr_req
-                elif target.br == 424:
-                    pass
-                else:
-                    assert False, "invalid bit rate for nfcf"
-            else:
-                assert False, "invalid target type"
+    @property
+    def capabilities(self):
+        return {}
+    
+    def listen(self, target, timeout):
+        print target
+        if type(target) is nfc.clf.DEP:
+            if target.br is None:
+                target.br = 106
+            return target, bytearray.fromhex(self.packets.next())
     
     def sense(self, targets):
         for target in targets:

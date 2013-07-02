@@ -24,3 +24,7 @@ import logging
 log = logging.getLogger(__name__)
 
 from tag import activate, emulate
+
+class Error: pass
+class AccessError(Error): pass
+class CapacityError(Error): pass

@@ -31,7 +31,7 @@ import nfc.clf
 
 class DataExchangeProtocol(object):
     def __init__(self, clf):
-        self.active = False
+        self.exchange = lambda self, send_data, timeout: None
         self.count = Counters()
         self.clf = clf
         self.gbi = ""
@@ -78,6 +78,13 @@ class Initiator(DataExchangeProtocol):
 
     def activate(self, timeout=None, brs=(0, 1, 2), gbi='', did=None, lr=3):
         """Activate DEP communication as Initiator."""
+
+        if self.clf.capabilities.get('NFC-DEP') is True:
+            log.debug("using hardware DEP implementation")
+            gbt = self.clf.sense(targets=None, gbi=gbi)
+            self.exchange = self._hw_dep_exchange
+            return gbt
+            
         # brs: bit rate selection, an integer or list of integers, 0 => 106A
         if not timeout: timeout = 4096 * 2**12 / 13.56E6
         if type(brs) == int: brs = (brs,)
@@ -143,26 +150,36 @@ class Initiator(DataExchangeProtocol):
                      .format(self.brm))
 
         self.pni = 0
-        self.active = True
+        self.exchange = self._sw_dep_exchange
         return atr_res.gb
 
     def deactivate(self, release=True):
-        REQ, RES = (RLS_REQ, RLS_RES) if release else (DSL_REQ, DSL_RES)
-        req = REQ(self.did)
-        try:
-            res = self.send_req_recv_res(req, 0.1)
-        except nfc.clf.DigitalProtocolError:
-            pass
-        else:
-            if type(res) != RES:
-                raise nfc.clf.ProtocolError("Table-86")
-            if res.did != req.did:
-                raise nfc.clf.ProtocolError("14.7.2.2")
-        self.active = False
-        log.info(self.stat)
+        if self.exchange == self._sw_dep_exchange:
+            REQ, RES = (RLS_REQ, RLS_RES) if release else (DSL_REQ, DSL_RES)
+            req = REQ(self.did)
+            try:
+                res = self.send_req_recv_res(req, 0.1)
+            except nfc.clf.DigitalProtocolError:
+                pass
+            else:
+                if type(res) != RES:
+                    raise nfc.clf.ProtocolError("Table-86")
+                if res.did != req.did:
+                    raise nfc.clf.ProtocolError("14.7.2.2")
+            log.info(self.stat)
+        self.exchange = lambda self, send_data, timeout: None
         return True
-    
-    def exchange(self, send_data, timeout):
+
+    def _hw_dep_exchange(self, send_data, timeout):
+        log.debug("dep raw >> " + str(send_data).encode("hex"))
+        send_data = bytearray(send_data)
+        recv_data = self.clf.exchange(send_data, timeout)
+        if recv_data is not None:
+            recv_data = str(recv_data)
+            log.debug("dep raw << " + recv_data.encode("hex"))
+            return recv_data
+        
+    def _sw_dep_exchange(self, send_data, timeout):
         def INF(pni, data, more, did, nad):
             pdu_type = (DEP_REQ.LastInformation, DEP_REQ.MoreInformation)[more]
             pfb = DEP_REQ.PFB(pdu_type, nad is not None, did is not None, pni)
@@ -180,9 +197,6 @@ class Initiator(DataExchangeProtocol):
             pfb = DEP_REQ.PFB(pdu_type, nad is not None, did is not None, 0)
             return DEP_REQ(pfb, did, nad, data=bytearray([rtox]))
 
-        if not self.active:
-            return None
-        
         log.debug("dep raw >> " + str(send_data).encode("hex"))
         send_data = bytearray(send_data)
         
@@ -342,24 +356,21 @@ class Target(DataExchangeProtocol):
         tta = {'cfg':ba('010040'),'uid':ba('08')+urandom(3)}
         ttf = {'idm':ba("01FE")+urandom(6),'pmm':ba("FF"*8),'sys':ba('FFFF')}
         
-        if brs is None:
-            targets = [nfc.clf.TTA(br=None, **tta),
-                       nfc.clf.TTF(br=None, **ttf)]
-        elif brs == 0:
-            targets = [nfc.clf.TTA(br=106, **tta)]
-        elif brs == 1:
-            targets = [nfc.clf.TTF(br=212, **ttf)]
-        elif brs == 2:
-            targets = [nfc.clf.TTF(br=424, **ttf)]
-            
         deadline = time() + timeout
-        activated = self.clf.listen(targets, timeout)
+
+        target = nfc.clf.DEP(br={0: 106, 1: 212, 2: 424}.get(brs), gb=gbt)
+        activated = self.clf.listen(target, timeout)
         if not activated: return None
 
         target, req_frame = activated
         self.brm = {106: '106A', 212: '212F', 424: '424F'}[target.br]
         log.debug("communication as p2p target started in {0}"
                   .format(self.brm))
+
+        if self.clf.capabilities.get('NFC-DEP') is True:
+            self.exchange = self._hw_dep_exchange
+            self.req = req_frame
+            return target.gb
         
         req = self.decode_frame(req_frame)
         while type(req) != ATR_REQ or len(req) > 64:
@@ -394,7 +405,7 @@ class Target(DataExchangeProtocol):
                       .format(self.brm))
 
         if type(req) == DEP_REQ and req.did == self.did:
-            self.active = True
+            self.exchange = self._sw_dep_exchange
             self.rwt = 4096/13.56E6 * pow(2, wt)
             self.pni = 0
             self.req = req
@@ -405,10 +416,26 @@ class Target(DataExchangeProtocol):
             self.send_res_recv_req(RLS_RES(self.did), 0)
     
     def deactivate(self):
-        self.active = False
-        log.info(self.stat)
+        if self.exchange == self._sw_dep_exchange:
+            log.info(self.stat)
+        self.exchange = lambda self, send_data, timeout: None
 
-    def exchange(self, send_data, timeout):
+    def _hw_dep_exchange(self, send_data, timeout):
+        if self.req is not None:
+            # first packet is received in activate()
+            assert send_data is None, "send_data must be None on first call"
+            recv_data = self.req; self.req = None
+        else:
+            log.debug("dep raw >> " + str(send_data).encode("hex"))
+            send_data = bytearray(send_data)
+            recv_data = self.clf.exchange(send_data, timeout)
+
+        if recv_data is not None:
+            recv_data = str(recv_data)
+            log.debug("dep raw << " + recv_data.encode("hex"))
+            return recv_data
+
+    def _sw_dep_exchange(self, send_data, timeout):
         def INF(pni, data, more, did, nad):
             pdu_type = (DEP_RES.LastInformation, DEP_RES.MoreInformation)[more]
             pfb = DEP_RES.PFB(pdu_type, nad is not None, did is not None, pni)
@@ -419,16 +446,13 @@ class Target(DataExchangeProtocol):
             pfb = DEP_RES.PFB(pdu_type, nad is not None, did is not None, pni)
             return DEP_RES(pfb, did, nad, data=None)
 
-        if not self.active:
-            return None
-        
         if send_data is not None and len(send_data) == 0:
             raise ValueError("send_data must not be empty")
 
         deadline = time() + timeout
         
         if self.req is not None:
-            # first packet is rcvd in activate
+            # first packet is received in activate()
             assert send_data is None, "send_data must be None on first call"
             req = self.req; self.req = None
         else:

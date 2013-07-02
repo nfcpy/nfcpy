@@ -23,6 +23,7 @@
 import logging
 log = logging.getLogger(__name__)
 
+import nfc.tag
 import nfc.clf
 import nfc.ndef
 
@@ -55,22 +56,22 @@ class NDEF(object):
             except Type4TagError: pass
             else: break
         else:
-            raise RuntimeError("ndef application file not found")
+            raise Exception("ndef application file not found")
             
         try: tag.select_file(0, 0, capability_container)
         except Type4TagError:
-            raise RuntimeError("capability container not found")
+            raise Exception("capability container not found")
 
         self._cc = tag.read_binary(offset=0, count=15)
         log.debug("CC = {0} ({1} bytes)".format(
                 str(self._cc).encode("hex"), len(self._cc)))
 
         if self._cc[0] == 0 and self._cc[1] < 15:
-            raise RuntimeError("capability container length below 15")
+            raise Exception("capability container length below 15")
         if not self._cc[2]>>4 in (1, 2):
-            raise RuntimeError("unsupported version " + self.version)
+            raise Exception("unsupported version " + self.version)
         if not self._cc[7] == 4 and self._cc[8] == 6:
-            raise RuntimeError("no ndef file control tlv")
+            raise Exception("no ndef file control tlv")
 
         self._vmajor = self._cc[2] >> 4
         self._vminor = self._cc[2] & 0x0F
@@ -93,7 +94,7 @@ class NDEF(object):
         p2 = 0 if self._vmajor == 1 else 12
         try: tag.select_file(0, p2, ndef_file_id)
         except Type4TagError:
-            raise RuntimeError("ndef file not found")
+            raise Exception("ndef file not found")
 
         self.changed # force initial read
 
@@ -147,10 +148,10 @@ class NDEF(object):
     @message.setter
     def message(self, msg):
         if not self.writeable:
-            raise IOError("tag writing disabled")
+            raise nfc.tag.AccessError
         data = bytearray([0, 0]) + bytearray(str(msg))
         if len(data) > 2 + self.capacity:
-            raise IOError("ndef message exceeds capacity")
+            raise nfc.tag.CapacityError
         for offset in range(0, len(data), self._max_lc):
             part = slice(offset, offset + min(self._max_lc, len(data)-offset))
             self.tag.update_binary(offset, data[part])
@@ -161,14 +162,20 @@ class Type4Tag(object):
     type = "Type4Tag"
 
     def __init__(self, clf, target):
+        log.debug("init {0}".format(target))
         self.clf = clf
-        self.ats = self.clf.exchange('\xE0\x80', timeout=0.03)
         self.atq = target.cfg[0] << 8 | target.cfg[1]
         self.sak = target.cfg[2]
         self.uid = target.uid
-        try: self.miu = (16,24,32,40,48,64,86,128)[self.ats[1] & 0x07]
-        except IndexError: self.miu = 256
-        self.pni = 0
+        self.ats = target.ats
+        if self.ats is None:
+            self.ats = self.clf.exchange('\xE0\x80', timeout=0.03)
+        try: self.miu = (16,24,32,40,48,64,86,128,256)[self.ats[1] & 0x0F]
+        except IndexError:
+            log.warning("FSCI with RFU value in Type 4A Answer To Select")
+            self.miu = 32
+        if self.clf.capabilities.get('ISO-DEP') is not True:
+            self.pni = 0
         self.ndef = None
         try:
             self.ndef = NDEF(self)
@@ -176,12 +183,14 @@ class Type4Tag(object):
             log.error("while reading ndef: {0!r}".format(error))
 
     def __str__(self):
-        return "Type4Tag ATQ={0:04x} SAK={1:02x} UID={2}, ATS={3}".format(
-            self.atq, self.sak, str(self.uid).encode("hex"),
-            str(self.ats).encode("hex"))
+        hx = lambda x: str(x) if x is None else str(x).encode("hex")
+        return "Type4Tag ATQ={0:04x} SAK={1:02x} UID={2} ATS={3}".format(
+            self.atq, self.sak, hx(self.uid), hx(self.ats))
 
-    def transceive(self, command):
-        timeout = 0.5
+    def transceive(self, command, timeout=0.5):
+        if self.clf.capabilities.get('ISO-DEP') is True:
+            return self.clf.exchange(command, timeout)
+        
         for offset in range(0, len(command), self.miu):
             more = len(command) - offset > self.miu
             pfb = (0x02 if not more else 0x12) | self.pni

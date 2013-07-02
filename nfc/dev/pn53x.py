@@ -28,11 +28,23 @@ log = logging.getLogger(__name__)
 
 import os
 import time
-import sys
-from array import array
-import nfc.dev
+import errno
 
-pn53x_cmd = {
+import nfc.dev
+from nfc.clf import TTA, TTB, TTF
+from nfc.clf import TimeoutError, TransmissionError, ProtocolError
+
+TIMEOUT_TABLE = (
+    0.0, 0.0001, 0.0002, 0.0004, 0.0008, 0.0016, 0.0032, 0.0064, 0.0128,
+    0.0256, 0.0512, 0.1024, 0.2048, 0.4096, 0.8192, 1.64, 3.28)
+
+def timeout_to_index(timeout):
+    for index in range(len(TIMEOUT_TABLE)):
+        if TIMEOUT_TABLE[index] >= timeout:
+            return (index, TIMEOUT_TABLE[index])
+    else: return (len(TIMEOUT_TABLE)-1, TIMEOUT_TABLE[-1])
+
+PN53X_CMD = {
     0x00: "Diagnose",
     0x02: "GetFirmwareVersion",
     0x04: "GetGeneralStatus",
@@ -66,7 +78,7 @@ pn53x_cmd = {
     0x8A: "TgGetTargetStatus",
     }
 
-pn53x_err = {
+PN53X_ERR = {
     0x01: "time out, the target has not answered",
     0x02: "checksum error during rf communication",
     0x03: "parity error during rf communication",
@@ -94,7 +106,7 @@ pn53x_err = {
 
 class CommandError(IOError):
     def __init__(self, errno):
-        strerror = pn53x_err.get(errno, "PN53x error 0x{0:02x}".format(errno))
+        strerror = PN53X_ERR.get(errno, "PN53x error 0x{0:02x}".format(errno))
         super(CommandError, self).__init__(errno, strerror)
 
 class FrameError(IOError):
@@ -104,25 +116,42 @@ class FrameError(IOError):
 class NoResponse(IOError):
     pass
 
-class pn53x(object):
+class Chipset(object):
     SOF = bytearray('\x00\x00\xFF')
     ACK = bytearray('\x00\x00\xFF\x00\xFF\x00')
 
-    def __init__(self, bus):
-        self.bus = bus
+    def __init__(self, transport):
+        self.transport = transport
+        
+        # write ack to perform a soft reset
+        # raises IOError(EACCES) if we're second
+        self.transport.write(Chipset.ACK)
+        
         ic, ver, rev, support = self.get_firmware_version()
         self.ic = "PN5{0:02x}".format(ic)
         self.fw = "{0}.{1}".format(ver, rev)
         log.debug("chipset is a {0} version {1}".format(self.ic, self.fw))
 
+        if self.ic == 'PN531':
+            self.set_parameters = self.pn531_set_parameters
+            self.max_packet_data_size = 254
+        elif self.ic == 'PN532':
+            self.set_parameters = self.pn532_set_parameters
+            self.max_packet_data_size = 264
+        elif self.ic == 'PN533':
+            self.set_parameters = self.pn533_set_parameters
+            self.max_packet_data_size = 264
+            
     def close(self):
-        self.bus.close()
-        self.bus = None
+        self.transport.write(Chipset.ACK)
+        self.transport.close()
+        self.transport = None
 
     def command(self, cmd_code, cmd_data=None, timeout=100):
-        """Send a chip command. Returns a byte array with the chip response.
-        """
-        log.debug(pn53x_cmd.get(cmd_code, "PN53x 0x{0:02X}".format(cmd_code)))
+        """Send a chip command and return the chip response."""
+        cmd_name = PN53X_CMD.get(cmd_code, "PN53x 0x{0:02X}".format(cmd_code))
+        log.debug("{0} called with timeout {1} ms".format(cmd_name, timeout))
+        
         frame = bytearray([0, 0, 255])
         LEN = 2 + len(cmd_data) if cmd_data is not None else 2
         if LEN < 256:
@@ -136,16 +165,18 @@ class pn53x(object):
             frame += bytearray(cmd_data)
         frame += bytearray([(256 - sum(frame[-LEN:])) % 256, 0])
         
-        self.bus.write(frame)
-
-        frame = self.bus.read(timeout=100)
+        self.transport.write(frame)
+        frame = self.transport.read(timeout=100)
         
-        if frame is None: raise FrameError("no response from pn53x")
-        if frame[0:3] != pn53x.SOF: raise FrameError("invalid start of frame")
-        if frame != pn53x.ACK: log.warning("missing ack frame from pn53x")
+        if frame is None:
+            raise FrameError("no response from pn53x")
+        if frame[0:3] != Chipset.SOF:
+            raise FrameError("invalid start of frame")
+        if frame != Chipset.ACK:
+            log.warning("missing ack frame from pn53x")
 
-        while frame == pn53x.ACK:
-            frame = self.bus.read(timeout)
+        while frame == Chipset.ACK:
+            frame = self.transport.read(timeout)
             if frame is None:
                 raise NoResponse("no response from pn53x")
 
@@ -200,12 +231,35 @@ class pn53x(object):
             raise CommandError(data[0])
         return data[1:]
 
+    def pn531_set_parameters(self, use_nad=False, use_did=False,
+                             auto_atr_res=True, use_irq=False,
+                             auto_rats=True):
+        flags = (int(use_nad) | int(use_did)<<1 | int(auto_atr_res)<<2 |
+                 int(use_irq)<<3 | int(auto_rats)<<4)
+        return self.command(0x12, chr(flags))
+        
+    def pn532_set_parameters(self, use_nad=False, use_did=False,
+                             auto_atr_res=True, use_irq=False,
+                             auto_rats=True, iso_14443_picc=True,
+                             short_host_frame=False):
+        flags = (int(use_nad) | int(use_did)<<1 | int(auto_atr_res)<<2 |
+                 int(use_irq)<<3 | int(auto_rats)<<4, int(iso_14443_picc)<<5,
+                 int(short_host_frame)<<6)
+        return self.command(0x12, chr(flags))
+        
+    def pn533_set_parameters(self, use_nad=False, use_did=False,
+                             auto_atr_res=True, tda_powered=False,
+                             auto_rats=True, secure=False):
+        flags = (int(use_nad) | int(use_did)<<1 | int(auto_atr_res)<<2 |
+                 int(tda_powered)<<3 | int(auto_rats)<<4 | int(secure)<<5)
+        return self.command(0x12, chr(flags))
+        
     def rf_configuration(self, cfg_item, cfg_data):
         return self.command(0x32, bytearray([cfg_item]) + bytearray(cfg_data))
 
-    def in_list_passive_target(self, br_ty, initiator_data):
-        br_ty = ("106A", "212F", "424F", "106B", "106J").index(br_ty)
-        cmd_data = chr(1) + chr(br_ty) + initiator_data
+    def in_list_passive_target(self, brm, initiator_data):
+        brm = ("106A", "212F", "424F", "106B", "106J").index(brm)
+        cmd_data = chr(1) + chr(brm) + initiator_data
         rsp_data = self.command(0x4A, cmd_data, timeout=1000)
         return rsp_data[2:] if rsp_data[0] == 1 else None
             
@@ -296,124 +350,134 @@ class pn53x(object):
         return status
 
 class Device(nfc.dev.Device):
-    def __init__(self, dev):
-        self.dev = dev
-        self.miu = 251
+    def __init__(self, transport):
+        self.chipset = Chipset(transport)
+        self._vendor_name = "NXP"
+        self._device_name = self.chipset.ic
+        if self.chipset.ic == "PN533":
+            # PN533 bug (found with SCL3711): usb manufacturer and product
+            # strings disappear after first use, guess memory corruption; also
+            # happens when read_register with more than 16 addresses.
+            eeprom = bytearray()
+            for addr in range(0xA000, 0xA100, 16):
+                eeprom += self.chipset.read_register(range(addr, addr+16))
+            index = 0
+            while index < len(eeprom) and eeprom[index] != 0xFF:
+                tlv_tag, tlv_len = eeprom[index], eeprom[index+1]
+                tlv_data = eeprom[index+2:index+2+tlv_len]
+                if tlv_tag == 3:
+                    self._device_name = tlv_data[2:].decode("utf-16")
+                if tlv_tag == 4:
+                    self._vendor_name = tlv_data[2:].decode("utf-16")
+                index += 2 + tlv_len
+        else:
+            device._vendor_name = transport.manufacturer_name
+            device._device_name = transport.product_name
 
-        if self.dev.ic == "PN533":
-            self._rwt = 8
-            self._wtx = 1
+        RWT_WTX = {'PN531': (14, 7), "PN532": (14, 7), "PN533": (8, 1)}
+        rwt, wtx = RWT_WTX[self.chipset.ic]
 
-        if self.dev.ic == "PN532":
-            self._rwt = 14
-            self._wtx = 7
-
-        if self.dev.ic == "PN531":
-            self._rwt = 14
-            self._wtx = 7
-
-        # set ATR_RES timeout: 409.6 ms, Thru timeout: 204.8 ms)
+        # set ATR_RES timeout: 102.4 ms, non-DEP: 51.2 ms)
         atr_res_to = 11 # T = 100 * 2^(x-1) µs
-        non_dep_to = 12 # T = 100 * 2^(x-1) µs
+        non_dep_to = 10 # T = 100 * 2^(x-1) µs
         log.debug("ATR_RES timeout: {0:7.1f} ms".format(0.1*2**(atr_res_to-1)))
         log.debug("non-DEP timeout: {0:7.1f} ms".format(0.1*2**(non_dep_to-1)))
         atr_res_to = chr(atr_res_to); non_dep_to = chr(non_dep_to)
-        self.dev.rf_configuration(0x02, chr(0x0b) + atr_res_to + non_dep_to)
+        self.chipset.rf_configuration(0x02, chr(11) + atr_res_to + non_dep_to)
         
         # retries for ATR_REQ, PSL_REQ, target activation
-        self.dev.rf_configuration(0x05, "\x02\x01\x00")
+        self.chipset.rf_configuration(0x05, "\x02\x01\x00")
 
+        #self.miu = 251
+        
     def close(self):
-        try: self.dev.rf_configuration(0x01, "\x00") # RF off
-        except CommandError: pass
-        self.dev.close()
-    
+        try:
+            self.chipset.rf_configuration(0x01, "\x00") # RF off
+        except CommandError:
+            pass
+        self.chipset.close()
+
+    @property
+    def capabilities(self):
+        return {'ISO-DEP': True, 'NFC-DEP': True}
+
     @property
     def rwt(self):
         return (256 * 16/13.56E6) * 2**self._rwt
 
-    def poll(self, p2p_activation_data=None):
-        for poll in (self.poll_nfca, self.poll_nfcb, self.poll_nfcf):
-            target = poll()
-            if target is not None:
-                if target['type'] is not "DEP":
-                    return target
-                if p2p_activation_data is not None:
-                    return self.poll_dep(p2p_activation_data)
+    def sense(self, targets, gbi=None):
+        if targets is None and gbi is not None:
+            return self.sense_dep(gbi)
+        
+        for tg in targets:
+            if type(tg) == TTA:
+                target = self.sense_a()
+                if (target and
+                    (tg.cfg is None or target.cfg.startswith(tg.cfg)) and
+                    (tg.uid is None or target.uid.startswith(tg.uid))):
+                    break
+            elif type(tg) == TTB:
+                target = self.sense_b()
+                if target:
+                    pass
+            elif type(tg) == TTF:
+                br, sc, rc = tg.br, tg.sys, 0
+                if sc is None: sc, rc = bytearray('\xFF\xFF'), 1
+                target = self.sense_f(br, sc, rc)
+                if (target and
+                    (tg.sys is None or target.sys == tg.sys) and
+                    (tg.idm is None or target.idm.startswith(tg.idm)) and
+                    (tg.pmm is None or target.pmm.startswith(tg.pmm))):
+                    break
+        else:
+            self.chipset.rf_configuration(0x01, "\x00") # RF-OFF
+            return None
 
-    def poll_nfca(self):
+        self.exchange = self.send_cmd_recv_rsp
+        return target
+
+    def sense_a(self):
         log.debug("polling for NFC-A technology")
 
-        rsp = self.dev.in_list_passive_target("106A", "")        
+        rsp = self.chipset.in_list_passive_target("106A", "")        
         if rsp is not None:
-            log.debug("NFC-A target found at 106 kbps")
-            atq = rsp[1] * 256 + rsp[0]
-            sak = rsp[2]
+            log.debug("found NFC-A target @ 106 kbps")
+            cfg = rsp[1::-1] + rsp[2:3]
             uid = rsp[4:4+rsp[3]]
-            platform = ("TT2", "TT4", "DEP", "DEP/TT4")[(sak >> 5) & 0b11]
-            log.debug("NFC-A configured for {0}".format(platform))
-            if sak == 0b00000000:
-                return {"type": "TT2", "ATQ": atq, "SAK": sak, "UID": uid}
-            elif sak & 0b00100000:
-                ats = rsp[4+len(uid):4+len(uid)+1+rsp[4+len(uid)]]
-                log.debug("ATS = " + str(ats).encode("hex"))
-                return {"type": "TT4", "ATQ": atq, "SAK": sak, "UID": uid}
-            elif sak & 0b01000000:
-                return {"type": "DEP", "ATQ": atq, "SAK": sak, "UID": uid}
-        elif self.dev.ic != "PN531":
-            rsp = self.dev.in_list_passive_target("106J", "")
+            ats = rsp[4+rsp[3]:]
+            return TTA(br=106, cfg=cfg, uid=uid, ats=ats)
+        
+        if self.chipset.ic != "PN531":
+            rsp = self.chipset.in_list_passive_target("106J", "")
             if rsp is not None:
-                log.debug("NFC-J tag found at 106 kbps")
-                atq = rsp[1] * 256 + rsp[0]
-                uid = bytearray(rsp[2:])
-                hdr = self.tt1_exchange("\x78\x00\x00" + str(uid))[0:2]
-                if hdr[0] & 0x10 == 0x10:
-                    return {"type": "TT1", "ATQ": atq, "SAK": 0,
-                            "UID": uid, "HDR": hdr}
+                log.debug("found NFC-A TT1 target @ 106 kbps")
+                return TTA(br=106, cfg=rsp[1::-1], uid=rsp[2:])
 
-        # no target found, shut off rf field
-        self.dev.rf_configuration(0x01, "\x00")
-
-    def poll_nfcb(self):
+    def sense_b(self):
         return None
     
-    def poll_nfcf(self):
-        log.debug("polling for NFC-F technology")
+    def sense_f(self, br, sc, rc):
+        poll_cmd = "00{sc[0]:02x}{sc[1]:02x}{rc:02x}03".format(sc=sc, rc=rc)
+        log.debug("poll NFC-F {0}".format(poll_cmd))
+        poll_cmd = bytearray.fromhex(poll_cmd)
 
-        poll_ffff = "\x00\xFF\xFF\x01\x03"
-        poll_12fc = "\x00\x12\xFC\x01\x03"
-
-        for br in ("424F", "212F"):
-            rsp = self.dev.in_list_passive_target(br, poll_ffff)
-            if rsp is None: continue
-
-            if (rsp[2], rsp[3]) == (0x01, 0xFE):
-                return {"type": "DEP"}
-
-            if (rsp[-2], rsp[-1]) != (0x12, 0xFC):
-                tmp_rsp = self.dev.in_list_passive_target(br, poll_12fc)
-                if tmp_rsp is not None: rsp = tmp_rsp
-            
-            idm = bytearray(rsp[2:10])
-            pmm = bytearray(rsp[10:18])
-            sys = bytearray(rsp[18:20])
-            log.debug("NFC-F target found at {0} kbps".format(br[0:3]))
-            return {"type": "TT3", "IDm": idm, "PMm": pmm, "SYS": sys}
-        else:
-            # no target found, shut off rf field
-            self.dev.rf_configuration(0x01, "\x00")
-            
-    def poll_dep(self, general_bytes):
+        rsp = self.chipset.in_list_passive_target(str(br)+'F', poll_cmd)
+        if rsp  and len(rsp) >= 18:
+            if len(rsp) == 18: rsp += "\xff\xff"
+            log.debug("found NFC-F target @ {0} kbps".format(br))
+            return TTF(br, idm=rsp[2:10], pmm=rsp[10:18], sys=rsp[18:20])
+    
+    def sense_dep(self, general_bytes):
         log.debug("polling for a p2p target")
-        self.dev.rf_configuration(0x01, "\x00")
+        self.chipset.rf_configuration(0x01, "\x00")
 
         pollrq = "\x00\xFF\xFF\x00\x03"
         nfcid3 = "\x01\xfe" + os.urandom(8)
 
         for mode, speed in (("active", "424"), ("passive", "424")):
             try:
-                rsp = self.dev.in_jump_for_dep(mode, speed, pollrq,
-                                               nfcid3, general_bytes)
+                rsp = self.chipset.in_jump_for_dep(
+                    mode, speed, pollrq, nfcid3, general_bytes)
                 log.info("activated a p2p target in {0} kbps {1} mode"
                          .format(speed, mode))
                 break
@@ -422,73 +486,101 @@ class Device(nfc.dev.Device):
         else:
             return None
         
-        log.debug("ATR_RES(nfcid3={0}, did={1:02x}, bs={2:02x},"
-                  " br={3:02x}, to={4:02x}, pp={5:02x}, gb={6})"
+        log.debug("ATR_RES(nfcid3={0} did={1:02x} bs={2:02x} "
+                  "br={3:02x} to={4:02x} pp={5:02x} gb={6})"
                   .format(str(rsp[0:10]).encode("hex"),
                           rsp[10], rsp[11], rsp[12], rsp[13],
                           rsp[14], str(rsp[15:]).encode("hex")))
-        return {"type": "DEP", "data": str(rsp[15:])}
-
-    def listen(self, general_bytes, timeout):
-        log.debug("listen: gb={0} timeout={1} ms"
-                  .format(general_bytes.encode("hex"), timeout))
         
-        mifare_params = "\x01\x01\x00\x00\x00\x40" # "\x08\x00\x12\x34\x56\x40"
-        felica_params = "\x01\xFE" + os.urandom(6) + 8*"\x00" + "\xFF\xFF"
-        nfcid3t = felica_params[0:8] + "\x00\x00"
+        self.exchange = self.send_cmd_recv_rsp
+        return rsp[15:]
 
-        return self.dev.tg_init_as_target(
-            "DEP", mifare_params, felica_params, nfcid3t,
-            general_bytes, timeout=timeout)
+    def listen_dep(self, target, timeout):
+        timeout_msec = int(timeout * 1000)
+        log.debug("listen_dep for {0} msec".format(timeout_msec))
         
-    ##
-    ## data exchange protocol
-    ##
-    def dep_exchange(self, data, timeout):
-        for i in range(0, len(data), self.miu)[0:-1]:            
-            self.dev.in_data_exchange(0x41, data[0:self.miu], timeout=100)
-            data = data[self.miu:]
-        status, data_in = self.dev.in_data_exchange(0x01, data, timeout)
-        data = str(data_in)
-        while bool(status & 0x40):
-            status, data_in = self.dev.in_data_exchange(0x01, "", timeout=100)
-            data = data + str(data_in)
-        return data
-
-    def dep_get_data(self, timeout):
-        status, data_in = self.dev.tg_get_data(timeout)
-        data = str(data_in)
-        while status == 0x40:
-            status, data_in = self.dev.tg_get_data(timeout=100)
-            data = data + str(data_in)
-        return data
-    
-    def dep_set_data(self, data, timeout):
-        for i in range(0, len(data), self.miu)[0:-1]:
-            self.dev.tg_set_meta_data(data[0:self.miu])
-            data = data[self.miu:]
-        self.dev.tg_set_data(data, timeout)
+        # nfca_params: SENS_RES + UID + SEL_RES
+        nfca_params = "\x01\x00" + os.urandom(3) + "\x40"
+        nfca_params = bytearray(nfca_params)
         
-    ##
-    ## tag type (1|2|3) command/response exchange
-    ##
-    def tt1_exchange(self, cmd):
-        log.debug("tt1_exchange")
-        rsp = self.dev.in_data_exchange(0x01, cmd, timeout=100)
-        return rsp[1]
+        # nfcf_params: IDM + PMM + SYS
+        nfcf_params = "\x01\xFE" + os.urandom(6) + 8 * "\x00" + "\xFF\xFF"
+        nfcf_params = bytearray(nfcf_params)
+        
+        nfcid3t = nfcf_params[0:8] + "\x00\x00"
 
-    def tt2_exchange(self, cmd):
-        log.debug("tt2_exchange")
-        rsp = self.dev.in_data_exchange(0x01, cmd, timeout=100)
-        return str(rsp[1])
+        self.chipset.set_parameters(auto_atr_res=True)
+        try:
+            data = self.chipset.tg_init_as_target(
+                "DEP", nfca_params, nfcf_params, nfcid3t,
+                target.gb, timeout=timeout_msec)
+        except IOError as error:
+            if error.errno != errno.ETIMEDOUT:
+                log.warning(error)
+            return None
 
-    def tt3_exchange(self, cmd, timeout):
-        log.debug("tt3_exchange")
-        rsp = self.dev.in_communicate_thru(cmd, timeout)
-        return str(rsp)
+        speed = (106, 212, 424)[(data[0]>>4) & 0x07]
+        cmode = ("passive", "active", "passive")[data[0] & 0x03]
+        ttype = ("card", "p2p")[bool(data[0] & 0x04)]
+        log.debug("activated as {0} target in {1} kbps {2} mode"
+                  .format(ttype, speed, cmode))
+        
+        target.br = speed
+        target.gb = data[18:]
 
-    def tt4_exchange(self, cmd):
-        log.debug("tt4_exchange")
-        rsp = self.dev.in_data_exchange(0x01, cmd, timeout=100)
-        return rsp[1]
+        try:
+            status, recv_data = self.chipset.tg_get_data(timeout=1000)
+            while status & 0x40:
+                status, data = self.chipset.tg_get_data(timeout_msec)
+                recv_data += data
+        except CommandError as error:
+            log.warning(error)
+            return None
+        
+        self.exchange = self.send_rsp_recv_cmd
+        return (target, recv_data)
+        
+    def send_cmd_recv_rsp(self, send_data, timeout):
+        non_dep_to, timeout = timeout_to_index(timeout)
+        self.chipset.rf_configuration(0x02, bytearray([11, 11, non_dep_to]))
+        self.chipset.rf_configuration(0x04, bytearray([3]))
+        timeout_msec = 100 + 3 * int(timeout * 1000)
+        miu = self.chipset.max_packet_data_size - 2
 
+        try:
+            for offset in range(0, len(send_data), miu):
+                data = send_data[offset:offset+miu]
+                more = len(send_data) > offset + miu
+                status, data = self.chipset.in_data_exchange(
+                    (more << 6) | 0x01, data, timeout_msec)
+            recv_data = data
+            while status & 0x40:
+                status, data = self.chipset.in_data_exchange(
+                    0x01, '', timeout_msec)
+                recv_data += data
+            return recv_data
+        except CommandError as error:
+            log.warning(error)
+            raise TimeoutError if error.errno == 0x01 else TransmissionError
+
+    def send_rsp_recv_cmd(self, send_data, timeout):
+        timeout_msec = int(timeout * 1000)
+        miu = self.chipset.max_packet_data_size - 2
+        try:
+            offset = 0
+            for offset in range(0, len(send_data), miu)[0:-1]:
+                data = send_data[offset:offset+miu]
+                self.chipset.tg_set_meta_data(data, timeout_msec)
+            self.chipset.tg_set_data(send_data[offset:], timeout_msec)
+            status, recv_data = self.chipset.tg_get_data(timeout_msec)
+            while status & 0x40:
+                status, data = self.chipset.tg_get_data(timeout_msec)
+                recv_data += data
+            return recv_data
+        except CommandError as error:
+            log.debug(error) if error.errno == 0x29 else log.warning(error)
+            if error.errno == 0x29: return None # RF-OFF by Initiator
+            raise TimeoutError if error.errno == 0x01 else TransmissionError
+
+def init(transport):
+    return Device(transport)
