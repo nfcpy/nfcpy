@@ -53,7 +53,7 @@ class USB(object):
             log.error("no python usb library could be loaded")
             return None
         
-        log.info("using pyusb version {0}.x".format(cls.pyusb_version))
+        log.debug("using pyusb version {0}.x".format(cls.pyusb_version))
         
         usb_or_none = re.compile(r'^(usb|)$')
         usb_vid_pid = re.compile(r'^usb(:[0-9a-fA-F]{4})(:[0-9a-fA-F]{4})?$')
