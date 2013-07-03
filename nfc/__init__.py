@@ -19,5 +19,8 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
+import logging
+logging.getLogger(__name__).addHandler(logging.NullHandler())
+logging.getLogger(__name__).setLevel(logging.WARNING)
 
 from clf import ContactlessFrontend

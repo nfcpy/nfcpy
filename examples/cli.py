@@ -20,7 +20,7 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-import logging
+import logging, logging.config
 log = logging.getLogger(__name__)
 
 import os
@@ -52,44 +52,32 @@ class CommandLineInterface(object):
         
         self.options = argument_parser.parse_args()
 
+        logging.getLogger().setLevel(logging.DEBUG)
+
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.ERROR if self.options.quiet else
+                    logging.INFO if self.options.logfile else logging.DEBUG)
+        ch.setFormatter(logging.Formatter('[%(name)s] %(message)s'))
+        logging.getLogger().addHandler(ch)
+
+        if self.options.logfile:
+            fmt = '%(asctime)s %(levelname)-5s [%(name)s] %(message)s'
+            fh = logging.FileHandler(self.options.logfile, "w")
+            fh.setFormatter(logging.Formatter(fmt))
+            fh.setLevel(logging.DEBUG)
+            logging.getLogger().addHandler(fh)
+
+        for module in self.options.debug:
+            log.info("enable debug output for module '{0}'".format(module))
+            logging.getLogger(module).setLevel(logging.DEBUG)
+
+        log.debug(self.options)
+        
         if "test" in self.groups and self.options.test_all:
             self.options.test = []
             for test_name in [m for m in dir(self) if m.startswith("test_")]:
                 self.options.test.append(int(test_name.split('_')[1]))
         
-        logformat = '%(message)s'
-        verbosity = logging.ERROR if self.options.quiet else logging.INFO
-        
-        if self.options.debug:
-            logformat = '%(levelname)-5s [%(name)s] %(message)s'
-            if '' in self.options.debug:
-                verbosity = logging.DEBUG
-        
-        logging.basicConfig(level=verbosity, format=logformat)
-
-        if self.options.debug and 'nfc' in self.options.debug:
-            verbosity = logging.DEBUG
-            
-        if self.options.logfile:
-            logfile_format = \
-                '%(asctime)s %(levelname)-5s [%(name)s] %(message)s'
-            logfile = logging.FileHandler(self.options.logfile, "w")
-            logfile.setFormatter(logging.Formatter(logfile_format))
-            logfile.setLevel(logging.DEBUG)
-            logging.getLogger('').addHandler(logfile)
-
-        nfcpy_path = os.path.dirname(inspect.getfile(nfc))
-        for name in os.listdir(nfcpy_path):
-            if os.path.isdir(os.path.join(nfcpy_path, name)):
-                logging.getLogger("nfc."+name).setLevel(verbosity)
-            elif name.endswith(".py") and name != "__init__.py":
-                logging.getLogger("nfc."+name[:-3]).setLevel(verbosity)
-            
-        if self.options.debug:
-            for module in self.options.debug:
-                log.info("enable debug output for module '{0}'".format(module))
-                logging.getLogger(module).setLevel(logging.DEBUG)
-
     def add_dbg_options(self, argument_parser):
         group = argument_parser.add_argument_group(
             title="Debug Options")
@@ -98,10 +86,11 @@ class CommandLineInterface(object):
             help="do not print anything except errors")
         group.add_argument(
             "-d", metavar="MODULE", dest="debug", action="append",
-            help="print debug messages for MODULE, use '' for all")
+            default=list(),
+            help="enable debug log for MODULE (main, nfc.clf, ...)")
         group.add_argument(
             "-f", dest="logfile", metavar="LOGFILE",
-            help="write log messages to file")
+            help="write debug logs to LOGFILE")
         
     def add_llcp_options(self, argument_parser):
         group = argument_parser.add_argument_group(

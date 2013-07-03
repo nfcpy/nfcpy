@@ -36,7 +36,6 @@ sys.path.insert(1, os.path.split(sys.path[0])[0])
 from cli import CommandLineInterface
 
 import nfc
-import nfc.ndef
 
 tt3_card_map = {
     "\x00\xF0": "FeliCa Lite RC-S965",
