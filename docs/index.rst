@@ -23,8 +23,8 @@ The *nfcpy* module implements NFC Forum specifications for wireless short-range 
 Tutorials
 =========
 
-:doc:`topics/clf`
-    Find and use NFC contactless readers.
+:doc:`topics/get-started`
+    Get started with the nfcpy module and example programs.
 
 :doc:`topics/tag`
     Supported tag types and how to use them.

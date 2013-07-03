@@ -218,6 +218,6 @@ def init(host, port):
     device = Device(host, port)
     import platform
     device._vendor_name = platform.uname()[0]
-    device._device_name = "TCP/IP"
+    device._device_name = "UDP/IP"
     return device
 
