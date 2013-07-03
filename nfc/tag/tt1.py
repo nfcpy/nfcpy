@@ -241,7 +241,9 @@ class Type1Tag(object):
     @property
     def is_present(self):
         """Returns True if the tag is still within communication range."""
-        try: return len(self.transceive("\x78\x00\x00"+self.uid)) == 6
+        try:
+            data = self.transceive("\x78\x00\x00"+self.uid)
+            return data and len(data) == 6
         except nfc.clf.DigitalProtocolError: return False
 
     def transceive(self, data, timeout=0.1):
