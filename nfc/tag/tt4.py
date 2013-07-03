@@ -174,6 +174,8 @@ class Type4Tag(object):
         except IndexError:
             log.warning("FSCI with RFU value in Type 4A Answer To Select")
             self.miu = 32
+        fwi = (self.ats[3] >> 4) if (self.ats[3] >> 4 == 15) else 4
+        self.fwt = 4096 / 13.56E6 * pow(2, fwi)
         if self.clf.capabilities.get('ISO-DEP') is not True:
             self.pni = 0
         self.ndef = None
@@ -187,7 +189,9 @@ class Type4Tag(object):
         return "Type4Tag ATQ={0:04x} SAK={1:02x} UID={2} ATS={3}".format(
             self.atq, self.sak, hx(self.uid), hx(self.ats))
 
-    def transceive(self, command, timeout=0.5):
+    def transceive(self, command, timeout=None):
+        if timeout is None: timeout = self.fwt + 0.01
+        
         if self.clf.capabilities.get('ISO-DEP') is True:
             return self.clf.exchange(command, timeout)
         
