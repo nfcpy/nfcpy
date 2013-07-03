@@ -29,7 +29,7 @@ import nfc.tag
 import nfc.llcp
 
 import time
-import collections
+import threading
 
 class TTA(object):
     """Represents a Type A target. The integer *br* is the
@@ -93,6 +93,7 @@ class ContactlessFrontend(object):
     *path* is interpeted."""
     
     def __init__(self, path=None):
+        self.lock = threading.Lock()
         self.open(path)
         
     def open(self, path=None):
@@ -108,23 +109,25 @@ class ContactlessFrontend(object):
         * ``udp[:host[:port]]`` with *host* IP or name and *port* number
 
         :raises `LookupError`: if no available reader device is found.
-        """        
+        """
         if not path: log.info("searching for a usable reader")
         else: log.info("searching for reader with path '{0}'".format(path))
-        
-        self.dev = dev.connect(path)
-        if self.dev is None:
-            msg = "no reader found"
-            msg = " ".join([msg, "at {0}".format(path) if path else ""])
-            log.error(msg)
-            raise LookupError("couldn't find any usable nfc reader")
 
-        log.info("using {0}".format(self.dev))
+        with self.lock:
+            self.dev = dev.connect(path)
+            if self.dev is None:
+                msg = "no reader found"
+                msg = " ".join([msg, "at {0}".format(path) if path else ""])
+                log.error(msg)
+                raise LookupError("couldn't find any usable nfc reader")
+
+            log.info("using {0}".format(self.dev))
 
     def close(self):
         """Close the contacless reader device."""
-        self.dev.close()
-        self.dev = None
+        with self.lock:
+            self.dev.close()
+            self.dev = None
 
     def connect(self, **options):
         """Connect with a contactless target or become connected as a
@@ -264,7 +267,6 @@ class ContactlessFrontend(object):
         True
         
         """
-        
         log.debug("connect({0})".format(options))
         
         rdwr_options = options.get('rdwr')
@@ -370,7 +372,8 @@ class ContactlessFrontend(object):
         .. note:: This is a direct interface to the
            driver and not needed if :meth:`connect` is used.
         """
-        return self.dev.sense(targets, **kwargs)
+        with self.lock:
+            return self.dev.sense(targets, **kwargs)
 
     def listen(self, target, timeout):
         """Listen for *timeout* seconds to become initialized as a
@@ -395,17 +398,18 @@ class ContactlessFrontend(object):
         .. note:: This is a direct interface to the
            driver and not needed if :meth:`connect` is used.
         """
-        log.debug("listen for {0:.3f} sec as target {1}"
-                  .format(timeout, target))
+        with self.lock:
+            log.debug("listen for {0:.3f} sec as target {1}"
+                      .format(timeout, target))
         
-        if type(target) is TTA:
-            return self.dev.listen_tta(target, timeout)
-        if type(target) is TTB:
-            return self.dev.listen_ttb(target, timeout)
-        if type(target) is TTF:
-            return self.dev.listen_ttf(target, timeout)
-        if type(target) is DEP:
-            return self.dev.listen_dep(target, timeout)
+            if type(target) is TTA:
+                return self.dev.listen_tta(target, timeout)
+            if type(target) is TTB:
+                return self.dev.listen_ttb(target, timeout)
+            if type(target) is TTF:
+                return self.dev.listen_ttf(target, timeout)
+            if type(target) is DEP:
+                return self.dev.listen_dep(target, timeout)
 
     def exchange(self, send_data, timeout):
         """Exchange data with an activated target (data is a command
@@ -422,7 +426,8 @@ class ContactlessFrontend(object):
         .. note:: This is a direct interface to the
            driver and not needed if :meth:`connect` is used.
         """
-        return self.dev.exchange(send_data, timeout)
+        with self.lock:
+            return self.dev.exchange(send_data, timeout)
 
     def set_communication_mode(self, brm, **kwargs):
         """Set the hardware communication mode. The effect of calling
@@ -441,7 +446,8 @@ class ContactlessFrontend(object):
         .. note:: This is a direct interface to the
            driver and not needed if :meth:`connect` is used.
         """
-        self.dev.set_communication_mode(brm, **kwargs)
+        with self.lock:
+            self.dev.set_communication_mode(brm, **kwargs)
 
     def __enter__(self):
         return self

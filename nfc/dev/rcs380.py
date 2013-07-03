@@ -26,15 +26,13 @@
 import logging
 log = logging.getLogger(__name__)
 
-from nfc.clf import ProtocolError, TransmissionError, TimeoutError
-from nfc.clf import TTA, TTB, TTF
-import nfc.dev
-
 import os
 import time
 import errno
 import struct
-import threading
+
+import nfc.dev
+import nfc.clf
 
 def trace(func):
     def traced_func(*args, **kwargs):
@@ -131,7 +129,6 @@ class Chipset():
     
     def __init__(self, transport):
         self.transport = transport
-        self.lock = threading.Lock()
         
         # write ack to perform a soft reset
         # raises IOError(EACCES) if we're second
@@ -144,24 +141,20 @@ class Chipset():
         self.switch_rf("off")
 
     def close(self):
-        with self.lock:
-            reset_frame = str(Frame(bytearray.fromhex("D6120000")))
-            self.transport.write(reset_frame)
-            self.transport.read(timeout=100)
-            self.transport.write(Chipset.ACK)
-            self.transport.close()
-            self.transport = None
+        self.switch_rf('off')
+        self.transport.write(Chipset.ACK)
+        self.transport.close()
+        self.transport = None
         
     def send_command(self, cmd_code, cmd_data, timeout):
-        with self.lock:
-            if self.transport is not None:
-                cmd = bytearray([0xD6, cmd_code]) + bytearray(cmd_data)
-                self.transport.write(str(Frame(cmd)))
-                if Frame(self.transport.read(timeout=100)).type == "ack":
-                    rsp = Frame(self.transport.read(timeout)).data
-                    if rsp and rsp[0] == 0xD7 and rsp[1] == cmd_code + 1:
-                        return rsp[2:]
-            else: log.debug("transport closed in send_command")
+        if self.transport is not None:
+            cmd = bytearray([0xD6, cmd_code]) + bytearray(cmd_data)
+            self.transport.write(str(Frame(cmd)))
+            if Frame(self.transport.read(timeout=100)).type == "ack":
+                rsp = Frame(self.transport.read(timeout)).data
+                if rsp and rsp[0] == 0xD7 and rsp[1] == cmd_code + 1:
+                    return rsp[2:]
+        else: log.debug("transport closed in send_command")
                 
     @trace
     def in_set_rf(self, comm_type):
@@ -246,7 +239,13 @@ class Chipset():
             raise CommunicationError(data[3:7])
         
         return data
-        
+
+    @trace
+    def reset_device(self, startup_delay=0):
+        self.send_command(0x12, struct.pack("<H", startup_delay), 100)
+        self.transport.write(Chipset.ACK)
+        time.sleep(float(startup_delay + 500)/1000)
+
     @trace
     def get_firmware_version(self):
         data = self.send_command(0x20, [], 100)
@@ -283,17 +282,17 @@ class Device(nfc.dev.Device):
 
     def sense(self, targets):
         for tg in targets:
-            if type(tg) == TTA:
+            if type(tg) == nfc.clf.TTA:
                 target = self.sense_a()
                 if (target and
                     (tg.cfg is None or target.cfg.startswith(tg.cfg)) and
                     (tg.uid is None or target.uid.startswith(tg.uid))):
                     break
-            elif type(tg) == TTB:
+            elif type(tg) == nfc.clf.TTB:
                 target = self.sense_b()
                 if target:
                     pass
-            elif type(tg) == TTF:
+            elif type(tg) == nfc.clf.TTF:
                 br, sc, rc = tg.br, tg.sys, 0
                 if sc is None: sc, rc = bytearray('\xFF\xFF'), 1
                 target = self.sense_f(br, sc, rc)
@@ -345,13 +344,13 @@ class Device(nfc.dev.Device):
             rid_res = self.chipset.in_comm_rf(rid_cmd, 30)
             if not rid_res[0] & 0xF0 == 0x10:
                 self.chipset.switch_rf("off")
-                raise ProtocolError("8.6.2.1")
+                raise nfc.clf.ProtocolError("8.6.2.1")
             
-            return TTA(br=106, cfg=sens_res, uid=rid_res[2:])
+            return nfc.clf.TTA(br=106, cfg=sens_res, uid=rid_res[2:])
 
         elif sens_res[0] & 0x1F == 0 or sens_res[1] & 0x0F == 0b1100:
             self.chipset.switch_rf("off")
-            raise ProtocolError("4.6.3.3")
+            raise nfc.clf.ProtocolError("4.6.3.3")
         
         #
         # other than type 1 tag platform
@@ -370,7 +369,7 @@ class Device(nfc.dev.Device):
                 uid = uid + sdd_res[1:4]
             else:
                 uid = uid + sdd_res[0:4]
-                return TTA(br=106, cfg=sens_res+sel_res, uid=uid)
+                return nfc.clf.TTA(br=106, cfg=sens_res+sel_res, uid=uid)
 
     def sense_b(self):
         target = None
@@ -416,7 +415,7 @@ class Device(nfc.dev.Device):
         if len(rsp) >= 18 and rsp[0] == len(rsp) and rsp[1] == 1:
             if len(rsp) == 18: rsp += "\xff\xff"
             idm, pmm, sys = rsp[2:10], rsp[10:18], rsp[18:20]
-            return TTF(br=br, idm=idm, pmm=pmm, sys=sys)
+            return nfc.clf.TTF(br=br, idm=idm, pmm=pmm, sys=sys)
             
     def listen_ttf(self, target, timeout):
         assert type(target) == nfc.clf.TTF
@@ -535,8 +534,8 @@ class Device(nfc.dev.Device):
         except CommunicationError as error:
             log.debug(error)
             if error == "RECEIVE_TIMEOUT_ERROR":
-                raise TimeoutError
-            raise TransmissionError
+                raise nfc.clf.TimeoutError
+            raise nfc.clf.TransmissionError
 
     def send_rsp_recv_cmd(self, data, timeout):
         timeout_msec = int(timeout * 1000)
@@ -549,8 +548,8 @@ class Device(nfc.dev.Device):
             if error == "RF_OFF_ERROR":
                 return None
             if error == "RECEIVE_TIMEOUT_ERROR":
-                raise TimeoutError
-            raise TransmissionError
+                raise nfc.clf.TimeoutError
+            raise nfc.clf.TransmissionError
 
     def set_communication_mode(self, brm, **kwargs):
         if self.exchange == self.send_rsp_recv_cmd:
