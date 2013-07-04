@@ -222,10 +222,10 @@ class CommandLineInterface(object):
             
         for device in self.options.device:
             try: clf = nfc.ContactlessFrontend(device)
-            except LookupError: pass
+            except IOError: pass
             else: break
         else:
-            log.info("no contactless frontend found")
+            log.error("no contactless reader found")
             raise SystemExit(1)
 
         if "rdwr" in self.groups:

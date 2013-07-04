@@ -23,13 +23,15 @@
 import logging
 log = logging.getLogger(__name__)
 
-import dev
+import os
+import time
+import errno
+import threading
+
+import nfc.dev
 import nfc.dep
 import nfc.tag
 import nfc.llcp
-
-import time
-import threading
 
 class TTA(object):
     """Represents a Type A target. The integer *br* is the
@@ -108,18 +110,17 @@ class ContactlessFrontend(object):
         * ``tty[:com[:port]]`` with serial *port* number (dec)
         * ``udp[:host[:port]]`` with *host* IP or name and *port* number
 
-        :raises `LookupError`: if no available reader device is found.
+        :raises `IOError(ENODEV)` if no available reader device is found.
         """
         if not path: log.info("searching for a usable reader")
         else: log.info("searching for reader with path '{0}'".format(path))
 
         with self.lock:
-            self.dev = dev.connect(path)
+            self.dev = nfc.dev.connect(path)
             if self.dev is None:
                 msg = "no reader found"
-                msg = " ".join([msg, "at {0}".format(path) if path else ""])
-                log.error(msg)
-                raise LookupError("couldn't find any usable nfc reader")
+                log.error(msg + " at '{0}'".format(path) if path else msg)
+                raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
 
             log.info("using {0}".format(self.dev))
 

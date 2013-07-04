@@ -80,9 +80,9 @@ def dta_pol_p2p(clf, args):
 def main(args):
     for device in args.device:
         try: clf = nfc.ContactlessFrontend(device); break
-        except LookupError: pass
+        except IOerror: pass
     else:
-        log.warning("no contactless reader")
+        log.error("no contactless reader found")
         raise SystemExit(1)
 
 #    connected = clf.connect({'tag': {}})
