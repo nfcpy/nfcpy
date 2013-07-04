@@ -20,8 +20,8 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-import logging, logging.config
-log = logging.getLogger(__name__)
+import logging
+log = logging.getLogger('main')
 
 import os
 import sys
@@ -52,11 +52,10 @@ class CommandLineInterface(object):
         
         self.options = argument_parser.parse_args()
 
-        logging.getLogger().setLevel(logging.DEBUG)
-
         ch = logging.StreamHandler()
-        ch.setLevel(logging.ERROR if self.options.quiet else
-                    logging.INFO if self.options.logfile else logging.DEBUG)
+        lv = logging.ERROR if self.options.quiet else logging.DEBUG
+        lv = logging.INFO if self.options.logfile else lv
+        ch.setLevel(lv)
         ch.setFormatter(logging.Formatter('[%(name)s] %(message)s'))
         logging.getLogger().addHandler(ch)
 
@@ -67,10 +66,12 @@ class CommandLineInterface(object):
             fh.setLevel(logging.DEBUG)
             logging.getLogger().addHandler(fh)
 
+        logging.getLogger().setLevel(logging.NOTSET)
+        logging.getLogger('main').setLevel(logging.INFO)
         for module in self.options.debug:
             log.info("enable debug output for module '{0}'".format(module))
             logging.getLogger(module).setLevel(logging.DEBUG)
-
+        
         log.debug(self.options)
         
         if "test" in self.groups and self.options.test_all:
