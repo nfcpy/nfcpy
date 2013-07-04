@@ -119,11 +119,13 @@ class USB(object):
 
     @property
     def manufacturer_name(self):
-        return self.get_string(100, self.manufacturer_name_id)
+        if self.manufacturer_name_id:
+            return self.get_string(100, self.manufacturer_name_id)
         
     @property
     def product_name(self):
-        return self.get_string(100, self.product_name_id)
+        if self.product_name_id:
+            return self.get_string(100, self.product_name_id)
 
     def _PYUSB0_get_string(self, length, index, langid=-1):
         return self.usb_dev.getString(index, length, langid)
