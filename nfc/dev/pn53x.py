@@ -29,6 +29,7 @@ log = logging.getLogger(__name__)
 import os
 import time
 import errno
+import struct
 
 import nfc.dev
 import nfc.clf
@@ -100,8 +101,8 @@ PN53X_ERR = {
     0x29: "Released by Initiator while operating as Target",
     0x2f: "Deselected by Initiator while operating as Target",
     0x31: "Initiator RF-OFF state detected in passive mode",
-    0x7f: "Invalid command syntax received as error frame",
-    0xff: "no data received from executing chip command",
+    0x7f: "Invalid command syntax - received error frame",
+    0xff: "No data received from executing chip command",
     }
 
 class ChipsetError:
@@ -118,12 +119,13 @@ class Chipset(object):
     ACK = bytearray('\x00\x00\xFF\x00\xFF\x00')
 
     def __init__(self, transport):
+        self.CMD = PN53X_CMD
         self.transport = transport
         
         # write ack to perform a soft reset
         # raises IOError(EACCES) if we're second
         self.transport.write(Chipset.ACK)
-        
+
         ic, ver, rev, support = self.get_firmware_version()
         self.ic = "PN5{0:02x}".format(ic)
         self.fw = "{0}.{1}".format(ver, rev)
@@ -146,7 +148,7 @@ class Chipset(object):
 
     def command(self, cmd_code, cmd_data=None, timeout=100):
         """Send a chip command and return the chip response."""
-        cmd_name = PN53X_CMD.get(cmd_code, "PN53x 0x{0:02X}".format(cmd_code))
+        cmd_name = self.CMD.get(cmd_code, "PN53x 0x{0:02X}".format(cmd_code))
         log.debug("{0} called with timeout {1} ms".format(cmd_name, timeout))
         
         frame = bytearray([0, 0, 255])
@@ -212,8 +214,13 @@ class Chipset(object):
         log.error("frame payload checksum error")
         raise IOError(errno.EIO, os.strerror(errno.EIO))
 
-    def diagnose(self, num_tst, in_param=""):
-        return self.command(0x00, chr(num_tst) + in_param)[1:]
+    def diagnose(self, test, test_data=None):
+        if test == "line":
+            if test_data is None: test_data = "nfcpy"
+            data = self.command(0x00, chr(0) + test_data)
+            if data is None: raise ChipsetError(data)
+            return data[0] == 0 and data[1:] == test_data
+        raise ValueError("unknown diagnose test {0!r}".format(test))
 
     def get_firmware_version(self):
         data = self.command(0x02)
@@ -227,7 +234,7 @@ class Chipset(object):
 
     def read_register(self, addr):
         if type(addr) is int: addr = [addr]
-        data = ''.join([chr(x/256)+chr(x%256) for x in addr])
+        data = ''.join([struct.pack(">H", x) for x in addr])
         data = self.command(0x06, data)
         if data is None or data[0] != 0:
             raise ChipsetError(data)
@@ -293,7 +300,7 @@ class Chipset(object):
             raise ChipsetError(data)
         return data[2:]
     
-    def in_data_exchange(self, data, more, timeout):
+    def in_data_exchange(self, data, timeout, more=False):
         data = self.command(0x40, chr(int(more)<<6 | 0x01) + data, timeout)
         if data is None or data[0] & 0x3f != 0:
             raise ChipsetError(data[0] & 0x3f if data else None)
@@ -346,29 +353,15 @@ class Chipset(object):
             raise ChipsetError(data)
 
 class Device(nfc.dev.Device):
-    def __init__(self, transport):
-        self.chipset = Chipset(transport)
+    def __init__(self, chipset):
+        self.chipset = chipset
+        
+        # perform a communication line test
+        if self.chipset.diagnose("line", "nfcpy") is not True:
+            raise IOError(errno.EIO, os.strerror(errno.EIO))
+        
         self._vendor_name = "NXP"
         self._device_name = self.chipset.ic
-        if self.chipset.ic == "PN533":
-            # PN533 bug (found with SCL3711): usb manufacturer and product
-            # strings disappear after first use, guess memory corruption; also
-            # happens when read_register with more than 16 addresses.
-            eeprom = bytearray()
-            for addr in range(0xA000, 0xA100, 16):
-                eeprom += self.chipset.read_register(range(addr, addr+16))
-            index = 0
-            while index < len(eeprom) and eeprom[index] != 0xFF:
-                tlv_tag, tlv_len = eeprom[index], eeprom[index+1]
-                tlv_data = eeprom[index+2:index+2+tlv_len]
-                if tlv_tag == 3:
-                    self._device_name = tlv_data[2:].decode("utf-16")
-                if tlv_tag == 4:
-                    self._vendor_name = tlv_data[2:].decode("utf-16")
-                index += 2 + tlv_len
-        else:
-            self._vendor_name = transport.manufacturer_name
-            self._device_name = transport.product_name
 
         RWT_WTX = {'PN531': (14, 7), "PN532": (14, 7), "PN533": (8, 1)}
         rwt, wtx = RWT_WTX[self.chipset.ic]
@@ -397,19 +390,19 @@ class Device(nfc.dev.Device):
         
         for tg in targets:
             if type(tg) == nfc.clf.TTA:
-                target = self.sense_a()
+                target = self.sense_tta()
                 if (target and
                     (tg.cfg is None or target.cfg.startswith(tg.cfg)) and
                     (tg.uid is None or target.uid.startswith(tg.uid))):
                     break
             elif type(tg) == nfc.clf.TTB:
-                target = self.sense_b()
+                target = self.sense_ttb()
                 if target:
                     pass
             elif type(tg) == nfc.clf.TTF:
                 br, sc, rc = tg.br, tg.sys, 0
                 if sc is None: sc, rc = bytearray('\xFF\xFF'), 1
-                target = self.sense_f(br, sc, rc)
+                target = self.sense_ttf(br, sc, rc)
                 if (target and
                     (tg.sys is None or target.sys == tg.sys) and
                     (tg.idm is None or target.idm.startswith(tg.idm)) and
@@ -422,7 +415,7 @@ class Device(nfc.dev.Device):
         self.exchange = self.send_cmd_recv_rsp
         return target
 
-    def sense_a(self):
+    def sense_tta(self):
         log.debug("polling for NFC-A technology")
 
         rsp = self.chipset.in_list_passive_target("106A", "")
@@ -439,10 +432,10 @@ class Device(nfc.dev.Device):
                 log.debug("found NFC-A TT1 target @ 106 kbps")
                 return nfc.clf.TTA(br=106, cfg=rsp[1::-1], uid=rsp[2:])
 
-    def sense_b(self):
+    def sense_ttb(self):
         return None
     
-    def sense_f(self, br, sc, rc):
+    def sense_ttf(self, br, sc, rc):
         poll_cmd = "00{sc[0]:02x}{sc[1]:02x}{rc:02x}03".format(sc=sc, rc=rc)
         log.debug("poll NFC-F {0}".format(poll_cmd))
         poll_cmd = bytearray.fromhex(poll_cmd)
@@ -493,7 +486,8 @@ class Device(nfc.dev.Device):
         log.debug("listen_dep for {0} msec".format(timeout_msec))
         
         # nfca_params: SENS_RES + UID + SEL_RES
-        nfca_params = "\x01\x00" + os.urandom(3) + "\x40"
+        # SENS_RES is set to be independent of byte order
+        nfca_params = "\x01\x01" + os.urandom(3) + "\x40"
         nfca_params = bytearray(nfca_params)
         
         # nfcf_params: IDM + PMM + SYS
@@ -517,9 +511,8 @@ class Device(nfc.dev.Device):
 
         speed = (106, 212, 424)[(data[0]>>4) & 0x07]
         cmode = ("passive", "active", "passive")[data[0] & 0x03]
-        ttype = ("card", "p2p")[bool(data[0] & 0x04)]
-        log.debug("activated as {0} target in {1} kbps {2} mode"
-                  .format(ttype, speed, cmode))
+        log.info("activated as target in {0} kbps {1} mode"
+                 .format(speed, cmode))
         
         target.br = speed
         target.gb = data[18:]
@@ -529,7 +522,7 @@ class Device(nfc.dev.Device):
             while more:
                 data, more = self.chipset.tg_get_data(timeout_msec)
                 recv_data += data
-        except ChipsetError as error:
+        except (ChipsetError, IOError) as error:
             log.warning(error)
             return None
         
@@ -548,10 +541,10 @@ class Device(nfc.dev.Device):
             for offset in range(0, len(send_data), miu):
                 data = send_data[offset:offset+miu]
                 more = len(send_data) > offset + miu
-                data, more = self.chipset.in_data_exchange(data, more, msec)
+                data, more = self.chipset.in_data_exchange(data, msec, more)
             recv_data = data
             while more:
-                data, more = self.chipset.in_data_exchange('', False, msec)
+                data, more = self.chipset.in_data_exchange('', msec)
                 recv_data += data
             return recv_data
         except ChipsetError as error:
@@ -562,8 +555,12 @@ class Device(nfc.dev.Device):
                 log.warning(error)
                 raise nfc.clf.TransmissionError
         except IOError as error:
-            log.error(error)
-            return None # Transport broken -> give up
+            if error.errno == errno.ETIMEDOUT:
+                log.debug(error)
+                raise nfc.clf.TimeoutError("send_cmd_recv_rsp")
+            else:
+                log.error(error)
+                raise error # Transport broken -> give up
 
     def send_rsp_recv_cmd(self, send_data, timeout):
         timeout_msec = int(timeout * 1000)
@@ -582,21 +579,44 @@ class Device(nfc.dev.Device):
         except ChipsetError as error:
             if error.errno == 0x29:
                 log.debug(error)
-                return None # RF-OFF detected -> give up
+                return None # RF-OFF detected
             else:
                 log.warning(error)
                 raise nfc.clf.TransmissionError
         except IOError as error:
             if error.errno == errno.ETIMEDOUT:
                 log.debug(error)
-                raise nfc.clf.TimeoutError
+                raise nfc.clf.TimeoutError("send_rsp_recv_cmd")
             else:
                 log.error(error)
-                return None # Transport broken -> give up
+                raise error # Transport broken
 
     @property
     def capabilities(self):
         return {'ISO-DEP': True, 'NFC-DEP': True}
 
 def init(transport):
-    return Device(transport)
+    chipset = Chipset(transport)
+    device = Device(chipset)
+    
+    if chipset.ic == "PN533":
+        # PN533 bug (found with SCL3711): usb manufacturer and product
+        # strings disappear after first use, guess memory corruption; also
+        # happens when read_register with more than 16 addresses.
+        eeprom = bytearray()
+        for addr in range(0xA000, 0xA100, 16):
+            eeprom += chipset.read_register(range(addr, addr+16))
+        index = 0
+        while index < len(eeprom) and eeprom[index] != 0xFF:
+            tlv_tag, tlv_len = eeprom[index], eeprom[index+1]
+            tlv_data = eeprom[index+2:index+2+tlv_len]
+            if tlv_tag == 3:
+                device._device_name = tlv_data[2:].decode("utf-16")
+            if tlv_tag == 4:
+                device._vendor_name = tlv_data[2:].decode("utf-16")
+            index += 2 + tlv_len
+    else:
+        device._vendor_name = transport.manufacturer_name
+        device._device_name = transport.product_name
+
+    return device
