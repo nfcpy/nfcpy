@@ -327,7 +327,11 @@ class ContactlessFrontend(object):
                     (rdwr_options and self._rdwr_connect(rdwr_options)) or
                     (card_options and self._card_connect(card_options))):
                     return True
-        except KeyboardInterrupt:
+        except KeyboardInterrupt as error:
+            log.debug(error)
+            return False
+        except IOError as error:
+            log.error(error)
             return False
 
     def _rdwr_connect(self, options):
