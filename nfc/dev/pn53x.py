@@ -145,7 +145,7 @@ class Chipset(object):
     def command(self, cmd_code, cmd_data=None, timeout=100):
         """Send a chip command and return the chip response."""
         cmd_name = self.CMD.get(cmd_code, "PN53x 0x{0:02X}".format(cmd_code))
-        log.debug("{0} called with timeout {1} ms".format(cmd_name, timeout))
+        log.debug("{0} command with timeout {1} ms".format(cmd_name, timeout))
         
         frame = bytearray([0, 0, 255])
         LEN = 2 + len(cmd_data) if cmd_data is not None else 2
@@ -164,8 +164,8 @@ class Chipset(object):
             self.transport.write(frame)
             frame = self.transport.read(timeout=100)
         except IOError as error:
-            log.error("{0} while waiting for ack".format(error))
-            raise error
+            log.error("timeout while waiting for ack")
+            raise IOError(errno.EIO, os.strerror(errno.EIO))
         
         if frame[0:3] != Chipset.SOF:
             log.error("received invalid start of frame")
@@ -175,7 +175,12 @@ class Chipset(object):
 
         while frame == Chipset.ACK:
             # transport raises IOError if timed out
-            frame = self.transport.read(timeout)
+            try:
+                frame = self.transport.read(timeout)
+            except IOError as error:
+                if error.errno == errno.ETIMEDOUT:
+                    self.transport.write(Chipset.ACK)
+                raise error
 
         if frame[3] == 255 and frame[4] == 255:
             # extended information frame
@@ -371,14 +376,15 @@ class Device(nfc.dev.Device):
         self.chipset.rf_configuration(0x02, chr(11) + atr_res_to + non_dep_to)
         
         # retries for ATR_REQ, PSL_REQ, target activation
+        log.debug("set retries: ATR_REQ=2 PSL_REQ=1 PassiveTarget=3")
         self.chipset.rf_configuration(0x05, "\x02\x01\x03")
 
     def close(self):
         try:
             self.chipset.rf_configuration(0x01, "\x00") # RF off
-        except ChipsetError:
+            self.chipset.close()
+        except (ChipsetError, IOError):
             pass
-        self.chipset.close()
 
     def sense(self, targets, gbi=None):
         if targets is None and gbi is not None:
@@ -457,9 +463,11 @@ class Device(nfc.dev.Device):
                          .format(speed, mode))
                 break
             except ChipsetError as error:
-                if error.errno != 1:
+                if error.errno in (0x01, 0x0A):
+                    return None # timeout
+                else:
                     log.warning(error)
-                    raise nfc.clf.TransmissionError
+                    raise nfc.clf.TransmissionError(str(error))
             except IOError as error:
                 log.error(error)
                 raise error
@@ -492,8 +500,8 @@ class Device(nfc.dev.Device):
         
         nfcid3t = nfcf_params[0:8] + "\x00\x00"
 
-        self.chipset.set_parameters(auto_atr_res=True)
         try:
+            self.chipset.set_parameters(auto_atr_res=True)
             data = self.chipset.tg_init_as_target(
                 "DEP", nfca_params, nfcf_params, nfcid3t,
                 target.gb, timeout=timeout_msec)
