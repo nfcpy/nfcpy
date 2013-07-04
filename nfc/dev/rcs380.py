@@ -283,19 +283,19 @@ class Device(nfc.dev.Device):
     def sense(self, targets):
         for tg in targets:
             if type(tg) == nfc.clf.TTA:
-                target = self.sense_a()
+                target = self.sense_tta()
                 if (target and
                     (tg.cfg is None or target.cfg.startswith(tg.cfg)) and
                     (tg.uid is None or target.uid.startswith(tg.uid))):
                     break
             elif type(tg) == nfc.clf.TTB:
-                target = self.sense_b()
+                target = self.sense_ttb()
                 if target:
                     pass
             elif type(tg) == nfc.clf.TTF:
                 br, sc, rc = tg.br, tg.sys, 0
                 if sc is None: sc, rc = bytearray('\xFF\xFF'), 1
-                target = self.sense_f(br, sc, rc)
+                target = self.sense_ttf(br, sc, rc)
                 if (target and
                     (tg.sys is None or target.sys == tg.sys) and
                     (tg.idm is None or target.idm.startswith(tg.idm)) and
@@ -307,10 +307,10 @@ class Device(nfc.dev.Device):
         self.exchange = self.send_cmd_recv_rsp
         return target
 
-    def sense_a(self):
+    def sense_tta(self):
         target = None
         try:
-            target = self._sense_a()
+            target = self._sense_tta()
         except CommunicationError as error:
             if error != "RECEIVE_TIMEOUT_ERROR":
                 log.debug(error)
@@ -318,7 +318,7 @@ class Device(nfc.dev.Device):
             self.chipset.switch_rf("off")
         return target
 
-    def _sense_a(self):
+    def _sense_tta(self):
         log.debug("polling for NFC-A technology")
         self.chipset.switch_rf("off")
         
@@ -371,10 +371,10 @@ class Device(nfc.dev.Device):
                 uid = uid + sdd_res[0:4]
                 return nfc.clf.TTA(br=106, cfg=sens_res+sel_res, uid=uid)
 
-    def sense_b(self):
+    def sense_ttb(self):
         target = None
         try:
-            target = self._sense_b()
+            target = self._sense_ttb()
         except CommunicationError as error:
             if error != "RECEIVE_TIMEOUT_ERROR":
                 log.debug(error)
@@ -382,7 +382,7 @@ class Device(nfc.dev.Device):
             self.chipset.switch_rf("off")
         return target
 
-    def _sense_b(self):
+    def _sense_ttb(self):
         log.debug("polling for NFC-B technology")
         self.chipset.in_set_rf("106B")
         p = bytearray.fromhex("0014010102010300040005000600070808000901"+
@@ -390,10 +390,10 @@ class Device(nfc.dev.Device):
         self.chipset.in_set_protocol(p)        
         rsp = self.chipset.in_comm_rf("\x05\x00\x00", 30)
 
-    def sense_f(self, br, sc, rc):
+    def sense_ttf(self, br, sc, rc):
         target = None
         try:
-            target = self._sense_f(br, sc, rc)
+            target = self._sense_ttf(br, sc, rc)
         except CommunicationError as error:
             if error != "RECEIVE_TIMEOUT_ERROR":
                 log.debug(error)
@@ -401,7 +401,7 @@ class Device(nfc.dev.Device):
             self.chipset.switch_rf("off")
         return target
     
-    def _sense_f(self, br, sc, rc):
+    def _sense_ttf(self, br, sc, rc):
         # poll felica (bit rate 'br', system code 'sc', request code 'rc')
         poll_cmd = "0600{sc[0]:02x}{sc[1]:02x}{rc:02x}03".format(sc=sc, rc=rc)
         log.debug("poll NFC-F {0}".format(poll_cmd))
