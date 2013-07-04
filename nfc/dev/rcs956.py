@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2009-2011 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2009-2013 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -20,16 +20,15 @@
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
 #
-# rcs956.py - common stuff for Sony RC-S956 based NFC readers
+# Device driver for Sony RC-S330/360/370 contactless reader
 #
-
 import logging
 log = logging.getLogger(__name__)
 
 import time
 import struct
-import pn53x
 
+import pn53x
 import nfc.clf
 
 class ChipsetError(pn53x.ChipsetError):
@@ -106,10 +105,16 @@ class Device(pn53x.Device):
         return super(Device, self).dep_set_data(data, timeout)
 
 def init(transport):
+    # write ack to perform a soft reset
+    # raises IOError(EACCES) if we're second
+    transport.write(Chipset.ACK)
+    
     chipset = Chipset(transport)
     device = Device(chipset)
+    
     device._vendor_name = transport.manufacturer_name
     device._device_name = transport.product_name
     if device._device_name is None:
         device._device_name = "RC-S330"
+    
     return device
