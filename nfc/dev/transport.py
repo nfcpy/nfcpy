@@ -142,20 +142,38 @@ class USB(object):
             self.usb_dev.claimInterface(0)
         except self.usb.USBError:
             raise IOError("unusable device")
-        intf = dev.configurations[0].interfaces[0]
-        self.usb_out = intf[0].endpoints[0].address
-        self.usb_inp = intf[0].endpoints[1].address
+        self.usb_dev.reset()
+        interface = dev.configurations[0].interfaces[0]
+        endpoints = interface[0].endpoints
+        bulk_inp = lambda ep: (\
+            (ep.type == self.usb.ENDPOINT_TYPE_BULK) and
+            (ep.address & self.usb.ENDPOINT_DIR_MASK == self.usb.ENDPOINT_IN))
+        bulk_out = lambda ep: (\
+            (ep.type == self.usb.ENDPOINT_TYPE_BULK) and
+            (ep.address & self.usb.ENDPOINT_DIR_MASK == self.usb.ENDPOINT_OUT))
+        self.usb_out = [ep for ep in endpoints if bulk_out(ep)].pop().address
+        self.usb_inp = [ep for ep in endpoints if bulk_inp(ep)].pop().address
         self.manufacturer_name_id = dev.iManufacturer
         self.product_name_id = dev.iProduct
     
     def _PYUSB1_open(self, bus_id, dev_id):
         self.usb_dev = self.usb_core.find(bus=bus_id, address=dev_id)
         self.usb_dev.set_configuration()
-        intf = self.usb_util.find_descriptor(self.usb_dev[0])
-        self.usb_out = intf[0]
-        self.usb_inp = intf[1]
+        interface = self.usb_util.find_descriptor(self.usb_dev[0])
+        bulk_inp = lambda ep: (\
+            (self.usb_util.endpoint_type(ep.bmAttributes) ==
+             self.usb_util.ENDPOINT_TYPE_BULK) and
+            (self.usb_util.endpoint_direction(ep.bEndpointAddress) ==
+             self.usb_util.ENDPOINT_IN))
+        bulk_out = lambda ep: (\
+            (self.usb_util.endpoint_type(ep.bmAttributes) ==
+             self.usb_util.ENDPOINT_TYPE_BULK) and
+            (self.usb_util.endpoint_direction(ep.bEndpointAddress) ==
+             self.usb_util.ENDPOINT_OUT))
+        self.usb_out = [ep for ep in interface if bulk_out(ep)].pop()
+        self.usb_inp = [ep for ep in interface if bulk_inp(ep)].pop()
         try:
-            # claim interface
+            # implicitely claim interface
             self.usb_out.write('')
         except self.usb_core.USBError:
             raise IOError(errno.EACCES, os.strerror(errno.EACCES))
@@ -166,12 +184,12 @@ class USB(object):
         if self.usb_inp is not None:
             try:
                 frame = self.usb_dev.bulkRead(self.usb_inp, 300, timeout)
-            except self.usb.USBError as e:
-                if e.message == "Connection timed out":
+            except self.usb.USBError as error:
+                if error.message == "Connection timed out":
                     ETIMEDOUT = errno.ETIMEDOUT
                     raise IOError(ETIMEDOUT, os.strerror(ETIMEDOUT))
                 else:
-                    log.error("{0!r}".format(e))
+                    log.error("{0!r}".format(error))
                     raise IOError(errno.EIO, os.strerror(errno.EIO))
             else:
                 frame = bytearray(frame)
@@ -182,10 +200,10 @@ class USB(object):
         if self.usb_inp is not None:
             try:
                 frame = self.usb_inp.read(300, timeout)
-            except self.usb_core.USBError as e:
-                if e.errno != errno.ETIMEDOUT:
-                    log.error("{0!r}".format(e))
-                raise IOError(e.errno, e.strerror)
+            except self.usb_core.USBError as error:
+                if error.errno != errno.ETIMEDOUT:
+                    log.error("{0!r}".format(error))
+                raise error
             else:
                 frame = bytearray(frame)
                 log.debug("<<< " + str(frame).encode("hex"))
@@ -194,16 +212,29 @@ class USB(object):
     def _PYUSB0_write(self, frame):
         if self.usb_out is not None:
             log.debug(">>> " + str(frame).encode("hex"))
-            self.usb_dev.bulkWrite(self.usb_out, frame)
-            if len(frame) % 64 == 0:
-                self.usb_dev.bulkWrite(self.usb_out, '') # end transfer
+            try:
+                self.usb_dev.bulkWrite(self.usb_out, frame)
+                if len(frame) % 64 == 0: # must end bulk transfer
+                    self.usb_dev.bulkWrite(self.usb_out, '')
+            except self.usb.USBError as error:
+                if error.message == "Connection timed out":
+                    ETIMEDOUT = errno.ETIMEDOUT
+                    raise IOError(ETIMEDOUT, os.strerror(ETIMEDOUT))
+                else:
+                    log.error("{0!r}".format(error))
+                    raise IOError(errno.EIO, os.strerror(errno.EIO))
         
     def _PYUSB1_write(self, frame):
         if self.usb_out is not None:
             log.debug(">>> " + str(frame).encode("hex"))
-            self.usb_out.write(frame)
-            if len(frame) % self.usb_out.wMaxPacketSize == 0:
-                self.usb_out.write('') # end transfer
+            try:
+                self.usb_out.write(frame)
+                if len(frame) % self.usb_out.wMaxPacketSize == 0:
+                    self.usb_out.write('') # end bulk transfer
+            except self.usb_core.USBError as error:
+                if error.errno != errno.ETIMEDOUT:
+                    log.error("{0!r}".format(error))
+                raise error
         
     def _PYUSB0_close(self):
         if self.usb_dev is not None:
