@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2012 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2012-2013 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -20,9 +20,8 @@
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
 #
-# transport.py
+# Transport layer for host to reader communication.
 #
-
 import logging
 log = logging.getLogger(__name__)
 
@@ -32,6 +31,68 @@ import sys
 import os
 import re
 
+class TTY(object):
+    @classmethod
+    def find(cls, path):
+        try:
+            cls.serial = importlib.import_module("serial")
+        except ImportError:
+            log.error("python serial library not found")
+            return None
+        
+        match = re.match(r"^(tty|com):([a-zA-Z0-9]+):([a-zA-Z0-9]+)$", path)
+
+        if match and match.group(1) == "tty":
+            try:
+                port = int(match.group(2))
+            except ValueError:
+                port = "/dev/tty{0}".format(match.group(2))
+            try:
+                tty = cls.serial.Serial(port)
+                return tty.port, match.group(3)
+            except cls.serial.SerialException:
+                log.debug("failed to open serial port '{0}'".format(port))
+        
+        if match and match.group(1) == "com":
+            try:
+                port = int(match.group(2))
+            except ValueError:
+                port = match.group(2)
+            try:
+                com = cls.serial.Serial(port)
+                return com.port, match.group(3)
+            except cls.serial.SerialException:
+                log.debug("failed to open serial port '{0}'".format(port))
+
+    def __init__(self, port):
+        self.open(port)
+
+    def open(self, port):
+        self.tty = self.serial.Serial(port, baudrate=115200, timeout=0.05)
+
+    def read(self, timeout):
+        if self.tty is not None:
+            self.tty.timeout = max(timeout / 1000.0, 0.05)
+            frame = bytearray(self.tty.read(300))
+            if frame is None or len(frame) == 0:
+                raise IOError(errno.ETIMEDOUT, os.strerror(errno.ETIMEDOUT))
+            log.debug("<<< " + str(frame).encode("hex"))
+            return frame
+
+    def write(self, frame):
+        if self.tty is not None:
+            log.debug(">>> " + str(frame).encode("hex"))
+            self.tty.flushInput()
+            try:
+                self.tty.write(frame)
+            except serial.SerialTimeoutException:
+                raise IOError(errno.EIO, os.strerror(errno.EIO))
+
+    def close(self):
+        if self.tty is not None:
+            self.tty.close()
+            self.tty = None
+        
 class USB(object):
     @classmethod
     def find(cls, path):
@@ -50,7 +111,7 @@ class USB(object):
             except ImportError: pass
 
         if cls.pyusb_version is None:
-            log.error("no python usb library could be loaded")
+            log.error("python usb library not found")
             return None
         
         log.debug("using pyusb version {0}.x".format(cls.pyusb_version))
@@ -245,3 +306,4 @@ class USB(object):
         if self.usb_dev is not None:
             self.usb_util.dispose_resources(self.usb_dev)
         self.usb_dev = self.usb_out = self.usb_inp = None
+

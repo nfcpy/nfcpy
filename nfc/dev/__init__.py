@@ -50,10 +50,14 @@ def connect(path=None):
         log.debug("import {0}".format(name))
         return importlib.import_module(name)
         
-    if path is None:
-        path = ""
+    if not path:
+        path = "usb"
 
-    found = transport.USB.find(path)
+    found = None
+
+    if path.startswith("usb"):
+        found = transport.USB.find(path)
+        
     if found is not None:
         for vid, pid, bus, dev in found:
             module = usb_device_map.get((vid, pid))
@@ -68,39 +72,21 @@ def connect(path=None):
                 device._path = "usb:{0:03}:{1:03}".format(int(bus), int(dev))
                 return device
 
-    if (path == "" or path.startswith("tty")) and os.name == "posix":
-        log.info("searching for a tty reader")
-        #
-        # match "tty[:(usb|com)][:port]"
-        #
-        match = re.match(r"tty(?:\:(usb|com))?(?:\:([0-9]{1,2}))?$", path)
-        if match is not None or path == "":
-            line, port = match.groups() if match else (None, None)
-            if line is None or line == "usb":
-                if port is not None:
-                    devname = "/dev/ttyUSB{0}".format(port)
-                    log.debug("trying usb tty reader {0}".format(devname))
-                    for module in ("arygon_tty", "pn53x_tty"):
-                        driver = import_driver(module)
-                        device = driver.init(devname)
-                        if device is not None:
-                            device._path = "tty:usb:{0}".format(port)
-                            return device
-                else:
-                    log.info("searching for a usb tty reader")
-                    for devname in glob.glob("/dev/ttyUSB[0-9]"):
-                        log.debug("trying usb tty reader {0}".format(devname))
-                        for module in ("arygon_tty", "pn53x_tty"):
-                            driver = import_driver(module)
-                            device = driver.init(devname)
-                            if device is not None:
-                                port = devname[-1]
-                                device._path = "tty:usb:{0}".format(port)
-                                return device
-    
-    elif path.startswith("tty"):
-        log.info("sorry, tty readers are only supported on posix systems")
-
+    if path.startswith("tty") or path.startswith("com"):
+        found = transport.TTY.find(path)
+        
+    if found is not None:
+        port, module = found
+        log.debug("trying {0} on '{1}'".format(module, path))
+        driver = import_driver(module)
+        try:
+            tty = transport.TTY(port)
+            device = driver.init(tty)
+            device._path = port
+            return device
+        except IOError:
+            pass
+        
     if path.startswith("udp"):
         path = path.split(':')
         host = str(path[1]) if len(path) > 1 and path[1] else 'localhost'
