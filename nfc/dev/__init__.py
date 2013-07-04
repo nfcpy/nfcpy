@@ -35,7 +35,7 @@ import transport
 usb_device_map = {
     #(0x054c, 0x0193) : "pn53x_usb", # Sony demo board
     #(0x04cc, 0x2533) : "pn53x_usb", # NXP PN533 demo board
-    #(0x04cc, 0x0531) : "pn53x", # SCM SCL3710, PN531 demo board
+    (0x04cc, 0x0531) : "pn53x", # SCM SCL3710, PN531 demo board
     (0x04e6, 0x5591) : "pn53x", # SCM SCL3711
     #(0x04e6, 0x5593) : "pn53x", # SCM SCL3712
     (0x054c, 0x02e1) : "rcs956", # Sony RC-S330/360/370
