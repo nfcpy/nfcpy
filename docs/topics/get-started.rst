@@ -44,13 +44,34 @@ there's only one plugged in. ::
   >>> print(clf)
   Sony RC-S360/SH on usb:002:005
 
-Similar stuff exists for serially connected readers and, best of all,
-if you don't have an NFC reader at hand or just want to test your
-application logic there's also a driver that carries NFC frames
-across a UDP/IP link. ::
+If you don't have an NFC reader at hand or just want to test your
+application logic a driver that carries NFC frames across a UDP/IP
+link might come handy. ::
 
   >>> import nfc
   >>> clf = nfc.ContactlessFrontend(path='udp')
   >>> print(clf)
   Linux UDP/IP on udp:localhost:54321
 
+Connect a target
+================
+
+With a reader opened the next step to get an NFC communication running
+is to use the :meth:`nfc.clf.ContactlessFrontend.connect` method.
+We'll start with connecting to a tag (a contactless card), hopefully
+you have one and it's not a Mifare Classic. Currently supported are
+only NFC Forum Type 1, 2, 3 and 4 Tags. ::
+
+  >>> import nfc
+  >>> clf = nfc.ContactlessFrontend()
+  >>> clf.connect(rdwr={}) # now touch a tag and remove it
+  True
+
+Although this doesn't look very exciting a lot has happened in the
+background. The tag was discovered and activated and it's data content
+read. Thereafter :meth:`nfc.clf.ContactlessFrontend.connect` continued
+to check the presence of the tag until you removed it. The return
+value :const:`True` tells us that it terminated normally and not
+because of a :exc:`KeyboardInterrupt` in which case we've seen
+:const:`False`. You can try this by either not touching or not
+removing the tag and press `Ctrl-C` while in connect.
