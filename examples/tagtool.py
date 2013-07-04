@@ -225,21 +225,6 @@ class TagTool(CommandLineInterface):
 
     def show_tag(self, tag):
         print(tag)
-        if self.options.verbose:
-            if tag.type == "Type1Tag":
-                memory_dump = tag[0:8+tag[10]*8]
-                print("TAG memory dump:")
-                print(format_data(memory_dump, w=8))
-            elif tag.type == "Type2Tag":
-                print("TAG memory dump:")
-                try:
-                    memory_dump = tag[0:16+tag[14]*8]
-                    print(format_data(memory_dump))
-                except nfc.clf.ProtocolError as e:
-                    log.error(e)
-            elif tag.type == "Type3Tag":
-                icc = str(tag.pmm[0:2]) # ic code
-                print("  " + tt3_card_map.get(icc, "unknown card"))
         if tag.ndef:
             print("NDEF capabilities:")
             if self.options.verbose and tag.type == "Type3Tag":
@@ -254,6 +239,29 @@ class TagTool(CommandLineInterface):
                 print(format_data(tag.ndef.message))
             print("NDEF record list:")
             print(tag.ndef.message.pretty())
+        if self.options.verbose:
+            if tag.type == "Type1Tag":
+                memory = bytearray()
+                for offset in range(0, 256 * 8, 8):
+                    try: memory += tag[offset:offset+8]
+                    except nfc.clf.DigitalProtocolError as error:
+                        log.error(repr(error)); break
+                #memory_dump = tag[0:8+tag[10]*8]
+                print("TAG memory dump:")
+                print(format_data(memory, w=8))
+                tag.clf.sense([nfc.clf.TTA(uid=tag.uid)])
+            elif tag.type == "Type2Tag":
+                memory = bytearray()
+                for offset in range(0, 256 * 4, 16):
+                    try: memory += tag[offset:offset+16]
+                    except nfc.clf.DigitalProtocolError as error:
+                        log.error(repr(error)); break
+                print("TAG memory dump:")
+                print(format_data(memory))
+                tag.clf.sense([nfc.clf.TTA(uid=tag.uid)])
+            elif tag.type == "Type3Tag":
+                icc = str(tag.pmm[0:2]) # ic code
+                print("  " + tt3_card_map.get(icc, "unknown card"))
 
     def dump_tag(self, tag):
         if tag.ndef:
