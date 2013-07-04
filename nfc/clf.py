@@ -283,10 +283,12 @@ class ContactlessFrontend(object):
                 targets = rdwr_options['on-startup'](self, targets)
                 if targets is None: rdwr_options = None
                 else: rdwr_options['targets'] = targets
-            if rdwr_options:
+            if rdwr_options is not None:
                 if not 'on-connect' in rdwr_options:
                     rdwr_options['on-connect'] = lambda tag: True
-
+        elif rdwr_options is not None:
+            raise TypeError("rdrw_options must be a dictionary")
+        
         if isinstance(llcp_options, dict):
             llc = nfc.llcp.llc.LogicalLinkController(
                 recv_miu=llcp_options.get('miu', 128),
@@ -295,9 +297,11 @@ class ContactlessFrontend(object):
             if 'on-startup' in llcp_options:
                 llc = llcp_options['on-startup'](self, llc)
                 if llc is None: llcp_options = None
-            if llcp_options:
+            if llcp_options is not None:
                 if not 'on-connect' in llcp_options:
                     llcp_options['on-connect'] = lambda llc: True
+        elif llcp_options is not None:
+            raise TypeError("llcp_options must be a dictionary")
 
         if isinstance(card_options, dict):
             if 'on-startup' in card_options:
@@ -305,12 +309,14 @@ class ContactlessFrontend(object):
                 targets = card_options['on-startup'](self, targets)
                 if targets is None: card_options = None
                 else: card_options['targets'] = targets
-            if card_options:
+            if card_options is not None:
                 if not card_options.get('targets'):
                     log.error("a target must be specified to connect as tag")
                     return False
                 if not 'on-connect' in card_options:
                     card_options['on-connect'] = lambda tag, command: True
+        elif card_options is not None:
+            raise TypeError("card_options must be a dictionary")
 
         some_options = rdwr_options or llcp_options or card_options
         if not some_options:
