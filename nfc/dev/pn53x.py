@@ -553,7 +553,7 @@ class Device(nfc.dev.Device):
                 raise nfc.clf.TimeoutError
             else:
                 log.warning(error)
-                raise nfc.clf.TransmissionError
+                raise nfc.clf.TransmissionError(str(error))
         except IOError as error:
             if error.errno == errno.ETIMEDOUT:
                 log.debug(error)
@@ -582,7 +582,7 @@ class Device(nfc.dev.Device):
                 return None # RF-OFF detected
             else:
                 log.warning(error)
-                raise nfc.clf.TransmissionError
+                raise nfc.clf.TransmissionError(str(error))
         except IOError as error:
             if error.errno == errno.ETIMEDOUT:
                 log.debug(error)
