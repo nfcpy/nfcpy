@@ -27,6 +27,7 @@ log = logging.getLogger(__name__)
 
 import importlib
 import errno
+import time
 import sys
 import os
 import re
@@ -64,6 +65,14 @@ class TTY(object):
             except cls.serial.SerialException:
                 log.debug("failed to open serial port '{0}'".format(port))
 
+    @property
+    def manufacturer_name(self):
+        return None
+        
+    @property
+    def product_name(self):
+        return None
+
     def __init__(self, port):
         self.open(port)
 
@@ -73,9 +82,16 @@ class TTY(object):
     def read(self, timeout):
         if self.tty is not None:
             self.tty.timeout = max(timeout / 1000.0, 0.05)
-            frame = bytearray(self.tty.read(300))
+            frame = bytearray(self.tty.read(6))
             if frame is None or len(frame) == 0:
                 raise IOError(errno.ETIMEDOUT, os.strerror(errno.ETIMEDOUT))
+            if frame.startswith("\x00\x00\xff\x00\xff\x00"):
+                return frame
+            LEN = frame[3]
+            if LEN == 0xFF:
+                frame += self.tty.read(3)
+                LEN = frame[5]<<8 | frame[6]
+            frame += self.tty.read(LEN + 1)
             log.debug("<<< " + str(frame).encode("hex"))
             return frame
 
@@ -90,6 +106,8 @@ class TTY(object):
 
     def close(self):
         if self.tty is not None:
+            self.tty.timeout = 0.1
+            self.tty.read(300)
             self.tty.close()
             self.tty = None
         

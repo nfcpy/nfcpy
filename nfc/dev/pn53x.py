@@ -170,7 +170,7 @@ class Chipset(object):
         if frame[0:3] != Chipset.SOF:
             log.error("received invalid start of frame")
             raise IOError(errno.EIO, os.strerror(errno.EIO))
-        if frame != Chipset.ACK:
+        if frame[0:len(Chipset.ACK)] != Chipset.ACK:
             log.warning("missing ack frame from pn53x")
 
         while frame == Chipset.ACK:
@@ -181,6 +181,10 @@ class Chipset(object):
                 if error.errno == errno.ETIMEDOUT:
                     self.transport.write(Chipset.ACK)
                 raise error
+        
+        if not frame.startswith(Chipset.SOF):
+            log.debug("invalid start of frame")
+            raise IOError(errno.EIO, os.strerror(errno.EIO))
 
         if frame[3] == 255 and frame[4] == 255:
             # extended information frame
@@ -253,8 +257,8 @@ class Chipset(object):
                              auto_rats=True, iso_14443_picc=True,
                              short_host_frame=False):
         flags = (int(use_nad) | int(use_did)<<1 | int(auto_atr_res)<<2 |
-                 int(use_irq)<<3 | int(auto_rats)<<4, int(iso_14443_picc)<<5,
-                 int(short_host_frame)<<6)
+                 int(use_irq)<<3 | int(auto_rats)<<4 |
+                 int(iso_14443_picc)<<5 | int(short_host_frame)<<6)
         self.command(0x12, chr(flags))
         
     def pn533_set_parameters(self, use_nad=False, use_did=False,
@@ -624,7 +628,11 @@ def init(transport):
                 device._vendor_name = tlv_data[2:].decode("utf-16")
             index += 2 + tlv_len
     else:
-        device._vendor_name = transport.manufacturer_name
-        device._device_name = transport.product_name
+        vendor_name = transport.manufacturer_name
+        if vendor_name:
+            device._vendor_name = vendor_name
+        device_name = transport.product_name
+        if device_name:
+            device._device_name = device_name
 
     return device
