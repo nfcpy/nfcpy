@@ -138,10 +138,16 @@ class Chipset(object):
             self.max_packet_data_size = 264
             
     def close(self):
-        self.transport.write(Chipset.ACK)
+        self.write_frame(Chipset.ACK)
         self.transport.close()
         self.transport = None
 
+    def write_frame(self, frame):
+        self.transport.write(frame)
+        
+    def read_frame(self, timeout):
+        return self.transport.read(timeout)
+        
     def command(self, cmd_code, cmd_data=None, timeout=100):
         """Send a chip command and return the chip response."""
         cmd_name = self.CMD.get(cmd_code, "PN53x 0x{0:02X}".format(cmd_code))
@@ -161,8 +167,8 @@ class Chipset(object):
         frame += bytearray([(256 - sum(frame[-LEN:])) % 256, 0])
 
         try:
-            self.transport.write(frame)
-            frame = self.transport.read(timeout=100)
+            self.write_frame(frame)
+            frame = self.read_frame(timeout=100)
         except IOError as error:
             log.error("timeout while waiting for ack")
             raise IOError(errno.EIO, os.strerror(errno.EIO))
@@ -176,10 +182,10 @@ class Chipset(object):
         while frame == Chipset.ACK:
             # transport raises IOError if timed out
             try:
-                frame = self.transport.read(timeout)
+                frame = self.read_frame(timeout)
             except IOError as error:
                 if error.errno == errno.ETIMEDOUT:
-                    self.transport.write(Chipset.ACK)
+                    self.write_frame(Chipset.ACK)
                 raise error
         
         if not frame.startswith(Chipset.SOF):

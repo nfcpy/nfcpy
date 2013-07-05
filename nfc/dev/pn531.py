@@ -27,7 +27,8 @@ log = logging.getLogger(__name__)
 
 import time
 import pn53x
-
+from pn53x import ChipsetError
+            
 class Chipset(pn53x.Chipset):
     pass
             
