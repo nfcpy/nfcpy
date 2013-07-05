@@ -35,6 +35,9 @@ import re
 class TTY(object):
     @classmethod
     def find(cls, path):
+        if not (path.startswith("tty") or path.startswith("com")):
+            return
+
         try:
             cls.serial = importlib.import_module("serial")
         except ImportError:
@@ -114,6 +117,9 @@ class TTY(object):
 class USB(object):
     @classmethod
     def find(cls, path):
+        if not path.startswith("usb"):
+            return
+        
         cls.pyusb_version = None
 
         try:

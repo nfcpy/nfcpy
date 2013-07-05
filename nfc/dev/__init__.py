@@ -53,11 +53,7 @@ def connect(path=None):
     if not path:
         path = "usb"
 
-    found = None
-
-    if path.startswith("usb"):
-        found = transport.USB.find(path)
-        
+    found = transport.USB.find(path)        
     if found is not None:
         for vid, pid, bus, dev in found:
             module = usb_device_map.get((vid, pid))
@@ -72,9 +68,7 @@ def connect(path=None):
                 device._path = "usb:{0:03}:{1:03}".format(int(bus), int(dev))
                 return device
 
-    if path.startswith("tty") or path.startswith("com"):
-        found = transport.TTY.find(path)
-        
+    found = transport.TTY.find(path)        
     if found is not None:
         port, module = found
         log.debug("trying {0} on '{1}'".format(module, path))
