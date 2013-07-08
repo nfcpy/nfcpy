@@ -9,8 +9,8 @@ finally read NDEF data from the tag.
 
 .. warning::
 
-   The helloworld example overwrites data on the tag without asking
-   for permission. Be careful.
+   The helloworld example overwrites data on the tag without
+   asking. Be sure what you do.
 
 Source code
 -----------
@@ -79,10 +79,10 @@ Line 29-32
 
 Line 36
 
-  The first available NFC reader is opened and assigned to *clf*. This
-  line would raise an :exc:`IOError` exception (with errno set to
-  :const:`errno.ENODEV`) if no reader is found and should in real
-  applications be enclosed in a try-except clause.
+  The first available NFC reader (connected on USB) is opened and
+  assigned to *clf*. This line would raise an :exc:`IOError` exception
+  (with errno set to :const:`errno.ENODEV`) if no reader is found and
+  should in real applications be enclosed in a try-except clause.
 
 Line 38
 

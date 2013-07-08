@@ -127,7 +127,7 @@ class CommandLineInterface(object):
         group = argument_parser.add_argument_group(
             title="Device Options")
         group.add_argument(
-            "--device", metavar="NAME", action="append",
+            "--device", metavar="PATH", action="append",
             help="use contactless reader at: "\
                 "'usb[:vid[:pid]]' (with vendor and product id), "\
                 "'usb[:bus[:dev]]' (with bus and device number), "\

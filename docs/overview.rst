@@ -30,9 +30,9 @@ Supported Hardware
 
 These readers are supported on Linux, Windows and Mac:
 
-* Sony RC-S330/360/380
+* Sony RC-S330/360/370/380
 * SCM SCL3710/11/12
-* ACS ACR122U (with limitations on listen period setting)
+* ACS ACR122U
 
 These readers are supported on Linux (and probably Mac):
 
@@ -42,14 +42,21 @@ These readers are supported on Linux (and probably Mac):
 
 Notes:
 
+* The Sony RC-S380 is the only reader for which *nfcpy* currently
+  supports tag emulation, more specifically Type 3 Tag emulation.
+
 * The NXP PN53x can not properly handle Type 1 Tags with dynamic
   memory layout (Topaz 512) due to a firmware bug that not allow
   READ-8 and WRITE-8 commands to be executed.
+
 * The NXP PN531 chip does not support any Type 1 Tag command and is
   also not able to exchange Type 4 Tag commands if the ReadBinary and
   UpdateBinary commands exceed the length of a standard host
   controller frame (which may happen if the card sets ISO-DEP MIU
   as 256).
+
+* The ACR122U is disabled as P2P Listener because the listen time
+  cannot be set shorter than 5 seconds.
 
 Implementation Status
 ---------------------
