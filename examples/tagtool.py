@@ -220,8 +220,11 @@ class TagTool(CommandLineInterface):
 
     def on_card_connect(self, tag, command):
         log.info("tag activated")
-        self.emulate_tag(tag, command)
+        return self.emulate_tag_start(tag, command)
+
+    def on_card_release(self, tag):
         log.info("tag released")
+        return self.emulate_tag_stop(tag)
 
     def show_tag(self, tag):
         print(tag)
@@ -379,9 +382,11 @@ class TagTool(CommandLineInterface):
         sys = bytearray.fromhex(self.options.sys)
         return nfc.clf.TTF(self.options.bitrate, idm, pmm, sys)
 
-    def emulate_tag(self, tag, command):
+    def emulate_tag_start(self, tag, command):
         if self.options.tagtype == "tt3":
-            self.emulate_tt3_tag(tag, command)
+            return self.emulate_tt3_tag(tag, command)
+
+    def emulate_tag_stop(self, tag):
         if self.options.preserve:
             self.options.preserve.seek(0)
             self.options.preserve.write(self.options.ndef_data_area)
@@ -404,14 +409,7 @@ class TagTool(CommandLineInterface):
 
         tag.add_service(0x0009, ndef_read, ndef_write)
         tag.add_service(0x000B, ndef_read, lambda: False)
-        while command is not None:
-            response = tag.process_command(command)
-            try:
-                command = tag.send_response(response, timeout=10)
-            except nfc.clf.TimeoutError:
-                log.info("no command received within 10 seconds")
-            except nfc.clf.TransmissionError:
-                break
+        return True
 
 class ArgparseError(SystemExit):
     pass

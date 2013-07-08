@@ -286,6 +286,11 @@ class ContactlessFrontend(object):
           :class:`~nfc.tag.TagEmulation` instance as first parameter and
           the first command received as the second parameter.
 
+        'on-release': function A function that will be called when the
+          activated tag has been released by it's Initiator, basically
+          that is when the tag has been removed from the Initiator's
+          RF field.
+
         'timeout': integer
           The timeout in seconds to wait for for each target to become
           initialized. The default value is 1 second.
@@ -428,12 +433,20 @@ class ContactlessFrontend(object):
                     log.debug("connected as {0}".format(tag))
                     callback = options['on-connect']
                     if callback and callback(tag=tag, command=command):
-                        while command is not None:
-                            response = tag.process_command(command)
+                        while True:
+                            response = (tag.process_command(command)
+                                        if command is not None else None)
                             try:
-                                command = tag.send_response(response, 1)
-                            except nfc.clf.DigitalProtocolError:
+                                command = tag.send_response(response, timeout=1)
+                            except nfc.clf.TimeoutError:
+                                command = None
+                            except nfc.clf.DigitalProtocolError as error:
+                                log.error(error)
                                 break
+                            else:
+                                if command is None: break
+                        callback = options.get('on-release')
+                        if callback: callback(tag=tag)
                         return True
                     else:
                         return tag

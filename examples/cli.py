@@ -191,6 +191,9 @@ class CommandLineInterface(object):
             return False
         return True
 
+    def on_card_release(self, tag):
+        pass
+
     def terminate(self):
         return self.test_completed
 
@@ -259,6 +262,7 @@ class CommandLineInterface(object):
             card_options = {
                 'on-startup': self.on_card_startup,
                 'on-connect': self.on_card_connect,
+                'on-release': self.on_card_release,
                 'targets': [],
                 }
         else:

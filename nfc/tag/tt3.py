@@ -316,7 +316,7 @@ class Type3TagEmulation(object):
                 return bytearray([10 + len(rsp), 0x0D]) + self.idm + rsp
 
     def send_response(self, rsp, timeout):
-        log.debug("rsp: " + (str(rsp).encode("hex") if rsp else str(rsp)))
+        if rsp: log.debug("rsp: " + str(rsp).encode("hex"))
         return self.clf.exchange(rsp, timeout)
 
     def polling(self, cmd_data):
