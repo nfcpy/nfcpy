@@ -318,7 +318,13 @@ class ContactlessFrontend(object):
         'on-connect' callback had returned :const:`False` the return
         value of connect() is the same parameters as were provided to
         the callback function.
+
+        Connect raises :exc:`IOError(errno.ENODEV)` if called before a
+        contactless reader was opened.
         """
+        if self.dev is None:
+            raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
+        
         log.debug("connect({0})".format(options))
         
         rdwr_options = options.get('rdwr')
@@ -467,6 +473,9 @@ class ContactlessFrontend(object):
         .. note:: This is a direct interface to the
            driver and not needed if :meth:`connect` is used.
         """
+        if self.dev is None:
+            raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
+        
         with self.lock:
             return self.dev.sense(targets, **kwargs)
 
@@ -492,6 +501,9 @@ class ContactlessFrontend(object):
         .. note:: This is a direct interface to the
            driver and not needed if :meth:`connect` is used.
         """
+        if self.dev is None:
+            raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
+        
         with self.lock:
             log.debug("listen for {0:.3f} sec as target {1}"
                       .format(timeout, target))
@@ -520,6 +532,9 @@ class ContactlessFrontend(object):
         .. note:: This is a direct interface to the
            driver and not needed if :meth:`connect` is used.
         """
+        if self.dev is None:
+            raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
+        
         with self.lock:
             return self.dev.exchange(send_data, timeout)
 
@@ -540,6 +555,9 @@ class ContactlessFrontend(object):
         .. note:: This is a direct interface to the
            driver and not needed if :meth:`connect` is used.
         """
+        if self.dev is None:
+            raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
+        
         with self.lock:
             self.dev.set_communication_mode(brm, **kwargs)
 
