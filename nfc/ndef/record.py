@@ -94,7 +94,7 @@ class Record(object):
         try:
             self.header = ord(f.read(1))
         except TypeError:
-            log.error("buffer underflow at offset {0}".format(f.tell()))
+            log.debug("buffer underflow at offset {0}".format(f.tell()))
             raise LengthError("insufficient data to parse")
         
         mbf = bool(self.header & 0x80)
@@ -115,7 +115,7 @@ class Record(object):
             else:
                 name_length = 0
         except (TypeError, struct.error):
-            log.error("buffer underflow at offset {0}".format(f.tell()))
+            log.debug("buffer underflow at offset {0}".format(f.tell()))
             raise LengthError("insufficient data to parse")
 
         try:
@@ -126,7 +126,7 @@ class Record(object):
             record_data = f.read(data_length)
             assert len(record_data) == data_length
         except AssertionError:
-            log.error("buffer underflow at offset {0}".format(f.tell()))
+            log.debug("buffer underflow at offset {0}".format(f.tell()))
             raise LengthError("insufficient data to parse")
 
         if tnf in (0, 5, 6) and len(record_type) > 0:
@@ -265,18 +265,6 @@ class Record(object):
         lines = [line[0].ljust(lwidth) + " = " + line[1] for line in lines]
         return ("\n").join([indent + line for line in lines])
         
-    # **************
-    # * deprecated *
-    # **************
-    @staticmethod
-    def fromstring(data):
-        return Record(data=data)
-
-    def tostring(self, message_begin=False, message_end=False):
-        self._message_begin = message_begin
-        self._message_end = message_end
-        return str(self)
-
 class RecordList(list):
     """A specialized list type that only accepts :class:`Record` objects."""
 

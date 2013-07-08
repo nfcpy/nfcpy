@@ -22,32 +22,35 @@
 # -----------------------------------------------------------------------------
 
 import logging
-log = logging.getLogger()
+log = logging.getLogger('main')
 
 import os
 import sys
 import time
+import argparse
 
 sys.path.insert(1, os.path.split(sys.path[0])[0])
+from cli import CommandLineInterface
+
 import nfc
 import nfc.snep
 import nfc.ndef
 
 class DefaultServer(nfc.snep.SnepServer):
-    def __init__(self):
-        super(DefaultServer, self).__init__('urn:nfc:sn:snep')
+    def __init__(self, llc):
+        service_name = 'urn:nfc:sn:snep'
+        super(DefaultServer, self).__init__(llc, service_name)
 
     def put(self, ndef_message):
         log.info("default snep server got put request")
         log.info("ndef message length is {0} octets".format(len(ndef_message)))
-        ndef_message = nfc.ndef.Message(ndef_message)
-        log.info("type is '{m.type}', id is '{m.name}'".format(m=ndef_message))
+        log.info(nfc.ndef.Message(ndef_message).pretty())
         return nfc.snep.Success
 
 class ValidationServer(nfc.snep.SnepServer):
-    def __init__(self):
+    def __init__(self, llc):
         service_name = "urn:nfc:xsn:nfc-forum.org:snep-validation"
-        super(ValidationServer, self).__init__(service_name, 10000)
+        super(ValidationServer, self).__init__(llc, service_name, 10000)
         self.ndef_message_store = dict()
 
     def put(self, ndef_message):
@@ -72,99 +75,21 @@ class ValidationServer(nfc.snep.SnepServer):
             else: return nfc.snep.ExcessData
         return nfc.snep.NotFound
 
-def main():
-    for device in options.device:
-        try: clf = nfc.ContactlessFrontend(device); break
-        except LookupError: pass
-    else: return
+class TestProgram(CommandLineInterface):
+    def __init__(self):
+        parser = argparse.ArgumentParser()
+        super(TestProgram, self).__init__(
+            parser, groups="llcp dbg clf")
 
-    nfc.llcp.startup({'send-lto': 1000, 'recv-miu': 1024})
-    default_snep_server = DefaultServer()
-    validation_snep_server = ValidationServer()
-    peer = llcp_connect(clf, str(nfc.llcp.config))
-    if peer != None:
-        try:
-            nfc.llcp.activate(peer)
-            default_snep_server.start()
-            validation_snep_server.start()
-            while nfc.llcp.connected():
-                time.sleep(1)
-        except KeyboardInterrupt:
-            log.info("aborted by user")
-        finally:
-            nfc.llcp.shutdown()
-            log.info("I was the " + peer.role)
-
-def llcp_connect(clf, general_bytes):
-    try:
-        while True:
-            if options.mode == "target" or options.mode is None:
-                listen_time = 250 + ord(os.urandom(1))
-                peer = clf.listen(listen_time, general_bytes)
-                if isinstance(peer, nfc.DEP):
-                    if peer.general_bytes.startswith("Ffm"):
-                        return peer
-            if options.mode == "initiator" or options.mode is None:
-                peer = clf.poll(general_bytes)
-                if isinstance(peer, nfc.DEP):
-                    if peer.general_bytes.startswith("Ffm"):
-                        return peer
-    except KeyboardInterrupt:
-        log.info("aborted by user")
+    def on_llcp_startup(self, clf, llc):
+        self.default_snep_server = DefaultServer(llc)
+        self.validation_snep_server = ValidationServer(llc)
+        return llc
+        
+    def on_llcp_connect(self, llc):
+        self.default_snep_server.start()
+        self.validation_snep_server.start()
+        return True
 
 if __name__ == '__main__':
-    from optparse import OptionParser, OptionGroup
-    parser = OptionParser()
-    parser.add_option("-q", default=True,
-                      action="store_false", dest="verbose",
-                      help="be quiet, only print errors")
-    parser.add_option("-d", type="string", default=[],
-                      action="append", dest="debug", metavar="MODULE",
-                      help="print debug messages for MODULE")
-    parser.add_option("-f", type="string",
-                      action="store", dest="logfile",
-                      help="write log messages to LOGFILE")
-    parser.add_option("--device", type="string", default=[],
-                      action="append", dest="device", metavar="SPEC",
-                      help="use only device(s) according to SPEC: "\
-                          "usb[:vendor[:product]] (vendor and product in hex) "\
-                          "usb[:bus[:dev]] (bus and device number in decimal) "\
-                          "tty[:(usb|com)[:port]] (usb virtual or com port)")
-    parser.add_option("--mode", type="choice", default=None,
-                      choices=["target", "initiator"],
-                      action="store", dest="mode",
-                      help="restrict mode to 'target' or 'initiator'")
-
-    global options
-    options, args = parser.parse_args()
-
-    verbosity = logging.INFO if options.verbose else logging.ERROR
-    logging.basicConfig(level=verbosity, format='%(message)s')
-
-    if options.logfile:
-        logfile_format = '%(asctime)s %(levelname)-5s [%(name)s] %(message)s'
-        logfile = logging.FileHandler(options.logfile, "w")
-        logfile.setFormatter(logging.Formatter(logfile_format))
-        logfile.setLevel(logging.DEBUG)
-        logging.getLogger('').addHandler(logfile)
-
-    import inspect, os, os.path
-    nfcpy_path = os.path.dirname(inspect.getfile(nfc))
-    for name in os.listdir(nfcpy_path):
-        if os.path.isdir(os.path.join(nfcpy_path, name)):
-            logging.getLogger("nfc."+name).setLevel(verbosity)
-        elif name.endswith(".py") and name != "__init__.py":
-            logging.getLogger("nfc."+name[:-3]).setLevel(verbosity)
-            
-    if options.debug:
-        logging.getLogger('').setLevel(logging.DEBUG)
-        logging.getLogger('nfc').setLevel(logging.DEBUG)
-        for module in options.debug:
-            log.info("enable debug output for module '{0}'".format(module))
-            logging.getLogger(module).setLevel(logging.DEBUG)
-
-    if len(options.device) == 0:
-        # search and use first
-        options.device = ["",]
-        
-    main()
+    TestProgram().run()

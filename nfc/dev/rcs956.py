@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2009-2011 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2009-2013 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -20,81 +20,81 @@
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
 #
-# rcs956.py - common stuff for Sony RC-S956 based NFC readers
+# Device driver for Sony RC-S330/360/370 contactless reader
 #
-
 import logging
 log = logging.getLogger(__name__)
 
 import time
 import struct
-import pn53x
 
-class rcs956(pn53x.pn53x):
-    def __init__(self, bus):
-        super(rcs956, self).__init__(bus)
+import pn53x
+import nfc.clf
+
+class ChipsetError(pn53x.ChipsetError):
+    pass
+
+class Chipset(pn53x.Chipset):
+    ACK = pn53x.Chipset.ACK
+    
+    def __init__(self, transport):
+        super(Chipset, self).__init__(transport)
+        self.CMD[0x18] = "ResetCommand"
         self.reset_mode()
         
-    def diagnose(self, num_tst, in_param=""):
-        return self.command(0x00, chr(num_tst) + in_param)
+    def diagnose(self, test, test_data=None):
+        if test == "line":
+            if test_data is None: test_data = ""
+            data = self.command(0x00, chr(0) + test_data)
+            if data is None: raise ChipsetError(data)
+            return data == test_data
+        raise ValueError("unknown diagnose test {0!r}".format(test))
 
     def reset_mode(self):
         self.command(0x18, [1])
-        self.bus.write(pn53x.pn53x.ACK)
+        self.transport.write(Chipset.ACK)
         time.sleep(0.010)
 
     def read_register(self, addr):
         if type(addr) is int: addr = [addr]
-        addr = ''.join([struct.pack(">H", a) for a in addr])
+        addr = ''.join([struct.pack(">H", x) for x in addr])
         return self.command(0x06, addr)
+    
+    def in_data_exchange_tt3(self, data, timeout, *args, **kwargs):
+        data = self.command(0x42, data, timeout)
+        if data is None or data[0] != 0:
+            raise ChipsetError(data)
+        return data[1:], False
 
 class Device(pn53x.Device):
-    def __init__(self, dev):
-        super(Device, self).__init__(dev)
+    def __init__(self, chipset):
+        super(Device, self).__init__(chipset)
 
-        self.dev.reset_mode()
-        cfg_data = chr(self._rwt) + chr(self._wtx) + "\x08"
-        self.dev.rf_configuration(0x82, cfg_data)
-        self.dev.command(0x08, "\x63\x0d\x00")
-        regs = self.dev.read_register(range(0xa01b, 0xa023))
-        self.dev.rf_configuration(0x0b, regs)
+        #cfg_data = chr(self._rwt) + chr(self._wtx) + "\x08"
+        #self.dev.rf_configuration(0x82, cfg_data)
+        #self.dev.command(0x08, "\x63\x0d\x00")
+        #regs = self.dev.read_register(range(0xa01b, 0xa023))
+        #self.dev.rf_configuration(0x0b, regs)
 
     def close(self):
-        self.dev.reset_mode()
+        self.chipset.reset_mode()
         super(Device, self).close()
+
+    def sense(self, *args, **kwargs):
+        # RC-S956 requires to use InCommunicateThru for TT3 card commands
+        self.chipset.reset_mode()
+        target = super(Device, self).sense(*args, **kwargs)
+        self.chipset.in_data_exchange = \
+            self.chipset.in_data_exchange_tt3 if type(target) is nfc.clf.TTF \
+            else super(Chipset, self.chipset).in_data_exchange
+        return target
     
-    def poll_nfca(self):
-        self.dev.reset_mode()
-        return super(Device, self).poll_nfca()
-
-    def poll_nfcb(self):
-        self.dev.reset_mode()
-        return super(Device, self).poll_nfcb()
-    
-    def poll_nfcf(self):
-        self.dev.reset_mode()
-        return super(Device, self).poll_nfcf()
-
-    def poll_dep(self, general_bytes):
-        self.dev.reset_mode()
-        return super(Device, self).poll_dep(general_bytes)
-
-    def listen(self, general_bytes, timeout):
-        self.dev.reset_mode()
-        try:
-            data = super(Device, self).listen(general_bytes, timeout)
-        except pn53x.NoResponse:
-            self.dev.bus.write(pn53x.pn53x.ACK)
-        else:
-            if self.dev.get_general_status()[4] == 3:
-                data[0] |= 0x4 # initialized as p2p target
-            speed = ("106", "212", "424")[(data[0]>>4) & 0x07]
-            cmode = ("passive", "active", "passive")[data[0] & 0x03]
-            ttype = ("card", "p2p")[bool(data[0] & 0x04)]
-            info = "activated as {0} target in {1} kbps {2} mode"
-            log.info(info.format(ttype, speed, cmode))
-            return str(data[18:])
-
+    def listen_dep(self, *args, **kwargs):
+        # RS-S956 firmware bug requires SENS_RES="0101". This is currently
+        # used in pn53x.py, make sure that keeps or implement it here.
+        self.chipset.reset_mode()
+        return super(Device, self).listen_dep(*args, **kwargs)
+        
     def dep_get_data(self, timeout):
         if self.dev.get_general_status()[4] == 4:
             # except first time, initiator cmd is received in set data
@@ -104,3 +104,17 @@ class Device(pn53x.Device):
     def dep_set_data(self, data, timeout):
         return super(Device, self).dep_set_data(data, timeout)
 
+def init(transport):
+    # write ack to perform a soft reset
+    # raises IOError(EACCES) if we're second
+    transport.write(Chipset.ACK)
+    
+    chipset = Chipset(transport)
+    device = Device(chipset)
+    
+    device._vendor_name = transport.manufacturer_name
+    device._device_name = transport.product_name
+    if device._device_name is None:
+        device._device_name = "RC-S330"
+    
+    return device

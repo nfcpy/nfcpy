@@ -23,11 +23,8 @@ The *nfcpy* module implements NFC Forum specifications for wireless short-range 
 Tutorials
 =========
 
-:doc:`topics/clf`
-    Find and use NFC contactless readers.
-
-:doc:`topics/tag`
-    Supported tag types and how to use them.
+:doc:`topics/get-started`
+    Get started with the nfcpy module and example programs.
 
 :doc:`topics/ndef`
     How to parse or generate NDEF records and messages.
@@ -56,6 +53,7 @@ Reference
 .. toctree::
 
     api/nfc
+    api/tag
     api/ndef
     api/llcp
     api/snep

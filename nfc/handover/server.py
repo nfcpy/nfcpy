@@ -31,40 +31,41 @@ import nfc.llcp
 class HandoverServer(Thread):
     """ NFC Forum Connection Handover server
     """
-    def __init__(self, request_size_limit=4096, recv_miu=248, recv_buf=2):
-        service_name = 'urn:nfc:sn:handover'
-        super(HandoverServer, self).__init__(name=service_name)
-        socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
-        nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVBUF, recv_buf)
-        nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVMIU, recv_miu)
-        nfc.llcp.bind(socket, service_name)
-        self.socket = socket
+    def __init__(self, llc, request_size_limit=4096, recv_miu=248, recv_buf=2):
+        socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
+        socket.setsockopt(nfc.llcp.SO_RCVBUF, recv_buf)
+        socket.setsockopt(nfc.llcp.SO_RCVMIU, recv_miu)
+        socket.bind('urn:nfc:sn:handover')
+        addr = socket.getsockname()
+        log.info("handover server bound to port {0}".format(addr))
+        socket.listen(backlog=2)
+        Thread.__init__(self, name='urn:nfc:sn:handover',
+                        target=self.listen, args=(llc, socket))
 
-    def run(self):
+    def listen(self, llc, socket):
+        log.debug("handover listen thread started")
         try:
-            addr = nfc.llcp.getsockname(self.socket)
-            log.info("handover server bound to port {0}".format(addr))
-            nfc.llcp.listen(self.socket, backlog=2)
             while True:
-                client_socket = nfc.llcp.accept(self.socket)
+                client_socket = socket.accept()
                 client_thread = Thread(target=HandoverServer.serve,
-                                       args=[client_socket, self])
+                                       args=(client_socket, self))
                 client_thread.start()
         except nfc.llcp.Error as e:
-            log.error(str(e))
+            (log.debug if e.errno == nfc.llcp.errno.EPIPE else log.error)(e)
         finally:
-            nfc.llcp.close(self.socket)
+            socket.close()
+            log.debug("handover listen thread terminated")
 
     @staticmethod
     def serve(socket, handover_server):
-        peer_sap = nfc.llcp.getpeername(socket)
+        peer_sap = socket.getpeername()
         log.info("serving handover client on remote sap {0}".format(peer_sap))
-        send_miu = nfc.llcp.getsockopt(socket, nfc.llcp.SO_SNDMIU)
+        send_miu = socket.getsockopt(nfc.llcp.SO_SNDMIU)
         try:
             while True:
                 request_data = ''
-                while nfc.llcp.poll(socket, "recv"):
-                    data = nfc.llcp.recv(socket)
+                while socket.poll("recv"):
+                    data = socket.recv()
                     if data is not None:
                         request_data += data
                         try:
@@ -81,15 +82,15 @@ class HandoverServer(Thread):
                 log.debug(">>> {0!r}".format(response_data))
 
                 while len(response_data) > 0:
-                    if nfc.llcp.send(socket, response_data[0:send_miu]):
+                    if socket.send(response_data[0:send_miu]):
                         response_data = response_data[send_miu:]
                     else:
                         return # connection closed
-        
         except nfc.llcp.Error as e:
-            log.debug("exception {0}".format(e))
+            (log.debug if e.errno == nfc.llcp.errno.EPIPE else log.error)(e)
         finally:
-            nfc.llcp.close(socket)
+            socket.close()
+            log.debug("handover serve thread terminated")
 
     def _process_request(self, request):
         log.debug("rcvd handover request {0}\n{1}"

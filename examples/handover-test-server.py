@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2012 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2012-2013 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -21,7 +21,7 @@
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
 import logging
-log = logging.getLogger()
+log = logging.getLogger('main')
 
 import os
 import sys
@@ -29,7 +29,7 @@ import time
 import argparse
 
 sys.path.insert(1, os.path.split(sys.path[0])[0])
-from llcp_test_base import TestBase
+from cli import CommandLineInterface
 
 import nfc
 import nfc.llcp
@@ -37,6 +37,7 @@ import nfc.ndef
 import nfc.snep
 import nfc.handover
 import threading
+from copy import deepcopy
 
 import gobject
 import dbus.mainloop.glib
@@ -83,18 +84,24 @@ class BluetoothAdapter(object):
 	self.oob_adapter.AddRemoteData(self.remote_bdaddr, ssp_hash, ssp_rand)
             
 class HandoverServer(nfc.handover.HandoverServer):
-    def __init__(self, select_carrier_func, options):
+    def __init__(self, llc, select_carrier_func, options):
         super(HandoverServer, self).__init__(
-            recv_miu=options.recv_miu, recv_buf=options.recv_buf)
+            llc, recv_miu=options.recv_miu, recv_buf=options.recv_buf)
         self.select_carrier = select_carrier_func
 
     def process_request(self, request):
         return self.select_carrier(request)
     
 class DefaultSnepServer(nfc.snep.SnepServer):
-    def __init__(self, select_carrier_func):
-        super(DefaultSnepServer, self).__init__('urn:nfc:sn:snep')
+    def __init__(self, llc, select_carrier_func):
+        super(DefaultSnepServer, self).__init__(llc, 'urn:nfc:sn:snep')
         self.select_carrier = select_carrier_func
+
+    def put(self, ndef_message):
+        log.info("default snep server got put request")
+        log.info("ndef message length is {0} octets".format(len(ndef_message)))
+        log.info(nfc.ndef.Message(ndef_message).pretty())
+        return nfc.snep.Success
 
     def get(self, acceptable_length, data):
         log.info("default snep server got GET request")
@@ -110,11 +117,15 @@ class DefaultSnepServer(nfc.snep.SnepServer):
             return str(hs)
         return nfc.snep.NotFound
 
-class HandoverTestServer(TestBase):
+description = """
+Run a connection handover server component with various test options.
+"""
+class TestProgram(CommandLineInterface):
     def __init__(self):
         parser = argparse.ArgumentParser(
             usage='%(prog)s [OPTION]... [CARRIER]...',
-            description="")
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            description=description)
         parser.add_argument(
             "carriers", metavar="CARRIER", nargs="*",
             type=argparse.FileType('r'),
@@ -147,7 +158,8 @@ class HandoverTestServer(TestBase):
             "--recv-buf", type=buf, metavar="INT", default=2,
             help="data link connection receive window (default: %(default)s)")
         
-        super(HandoverTestServer, self).__init__(parser)
+        super(TestProgram, self).__init__(
+            parser, groups="llcp dbg clf iop")
 
         if sum([1 for f in self.options.carriers if f.name == "<stdin>"]) > 1:
             log.error("only one carrier file may be read from stdin")
@@ -189,21 +201,20 @@ class HandoverTestServer(TestBase):
 
         self.select_carrier_lock = threading.Lock()
         
-    def register_llcp_services(self):
+    def on_llcp_startup(self, clf, llc):
         self.handover_service = HandoverServer(
-            self.select_carrier, self.options)
+            llc, self.select_carrier, self.options)
         if self.options.quirks:
-            self.snep_service = DefaultSnepServer(self.select_carrier)
+            self.snep_service = DefaultSnepServer(
+                llc, self.select_carrier)
+        return llc
         
-    def startup_llcp_services(self):
+    def on_llcp_connect(self, llc):
         self.handover_service.start()
         if self.options.quirks:
             self.snep_service.start()
+        return True
         
-    def main(self):
-        while nfc.llcp.connected():
-            time.sleep(1)
-
     def select_carrier(self, handover_request):
         self.select_carrier_lock.acquire()
         log.info("<<< Handover Request\n" + handover_request.pretty(2))
@@ -227,7 +238,7 @@ class HandoverTestServer(TestBase):
                     remote_carrier_type = remote_carrier.type[12:]
                     
                     
-            for local_carrier in self.options.selectable.carriers:
+            for local_carrier in deepcopy(self.options.selectable.carriers):
                 if remote_carrier_type == local_carrier.type:
                     if len(handover_select.carriers) < self.options.select:
                         log.info("match for {0}".format(local_carrier.type))
@@ -260,4 +271,4 @@ class HandoverTestServer(TestBase):
         return handover_select
 
 if __name__ == '__main__':
-    HandoverTestServer().start()
+    TestProgram().run()

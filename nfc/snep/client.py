@@ -30,18 +30,18 @@ import nfc.llcp
 
 def send_request(socket, snep_request, send_miu):
     if len(snep_request) <= send_miu:
-        return nfc.llcp.send(socket, snep_request)
+        return socket.send(snep_request)
     else:
-        if nfc.llcp.send(socket, snep_request[0:send_miu]):
-            if nfc.llcp.recv(socket) == "\x10\x80\x00\x00\x00\x00":
+        if socket.send(snep_request[0:send_miu]):
+            if socket.recv() == "\x10\x80\x00\x00\x00\x00":
                 for offset in xrange(send_miu, len(snep_request), send_miu):
                     fragment = snep_request[offset:offset+send_miu]
-                    if not nfc.llcp.send(socket, fragment): break
+                    if not socket.send(fragment): break
                 else: return True
 
 def recv_response(socket, acceptable_length, timeout):
-    if nfc.llcp.poll(socket, "recv", timeout):
-        snep_response = nfc.llcp.recv(socket)
+    if socket.poll("recv", timeout):
+        snep_response = socket.recv()
         if len(snep_response) < 6:
             log.debug("snep response initial fragment too short")
             return None
@@ -51,29 +51,30 @@ def recv_response(socket, acceptable_length, timeout):
             return None
         if len(snep_response) - 6 < length:
             # request remaining fragments
-            nfc.llcp.send(socket, "\x10\x00\x00\x00\x00\x00")
+            socket.send("\x10\x00\x00\x00\x00\x00")
             while len(snep_response) - 6 < length:
-                if nfc.llcp.poll(socket, "recv", timeout):
-                    snep_response += nfc.llcp.recv(socket)
+                if socket.poll("recv", timeout):
+                    snep_response += socket.recv()
                 else: return None                
         return snep_response
 
 class SnepClient(object):
-    """ A simple NDEF exchange protocol - client side
+    """ Simple NDEF exchange protocol - client implementation
     """
-    def __init__(self, max_ndef_msg_recv_size=1024):
-        self.socket = None
+    def __init__(self, llc, max_ndef_msg_recv_size=1024):
         self.acceptable_length = max_ndef_msg_recv_size
+        self.socket = None
+        self.llc = llc
 
     def connect(self, service_name):
-        if self.socket: self.close()
-        self.socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
-        nfc.llcp.connect(self.socket, service_name)
-        self.send_miu = nfc.llcp.getsockopt(self.socket, nfc.llcp.SO_SNDMIU)
+        self.close()
+        self.socket = nfc.llcp.Socket(self.llc, nfc.llcp.DATA_LINK_CONNECTION)
+        self.socket.connect(service_name)
+        self.send_miu = self.socket.getsockopt(nfc.llcp.SO_SNDMIU)
 
     def close(self):
         if self.socket:
-            nfc.llcp.close(self.socket)
+            self.socket.close()
             self.socket = None
 
     def get(self, ndef_message='', timeout=1.0):
@@ -123,6 +124,13 @@ class SnepClient(object):
         finally:
             if self.release_connection:
                 self.close()
+
+    def __enter__(self):
+        self.connect()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
 
 class SnepError(Exception):
     strerr = {0xC0: "resource not found",

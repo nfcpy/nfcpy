@@ -29,6 +29,9 @@ import threading
 import collections
 import random
 
+import nfc.clf
+import nfc.dep
+
 # local imports
 from tco import *
 from pdu import *
@@ -72,7 +75,7 @@ class ServiceAccessPoint(object):
             if insertable:
                 socket.bind(self.addr)
                 self.sock_list.appendleft(socket)
-            else: log.error("can't insert socket of differing type")
+            else: log.error("can't insert socket of different type")
             return insertable
 
     def remove_socket(self, socket):
@@ -207,150 +210,148 @@ class ServiceDiscovery(object):
             self.snl = None
             self.resp.notify_all()
 
-class LogicalLinkControl(threading.Thread):
-    def __init__(self, config):
-        super(LogicalLinkControl, self).__init__()
+class LogicalLinkController(object):
+    def __init__(self, recv_miu=248, send_lto=500, send_agf=True):
+        #super(LogicalLinkControl, self).__init__()
         self.lock = threading.RLock()
         self.cfg = dict()
-        self.cfg['recv-miu'] = config.get('recv-miu', 248)
-        self.cfg['send-lto'] = config.get('send-lto', 500)
-        self.cfg['send-agf'] = config.get('send-agf', True)
+        self.cfg['recv-miu'] = recv_miu
+        self.cfg['send-lto'] = send_lto
+        self.cfg['send-agf'] = send_agf
         self.snl = dict({"urn:nfc:sn:sdp" : 1})
         self.sap = 64 * [None]
         self.sap[0] = ServiceAccessPoint(0, self)
         self.sap[1] = ServiceDiscovery(self)
 
-    @property
-    def parameter_string(self):
+    def activate(self, mac):
+        assert type(mac) in (nfc.dep.Initiator, nfc.dep.Target)
+        self.mac = None
+        
         miu = self.cfg['recv-miu']
         lto = self.cfg['send-lto']
         wks = 1+sum(sorted([1<<sap for sap in self.snl.values() if sap < 15]))
         pax = ParameterExchange(version=(1,1), miu=miu, lto=lto, wks=wks)
-        return "Ffm" + pax.to_string().lstrip("\x00\x40")
+        
+        if type(mac) == nfc.dep.Initiator:
+            gb = mac.activate(gbi='Ffm'+pax.to_string()[2:])
+            self.run = self.run_as_initiator
+            role = "Initiator"
+        if type(mac) == nfc.dep.Target:
+            gb = mac.activate(gbt='Ffm'+pax.to_string()[2:], wt=8)
+            self.run = self.run_as_target
+            role = "Target"
 
-    def activate(self, mac):
-        info = ["LLCP Link established, I'm the DEP {0}".format(mac.role)]
+        if gb is not None and gb.startswith('Ffm') and len(gb) >= 6:
+            info = ["LLCP Link established as NFC-DEP {0}".format(role)]
 
-        pax = "\x00\x40" + self.parameter_string.lstrip("Ffm")
-        pax = ProtocolDataUnit.from_string(pax)
-        info.append("Local LLCP Settings")
-        info.append("  LLCP Version: {0[0]}.{0[1]}".format(pax.version))
-        info.append("  Link Timeout: {0} ms".format(pax.lto))
-        info.append("  Max Inf Unit: {0} octet".format(pax.miu))
-        info.append("  Service List: {0:016b}".format(pax.wks))
+            info.append("Local LLCP Settings")
+            info.append("  LLCP Version: {0[0]}.{0[1]}".format(pax.version))
+            info.append("  Link Timeout: {0} ms".format(pax.lto))
+            info.append("  Max Inf Unit: {0} octet".format(pax.miu))
+            info.append("  Service List: {0:016b}".format(pax.wks))
 
-        pax = "\x00\x40" + mac.general_bytes.lstrip("Ffm")
-        pax = ProtocolDataUnit.from_string(pax)
-        info.append("Remote LLCP Settings")
-        info.append("  LLCP Version: {0[0]}.{0[1]}".format(pax.version))
-        info.append("  Link Timeout: {0} ms".format(pax.lto))
-        info.append("  Max Inf Unit: {0} octet".format(pax.miu))
-        info.append("  Service List: {0:016b}".format(pax.wks))
+            pax = ProtocolDataUnit.from_string("\x00\x40" + str(gb[3:]))
+            info.append("Remote LLCP Settings")
+            info.append("  LLCP Version: {0[0]}.{0[1]}".format(pax.version))
+            info.append("  Link Timeout: {0} ms".format(pax.lto))
+            info.append("  Max Inf Unit: {0} octet".format(pax.miu))
+            info.append("  Service List: {0:016b}".format(pax.wks))
+            log.info('\n'.join(info))
 
-        self.mac = mac
-        self.cfg['rcvd-ver'] = pax.version
-        self.cfg['send-miu'] = pax.miu
-        self.cfg['recv-lto'] = pax.lto
-        self.cfg['send-wks'] = pax.wks
-        self.cfg['send-lsc'] = pax.lsc
-        log.debug("llc cfg {0}".format(self.cfg))
-        log.info('\n'.join(info))
+            self.cfg['rcvd-ver'] = pax.version
+            self.cfg['send-miu'] = pax.miu
+            self.cfg['recv-lto'] = pax.lto
+            self.cfg['send-wks'] = pax.wks
+            self.cfg['send-lsc'] = pax.lsc
+            log.debug("llc cfg {0}".format(self.cfg))
+            
+            self.mac = mac
 
-    def shutdown(self):
-        log.debug("shutdown requested")
-        if self.sap[0]:
-            self.sap[0].send(Disconnect(dsap=0, ssap=0))
+        return bool(self.mac)
 
-    def run(self):
-        def shutdown_clients(sap):
-            for i in range(63, -1, -1):
-                if not sap[i] is None:
-                    log.debug("closing service access point %d" % i)
-                    sap[i].shutdown()
-                    sap[i] = None
-
-        link_terminate_pdu = Disconnect(dsap=0, ssap=0)
-        link_terminate_str = link_terminate_pdu.to_string()
-        link_symmetry_pdu = Symmetry()
-
-        recv_timeout = self.cfg['recv-lto'] + 50
-        send_timeout = self.cfg['send-lto'] / 2
-
-        recv_symm_count = 0
-        recv_symm_level = 10
-
-        if self.mac.role == "Initiator":
-            pdu = self._collect()
-            while True:
-                if pdu is None:
-                    pdu = Symmetry()
-                if pdu == link_terminate_pdu:
-                    log.info("shutdown on local request")
-                    log.debug("SEND " + str(pdu))
-                    try: self.mac.exchange(pdu.to_string(), timeout=1)
-                    except IOError: pass
-                    shutdown_clients(self.sap)
-                    break
-                log.debug("SEND " + str(pdu))
-                try: data = self.mac.exchange(pdu.to_string(), recv_timeout)
-                except IOError as error:
-                    log.debug("in exchange => IOError {0}".format(error))
-                    data = None
-                if data is None or data == link_terminate_str:
-                    if data: log.info("shutdown on remote request")
-                    else: log.info("shutdown on link disruption")
-                    shutdown_clients(self.sap)
-                    break
+    def terminate(self, reason):
+        log.debug("llcp link termination caused by {0}".format(reason))
+        if reason == "local choice":
+            self.exchange(Disconnect(0, 0), timeout=0.1)
+            self.mac.deactivate()
+        elif reason == "remote choice":
+            self.mac.deactivate()
+        # shutdown local services
+        for i in range(63, -1, -1):
+            if not self.sap[i] is None:
+                log.debug("closing service access point %d" % i)
+                self.sap[i].shutdown()
+                self.sap[i] = None
+        
+    def exchange(self, pdu, timeout):
+        try:
+            log.debug("SEND {0}".format(pdu))
+            data = pdu.to_string() if pdu else None
+            data = self.mac.exchange(data, timeout)
+        except nfc.clf.DigitalProtocolError as error:
+            log.debug("{0!r}".format(error))
+        else:
+            if data is not None:
                 pdu = ProtocolDataUnit.from_string(data)
-                log.debug("RECV " + str(pdu))
-                if pdu == link_symmetry_pdu:
-                    recv_symm_count += 1
-                else:
-                    recv_symm_count = 0
-                self._dispatch(pdu)
-                pdu = self._collect()
-                if pdu is None and recv_symm_count >= recv_symm_level:
-                    time.sleep(0.001 * send_timeout)
-                    pdu = self._collect()
+                log.debug("RECV {0}".format(pdu))
+                return pdu
 
-        if self.mac.role == "Target":
-            while True:
-                try: data = self.mac.wait_command(recv_timeout)
-                except IOError as error:
-                    log.debug("wait_command: IOError {0}".format(str(error)))
-                    data = None
-                if data:
-                    pdu = ProtocolDataUnit.from_string(data)
-                    log.debug("RECV " + str(pdu))
-                if data is None or data == link_terminate_str:
-                    if data: log.info("shutdown on remote request")
-                    else: log.info("shutdown on link disruption")
-                    shutdown_clients(self.sap)
-                    break
-                #FIXME: must be coordinated with DEP RWT
-                #if pdu == link_symmetry_pdu:
-                #    recv_symm_count += 1
-                #else:
-                #    recv_symm_count = 0
-                self._dispatch(pdu)
-                pdu = self._collect()
-                if pdu is None and recv_symm_count >= recv_symm_level:
-                    time.sleep(0.001 * send_timeout)
-                    pdu = self._collect()
+    def run_as_initiator(self, terminate=lambda: False):
+        recv_timeout = 1E-3 * (self.cfg['recv-lto'] + 10)
+        symm = 0
+
+        try:
+            pdu = self.collect(delay=0.01)
+            while not terminate():
+                if pdu is None: pdu = Symmetry()
+                pdu = self.exchange(pdu, recv_timeout)
                 if pdu is None:
-                    pdu = Symmetry()
-                log.debug("SEND " + str(pdu))
-                try: self.mac.send_response(pdu.to_string(), recv_timeout)
-                except IOError as err:
-                    if not pdu == link_terminate_pdu:
-                        log.debug("send_response: IOError {0}".format(err))
-                        log.info("shutdown on link disruption")
-                    shutdown_clients(self.sap)
-                    break
+                    return self.terminate(reason="link disruption")
+                if pdu == Disconnect(0, 0):
+                    return self.terminate(reason="remote choice")
+                symm = symm + 1 if type(pdu) == Symmetry else 0
+                self.dispatch(pdu)
+                pdu = self.collect(delay=0.01)
+                if pdu is None and symm >= 10:
+                    pdu = self.collect(delay=0.02)
+            else:
+                self.terminate(reason="local choice")
+        except KeyboardInterrupt:
+            print # move to new line
+            self.terminate(reason="local choice")
+            raise KeyboardInterrupt
+        finally:
+            log.debug("llc run loop terminated on initiator")
 
-        log.debug("llc run thread terminated")
+    def run_as_target(self, terminate=lambda: False):
+        recv_timeout = 1E-3 * (self.cfg['recv-lto'] + 10)
+        symm = 0
+        
+        try:
+            pdu = None
+            while not terminate():
+                pdu = self.exchange(pdu, recv_timeout)
+                if pdu is None:
+                    return self.terminate(reason="link disruption")
+                if pdu == Disconnect(0, 0):
+                    return self.terminate(reason="remote choice")
+                #symm = symm + 1 if type(pdu) == Symmetry else 0
+                self.dispatch(pdu)
+                pdu = self.collect(delay=0.01)
+                if pdu is None and symm >= 10:
+                    pdu = self.collect(delay=0.02)
+                if pdu is None: pdu = Symmetry()
+            else:
+                self.terminate(reason="local choice")
+        except KeyboardInterrupt:
+            print # move to new line
+            self.terminate(reason="local choice")
+            raise KeyboardInterrupt
+        finally:
+            log.debug("llc run loop terminated on target")
 
-    def _collect(self):
+    def collect(self, delay=None):
+        if delay: time.sleep(delay)
         pdu_list = list()
         max_data = None
         with self.lock:
@@ -359,7 +360,7 @@ class LogicalLinkControl(threading.Thread):
                 #log.debug("query sap {0}, max_data={1}"
                 #          .format(sap, max_data))
                 pdu = sap.dequeue(max_data if max_data else 2179)
-                if not pdu is None:
+                if pdu is not None:
                     if self.cfg['send-agf'] == False:
                         return pdu
                     pdu_list.append(pdu)
@@ -387,14 +388,14 @@ class LogicalLinkControl(threading.Thread):
             return pdu_list[0]
         return None
 
-    def _dispatch(self, pdu):
+    def dispatch(self, pdu):
         if isinstance(pdu, Symmetry):
             return
 
         if isinstance(pdu, AggregatedFrame):
             if pdu.dsap == 0 and pdu.ssap == 0:
                 [log.debug("     " + str(p)) for p in pdu]
-                [self._dispatch(p) for p in pdu]
+                [self.dispatch(p) for p in pdu]
             return
 
         if isinstance(pdu, Connect) and pdu.dsap == 1:
@@ -421,11 +422,11 @@ class LogicalLinkControl(threading.Thread):
 
     def socket(self, socket_type):
         if socket_type == RAW_ACCESS_POINT:
-            return RawAccessPoint(self.cfg["send-miu"], self.cfg["recv-miu"])
+            return RawAccessPoint(recv_miu=self.cfg["recv-miu"])
         if socket_type == LOGICAL_DATA_LINK:
-            return LogicalDataLink(self.cfg["send-miu"], self.cfg["recv-miu"])
+            return LogicalDataLink(recv_miu=self.cfg["recv-miu"])
         if socket_type == DATA_LINK_CONNECTION:
-            return DataLinkConnection()
+            return DataLinkConnection(recv_miu=128, recv_win=1)
 
     def setsockopt(self, socket, option, value):
         if not isinstance(socket, TransmissionControlObject):
@@ -436,15 +437,14 @@ class LogicalLinkControl(threading.Thread):
         if not isinstance(socket, TransmissionControlObject):
             raise Error(errno.ENOTSOCK)
         if isinstance(socket, LogicalDataLink):
-            if option == SO_SNDMIU:
-                return self.cfg["send-miu"]
-            if option == SO_RCVMIU:
-                return self.cfg["recv-miu"]
+            # FIXME: set socket send miu when activated
+            socket.send_miu = self.cfg['send-miu']
+        if isinstance(socket, RawAccessPoint):
+            # FIXME: set socket send miu when activated
+            socket.send_miu = self.cfg['send-miu']
         return socket.getsockopt(option)
 
     def bind(self, socket, addr_or_name=None):
-        """Bind a socket to an address or service name. 
-        """
         if not isinstance(socket, TransmissionControlObject):
             raise Error(errno.ENOTSOCK)
         if not socket.addr is None:
@@ -499,8 +499,7 @@ class LogicalLinkControl(threading.Thread):
         if not socket.is_bound:
             self.bind(socket)
         socket.connect(dest)
-        log.debug("connected ({dlc.addr} ===> {dlc.peer})"
-                  .format(dlc=socket))
+        log.debug("connected ({0} ===> {1})".format(socket.addr, socket.peer))
 
     def listen(self, socket, backlog):
         if not isinstance(socket, TransmissionControlObject):
@@ -544,6 +543,8 @@ class LogicalLinkControl(threading.Thread):
                 raise TypeError("message must be a pdu on raw access point")
             if not socket.is_bound:
                 self.bind(socket)
+            # FIXME: set socket send miu when activated
+            socket.send_miu = self.cfg['send-miu']
             return socket.send(message)
         if not type(message) == StringType:
             raise TypeError("sendto() argument *message* must be a string")
@@ -552,6 +553,8 @@ class LogicalLinkControl(threading.Thread):
                 raise Error(errno.EDESTADDRREQ)
             if not socket.is_bound:
                 self.bind(socket)
+            # FIXME: set socket send miu when activated
+            socket.send_miu = self.cfg['send-miu']
             return socket.sendto(message, dest)
         if isinstance(socket, DataLinkConnection):
             return socket.send(message)

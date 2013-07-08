@@ -31,32 +31,33 @@ import time
 class HandoverClient(object):
     """ NFC Forum Connection Handover client
     """
-    def __init__(self):
+    def __init__(self, llc):
         self.socket = None
+        self.llc = llc
 
     def connect(self, recv_miu=248, recv_buf=2):
         """Connect to the remote handover server if available. Raises
         :exc:`nfc.llcp.ConnectRefused` if the remote device does not
         have a handover service or the service does not accept any
         more connections."""
-        socket = nfc.llcp.socket(nfc.llcp.DATA_LINK_CONNECTION)
-        nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVBUF, recv_buf)
-        nfc.llcp.setsockopt(socket, nfc.llcp.SO_RCVMIU, recv_miu)
-        nfc.llcp.connect(socket, "urn:nfc:sn:handover")
-        log.info("handover client connected to remote sap {0}"
-                 .format(nfc.llcp.getsockname(socket)))
+        socket = nfc.llcp.Socket(self.llc, nfc.llcp.DATA_LINK_CONNECTION)
+        socket.setsockopt(nfc.llcp.SO_RCVBUF, recv_buf)
+        socket.setsockopt(nfc.llcp.SO_RCVMIU, recv_miu)
+        socket.connect("urn:nfc:sn:handover")
+        server = socket.getpeername()
+        log.debug("handover client connected to remote sap {0}".format(server))
         self.socket = socket
 
     def close(self):
         """Disconnect from the remote handover server."""
         if self.socket:
-            nfc.llcp.close(self.socket)
+            self.socket.close()
             self.socket = None
 
     def send(self, message):
         """Send a handover request message to the remote server."""
         log.debug("sending '{0}' message".format(message.type))
-        send_miu = nfc.llcp.getsockopt(self.socket, nfc.llcp.SO_SNDMIU)
+        send_miu = self.socket.getsockopt(nfc.llcp.SO_SNDMIU)
         try:
             data = str(message)
         except nfc.llcp.EncodeError as e:
@@ -66,7 +67,7 @@ class HandoverClient(object):
         
     def _send(self, data, miu):
         while len(data) > 0:
-            if nfc.llcp.send(self.socket, data[0:miu]):
+            if self.socket.send(data[0:miu]):
                 data = data[miu:]
             else: break
         return bool(len(data) == 0)
@@ -84,9 +85,9 @@ class HandoverClient(object):
     def _recv(self, timeout=None):
         data = ''
         started = time.time()
-        while nfc.llcp.poll(self.socket, "recv", timeout):
+        while self.socket.poll("recv", timeout):
             try:
-                data += nfc.llcp.recv(self.socket)
+                data += self.socket.recv()
                 message = nfc.ndef.Message(data)
                 log.debug("received message\n" + message.pretty())
                 return message
