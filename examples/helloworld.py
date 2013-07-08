@@ -55,16 +55,16 @@ class HelloWorld(object):
         return True
     
     def main(self):
-        clf = nfc.ContactlessFrontend()
+        with nfc.ContactlessFrontend('usb') as clf:
 
-        self.sent_hello = False
-        
-        while not self.sent_hello:
-            print "Please touch a tag to send a hello to the world"
-            clf.connect(rdwr={'on-connect': self.send_hello})
+            self.sent_hello = False
 
-        print "Now touch it again to receive a hello from the world"
-        clf.connect(rdwr={'on-connect': self.read_hello})
+            while not self.sent_hello:
+                print "Please touch a tag to send a hello to the world"
+                clf.connect(rdwr={'on-connect': self.send_hello})
+
+            print "Now touch it again to receive a hello from the world"
+            clf.connect(rdwr={'on-connect': self.read_hello})
 
 if __name__ == '__main__':
     HelloWorld().main()

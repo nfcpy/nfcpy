@@ -90,52 +90,91 @@ class DEP(object):
 
 class ContactlessFrontend(object):
     """The contactless frontend is the main interface class for
-    working with contactless reader devices. A reader device is opened
-    automatically upon instance creation, see :meth:`.open` for how
-    *path* is interpeted."""
+    working with contactless reader devices.  A reader device may be
+    opened when an instance is created by providing the *path*
+    argument, see :meth:`nfc.ContactlessFrontend.open` for how it must
+    be constructed.
+
+    The initializer method raises :exc:`IOError(errno.ENODEV)` if a
+    path is specified but no no reader are found.
+    """
     
     def __init__(self, path=None):
+        self.dev = None
         self.lock = threading.Lock()
-        self.open(path)
+        if path and not self.open(path):
+            raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
         
-    def open(self, path=None):
-        """Open contactless reader device identified by *path*. If
-        *path* is not :const:`None` (default) or an empty string, the
-        first available device is used. Otherwise *path* must match
-        one of the following expressions:
+    def open(self, path):
+        """Open a contactless reader device identified by *path*.
 
-        * ``usb[:vendor[:product]]`` with *vendor* and *product* id (hex)
-        * ``usb[:bus[:device]]`` with usb *bus* and *device* number (dec)
-        * ``tty[:usb[:port]]`` with usb serial *port* number (dec)
-        * ``tty[:com[:port]]`` with serial *port* number (dec)
-        * ``udp[:host[:port]]`` with *host* IP or name and *port* number
+        :param path: search path for contactless reader
+        :returns True: if reader was found and activated
 
-        :raises `IOError(ENODEV)` if no available reader device is found.
+        **Path specification:**
+        
+          ``usb[:vendor[:product]]``
+            with optional *vendor* and *product* as four digit
+            hexadecimal numbers, like ``usb:054c:06c3`` would open the
+            first Sony RC-S380 reader and ``usb:054c`` the first Sony
+            reader.
+        
+          ``usb[:bus[:device]]``
+            with optional *bus* and *device* number as three-digit
+            decimal numbers, like ``usb:001:023`` would specifically
+            mean the usb device with bus number 1 and device id 23
+            whereas ``usb:001`` would mean to use the first available
+            reader on bus number 1.
+        
+          ``tty:port:driver``
+            with mandatory *port* and *driver* name should be used on
+            Posix systems to open the serial port at device node
+            ``/dev/tty<port>`` and load the driver from module
+            ``nfc/dev/<driver>.py``. A typical example would be
+            ``tty:USB0:arygon`` for the Arygon APPx/ADRx at
+            ``/dev/ttyUSB0``.
+        
+          ``com:port:driver``
+            with mandatory *port* and *driver* name should be used on
+            Windows systems to open the serial port ``COM<port>`` and
+            load the ``nfc/dev/<driver>.py`` driver module.
+        
+          ``udp[:host][:port]`` with optional *host* name or address
+            and *port* number will use a fake communication channel over
+            UDP/IP. Either value may be omitted in which case *host*
+            defaults to 'localhost' and *port* defaults to 54321.
+
         """
-        if not path: log.info("searching for a usable reader")
-        else: log.info("searching for reader with path '{0}'".format(path))
+        if not isinstance(path, str):
+            raise TypeError("expecting a string type argument *path*")
+        if not len(path) > 0:
+             raise ValueError("argument *path* must not be empty")
+    
+        log.info("searching for reader with path '{0}'".format(path))
 
         with self.lock:
             self.dev = nfc.dev.connect(path)
-            if self.dev is None:
-                msg = "no reader found"
-                log.error(msg + " at '{0}'".format(path) if path else msg)
-                raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
-
+        
+        if self.dev is None:
+            log.error("no reader found at '{0}'".format(path))
+        else:
             log.info("using {0}".format(self.dev))
+            
+        return bool(self.dev)
 
     def close(self):
         """Close the contacless reader device."""
         with self.lock:
-            self.dev.close()
-            self.dev = None
+            if self.dev:
+                self.dev.close()
+                self.dev = None
 
     def connect(self, **options):
         """Connect with a contactless target or become connected as a
-        contactless target. Connect blocks the calling thread until an
+        contactless target. Blocks the calling thread until a single
         activation and deactivation has completed. Connect options are
-        given as keyword arguments with dictionary values and at least
-        one option must be present. Possible options are:
+        given as keyword arguments with dictionary values. Possible
+        options are:
         
         * ``rdwr={key: value, ...}`` - options for reader/writer operation
         * ``llcp={key: value, ...}`` - options for peer to peer mode operation
@@ -255,7 +294,7 @@ class ContactlessFrontend(object):
         >>>
         >>> def connected(tag, command):
         ...     print tag
-        ...     print str(command).enccode("hex")
+        ...     print str(command).encode("hex")
         ...
         >>> clf = nfc.ContactlessFrontend()
         >>> idm = bytearray.fromhex("01010501b00ac30b")
@@ -267,13 +306,20 @@ class ContactlessFrontend(object):
         100601010501b00ac30b010b00018000
         True
         
+        Connect returns :const:`None` if no options were to execute,
+        :const:`False` if interrupted by a :exc:`KeyboardInterrupt`,
+        or :const:`True` if terminated normally and the 'on-connect'
+        callback function had returned :const:`True`. If the
+        'on-connect' callback had returned :const:`False` the return
+        value of connect() is the same parameters as were provided to
+        the callback function.
         """
         log.debug("connect({0})".format(options))
         
         rdwr_options = options.get('rdwr')
         llcp_options = options.get('llcp')
         card_options = options.get('card')
-        
+
         if isinstance(rdwr_options, dict):
             rdwr_options.setdefault('targets', [
                     TTA(br=106, cfg=None, uid=None), TTB(br=106),
@@ -288,7 +334,7 @@ class ContactlessFrontend(object):
                 if not 'on-connect' in rdwr_options:
                     rdwr_options['on-connect'] = lambda tag: True
         elif rdwr_options is not None:
-            raise TypeError("rdrw_options must be a dictionary")
+            raise TypeError("argument *rdrw* must be a dictionary")
         
         if isinstance(llcp_options, dict):
             llc = nfc.llcp.llc.LogicalLinkController(
@@ -302,7 +348,7 @@ class ContactlessFrontend(object):
                 if not 'on-connect' in llcp_options:
                     llcp_options['on-connect'] = lambda llc: True
         elif llcp_options is not None:
-            raise TypeError("llcp_options must be a dictionary")
+            raise TypeError("argument *llcp* must be a dictionary")
 
         if isinstance(card_options, dict):
             if 'on-startup' in card_options:
@@ -317,17 +363,24 @@ class ContactlessFrontend(object):
                 if not 'on-connect' in card_options:
                     card_options['on-connect'] = lambda tag, command: True
         elif card_options is not None:
-            raise TypeError("card_options must be a dictionary")
+            raise TypeError("argument *card* must be a dictionary")
 
         some_options = rdwr_options or llcp_options or card_options
         if not some_options:
             log.warning("no options left to connect")
+            return None
+        
         try:
-            while some_options:
-                if ((llcp_options and self._llcp_connect(llcp_options, llc)) or
-                    (rdwr_options and self._rdwr_connect(rdwr_options)) or
-                    (card_options and self._card_connect(card_options))):
-                    return True
+            while True:
+                if llcp_options:
+                    result = self._llcp_connect(llcp_options, llc)
+                    if bool(result): return result
+                if rdwr_options:
+                    result = self._rdwr_connect(rdwr_options)
+                    if bool(result): return result
+                if card_options:
+                    result = self._card_connect(card_options)
+                    if bool(result): return result
         except KeyboardInterrupt as error:
             log.debug(error)
             return False
@@ -343,8 +396,11 @@ class ContactlessFrontend(object):
             if tag is not None:
                 log.debug("connected to {0}".format(tag))
                 if options['on-connect'](tag=tag):
-                    while tag.is_present: time.sleep(0.1)
-                return True
+                    while tag.is_present:
+                        time.sleep(0.1)
+                    return True
+                else:
+                    return tag
         
     def _llcp_connect(self, options, llc):
         for role in ('target', 'initiator'):
@@ -352,8 +408,11 @@ class ContactlessFrontend(object):
                 DEP = eval("nfc.dep." + role.capitalize())
                 if llc.activate(mac=DEP(clf=self)):
                     log.debug("connected {0}".format(llc))
-                    if options['on-connect'](llc=llc): llc.run()
-                    return True
+                    if options['on-connect'](llc=llc):
+                        llc.run()
+                        return True
+                    else:
+                        return llc
         
     def _card_connect(self, options):
         timeout = options.get('timeout', 1.0)
@@ -365,8 +424,16 @@ class ContactlessFrontend(object):
                 tag = nfc.tag.emulate(self, target)
                 if tag is not None:
                     log.debug("connected as {0}".format(tag))
-                    options['on-connect'](tag=tag, command=command)
-                return True
+                    if options['on-connect'](tag=tag, command=command):
+                        while command is not None:
+                            response = tag.process_command(command)
+                            try:
+                                command = tag.send_response(response, 1)
+                            except nfc.clf.DigitalProtocolError:
+                                break
+                        return True
+                    else:
+                        return tag
         
     @property
     def capabilities(self):
@@ -389,15 +456,14 @@ class ContactlessFrontend(object):
 
     def listen(self, target, timeout):
         """Listen for *timeout* seconds to become initialized as a
-        *target*. The *target* must be set to one of
-        :class:`nfc.clf.TTA`, :class:`nfc.clf.TTB`,
-        :class:`nfc.clf.TTF`, or :class:`nfc.clf.DEP` (note that
-        target type support depends on the hardware capabilities). The
-        return value is :const:`None` if *timeout* elapsed without
-        activation or a tuple (target, command) where target is the
-        activated target (which may differ from the requested target,
-        see below) and command is the first command received from the
-        initiator.
+        *target*. The *target* must be one of :class:`nfc.clf.TTA`,
+        :class:`nfc.clf.TTB`, :class:`nfc.clf.TTF`, or
+        :class:`nfc.clf.DEP` (note that target type support depends on
+        the hardware capabilities). The return value is :const:`None`
+        if *timeout* elapsed without activation or a tuple (target,
+        command) where target is the activated target (which may
+        differ from the requested target, see below) and command is
+        the first command received from the initiator.
 
         If an activated target is returned, the target type and
         attributes may differ from the *target* requested. This is

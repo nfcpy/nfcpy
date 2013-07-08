@@ -26,9 +26,6 @@ Tutorials
 :doc:`topics/get-started`
     Get started with the nfcpy module and example programs.
 
-:doc:`topics/tag`
-    Supported tag types and how to use them.
-
 :doc:`topics/ndef`
     How to parse or generate NDEF records and messages.
 

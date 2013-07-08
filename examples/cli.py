@@ -128,11 +128,12 @@ class CommandLineInterface(object):
             title="Device Options")
         group.add_argument(
             "--device", metavar="NAME", action="append",
-            help="use specified contactless reader(s): "\
-                "usb[:vendor[:product]] (vendor and product in hex), "\
-                "usb[:bus[:dev]] (bus and device number in decimal), "\
-                "tty[:(usb|com)[:port]] (usb virtual or com port), "\
-                "udp[:host[:port]] (defaults to 'udp:localhost:54321')")
+            help="use contactless reader at: "\
+                "'usb[:vid[:pid]]' (with vendor and product id), "\
+                "'usb[:bus[:dev]]' (with bus and device number), "\
+                "'tty:port:driver' (with /dev/tty<port> and <driver>), "\
+                "'com:port:driver' (with COM<port> and <driver>), "\
+                "'udp[:host[:port]]' (with <host> name/addr and <port> number)")
         
     def add_iop_options(self, argument_parser):
         group = argument_parser.add_argument_group(
@@ -218,7 +219,7 @@ class CommandLineInterface(object):
 
     def run_once(self):
         if self.options.device is None:
-            self.options.device = ['']
+            self.options.device = ['usb']
             
         for device in self.options.device:
             try: clf = nfc.ContactlessFrontend(device)

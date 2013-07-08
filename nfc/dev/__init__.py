@@ -44,15 +44,14 @@ usb_device_map = {
     (0x072f, 0x2200) : "acr122", # Arygon ACR122U
     }
 
-def connect(path=None):
+def connect(path):
+    assert isinstance(path, str) and len(path) > 0
+    
     def import_driver(name):
         name = "nfc.dev.{0}".format(name)
         log.debug("import {0}".format(name))
         return importlib.import_module(name)
         
-    if not path:
-        path = "usb"
-
     found = transport.USB.find(path)        
     if found is not None:
         for vid, pid, bus, dev in found:
