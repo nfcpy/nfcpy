@@ -395,7 +395,8 @@ class ContactlessFrontend(object):
             tag = nfc.tag.activate(self, target)
             if tag is not None:
                 log.debug("connected to {0}".format(tag))
-                if options['on-connect'](tag=tag):
+                callback = options['on-connect']
+                if callback and callback(tag=tag):
                     while tag.is_present:
                         time.sleep(0.1)
                     return True
@@ -408,7 +409,8 @@ class ContactlessFrontend(object):
                 DEP = eval("nfc.dep." + role.capitalize())
                 if llc.activate(mac=DEP(clf=self)):
                     log.debug("connected {0}".format(llc))
-                    if options['on-connect'](llc=llc):
+                    callback = options['on-connect']
+                    if callback and callback(llc=llc):
                         llc.run()
                         return True
                     else:
@@ -424,7 +426,8 @@ class ContactlessFrontend(object):
                 tag = nfc.tag.emulate(self, target)
                 if tag is not None:
                     log.debug("connected as {0}".format(tag))
-                    if options['on-connect'](tag=tag, command=command):
+                    callback = options['on-connect']
+                    if callback and callback(tag=tag, command=command):
                         while command is not None:
                             response = tag.process_command(command)
                             try:
