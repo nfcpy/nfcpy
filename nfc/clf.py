@@ -166,7 +166,9 @@ class ContactlessFrontend(object):
         """Close the contacless reader device."""
         with self.lock:
             if self.dev:
+                #try:
                 self.dev.close()
+                #except IOError: pass
                 self.dev = None
 
     def connect(self, **options):
