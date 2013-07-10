@@ -88,9 +88,9 @@ class SnepClient(object):
             self.release_connection = False
         try:
             snep_request = '\x10\x01'
-            snep_request += struct.pack('>L', 4 + len(ndef_message))
+            snep_request += struct.pack('>L', 4 + len(str(ndef_message)))
             snep_request += struct.pack('>L', self.acceptable_length)
-            snep_request += ndef_message
+            snep_request += str(ndef_message)
             if send_request(self.socket, snep_request, self.send_miu):
                 snep_response = recv_response(
                     self.socket, self.acceptable_length, timeout)
@@ -113,8 +113,8 @@ class SnepClient(object):
         else:
             self.release_connection = False
         try:
-            ndef_msgsize = struct.pack('>L', len(ndef_message))
-            snep_request = '\x10\x02' + ndef_msgsize + ndef_message
+            ndef_msgsize = struct.pack('>L', len(str(ndef_message)))
+            snep_request = '\x10\x02' + ndef_msgsize + str(ndef_message)
             if send_request(self.socket, snep_request, self.send_miu):
                 snep_response = recv_response(self.socket, 0, timeout)
                 if snep_response is not None:
