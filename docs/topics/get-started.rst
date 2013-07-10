@@ -288,7 +288,7 @@ or send by an external program) ::
 Now we've got LLCP running but there's still not much we can do with
 it. But same as for the other modes we can add a callback function for
 the ``on-connect`` event. This function will receive as it's single
-argument the :class:`~nfc.llcp:llc:LogicalLinkController` instance
+argument the :class:`~nfc.llcp.llc.LogicalLinkController` instance
 that controls the LLCP link. ::
 
   >>> import nfc
@@ -327,11 +327,11 @@ stuff but return immediately and give us the callback parameters. ::
 Application code is not supposed to work directly with the *llc*
 object but it's one of the parameters we need to create a
 :class:`nfc.llcp.Socket` for the actual communication. The other
-argument we need to supply is the socket type, either
+parameter we need to supply is the socket type, either
 :const:`nfc.llcp.LOGICAL_DATA_LINK` for a connection-less socket or
 :const:`nfc.llcp.DATA_LINK_CONNECTION` for a connection-mode socket. A
 connection-less socket does not guarantee that application data is
-delivered to the remote application (although *nfcpy* guarantees that
+delivered to the remote application (although *nfcpy* makes sure that
 it's been delivered to the remote device). A connection-mode socket
 cares about reliability, unless the other implementation is buggy data
 you send is guaranteed to make it to the receiving application -
@@ -343,11 +343,11 @@ running that we can play with. The acronym SNEP stands for the NFC
 Forum Simple NDEF Exchange Protocol and the SNEP Default Server is a
 service that must be available on every NFC Forum certified
 device. Though many phones are not yet certified, a SNEP default
-server is built into stock Android and part of the Android Beam
-feature. As SNEP messages are exchanged over an LLCP data link
-connection we'll first create a connection-mode socket, then determine
-the address of the SNEP server, connect to the server and send some
-data. ::
+server is built into stock Android as part of the Android Beam
+feature. Because SNEP messages are exchanged over an LLCP data link
+connection we'll first have to create a connection-mode socket, then
+determine the address of the SNEP server, connect to the server and
+finally send some data. ::
 
   >>> import nfc, threading
   >>> clf = nfc.ContactlessFrontend('usb)
@@ -375,18 +375,19 @@ Internet browser has opened the http://nfcpy.org web page. In Android terminolog
 .. _NFC Forum Assigned Numbers Register:
    http://www.nfc-forum.org/specs/nfc_forum_assigned_numbers_register
 
-Just for the purpose of demonstration I've shown how to resolve the
-SNEP default server's service name into an address value. Both the
-service name ``urn:nfc:sn:snep`` and the address 4 are well-known
-values defined in the `NFC Forum Assigned Numbers Register`_ so we
-could have directly connect to 4. It is also possible to use a service
-name as an address so below calls all have the same effect. ::
+Just for the purpose of demonstration the example did resolve the SNEP
+default server's service name into an address value first. But both
+the service name ``urn:nfc:sn:snep`` and the address 4 are well-known
+values defined in the `NFC Forum Assigned Numbers Register`_ and so
+we've could have directly connect to address 4. And because it is also
+possible to use a service name as an address we've could have gone
+without the reolve step at all. So all of the following calls would have brought us the same effect. ::
 
   >>> socket.connect( socket.resolve('urn:nfc:sn:snep') )
   >>> socket.connect( 'urn:nfc:sn:snep' )
   >>> socket.connect( 4 )
 
-As it is a primary goal of *nfcpy* to make life as simple as possible
+As it is a primary goal of *nfcpy* to make life as simple as possible,
 there is no need to mess around with binary strings. The
 :class:`nfc.snep.SnepClient` does all the things needed, just import
 :mod:`nfc.snep` to have it available. ::
