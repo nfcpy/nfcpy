@@ -397,8 +397,7 @@ there is no need to mess around with binary strings. The
   >>> connected = lambda llc: threading.Thread(target=llc.run()).start()
   >>> llc = clf.connect(llcp={'on-connect': connected})
   >>> snep = nfc.snep.SnepClient(llc)
-  >>> uri = "http://nfcpy.org"
-  >>> snep.put(nfc.ndef.Message(nfc.ndef.SmartPosterRecord(uri)))
+  >>> snep.put(nfc.ndef.Message(nfc.ndef.SmartPosterRecord("http://nfcpy.org")))
   >>> clf.close()
 
 The :mod:`nfc.llcp` module documentation contains more information on
