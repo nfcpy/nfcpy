@@ -56,7 +56,7 @@ class Socket(object):
         device does not know about the service name requested. The
         return value is None if communication with the peer device got
         terminated."""
-        return self.sap[1].resolve(name)
+        return self.llc.resolve(name)
 
     def setsockopt(self, option, value):
         """Return the value of the given socket option."""
