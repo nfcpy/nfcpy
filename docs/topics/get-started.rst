@@ -60,7 +60,7 @@ difference is that :meth:`~ContactlessFrontend.open` returns either
 found whereas ``ContactlessFrontend('...')`` raises :exc:`IOError`
 if a reader was not found.
 
-Read/Write Tags
+Read/write tags
 ---------------
 
 With a reader opened the next step to get an NFC communication running
@@ -224,12 +224,182 @@ the message to be read back from the tag and finally printed.
    API documentation as well as the :ref:`ndef-tutorial` tutorial to
    learn how *nfcpy* maps to the concepts of the NDEF specification.
 
-Emulate Tags
-------------
+Emulate a tag
+-------------
 
 This section has yet to be written.
 
-Peer 2 Peer
------------
+Work with a peer
+----------------
 
-This section has yet to be written. Meantime, you may read the :mod:`nfc.llcp` API documentation which has some lightweight examples too.
+The best part of NFC comes when the limitations of a single master
+controlling a poor servant are overcome. This is achieved by the NFC
+Forum Logical Link Control Protocol (LLCP), which allows multiplexed
+communications between two NFC Forum Devices with either peer able to
+send protocol data units at any time and no restriction to a single
+application run in one direction.
+
+An LLCP link between two NFC devices is established again by calling
+:meth:`ContactlessFrontend.connect` with a set of options, this time
+they go with the argument ``llcp``.
+
+.. note:: The example code in this section assumes that you have an
+   Android phone to use as peer device. If that is not the case you
+   can either use readers that are supported by *nfcpy* and start
+   ``examples/snep-test-server.py --loop`` before diving into the
+   examples or use the UDP driver to work without a hardware. You'll
+   then start ``examples/snep-test-server.py --loop --device udp``
+   first and initalize :meth:`~ContactlessFrontend` with the path
+   string ``'udp'`` instead of ``'usb'``.
+
+Here's the shortest code fragment we can use to get an LLCP link
+running. ::
+
+  >>> import nfc
+  >>> clf = ContactlessFrontend('usb')
+  >>> clf.connect(llcp={}) # now touch your phone
+  True
+  >>> clf.close()
+
+Depending on your reader and the phone you may have had to explicitely
+move both out of proximity to see :const:`True` printed after connect
+or it may just have happened. That is simply because the device
+connect phase may have seen unstable communication and ``connect``
+returns after one activation/deactivation.
+
+.. note:: In the contactless world it can not be really distinguished
+   whether deactivation was intentional deactivation or because of
+   broken communication. A broken communication is just the normal
+   case when a user removes the device.
+
+Remember that :meth:`~ContactlessFrontend.connect` returns
+:const:`True` (or something that evaluates :const:`True` in a boolean
+expression) when returning normally and the pattern is clear: We just
+need to call :meth:`~ContactlessFrontend.connect` in an endless loop
+until a :exc:`KeyboardInterrupt` exception is raised (with ``Ctrl-C``
+or send by an external program) ::
+
+  >>> import nfc
+  >>> clf = ContactlessFrontend('usb')
+  >>> while clf.connect(llcp={}): pass
+  ...
+  >>> clf.close()
+
+Now we've got LLCP running but there's still not much we can do with
+it. But same as for the other modes we can add a callback function for
+the ``on-connect`` event. This function will receive as it's single
+argument the :class:`~nfc.llcp:llc:LogicalLinkController` instance
+that controls the LLCP link. ::
+
+  >>> import nfc
+  >>> def connected(llc):
+  ...     print llc
+  ...     return True
+  ...
+  >>> clf = ContactlessFrontend('usb')
+  >>> clf.connect(llcp={'on-connect': connected})
+  LLC: Local(MIU=128, LTO=100ms) Remote(MIU=1024, LTO=500ms)
+  True
+  >>> clf.close()
+
+The callback function is the place where we to start LLCP client and
+server applications but it is important to treat it like an interrupt,
+that means application code must be started in a separate thread and
+the callback return immediately. The reason is that in order to keep
+the LLCP link alive and receive or dispatch LLC protocol data units
+(PDUs) the :class:`~nfc.llcp.llc.LogicalLinkController` must run a
+service loop and :meth:`~ContactlessFrontend.connect` is using the
+calling thread's context for that. When using the interactive
+interpreter this is less convinient as we'd have to change the
+callback code when going further with the tutorial, so remember that
+if the callback returns :const:`False` or :const:`None` then
+:meth:`~ContactlessFrontend.connect` will not do the housekeeping
+stuff but return immediately and give us the callback parameters. ::
+
+  >>> import nfc, threading
+  >>> clf = nfc.ContactlessFrontend('usb)
+  >>> connected = lambda llc: threading.Thread(target=llc.run()).start()
+  >>> llc = clf.connect(llcp={'on-connect': connected})
+  >>> print llc
+  LLC: Local(MIU=128, LTO=100ms) Remote(MIU=1024, LTO=500ms)
+  >>> clf.close()
+
+Application code is not supposed to work directly with the *llc*
+object but it's one of the parameters we need to create a
+:class:`nfc.llcp.Socket` for the actual communication. The other
+argument we need to supply is the socket type, either
+:const:`nfc.llcp.LOGICAL_DATA_LINK` for a connection-less socket or
+:const:`nfc.llcp.DATA_LINK_CONNECTION` for a connection-mode socket. A
+connection-less socket does not guarantee that application data is
+delivered to the remote application (although *nfcpy* guarantees that
+it's been delivered to the remote device). A connection-mode socket
+cares about reliability, unless the other implementation is buggy data
+you send is guaranteed to make it to the receiving application -
+error-free and in order.
+
+So what can we do next with the Android phone? It happens that every
+modern NFC phone on the market has a so called SNEP Default Server
+running that we can play with. The acronym SNEP stands for the NFC
+Forum Simple NDEF Exchange Protocol and the SNEP Default Server is a
+service that must be available on every NFC Forum certified
+device. Though many phones are not yet certified, a SNEP default
+server is built into stock Android and part of the Android Beam
+feature. As SNEP messages are exchanged over an LLCP data link
+connection we'll first create a connection-mode socket, then determine
+the address of the SNEP server, connect to the server and send some
+data. ::
+
+  >>> import nfc, threading
+  >>> clf = nfc.ContactlessFrontend('usb)
+  >>> connected = lambda llc: threading.Thread(target=llc.run()).start()
+  >>> llc = clf.connect(llcp={'on-connect': connected})
+  >>> socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
+  >>> addr = socket.resolve('urn:nfc:sn:snep')
+  >>> addr
+  4
+  >>> socket.connect(addr)
+  >>> msg = nfc.ndef.Message(nfc.ndef.SmartPosterRecord("http://nfcpy.org"))
+  >>> str(msg)
+  '\xd1\x02\x0eSp\xd1\x01\nU\x03nfcpy.org'
+  >>> hex(len(str(msg)))
+  '0x13'
+  >>> socket.send("\x10\x02\x00\x00\x00\x13" + str(msg))
+  >>> socket.recv()
+  '\x10\x81\x00\x00\x00\x00'
+  >>> socket.close()
+  >>> clf.close()
+
+If your phone has an Internet connection you should now see that the
+Internet browser has opened the http://nfcpy.org web page. In Android terminology we've *beamed*.
+
+.. _NFC Forum Assigned Numbers Register:
+   http://www.nfc-forum.org/specs/nfc_forum_assigned_numbers_register
+
+Just for the purpose of demonstration I've shown how to resolve the
+SNEP default server's service name into an address value. Both the
+service name ``urn:nfc:sn:snep`` and the address 4 are well-known
+values defined in the `NFC Forum Assigned Numbers Register`_ so we
+could have directly connect to 4. It is also possible to use a service
+name as an address so below calls all have the same effect. ::
+
+  >>> socket.connect( socket.resolve('urn:nfc:sn:snep') )
+  >>> socket.connect( 'urn:nfc:sn:snep' )
+  >>> socket.connect( 4 )
+
+As it is a primary goal of *nfcpy* to make life as simple as possible
+there is no need to mess around with binary strings. The
+:class:`nfc.snep.SnepClient` does all the things needed, just import
+:mod:`nfc.snep` to have it available. ::
+
+  >>> import nfc, nfc.snep, threading
+  >>> clf = nfc.ContactlessFrontend('usb)
+  >>> connected = lambda llc: threading.Thread(target=llc.run()).start()
+  >>> llc = clf.connect(llcp={'on-connect': connected})
+  >>> snep = nfc.snep.SnepClient(llc)
+  >>> uri = "http://nfcpy.org"
+  >>> snep.put(nfc.ndef.Message(nfc.ndef.SmartPosterRecord(uri)))
+  >>> clf.close()
+
+The :mod:`nfc.llcp` module documentation contains more information on
+LLCP and the :class:`nfc.llcp.Socket` API.
+
