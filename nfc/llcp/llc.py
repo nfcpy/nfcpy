@@ -212,7 +212,6 @@ class ServiceDiscovery(object):
 
 class LogicalLinkController(object):
     def __init__(self, recv_miu=248, send_lto=500, send_agf=True):
-        #super(LogicalLinkControl, self).__init__()
         self.lock = threading.RLock()
         self.cfg = dict()
         self.cfg['recv-miu'] = recv_miu
@@ -222,6 +221,13 @@ class LogicalLinkController(object):
         self.sap = 64 * [None]
         self.sap[0] = ServiceAccessPoint(0, self)
         self.sap[1] = ServiceDiscovery(self)
+
+    def __str__(self):
+        local = "Local(MIU={miu}, LTO={lto}ms)".format(
+            miu=self.cfg.get('recv-miu'), lto=self.cfg.get('send-lto'))
+        remote = "Remote(MIU={miu}, LTO={lto}ms)".format(
+            miu=self.cfg.get('send-miu'), lto=self.cfg.get('recv-lto'))
+        return "LLC: {local} {remote}".format(local=local, remote=remote)
 
     def activate(self, mac):
         assert type(mac) in (nfc.dep.Initiator, nfc.dep.Target)
@@ -320,6 +326,9 @@ class LogicalLinkController(object):
             print # move to new line
             self.terminate(reason="local choice")
             raise KeyboardInterrupt
+        except IOError:
+            self.terminate(reason="input/output error")
+            raise SystemExit
         finally:
             log.debug("llc run loop terminated on initiator")
 
@@ -347,6 +356,9 @@ class LogicalLinkController(object):
             print # move to new line
             self.terminate(reason="local choice")
             raise KeyboardInterrupt
+        except IOError:
+            self.terminate(reason="input/output error")
+            raise SystemExit
         finally:
             log.debug("llc run loop terminated on target")
 
