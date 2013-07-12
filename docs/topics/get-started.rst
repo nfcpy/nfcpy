@@ -262,7 +262,7 @@ option. ::
    ``'examples/tagtool.py --device udp'`` as card reader.
 
 You can read the tag we've created for example with the excellent `NXP
-Tag Info App`_ available for free in the Android app store. It will
+Tag Info`_ app available for free in the Android app store. It will
 tell you that this is a *FeliCa Plug RC-S926* tag (because we said
 that with the first two bytes of the *IDm*) and if you switch over to
 the TECH view there'll be the *IDm*, *PMm* and *System Code* we've
@@ -274,9 +274,9 @@ set.
    work pretty well and the same should be true for the Samsung S4 as
    those are having the same chip. Other phones can be a little bitchy.
 
-But it will say that there's no NDEF partition on it, so let's fix
-that. It's unfortunately now going to be a bit more code and you
-probably want to copy it, so the following is not showing the
+The `NXP Tag Info`_ app tells us that there's no NDEF partition on it,
+so let's fix that. It's unfortunately now going to be a bit more code
+and you probably want to copy it, so the following is not showing the
 interpreter prompt. ::
 
   import nfc
@@ -311,10 +311,10 @@ interpreter prompt. ::
   
   while clf.connect(card={'targets': [target], 'on-connect': connected}): pass
 
-We've now got a fully functional NFC Forum Type 3 Tag. If you have for
-example the `NXP Tag Writer App`_ start to write something to the
-card, touch again to read it back, and so on. Finally, press
-``Ctrl-C`` to stop the card working.
+We've now got a fully functional NFC Forum Type 3 Tag. If, for
+example, you have the `NXP Tag Writer`_ app installed, start to write
+something to the card, touch again to read it back, and so
+on. Finally, press ``Ctrl-C`` to stop the card working.
 
 .. note:: Other card commands can be realized by running the basic
    *receive command* and *send response* loop as part of the
@@ -324,10 +324,10 @@ card, touch again to read it back, and so on. Finally, press
    unknown command, check out :meth:`nfc.ContactlessFrontend.connect`
    in ``nfc/clf.py`` for something to start with.
 
-.. _NXP Tag Info App:
+.. _NXP Tag Info:
    https://play.google.com/store/apps/details?id=com.nxp.taginfolite
 
-.. _NXP Tag Writer App:
+.. _NXP Tag Writer:
    https://play.google.com/store/apps/details?id=com.nxp.nfc.tagwriter
 
 
