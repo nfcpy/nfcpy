@@ -224,10 +224,112 @@ the message to be read back from the tag and finally printed.
    API documentation as well as the :ref:`ndef-tutorial` tutorial to
    learn how *nfcpy* maps to the concepts of the NDEF specification.
 
-Emulate a tag
+Become a card
 -------------
 
-This section has yet to be written.
+How do we get *nfcpy* to be a card? We supply *card* options to
+:meth:`nfc.ContactlessFrontend.connect`. ::
+
+  >>> import nfc
+  >>> clf = nfc.ContactlessFrontend('usb')
+  >>> print clf.connect(card={})
+  None
+
+Guess you've noticed that something was going wrong. Unlike when
+reading a card (or tag) the ``clf.connect()`` call returns immediately
+and the result we're getting is :const:`None`. This is because there
+exists no sensible default behavior that can be applied when working
+as a tag, we need to be explicit about the technology we want to use
+(for a tag reader it just makes sense to look for all technologies and
+tag types). So we choose a technology and supply that as the 'targets'
+option. ::
+
+  >>> import nfc
+  >>> clf = nfc.ContactlessFrontend('usb')
+  >>> nfcf_idm = bytearray.fromhex('03FEFFE011223344')
+  >>> nfcf_pmm = bytearray.fromhex('01E0000000FFFF00')
+  >>> nfcf_sys = bytearray.fromhex('12FC')
+  >>> target = nfc.clf.TTF(br=212, idm=nfcf_idm, pmm=nfcf_pmm, sys=nfcf_sys)
+  >>> clf.connect(card={'targets': [target]}) # touch a reader
+  True
+
+.. note:: It is time to talk about the limitations. As of writing,
+   *nfcpy* supports tag emulation only for NFC Forum Type 3 Tag and
+   requires a Sony RC-S380 contactless frontend. The only alternative
+   to an RC-S380 is to use the UDP driver that simulates NFC
+   communication over UDP/IP. The use the UDP driver initialize
+   ContactlessFrontend with the string ``udp`` and use
+   ``'examples/tagtool.py --device udp'`` as card reader.
+
+You can read the tag we've created for example with the excellent `NXP
+Tag Info App`_ available for free in the Android app store. It will
+tell you that this is a *FeliCa Plug RC-S926* tag (because we said
+that with the first two bytes of the *IDm*) and if you switch over to
+the TECH view there'll be the *IDm*, *PMm* and *System Code* we've
+set.
+
+.. note:: Depending on your Android device it will be more or less
+   difficult to get a stable reading, it seems to depend much on the
+   phone's NFC chip and driver. Generally the Google Nexus 4 and 10
+   work pretty well and the same should be true for the Samsung S4 as
+   those are having the same chip. Other phones can be a little bitchy.
+
+But it will say that there's no NDEF partition on it, so let's fix
+that. It's unfortunately now going to be a bit more code and you
+probably want to copy it, so the following is not showing the
+interpreter prompt. ::
+
+  import nfc
+  clf = nfc.ContactlessFrontend('usb')
+  nfcf_idm = bytearray.fromhex('03FEFFE011223344')
+  nfcf_pmm = bytearray.fromhex('01E0000000FFFF00')
+  nfcf_sys = bytearray.fromhex('12FC')
+  target = nfc.clf.TTF(br=212, idm=nfcf_idm, pmm=nfcf_pmm, sys=nfcf_sys)
+
+  attr = nfc.tag.tt3.NdefAttributeData()
+  attr.version, attr.nbr, attr.nbw = '1.0', 12, 8
+  attr.capacity, attr.writeable = 1024, True
+  ndef_data_area = str(attr) + bytearray(attr.capacity)
+
+  def ndef_read(block_number, rb, re):
+      if block_number < len(ndef_data_area) / 16:
+          first, last = block_number*16, (block_number+1)*16
+          block_data = ndef_data_area[first:last]
+          return block_data
+  
+  def ndef_write(block_number, block_data, wb, we):
+      global ndef_data_area
+      if block_number < len(ndef_data_area) / 16:
+          first, last = block_number*16, (block_number+1)*16
+          ndef_data_area[first:last] = block_data
+          return True
+
+  def connected(tag, cmd):
+      tag.add_service(0x0009, ndef_read, ndef_write)
+      tag.add_service(0x000B, ndef_read, lambda: False)
+      return True
+  
+  while clf.connect(card={'targets': [target], 'on-connect': connected}): pass
+
+We've now got a fully functional NFC Forum Type 3 Tag. If you have for
+example the `NXP Tag Writer App`_ start to write something to the
+card, touch again to read it back, and so on. Finally, press
+``Ctrl-C`` to stop the card working.
+
+.. note:: Other card commands can be realized by running the basic
+   *receive command* and *send response* loop as part of the
+   application logic, for example as part of the ``on-connect``
+   callback function with a :const:`False` value returned at the
+   end. The loop requires a bit of exception checking and must handle
+   unknown command, check out :meth:`nfc.ContactlessFrontend.connect`
+   in ``nfc/clf.py`` for something to start with.
+
+.. _NXP Tag Info App:
+   https://play.google.com/store/apps/details?id=com.nxp.taginfolite
+
+.. _NXP Tag Writer App:
+   https://play.google.com/store/apps/details?id=com.nxp.nfc.tagwriter
+
 
 Work with a peer
 ----------------
