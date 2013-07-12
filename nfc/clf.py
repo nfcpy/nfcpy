@@ -371,7 +371,7 @@ class ContactlessFrontend(object):
             if card_options is not None:
                 if not card_options.get('targets'):
                     log.error("a target must be specified to connect as tag")
-                    return False
+                    return None
                 if not 'on-connect' in card_options:
                     card_options['on-connect'] = lambda tag, command: True
         elif card_options is not None:
@@ -408,7 +408,7 @@ class ContactlessFrontend(object):
             if tag is not None:
                 log.debug("connected to {0}".format(tag))
                 callback = options['on-connect']
-                if callback and callback(tag=tag):
+                if callback and callback(tag):
                     while tag.is_present:
                         time.sleep(0.1)
                     return True
@@ -422,7 +422,7 @@ class ContactlessFrontend(object):
                 if llc.activate(mac=DEP(clf=self)):
                     log.debug("connected {0}".format(llc))
                     callback = options['on-connect']
-                    if callback and callback(llc=llc):
+                    if callback and callback(llc):
                         llc.run()
                         return True
                     else:
@@ -439,7 +439,7 @@ class ContactlessFrontend(object):
                 if tag is not None:
                     log.debug("connected as {0}".format(tag))
                     callback = options['on-connect']
-                    if callback and callback(tag=tag, command=command):
+                    if callback and callback(tag, command):
                         while True:
                             response = (tag.process_command(command)
                                         if command is not None else None)
