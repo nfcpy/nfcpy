@@ -31,12 +31,7 @@ regex = re.compile(r'^Bus (.{3}) Device (.{3}): ID (.{4}):(.{4})')
 
 def test_usb_find_path_is_empty():
     found = nfc.dev.transport.USB.find(path='')
-    assert type(found) is list
-    assert len(found) == len(lsusb)
-    assert len(found) > 1
-    assert [(type(vid), type(pid), type(bus), type(dev))
-            is (int, int, str, str)
-            for vid, pid, bus, dev in found]
+    assert found is None
     
 def test_usb_find_path_is_usb():
     found = nfc.dev.transport.USB.find(path='usb')
