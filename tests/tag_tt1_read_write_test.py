@@ -63,6 +63,7 @@ class ContactlessFrontend(nfc.clf.ContactlessFrontend):
     def __init__(self, target, packets):
         self.target = target
         self.packets = packet_generator(packets)
+        self.dev = nfc.dev.Device()
 
     def sense(self, targets):
         for target in targets:

@@ -44,6 +44,7 @@ def makemask(s):
 class ContactlessFrontend(nfc.clf.ContactlessFrontend):
     def __init__(self, packets):
         self.packets = packet_generator(packets)
+        self.dev = nfc.dev.Device()
 
     @property
     def capabilities(self):
