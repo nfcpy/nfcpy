@@ -1,22 +1,95 @@
 Getting started
 ===============
 
-.. note::
+Installation
+------------
 
-   Working with contactless reader hardware may require root
-   permissions on Linux systems, it is usually necessary for readers
-   that connect via USB. The simplest way is to run python via sudo
-   but then the password must be input quite frequently. A more
-   persistent method is to adjust device node permissions, this will
-   at least keep it for the login session::
+.. _Bazaar:
+   http://bazaar.canonical.com/en/
 
-      $ lsusb
-      Bus 003 Device 009: ID 04e6:5591 SCM Microsystems, Inc.
-      $ sudo chmod 666 /dev/bus/usb/003/009
+.. _nfcpy trunk:
+   https://code.launchpad.net/~stephen-tiedemann/nfcpy/trunk
 
-   The most persistant method is to install a udev rules file into
-   /etc/udev/rules.d/. An example can be found at
-   https://code.google.com/p/libnfc/source/browse/trunk/contrib/udev/42-pn53x.rules
+.. _Launchpad:
+   https://launchpad.net/
+
+**1. Get the source**
+
+It is not yet possible to install *nfcpy* from PyPI - the Python
+Package Index or download a tarball. Install requires to use a
+`Bazaar`_ client and create a local branch. For a Debian based system
+this is as easy as: ::
+
+  $ sudo apt-get install bzr
+  $ cd <somedir>
+  $ bzr branch lp:nfcpy
+
+This will download a branch of the `nfcpy trunk`_ repository from
+Canonical's `Launchpad`_ source code hosting platform into the local
+directory ``<somedir>/trunk``.
+
+For a Windows install the easiest is to download the Bazaar standalone
+installer from http://wiki.bazaar.canonical.com/WindowsDownloads and
+choose the *Typical Installation* that includes the *Bazaar Explorer
+GUI Application*. Start *Bazaar Explorer*, go to *Get project source
+from elsewhere* and create a local **branch** of ``lp:nfcpy`` into
+``C:/src/nfcpy`` or some other directory of choice.
+
+**2. Install Python**
+
+Python is already installed on every Desktop Linux. Windows installers
+can be found at http://www.python.org/download/windows/. Make sure to
+choose a 2.x version, usually the latest, as *nfcpy* is not yet ported
+to Python 3.
+
+**3. Install libusb**
+
+The final piece needed is the USB library *libusb* and Python
+bindings. Once more this is dead easy for Linux where *libusb* is
+already available and the only step required is: ::
+
+  $ sudo apt-get install python-usb
+
+To install libusb for Windows read the *Driver Installation* at
+http://www.libusb.org/wiki/windows_backend and use *Zadig.exe* to
+install *libusb-win32* for the contactless reader device (connect the
+reader and cancel the standard Windows install dialog, the device will
+be selectable in *Zadig*). The Python USB library can be downloaded as
+a zip file from http://sourceforge.net/projects/pyusb/ and installed
+with ``python.exe setup.py install`` from within the unzipped pyusb
+source code directory (add the full path to *python.exe* if it's not
+part of the search path).
+
+**4. Run example**
+
+A couple of example programs come with *nfcpy*. To see if the
+installation succeeded and the reader is working head over to the
+*nfcpy* directory and run the tagtool example: ::
+
+  $ python examples/tagtool.py show
+
+Touch a compatible tag (NFC Forum Type 1-4) and the NDEF data should
+be printed. See :doc:`../examples/tagtool` for other options.
+
+.. note:: Things may not immediately work on Linux for two reasons:
+   The reader might be claimed by the Linux NFC subsystem available
+   since Linux 3.1 and root privileges may be required to access the
+   device. To prevent a reader being used by the NFC kernel driver add
+   a blacklist entry in ``'/etc/modprobe.d/'``, for example the following
+   line works for the PN533 based SCL3711: ::
+
+     $ echo "blacklist pn533" | sudo tee -a /etc/modprobe.d/blacklist-nfc.conf
+
+   Root permissions are usually needed for the USB readers and ``sudo
+   python`` is an easy fix, however not quite convinient and maybe a
+   bit dangerous. A better solution is to add a udev rule and make the
+   reader accessible to a normal user, like the following rules would
+   allow members of the *plugdev* group to access an SCL-3711 or
+   RC-S380 if stored in ``'/etc/udev/rules.d/nfcdev.rules'``. ::
+
+     SUBSYSTEM="usb", ACTION="add", ATTRS{idVendor}=="04e6", ATTRS{idProduct}=="5591", GROUP="plugdev" # SCM SCL-3711
+     SUBSYSTEM="usb", ACTION="add", ATTRS{idVendor}=="054c", ATTRS{idProduct}=="06c1", GROUP="plugdev" # Sony RC-S380
+
 
 Open a reader
 -------------
