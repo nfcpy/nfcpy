@@ -28,25 +28,25 @@ Installation on (Ubuntu) Linux is as easy as: ::
 Supported Hardware
 ------------------
 
-These readers are supported on Linux, Windows and Mac:
-
 * Sony RC-S330/360/370/380
-* SCM SCL3710/11/12
-* ACS ACR122U
-
-These readers are supported on Linux (and probably Mac):
-
-* Arygon ACS122U
-* Arygon APPB US
+* SCM SCL-3710/11/12
+* ACS ACR122U (version 2.xx)
+* Arygon APPBUS
 * Stollmann NFC Reader
 
 Notes:
+
+* All readers are tested to work with Ubuntu Linux. Less frequently
+  some are tested to work on Windows (usually the SCL3711 and
+  RC-S3xx). User feedback indicates that the readers seem to work on
+  Mac. Readers with serial communication protocol have not yet been
+  tested on Windows.
 
 * The Sony RC-S380 is the only reader for which *nfcpy* currently
   supports tag emulation, more specifically Type 3 Tag emulation.
 
 * The NXP PN53x can not properly handle Type 1 Tags with dynamic
-  memory layout (Topaz 512) due to a firmware bug that not allow
+  memory layout (Topaz 512) due to a firmware bug that does not allow
   READ-8 and WRITE-8 commands to be executed.
 
 * The NXP PN531 chip does not support any Type 1 Tag command and is
@@ -56,7 +56,7 @@ Notes:
   as 256).
 
 * The ACR122U is disabled as P2P Listener because the listen time
-  cannot be set shorter than 5 seconds.
+  can't be set shorter than 5 seconds.
 
 Implementation Status
 ---------------------

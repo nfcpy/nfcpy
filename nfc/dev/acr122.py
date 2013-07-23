@@ -34,6 +34,18 @@ import pn53x
 
 class Chipset(pn53x.Chipset):
     def __init__(self, transport):
+        frame = bytearray([0xFF, 0x00, 0x48, 0x00, 0x00])
+        frame = bytearray([0x6B, len(frame)] + 8 * [0x00]) + frame
+        transport.write(frame)
+        frame = transport.read(1000)
+        if not (frame[0:10] == "830a0000000000028100".decode("hex")
+                and frame[10:17] == "ACR122U"):
+            log.error("failed to retrieve ACR122U version string")
+            raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
+        if int(chr(frame[-3])) < 2:
+            log.error("{0} is not supported, need version 2.xx"
+                      .format(frame[10:]))
+            raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
         super(Chipset, self).__init__(transport)
             
     def close(self):
