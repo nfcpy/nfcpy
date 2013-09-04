@@ -352,7 +352,8 @@ class ContactlessFrontend(object):
             llc = nfc.llcp.llc.LogicalLinkController(
                 recv_miu=llcp_options.get('miu', 128),
                 send_lto=llcp_options.get('lto', 100),
-                send_agf=llcp_options.get('agf', True))
+                send_agf=llcp_options.get('agf', True),
+                symm_log=llcp_options.get('symm-log', True))
             if 'on-startup' in llcp_options:
                 llc = llcp_options['on-startup'](self, llc)
                 if llc is None: llcp_options = None

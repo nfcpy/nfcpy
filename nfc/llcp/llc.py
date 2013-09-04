@@ -211,12 +211,14 @@ class ServiceDiscovery(object):
             self.resp.notify_all()
 
 class LogicalLinkController(object):
-    def __init__(self, recv_miu=248, send_lto=500, send_agf=True):
+    def __init__(self, recv_miu=248, send_lto=500, send_agf=True,
+                 symm_log=True):
         self.lock = threading.RLock()
         self.cfg = dict()
         self.cfg['recv-miu'] = recv_miu
         self.cfg['send-lto'] = send_lto
         self.cfg['send-agf'] = send_agf
+        self.cfg['symm-log'] = symm_log
         self.snl = dict({"urn:nfc:sn:sdp" : 1})
         self.sap = 64 * [None]
         self.sap[0] = ServiceAccessPoint(0, self)
@@ -290,17 +292,21 @@ class LogicalLinkController(object):
                 self.sap[i] = None
         
     def exchange(self, pdu, timeout):
-        try:
+        if not isinstance(pdu, Symmetry) or self.cfg.get('symm-log') is True:
             log.debug("SEND {0}".format(pdu))
-            data = pdu.to_string() if pdu else None
+
+        data = pdu.to_string() if pdu else None
+        try:
             data = self.mac.exchange(data, timeout)
+            if data is None: return None
         except nfc.clf.DigitalProtocolError as error:
             log.debug("{0!r}".format(error))
-        else:
-            if data is not None:
-                pdu = ProtocolDataUnit.from_string(data)
-                log.debug("RECV {0}".format(pdu))
-                return pdu
+            return None
+
+        pdu = ProtocolDataUnit.from_string(data)
+        if not isinstance(pdu, Symmetry) or self.cfg.get('symm-log') is True:
+            log.debug("RECV {0}".format(pdu))
+        return pdu
 
     def run_as_initiator(self, terminate=lambda: False):
         recv_timeout = 1E-3 * (self.cfg['recv-lto'] + 10)

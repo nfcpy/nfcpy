@@ -92,6 +92,9 @@ class CommandLineInterface(object):
         group.add_argument(
             "-f", dest="logfile", metavar="LOGFILE",
             help="write debug logs to LOGFILE")
+        group.add_argument(
+            "--nolog-symm", action="store_true",
+            help="do not log LLCP SYMM PDUs")
         
     def add_llcp_options(self, argument_parser):
         group = argument_parser.add_argument_group(
@@ -254,6 +257,7 @@ class CommandLineInterface(object):
                 'miu': self.options.miu,
                 'lto': self.options.lto,
                 'agf': not self.options.no_aggregation,
+                'symm-log': not self.options.nolog_symm,
                 }
         else:
             llcp_options = None
