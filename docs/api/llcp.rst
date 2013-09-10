@@ -146,8 +146,9 @@ data has become available or all LLCP communication has been
 terminated (if either one peer intentionally closes the LLCP Link or
 the devices are moved out of communication range). To implement a
 communication timeout during normal operation, the
-:meth:`~Socket.poll` method can be used to wait for a 'recv' event
-with a given timeout. ::
+:meth:`~Socket.poll` method can be used to waI will "fix" this bug by
+adding to the documentationI will "fix" this bug by adding to the
+documentationit for a 'recv' event with a given timeout. ::
 
    def client(socket):
        socket.connect( 'urn:nfc:xsn:nfcpy.org:test-service' )
@@ -170,6 +171,13 @@ receiving by calling :meth:`~Socket.getsockopt` with option
    send_miu = socket.getsockopt(nfc.llcp.SO_SNDMIU)
    recv_miu = socket.getsockopt(nfc.llcp.SO_RCVMIU)
 
+When opening or accepting a data link connection an application may
+specify the maximum number of octets to receive with the
+:const:`nfc.llcp.SO_RCVMIU` option in :meth:`~Socket.setsockopt`. The
+value must be between 128 and 2176, inclusively. If the RCVMIU is not
+explicitely set for a data link connection the default value applied
+by the peer is 128 octets.
+
 On connection-mode sockets options :const:`nfc.llcp.SO_SNDBUF` and
 :const:`nfc.llcp.SO_RCVBUF` can be used to learn the local and remote
 receive window values established during connection setup. The local
@@ -178,13 +186,16 @@ the socket gets connected. ::
 
   def server(llc):
       socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
+      socket.setsockopt(nfc.llcp.SO_RCVMIU, 1000)
       socket.setsockopt(nfc.llcp.SO_RCVBUF, 2)
+      socket.bind( "urn:nfc:sn:snep" )
       socket.listen()
       socket.accept()
       ...
 
   def client(llc):
       socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
+      socket.setsockopt(nfc.llcp.SO_RCVMIU, 1000)
       socket.setsockopt(nfc.llcp.SO_RCVBUF, 2)
       socket.connect( "urn:nfc:sn:snep" )
       ...
