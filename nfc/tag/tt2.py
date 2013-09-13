@@ -143,9 +143,10 @@ class NDEF(object):
         if not self.writeable:
             raise nfc.tag.AccessError
         data = bytearray(str(msg))
-        if len(data) > self.capacity:
+        nlen = len(data)
+        if nlen > self.capacity:
             raise nfc.tag.CapacityError
-        if len(data) < self.capacity:
+        if nlen < self.capacity:
             data = data + "\xFE"
         with self._tag as tag:
             offset = self._ndef_tlv_offset + 1
@@ -159,11 +160,11 @@ class NDEF(object):
         with self._tag as tag:
             offset = self._ndef_tlv_offset + 1
             if len(data) < 255:
-                tag[offset] = len(data)
+                tag[offset] = nlen
             else:
                 tag[offset] = 255
-                tag[offset+1] = len(data) / 256
-                tag[offset+2] = len(data) % 256
+                tag[offset+1] = nlen / 256
+                tag[offset+2] = nlen % 256
 
 class Type2Tag(object):
     type = "Type2Tag"
