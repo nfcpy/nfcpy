@@ -50,12 +50,13 @@ class SmartPosterRecord(Record):
     'urn:nfc:wkt:Sp' a :exc:`ValueError` exception is raised.
 
     >>> nfc.ndef.SmartPosterRecord(nfc.ndef.Record())
-    >>> nfc.ndef.TextRecord("http://nfcpy.org", "nfcpy")
-    >>> nfc.ndef.TextRecord("http://nfcpy.org", "nfcpy", action="save")
+    >>> nfc.ndef.SmartPosterRecord("http://nfcpy.org", "nfcpy")
+    >>> nfc.ndef.SmartPosterRecord("http://nfcpy.org", "nfcpy", action="save")
     """
     def __init__(self, uri, title={}, icons={}, action='default',
                  resource_size=None, resource_type=None):
         super(SmartPosterRecord, self).__init__('urn:nfc:wkt:Sp')
+        self._title = dict()
         self.title = title
         self.icons = icons
         self.action = action
