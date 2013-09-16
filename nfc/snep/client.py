@@ -67,17 +67,36 @@ class SnepClient(object):
         self.llc = llc
 
     def connect(self, service_name):
+        """Connect to a SNEP server. This needs only be called to
+        connect to a server other than the Default SNEP Server at
+        `urn:nfc:sn:snep` or if the client wants to send multiple
+        requests with a single connection.
+        """
         self.close()
         self.socket = nfc.llcp.Socket(self.llc, nfc.llcp.DATA_LINK_CONNECTION)
         self.socket.connect(service_name)
         self.send_miu = self.socket.getsockopt(nfc.llcp.SO_SNDMIU)
 
     def close(self):
+        """Close the data link connection with the SNEP server.
+        """
         if self.socket:
             self.socket.close()
             self.socket = None
 
-    def get(self, ndef_message='', timeout=1.0):
+    def get(self, ndef_message=None, timeout=1.0):
+        """Get an NDEF message from the server. Temporarily connects
+        to the default SNEP server if the client is not yet connected.
+        """
+        if ndef_message is None:
+            ndef_message = nfc.ndef.Message(nfc.ndef.Record())
+        ndef_message_data = self._get(ndef_message, timeout)
+        try:
+            return nfc.ndef.Message(ndef_message_data)
+        except Exception as err:
+            log.error(repr(err))
+        
+    def _get(self, ndef_message, timeout=1.0):
         """Get an NDEF message from the server. Temporarily connects
         to the default SNEP server if the client is not yet connected.
         """

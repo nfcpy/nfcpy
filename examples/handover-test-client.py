@@ -135,7 +135,7 @@ def handover_connect(llc, options):
 # global object to store the handover response in quirks mode when the
 # handover message exchange is via the snep default server, as done by
 # the initial Android Jelly Bean release.
-quirks_handover_snep_response_data = None
+quirks_handover_snep_response = None
 
 def handover_send(client, message, miu=128):
     if isinstance(client, nfc.handover.HandoverClient):
@@ -146,14 +146,14 @@ def handover_send(client, message, miu=128):
             if not client.send(message):
                 raise TestError("error sending handover request")
     elif isinstance(client, nfc.snep.SnepClient):
-        global quirks_handover_snep_response_data
-        quirks_handover_snep_response_data = None
+        global quirks_handover_snep_response
+        quirks_handover_snep_response = None
         try:
-            data = client.get(str(message), timeout=3.0)
+            message = client.get(message, timeout=3.0)
         except nfc.snep.SnepError as err:
             raise TestError("remote snep server returned '{0}'".format(err))
         else:
-            quirks_handover_snep_response_data = data
+            quirks_handover_snep_response = message
     else:
         raise ValueError("wrong client argument type")
 
@@ -163,10 +163,10 @@ def handover_recv(client, timeout, raw=False):
     if isinstance(client, nfc.handover.HandoverClient):
         message = client._recv(timeout)
     elif isinstance(client, nfc.snep.SnepClient):
-        global quirks_handover_snep_response_data
-        if quirks_handover_snep_response_data:
-            message = nfc.ndef.Message(quirks_handover_snep_response_data)
-            quirks_handover_snep_response_data = None
+        global quirks_handover_snep_response
+        if quirks_handover_snep_response:
+            message = quirks_handover_snep_response
+            quirks_handover_snep_response = None
     else:
         raise ValueError("wrong client argument type")
     

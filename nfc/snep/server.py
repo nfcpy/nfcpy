@@ -29,6 +29,7 @@ from threading import Thread
 from struct import pack, unpack
 
 import nfc.llcp
+import nfc.ndef
 
 class SnepServer(Thread):
     """ NFC Forum Simple NDEF Exchange Protocol server
@@ -94,9 +95,9 @@ class SnepServer(Thread):
 
                 # message complete, now handle the request
                 if opcode == 1 and len(snep_request) >= 10:
-                    snep_response = snep_server._get(snep_request)
+                    snep_response = snep_server.__get(snep_request)
                 elif opcode == 2:
-                    snep_response = snep_server._put(snep_request)
+                    snep_response = snep_server.__put(snep_request)
                 else:
                     log.debug("bad request {0}".format(version & 0x0f))
                     snep_response = "\x10\xC2\x00\x00\x00\x00"
@@ -117,10 +118,10 @@ class SnepServer(Thread):
         finally:
             socket.close()
 
-    def _get(self, snep_request):
+    def __get(self, snep_request):
         acceptable_length = unpack(">L", snep_request[6:10])[0]
-        response = self.get(acceptable_length, snep_request[10:])
-        if type(response) == type(int()):
+        response = self._get(acceptable_length, snep_request[10:])
+        if type(response) == int:
             response_code = chr(response)
             ndef_message = ""
         else:
@@ -129,26 +130,43 @@ class SnepServer(Thread):
         ndef_length = pack(">L", len(ndef_message))
         return "\x10" + response_code + ndef_length + ndef_message
 
+    def _get(self, acceptable_length, ndef_message_data):
+        log.debug("SNEP GET ({0})".format(ndef_message_data.encode("hex")))
+        try:
+            ndef_message = nfc.ndef.Message(ndef_message_data)
+        except (nfc.ndef.LengthError, nfc.ndef.FormatError) as err:
+            log.error(repr(err))
+            return 0xC2
+        else:
+            rsp = self.get(acceptable_length, ndef_message)
+            return str(rsp) if isinstance(rsp, nfc.ndef.Message) else rsp
+        
     def get(self, acceptable_length, ndef_message):
         """Handle Get requests. This method should be overwritten by a
         subclass of SnepServer to customize it's behavior. The default
         implementation simply returns Not Implemented.
         """
-        log.debug("get method called")
-        log.debug(ndef_message.encode("hex"))
         return 0xE0
 
-    def _put(self, snep_request):
-        response = self.put(snep_request[6:])
+    def __put(self, snep_request):
+        response = self._put(snep_request[6:])
         response_code = chr(response)
         ndef_length = "\x00\x00\x00\x00"
         return "\x10" + chr(response) + ndef_length
+
+    def _put(self, ndef_message_data):
+        log.debug("SNEP PUT ({0})".format(ndef_message_data.encode("hex")))
+        try:
+            ndef_message = nfc.ndef.Message(ndef_message_data)
+        except (nfc.ndef.LengthError, nfc.ndef.FormatError) as err:
+            log.error(repr(err))
+            return 0xC2
+        else:
+            return self.put(ndef_message)
 
     def put(self, ndef_message):
         """Handle Put requests. This method should be overwritten by a
         subclass of SnepServer to customize it's behavior. The default
         implementation simply returns Not Implemented.
         """
-        log.debug("put method called")
-        log.debug(ndef_message.encode("hex"))
         return 0xE0

@@ -55,6 +55,19 @@ class TestProgram(CommandLineInterface):
         super(TestProgram, self).__init__(
             parser, groups="test llcp dbg clf")
 
+    def test_00(self, llc):
+        """Read NDEF data to send from file 'beam.ndef'"""
+        
+        try:
+            data = open("beam.ndef", "rb").read()
+        except IOError:
+            return
+        ndef = nfc.ndef.Message(data)
+
+        snep = nfc.snep.SnepClient(llc, max_ndef_msg_recv_size=1024)
+        snep.put(ndef)
+        snep.close()
+
     def test_01(self, llc):
         """Connect and terminate"""
         
@@ -84,7 +97,7 @@ class TestProgram(CommandLineInterface):
 
         payload = ''.join([chr(x) for x in range(122-29)])
         record = nfc.ndef.Record("application/octet-stream", "1", payload)
-        ndef_message_sent.append(str(nfc.ndef.Message(record)))
+        ndef_message_sent.append(nfc.ndef.Message(record))
 
         snep = nfc.snep.SnepClient(llc, max_ndef_msg_recv_size=1024)
         try:
@@ -99,7 +112,7 @@ class TestProgram(CommandLineInterface):
 
             info("get short ndef message")
             identifier = nfc.ndef.Record("application/octet-stream", "1", "")
-            ndef_message = snep.get(str(nfc.ndef.Message(identifier)))
+            ndef_message = snep.get(nfc.ndef.Message(identifier))
             ndef_message_rcvd.append(ndef_message)
 
             for i in range(len(ndef_message_sent)):
@@ -108,7 +121,7 @@ class TestProgram(CommandLineInterface):
                 else:
                     info("rcvd ndef message {0} is correct".format(i))
         except Exception as e:
-            TestError("exception: " + str(e))
+            raise TestError("exception: " + str(e))
         finally:
             info("disconnect from {0}".format(validation_server))
             snep.close()
@@ -119,10 +132,9 @@ class TestProgram(CommandLineInterface):
         ndef_message_sent = list()
         ndef_message_rcvd = list()
 
-        #payload = ''.join([chr(x%256) for x in range(2171-29)])
-        payload = ''.join([chr(x%256) for x in range(512)])
+        payload = ''.join([chr(x%256) for x in range(2171-29)])
         record = nfc.ndef.Record("application/octet-stream", "1", payload)
-        ndef_message_sent.append(str(nfc.ndef.Message(record)))
+        ndef_message_sent.append(nfc.ndef.Message(record))
 
         snep = nfc.snep.SnepClient(llc, max_ndef_msg_recv_size=10000)
         try:
@@ -137,7 +149,7 @@ class TestProgram(CommandLineInterface):
 
             info("get large ndef message")
             identifier = nfc.ndef.Record("application/octet-stream", "1", "")
-            ndef_message = snep.get(str(nfc.ndef.Message(identifier)))
+            ndef_message = snep.get(nfc.ndef.Message(identifier))
             ndef_message_rcvd.append(ndef_message)
 
             for i in range(len(ndef_message_sent)):
@@ -160,9 +172,9 @@ class TestProgram(CommandLineInterface):
 
         payload = ''.join([chr(x%256) for x in range(50)])
         record = nfc.ndef.Record("application/octet-stream", "1", payload)
-        ndef_message_sent.append(str(nfc.ndef.Message(record)))
+        ndef_message_sent.append(nfc.ndef.Message(record))
         record = nfc.ndef.Record("application/octet-stream", "2", payload)
-        ndef_message_sent.append(str(nfc.ndef.Message(record)))
+        ndef_message_sent.append(nfc.ndef.Message(record))
 
         snep = nfc.snep.SnepClient(llc, max_ndef_msg_recv_size=10000)    
         try:
@@ -180,12 +192,12 @@ class TestProgram(CommandLineInterface):
 
             info("get 1st ndef message")
             identifier = nfc.ndef.Record("application/octet-stream", "1", "")
-            ndef_message = snep.get(str(nfc.ndef.Message(identifier)))
+            ndef_message = snep.get(nfc.ndef.Message(identifier))
             ndef_message_rcvd.append(ndef_message)
 
             info("get 2nd ndef message")
             identifier = nfc.ndef.Record("application/octet-stream", "2", "")
-            ndef_message = snep.get(str(nfc.ndef.Message(identifier)))
+            ndef_message = snep.get(nfc.ndef.Message(identifier))
             ndef_message_rcvd.append(ndef_message)
 
             for i in range(len(ndef_message_sent)):
@@ -205,9 +217,9 @@ class TestProgram(CommandLineInterface):
 
         payload = ''.join([chr(x) for x in range(122-29)])
         record = nfc.ndef.Record("application/octet-stream", "1", payload)
-        ndef_message_sent = str(nfc.ndef.Message(record))
+        ndef_message_sent = nfc.ndef.Message(record)
 
-        max_ndef_msg_recv_size = len(ndef_message_sent) - 1
+        max_ndef_msg_recv_size = len(str(ndef_message_sent)) - 1
         snep = nfc.snep.SnepClient(llc, max_ndef_msg_recv_size)
         try:
             info("connect to {0}".format(validation_server))
@@ -216,21 +228,21 @@ class TestProgram(CommandLineInterface):
             raise TestError("could not connect to validation server")
 
         try:
-            info("put {0} octets ndef message".format(len(ndef_message_sent)))
+            info("put {0} octets ndef message".format(
+                    len(str(ndef_message_sent))))
             snep.put(ndef_message_sent)
 
-            info("request ndef message back with max acceptable lenght of " +
+            info("request ndef message back with max acceptable lenght " +
                  str(max_ndef_msg_recv_size))
             identifier = nfc.ndef.Record("application/octet-stream", "1", "")
             try:
-                ndef_message = snep.get(str(nfc.ndef.Message(identifier)))
+                ndef_message = snep.get(nfc.ndef.Message(identifier))
             except nfc.snep.SnepError as e:
-                if e.errno == nfc.snep.ExcessData: return # PASS
-                raise TestError("received unexpected response code")
+                if e.errno != nfc.snep.ExcessData:
+                    raise TestError("received unexpected response code")
+                info("received 'excess data' response as expected")
             else:
                 raise TestError("received unexpected message from server")
-        except Exception:
-            raise
         finally:
             info("disconnect from {0}".format(validation_server))
             snep.close()
@@ -249,14 +261,13 @@ class TestProgram(CommandLineInterface):
             identifier = nfc.ndef.Record("application/octet-stream", "0", "")
             info("request ndef message " + repr(identifier))
             try:
-                ndef_message = snep.get(str(nfc.ndef.Message(identifier)))
+                ndef_message = snep.get(nfc.ndef.Message(identifier))
             except nfc.snep.SnepError as e:
-                if e.errno == nfc.snep.NotFound: return # PASS
-                raise TestError("received unexpected response code")
+                if e.errno != nfc.snep.NotFound:
+                    raise TestError("received unexpected response code")
+                info("received 'not found' response as expected")
             else:
                 raise TestError("received unexpected message from server")
-        except Exception:
-            raise
         finally:
             info("disconnect from {0}".format(validation_server))
             snep.close()
@@ -266,31 +277,31 @@ class TestProgram(CommandLineInterface):
 
         payload = ''.join([chr(x%256) for x in range(1024-32)])
         record = nfc.ndef.Record("application/octet-stream", "1", payload)
-        ndef_message = str(nfc.ndef.Message(record))
+        ndef_message = nfc.ndef.Message(record)
 
         snep = nfc.snep.SnepClient(llc)
         try:
             info("connect to {0}".format("urn:nfc:sn:snep"))
             snep.connect("urn:nfc:sn:snep")
         except nfc.llcp.ConnectRefused:
-            raise TestError("could not connect to validation server")
+            raise TestError("could not connect to default server")
 
         try:
-            info("put {0} octets ndef message".format(len(ndef_message)))
+            info("put {0} octets ndef message".format(len(str(ndef_message))))
             snep.put(ndef_message)
 
             identifier = nfc.ndef.Record("application/octet-stream", "1", "")
             info("request ndef message " + repr(identifier))
             try:
-                ndef_message = snep.get(str(nfc.ndef.Message(identifier)))
+                ndef_message = snep.get(nfc.ndef.Message(identifier))
             except nfc.snep.SnepError as e:
-                if e.errno == nfc.snep.NotImplemented: return # PASS
-                raise TestError("received unexpected response code")
+                if e.errno != nfc.snep.NotImplemented:
+                    raise TestError("received unexpected response code")
+                info("received 'not implemented' response as expected")
             else:
                 raise TestError("received unexpected message from server")
-        except Exception:
-            raise
         finally:
+            info("disconnect from server")
             snep.close()
 
 if __name__ == '__main__':

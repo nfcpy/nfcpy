@@ -43,8 +43,7 @@ class DefaultServer(nfc.snep.SnepServer):
 
     def put(self, ndef_message):
         log.info("default snep server got put request")
-        log.info("ndef message length is {0} octets".format(len(ndef_message)))
-        log.info(nfc.ndef.Message(ndef_message).pretty())
+        log.info(ndef_message.pretty())
         return nfc.snep.Success
 
 class ValidationServer(nfc.snep.SnepServer):
@@ -55,7 +54,6 @@ class ValidationServer(nfc.snep.SnepServer):
 
     def put(self, ndef_message):
         log.info("validation snep server got put request")
-        ndef_message = nfc.ndef.Message(ndef_message)
         key = (ndef_message.type, ndef_message.name)
         log.info("store ndef message under key " + str(key))
         self.ndef_message_store[key] = ndef_message
@@ -63,14 +61,13 @@ class ValidationServer(nfc.snep.SnepServer):
 
     def get(self, acceptable_length, ndef_message):
         log.info("validation snep server got get request")
-        ndef_message = nfc.ndef.Message(ndef_message)
         key = (ndef_message.type, ndef_message.name)
         log.info("client requests ndef message with key " + str(key))
         if key in self.ndef_message_store:
-            ndef_message = str(self.ndef_message_store[key])
-            info = "found matching ndef message, total length is {0} octets"
-            log.info(info.format(len(ndef_message)))
-            if len(ndef_message) <= acceptable_length:
+            ndef_message = self.ndef_message_store[key]
+            log.info("found matching ndef message")
+            log.info(ndef_message.pretty())
+            if len(str(ndef_message)) <= acceptable_length:
                 return ndef_message
             else: return nfc.snep.ExcessData
         return nfc.snep.NotFound

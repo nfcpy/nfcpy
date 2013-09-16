@@ -99,13 +99,11 @@ class DefaultSnepServer(nfc.snep.SnepServer):
 
     def put(self, ndef_message):
         log.info("default snep server got put request")
-        log.info("ndef message length is {0} octets".format(len(ndef_message)))
-        log.info(nfc.ndef.Message(ndef_message).pretty())
+        log.info(ndef_message.pretty())
         return nfc.snep.Success
 
-    def get(self, acceptable_length, data):
+    def get(self, acceptable_length, message):
         log.info("default snep server got GET request")
-        message = nfc.ndef.Message(data)
         if message.type == 'urn:nfc:wkt:Hr':
             try: hr = nfc.ndef.HandoverRequestMessage(message)
             except nfc.ndef.FormatError as e:
@@ -113,8 +111,7 @@ class DefaultSnepServer(nfc.snep.SnepServer):
                 log.warning("quirks: set handover request version to 1.1")
                 message = nfc.ndef.Message(data[:5] + '\x11' + data[6:])
                 hr = nfc.ndef.HandoverRequestMessage(message)
-            hs = self.select_carrier(hr)
-            return str(hs)
+            return self.select_carrier(hr)
         return nfc.snep.NotFound
 
 description = """
