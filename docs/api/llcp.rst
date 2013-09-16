@@ -76,12 +76,12 @@ into a service access point address number with
        message, address = socket.recvfrom()
        print("SAP {0} said: {1}".format(address, message))
 
-   def startup(llc):
+   def startup(clf, llc):
        socket = nfc.llcp.Socket(llc, nfc.llcp.LOGICAL_DATA_LINK)
        socket.bind( 'urn:nfc:xsn:nfcpy.org:test-service' )
        print("server bound to SAP {0}".format(socket.getsockname()))
        Thread(target=server, args=(socket,)).start()
-       return True
+       return llc
    
    def connected(llc):
        socket = nfc.llcp.Socket(llc, nfc.llcp.LOGICAL_DATA_LINK)
@@ -117,13 +117,13 @@ multiple service names are needed). ::
        message = socket.recv()
        print("Server said: {0}".format(message))
 
-   def startup(llc):
+   def startup(clf, llc):
        socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
        socket.bind( 'urn:nfc:xsn:nfcpy.org:test-service' )
        print("server bound to SAP {0}".format(socket.getsockname()))
        socket.listen()
        Thread(target=server, args=(socket,)).start()
-       return True
+       return llc
    
    def connected(llc):
        socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
