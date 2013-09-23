@@ -103,8 +103,8 @@ class TTY(object):
             log.debug(">>> " + str(frame).encode("hex"))
             self.tty.flushInput()
             try:
-                self.tty.write(frame)
-            except serial.SerialTimeoutException:
+                self.tty.write(str(frame))
+            except self.serial.SerialTimeoutException:
                 raise IOError(errno.EIO, os.strerror(errno.EIO))
 
     def close(self):
