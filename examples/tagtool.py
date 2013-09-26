@@ -228,6 +228,16 @@ class TagTool(CommandLineInterface):
 
     def show_tag(self, tag):
         print(tag)
+        if self.options.verbose:
+            if tag.type == "Type1Tag":
+                pass
+            elif tag.type == "Type2Tag":
+                pass
+            elif tag.type == "Type3Tag":
+                icc = str(tag.pmm[0:2]) # ic code
+                print("  " + tt3_card_map.get(icc, "unknown card type"))
+            elif tag.type == "Type4Tag":
+                pass
         if tag.ndef:
             print("NDEF capabilities:")
             if self.options.verbose and tag.type == "Type3Tag":
@@ -263,8 +273,9 @@ class TagTool(CommandLineInterface):
                 print(format_data(memory))
                 tag.clf.sense([nfc.clf.TTA(uid=tag.uid)])
             elif tag.type == "Type3Tag":
-                icc = str(tag.pmm[0:2]) # ic code
-                print("  " + tt3_card_map.get(icc, "unknown card"))
+                pass
+            elif tag.type == "Type4Tag":
+                pass
 
     def dump_tag(self, tag):
         if tag.ndef:
