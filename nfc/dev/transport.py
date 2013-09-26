@@ -227,7 +227,8 @@ class USB(object):
             self.usb_dev.claimInterface(0)
         except self.usb.USBError:
             raise IOError("unusable device")
-        self.usb_dev.reset()
+        if (dev.idVendor, dev.idProduct) in [(0x54c, 0x193), (0x4cc, 0x531)]:
+            self.usb_dev.reset() # needed for PN531 only
         interface = dev.configurations[0].interfaces[0]
         endpoints = interface[0].endpoints
         bulk_inp = lambda ep: (\
