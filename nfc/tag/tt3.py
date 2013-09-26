@@ -181,9 +181,17 @@ class Type3Tag(object):
         self.idm = target.idm
         self.pmm = target.pmm
         self.sys = target.sys
+
+        if self.sys != "\x12\xFC":
+            idm, pmm = self.poll(0x12FC)
+            if idm is not None and pmm is not None:
+                self.sys = bytearray([0x12, 0xFC])
+                self.idm, self.pmm = idm, pmm
+
         rto, wto = self.pmm[5], self.pmm[6]
         self.rto = ((rto&0x07)+1, (rto>>3&0x07)+1, 302E-6 * 4**(rto >> 6))
         self.wto = ((wto&0x07)+1, (wto>>3&0x07)+1, 302E-6 * 4**(wto >> 6))
+
         try:
             self.ndef = NDEF(self) if self.sys == "\x12\xFC" else None
         except Exception as error:
@@ -215,6 +223,31 @@ class Type3Tag(object):
         
         return False
 
+    def poll(self, system_code):
+        """Send the polling command to recognize a system on the card. The 
+        *system_code* may be specified as a short integer or as a string or
+        bytearray of length 2. The return value is the tuple of the two 
+        bytearrays (idm, pmm) if the requested system is present or the tuple
+        (None, None) if not."""
+
+        if isinstance(system_code, int):
+            system_code = bytearray([system_code/256, system_code%256])
+
+        log.debug("poll for system {0}".format(system_code))
+        cmd = bytearray("\x06\x00" + system_code + "\x00\x00")
+
+        try:
+            rsp = self.clf.exchange(cmd, timeout=0.01)
+        except nfc.clf.TimeoutError as error:
+            return None, None
+        except nfc.clf.DigitalProtocolError as error:
+            raise IOError(repr(error))
+        if not rsp.startswith(chr(len(rsp)) + "\x01"):
+            raise IOError("tt3 response error")
+
+        log.debug("<<< {0}".format(str(rsp).encode("hex")))
+        return rsp[2:10], rsp[10:18]
+
     def read(self, blocks, service=ndef_read_service):
         """Read service data blocks from tag. The *service* argument is the
         tag type 3 service code to use, 0x000b for reading NDEF. The *blocks*
@@ -235,7 +268,7 @@ class Type3Tag(object):
         except nfc.clf.DigitalProtocolError as error:
             raise IOError(repr(error))
         if not rsp.startswith(chr(len(rsp)) + "\x07" + self.idm):
-            raise IOError("tt3 data error")
+            raise IOError("tt3 response error")
         if rsp[10] != 0 or rsp[11] != 0:
             raise IOError("tt3 cmd error {0:02x} {1:02x}".format(*rsp[10:12]))
         data = str(rsp[13:])
@@ -268,7 +301,7 @@ class Type3Tag(object):
         except nfc.clf.TimeoutError:
             raise IOError("communication timeout")
         if not rsp.startswith(chr(len(rsp)) + "\x09" + self.idm):
-            raise IOError("tt3 data error")
+            raise IOError("tt3 response error")
         if rsp[10] != 0 or rsp[11] != 0:
             raise IOError("tt3 cmd error {0:02x} {1:02x}".format(*rsp[10:12]))
 
