@@ -78,7 +78,7 @@ class BluetoothConfigRecord(Record):
 
     @device_address.setter
     def device_address(self, value):
-        self._bdaddr = bytearray.fromhex(value.replace(':', ''))
+        self._bdaddr = bytearray(value.replace(':', '').decode("hex"))
         assert len(self._bdaddr) == 6
 
     @property

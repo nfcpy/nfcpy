@@ -92,7 +92,7 @@ class Initiator(DataExchangeProtocol):
 
         assert min(brs) >= 0 and max(brs) <= 2
         
-        ba = lambda s: bytearray.fromhex(s)
+        ba = lambda s: bytearray(s.decode("hex"))
         tta = {'cfg': None, 'uid': None}
         ttf = {'idm': ba("01FE"), 'pmm': None, 'sys': ba('FFFF')}
 
@@ -352,7 +352,7 @@ class Target(DataExchangeProtocol):
         # brs (int): bit rate selection, 0 => 106A, 1 => 212F, 2 => 424F
         if not timeout: timeout = (372 + ord(urandom(1))) * 1E-3
 
-        ba = lambda s: bytearray.fromhex(s)
+        ba = lambda s: bytearray(s.decode("hex"))
         tta = {'cfg':ba('010040'),'uid':ba('08')+urandom(3)}
         ttf = {'idm':ba("01FE")+urandom(6),'pmm':ba("FF"*8),'sys':ba('FFFF')}
         

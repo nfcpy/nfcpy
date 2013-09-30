@@ -87,7 +87,7 @@ class Device(nfc.dev.Device):
     def sense_f(self, br, sc, rc):
         cmd = "0600{sc[0]:02x}{sc[1]:02x}{rc:02x}03".format(sc=sc, rc=rc)
         log.debug("poll NFC-F {0} to {1}".format(cmd, self.addr))
-        cmd = bytearray.fromhex(cmd)
+        cmd = bytearray(cmd.decode("hex"))
 
         self.socket.sendto(cmd, self.addr)
         if len(select.select([self.socket], [], [], 1.0)[0]) == 1:

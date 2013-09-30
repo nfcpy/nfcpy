@@ -450,7 +450,7 @@ class Device(nfc.dev.Device):
     def sense_ttf(self, br, sc, rc):
         poll_cmd = "00{sc[0]:02x}{sc[1]:02x}{rc:02x}03".format(sc=sc, rc=rc)
         log.debug("poll NFC-F {0}".format(poll_cmd))
-        poll_cmd = bytearray.fromhex(poll_cmd)
+        poll_cmd = bytearray(poll_cmd.decode("hex"))
 
         rsp = self.chipset.in_list_passive_target(str(br)+'F', poll_cmd)
         if rsp  and len(rsp) >= 18:

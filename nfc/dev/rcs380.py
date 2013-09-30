@@ -125,7 +125,7 @@ class StatusError:
             return "UNKNOWN STATUS ERROR {0:02x}".format(self.errno)
     
 class Chipset():
-    ACK = bytearray.fromhex('0000FF00FF00')
+    ACK = bytearray('\x00\x00\xFF\x00\xFF\x00')
     
     def __init__(self, transport):
         self.transport = transport
@@ -170,9 +170,7 @@ class Chipset():
         
     @trace
     def in_set_protocol(self, data):
-        try: data = bytearray.fromhex(data)
-        except (TypeError, ValueError): pass
-        data = self.send_command(0x02, data, 100)
+        data = self.send_command(0x02, bytearray(data), 100)
         if data and data[0] != 0:
             raise StatusError(data[0])
         
@@ -203,9 +201,7 @@ class Chipset():
         
     @trace
     def tg_set_protocol(self, data):
-        try: data = bytearray.fromhex(data)
-        except (TypeError, ValueError): pass
-        data = self.send_command(0x42, data, 100)
+        data = self.send_command(0x42, bytearray(data), 100)
         if data and data[0] != 0:
             raise StatusError(data[0])
         
@@ -324,8 +320,10 @@ class Device(nfc.dev.Device):
         
         self.chipset.in_set_rf("106A")
         self.chipset.in_set_protocol(
-            "0006 0100 0200 0300 0400 0501 0600 0707 0800 0900 "
-            "0a00 0b00 0c00 0e04 0f00 1000 1100 1200 1306")
+            "\x00\x06" "\x01\x00" "\x02\x00" "\x03\x00" "\x04\x00"
+            "\x05\x01" "\x06\x00" "\x07\x07" "\x08\x00" "\x09\x00"
+            "\x0A\x00" "\x0B\x00" "\x0C\x00" "\x0E\x04" "\x0F\x00"
+            "\x10\x00" "\x11\x00" "\x12\x00" "\x13\x06")
         
         sens_res = self.chipset.in_comm_rf("\x26", 30)
         log.debug("SENS_RES (ATQ) = " + str(sens_res).encode("hex"))
@@ -338,9 +336,9 @@ class Device(nfc.dev.Device):
             log.debug("NFC-A TT1 target @ 106 kbps")
             
             # set: add tt1 crc, check tt1 crc, all bits valid, rrdd = 60µs
-            self.chipset.in_set_protocol("0102 0202 0708 1102")
+            self.chipset.in_set_protocol("\x01\x02\x02\x02\x07\x08\x11\x02")
             
-            rid_cmd = bytearray.fromhex("78 00 00 00 00 00 00")
+            rid_cmd = bytearray("\x78\x00\x00\x00\x00\x00\x00")
             rid_res = self.chipset.in_comm_rf(rid_cmd, 30)
             if not rid_res[0] & 0xF0 == 0x10:
                 self.chipset.switch_rf("off")
@@ -355,14 +353,14 @@ class Device(nfc.dev.Device):
         #
         # other than type 1 tag platform
         #
-        self.chipset.in_set_protocol("0401 0708") # odd parity, all bits
+        self.chipset.in_set_protocol("\x04\x01\x07\x08") # odd parity, all bits
         uid = bytearray()
         for cascade_level in range(3):
             sel_cmd = ("\x93", "\x95", "\x97")[cascade_level]
-            self.chipset.in_set_protocol("0100 0200") # no crc add/check
+            self.chipset.in_set_protocol("\x01\x00\x02\x00") # no crc add/check
             sdd_res = self.chipset.in_comm_rf(sel_cmd + "\x20", 30)
             log.debug("SDD_RES = " + str(sdd_res).encode("hex"))
-            self.chipset.in_set_protocol("0101 0201") # do crc add/check
+            self.chipset.in_set_protocol("\x01\x01\x02\x01") # do crc add/check
             sel_res = self.chipset.in_comm_rf(sel_cmd + "\x70" + sdd_res, 30)
             log.debug("SEL_RES = " + str(sel_res).encode("hex"))
             if bool(sel_res[0] & 0b00000100):
@@ -384,10 +382,14 @@ class Device(nfc.dev.Device):
 
     def _sense_ttb(self):
         log.debug("polling for NFC-B technology")
+
         self.chipset.in_set_rf("106B")
-        p = bytearray.fromhex("0014010102010300040005000600070808000901"+
-                              "0a010b010c010e040f001000110012001306")
-        self.chipset.in_set_protocol(p)        
+        self.chipset.in_set_protocol(
+            "\x00\x14" "\x01\x01" "\x02\x01" "\x03\x00" "\x04\x00"
+            "\x05\x00" "\x06\x00" "\x07\x08" "\x08\x00" "\x09\x01"
+            "\x0A\x01" "\x0B\x01" "\x0C\x01" "\x0E\x04" "\x0F\x00"
+            "\x10\x00" "\x11\x00" "\x12\x00" "\x13\x06")
+
         rsp = self.chipset.in_comm_rf("\x05\x00\x00", 30)
 
     def sense_ttf(self, br, sc, rc):
@@ -408,10 +410,12 @@ class Device(nfc.dev.Device):
 
         self.chipset.in_set_rf(str(br) + "F")
         self.chipset.in_set_protocol(
-            "0018 0101 0201 0300 0400 0500 0600 0708 0800 0900"
-            "0a00 0b00 0c00 0e04 0f00 1000 1100 1200 1306")
+            "\x00\x18" "\x01\x01" "\x02\x01" "\x03\x00" "\x04\x00"
+            "\x05\x00" "\x06\x00" "\x07\x08" "\x08\x00" "\x09\x00"
+            "\x0A\x00" "\x0B\x00" "\x0C\x00" "\x0E\x04" "\x0F\x00"
+            "\x10\x00" "\x11\x00" "\x12\x00" "\x13\x06")
         
-        rsp = self.chipset.in_comm_rf(bytearray.fromhex(poll_cmd), 10)
+        rsp = self.chipset.in_comm_rf(bytearray(poll_cmd.decode("hex")), 10)
         if len(rsp) >= 18 and rsp[0] == len(rsp) and rsp[1] == 1:
             if len(rsp) == 18: rsp += "\xff\xff"
             idm, pmm, sys = rsp[2:10], rsp[10:18], rsp[18:20]
@@ -428,7 +432,7 @@ class Device(nfc.dev.Device):
             target.br = 212
             
         self.chipset.tg_set_rf(str(target.br) + 'F')
-        self.chipset.tg_set_protocol("0001 0100 0207")
+        self.chipset.tg_set_protocol("\x00\x01\x01\x00\x02\x07")
 
         data = None
         while timeout > 0:
@@ -457,7 +461,7 @@ class Device(nfc.dev.Device):
         else:
             return None
 
-        self.chipset.tg_set_protocol("0101") # break on rf off
+        self.chipset.tg_set_protocol("\x01\x01") # break on rf off
         self.exchange = self.send_rsp_recv_cmd
         return target, data[7:]
 
@@ -486,7 +490,7 @@ class Device(nfc.dev.Device):
             mdaa = True
 
         self.chipset.tg_set_rf(tech)
-        self.chipset.tg_set_protocol("0001 0100 0207")
+        self.chipset.tg_set_protocol("\x00\x01\x01\x00\x02\x07")
 
         data = None
         while timeout > 0:
@@ -521,7 +525,7 @@ class Device(nfc.dev.Device):
         else:
             return None
 
-        self.chipset.tg_set_protocol("0101") # break on rf off
+        self.chipset.tg_set_protocol("\x01\x01") # break on rf off
         target = nfca_target if tech[-1] == 'A' else nfcf_target
         target.br = int(tech[0:-1])
         self.exchange = self.send_rsp_recv_cmd
