@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
 # Copyright 2012 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
@@ -357,16 +357,30 @@ def add_pack_parser(parser):
     
 def pack(args):
     if args.type == 'unknown':
+        print >> sys.stderr, "guess mime type from file"
         mimetype = mimetypes.guess_type(args.input.name, strict=False)[0]
         if mimetype is not None: args.type = mimetype
     if args.name is None:
         args.name = args.input.name if args.input.name != "<stdin>" else ""
         
     data = args.input.read()
-    try: data = data.decode("hex")
-    except TypeError: pass
 
-    record = nfc.ndef.Record(args.type, args.name, data)
+    if args.type == "text/plain":
+        print >> sys.stderr, "text/plain ==> urn:nfc:wkt:T"
+        try:
+            from guess_language import guessLanguage
+            print >> sys.stderr, "guess language from text"
+            language = guessLanguage(data)
+            if language == "UNKNOWN": language = "en"
+        except ImportError:
+            language = "en"
+        print >> sys.stderr, "text language is '%s'" % language
+        record = nfc.ndef.TextRecord(data, language=language)
+        record.name = args.name
+    else:
+        print >> sys.stderr, "mime type is %s" % args.type
+        record = nfc.ndef.Record(args.type, args.name, data)
+
     message = nfc.ndef.Message(record)
     if args.outfile.name == "<stdout>":
         args.outfile.write(str(message).encode("hex"))

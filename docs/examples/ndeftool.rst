@@ -261,7 +261,12 @@ message begin and end flag set to 1. If the ``-t`` option is not given
 the record type is guessed from the file content using the mimetypes
 module. The record name is by default set to the name of the file
 being converted, unless data is read from stdin in which case the
-record name is not encoded. ::
+record name is not encoded.
+
+If a file mime type is ``text/plain`` it will be encoded as an NDEF
+Text Record (type ``urn:nfc:wkt:T``) if ``-t`` is not set. The text
+record language is guessed from the file content if the Python module
+``guess_language`` is installed, otherwise set to English. ::
 
   $ ndeftool.py pack [-h|--help] [options] FILE
 
