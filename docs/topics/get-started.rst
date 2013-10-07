@@ -87,8 +87,8 @@ be printed. See :doc:`../examples/tagtool` for other options.
    allow members of the *plugdev* group to access an SCL-3711 or
    RC-S380 if stored in ``'/etc/udev/rules.d/nfcdev.rules'``. ::
 
-     SUBSYSTEM="usb", ACTION="add", ATTRS{idVendor}=="04e6", ATTRS{idProduct}=="5591", GROUP="plugdev" # SCM SCL-3711
-     SUBSYSTEM="usb", ACTION="add", ATTRS{idVendor}=="054c", ATTRS{idProduct}=="06c1", GROUP="plugdev" # Sony RC-S380
+     SUBSYSTEM=="usb", ACTION=="add", ATTRS{idVendor}=="04e6", ATTRS{idProduct}=="5591", GROUP="plugdev" # SCM SCL-3711
+     SUBSYSTEM=="usb", ACTION=="add", ATTRS{idVendor}=="054c", ATTRS{idProduct}=="06c1", GROUP="plugdev" # Sony RC-S380
 
 
 Open a reader
