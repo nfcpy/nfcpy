@@ -46,8 +46,13 @@ def add_send_parser(parser):
         "additional and/or required arguments per send item.")
     add_send_link_parser(subparsers.add_parser(
         "link", help="send hyperlink",
-        description="Construct a smartposter message with URI and the "
+        description="Construct an NDEF Smartposter message with URI and the "
         "optional title argument and send it to the peer when connected."))
+    add_send_text_parser(subparsers.add_parser(
+        "text", help="send plain text",
+        description="Construct an NDEF Text message with the input string as "
+        "text content. The language default is 'en' (English) but may be set "
+        "differently with the --lang option."))
     add_send_file_parser(subparsers.add_parser(
         "file", help="send disk file",
         description="Embed the file content into an NDEF message and send "
@@ -71,6 +76,18 @@ def run_send_link_action(args, llc):
     sp = nfc.ndef.SmartPosterRecord(args.uri)
     if args.title: sp.title = args.title
     nfc.snep.SnepClient(llc).put(nfc.ndef.Message(sp))
+
+def add_send_text_parser(parser):
+    parser.set_defaults(func=run_send_text_action)
+    parser.add_argument(
+        "--lang", help="text language")
+    parser.add_argument(
+        "text", metavar="STRING", help="text string")
+
+def run_send_text_action(args, llc):
+    record = nfc.ndef.TextRecord(args.text)
+    if args.lang: record.language = args.lang
+    nfc.snep.SnepClient(llc).put(nfc.ndef.Message(record))
 
 def add_send_file_parser(parser):
     parser.set_defaults(func=run_send_file_action)
@@ -115,6 +132,9 @@ def add_recv_parser(parser):
         description="On receipt of incoming beam data perform the specified "
         "action. Use 'beam.py recv {action} -h' to learn additional and/or "
         "required arguments per action.")
+    add_recv_print_parser(subparsers.add_parser(
+        "print", help="print received message",
+        description="Print the received NDEF message and do nothing else."))
     add_recv_save_parser(subparsers.add_parser(
         "save", help="save ndef data to a disk file",
         description="Save incoming beam data to a file. New data is appended "
@@ -129,6 +149,13 @@ def add_recv_parser(parser):
         description="Receive an NDEF message and use the translations file "
         "to find a matching response to send to the peer device. Each "
         "translation is a pair of in and out NDEF message cat together."))
+
+def add_recv_print_parser(parser):
+    parser.set_defaults(func=run_recv_print_action)
+
+def run_recv_print_action(args, llc, rcvd_ndef_msg):
+    log.info('print ndef message {0!r}'.format(rcvd_ndef_msg.type))
+    print rcvd_ndef_msg.pretty()
 
 def add_recv_save_parser(parser):
     parser.set_defaults(func=run_recv_save_action)
@@ -181,7 +208,6 @@ class DefaultServer(nfc.snep.SnepServer):
 
     def put(self, ndef_message):
         log.info("default snep server got put request")
-        log.info(ndef_message.pretty())
         if self.args.action == "recv":
             self.args.func(self.args, self.llc, ndef_message)
         return nfc.snep.Success
