@@ -54,6 +54,7 @@ PN53X_CMD = {
     0x0E: "WriteGPIO",
     0x10: "SetSerialBaudrate",
     0x12: "SetParameters",
+    0x14: "SAMConfiguration",
     0x16: "PowerDown",
     0x32: "RFConfiguration",
     0x58: "RFRegulationTest",
@@ -130,9 +131,11 @@ class Chipset(object):
         if self.ic == 'PN531':
             self.set_parameters = self.pn531_set_parameters
             self.max_packet_data_size = 254
+            self.pn531_sam_configuration("normal")
         elif self.ic == 'PN532':
             self.set_parameters = self.pn532_set_parameters
             self.max_packet_data_size = 264
+            self.pn532_sam_configuration("normal")
         elif self.ic == 'PN533':
             self.set_parameters = self.pn533_set_parameters
             self.max_packet_data_size = 264
@@ -273,7 +276,15 @@ class Chipset(object):
         flags = (int(use_nad) | int(use_did)<<1 | int(auto_atr_res)<<2 |
                  int(tda_powered)<<3 | int(auto_rats)<<4 | int(secure)<<5)
         self.command(0x12, chr(flags))
-        
+
+    def pn531_sam_configuration(self, mode="normal", timeout=0):
+        mode = ("normal", "virtual", "wired", "dual").index(mode) + 1
+        self.command(0x14, chr(mode) + chr(timeout))
+
+    def pn532_sam_configuration(self, mode="normal", timeout=0, irq=False):
+        mode = ("normal", "virtual", "wired", "dual").index(mode) + 1
+        self.command(0x14, chr(mode) + chr(timeout) + chr(int(irq)))
+
     def rf_configuration(self, cfg_item, cfg_data):
         self.command(0x32, bytearray([cfg_item]) + bytearray(cfg_data))
 
