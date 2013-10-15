@@ -28,6 +28,7 @@ import os
 import io
 import sys
 import time
+import random
 import argparse
 import threading
 import mimetypes
@@ -62,8 +63,15 @@ def add_send_parser(parser):
         "-t TYPE and -n NAME, respectively."))
     add_send_ndef_parser(subparsers.add_parser(
         "ndef", help="send ndef data",
-        description="Send the NDEF message stored in FILE. If the file "
-        "contains multiple messages only the first one is extracted."))
+        description="Send an NDEF message from FILE. If the file contains "
+        "multiple messages the strategy that determines the message to be "
+        "send can be set with the --select argument. For strategies that "
+        "select a different message per touch beam.py must be called with "
+        "the --loop flag. The strategies 'first', 'last' and 'random' select "
+        "the first, last or a random message from the file. The strategies "
+        "'next' and 'cycle' start with the first message and then count up, "
+        "the difference is that 'next' stops at the last message while "
+        "'cycle' continues with first."))
 
 def add_send_link_parser(parser):
     parser.set_defaults(func=run_send_link_action)
@@ -118,14 +126,35 @@ def run_send_file_action(args, llc):
 def add_send_ndef_parser(parser):
     parser.set_defaults(func=run_send_ndef_action)
     parser.add_argument(
-        "ndef", type=argparse.FileType('rb'), metavar="FILE",
+        "ndef", metavar="FILE", type=argparse.FileType('rb'),
         help="NDEF message file")
+    parser.add_argument(
+        "--select", metavar="STRATEGY",
+        choices=['first', 'last', 'next', 'cycle', 'random'], default="first",
+        help="strategies are: %(choices)s")
 
 def run_send_ndef_action(args, llc):
-    data = args.ndef.read()
-    try: data = data.decode("hex")
-    except TypeError: pass
-    nfc.snep.SnepClient(llc).put(nfc.ndef.Message(data))
+    if type(args.ndef) == file:
+        bytestream = io.BytesIO(args.ndef.read())
+        args.ndef = list()
+        while True:
+            try: args.ndef.append(nfc.ndef.Message(bytestream))
+            except nfc.ndef.LengthError: break
+        args.selected = -1
+
+    if args.select == "first":
+        args.selected = 0
+    elif args.select == "last":
+        args.selected = len(args.ndef) - 1
+    elif args.select == "next":
+        args.selected = args.selected + 1
+    elif args.select == "cycle":
+        args.selected = (args.selected + 1) % len(args.ndef)
+    elif args.select == "random":
+        args.selected = random.choice(range(len(args.ndef)))
+
+    if args.selected < len(args.ndef):
+        nfc.snep.SnepClient(llc).put(args.ndef[args.selected])
 
 def add_recv_parser(parser):
     subparsers = parser.add_subparsers(title="receive action", dest="recv",
