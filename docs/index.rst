@@ -44,6 +44,9 @@ Examples
 :doc:`examples/ndeftool`
    Generate or inspect or reorganize NDEF data.
 
+:doc:`examples/beam`
+   Exchange NDEF data with a smartphone.
+
 :doc:`examples/handover-test`
    A test tool for dynamic connection handover.
 
