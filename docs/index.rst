@@ -32,6 +32,10 @@ Tutorials
 :doc:`topics/test-tags`
     Recipes to generate tags for testing tag readers.
 
+:doc:`topics/projects`
+   How *nfcpy* can be used to do more or less useful stuff.
+    
+
 Examples
 ========
 
