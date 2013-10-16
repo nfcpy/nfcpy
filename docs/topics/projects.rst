@@ -53,7 +53,7 @@ like so: ::
   $ echo -n "You finished the treasure hunt" > final.txt
   $ examples/ndeftool.py pack -n '' final.txt -o final.ndef
 
-  $ cat start.ndef q1.ndef a1.ndef q2.ndef a2.ndef final.ndef challenge.ndef
+  $ cat start.ndef q1.ndef a1.ndef q2.ndef a2.ndef final.ndef > challenge.ndef
 
 And the answer tags can then be created with ``examples/tagtool.py``:
 ::
