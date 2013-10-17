@@ -176,7 +176,7 @@ class Chipset():
         
     @trace
     def in_comm_rf(self, data, timeout):
-        to = struct.pack("<H", timeout*10)
+        to = struct.pack("<H", timeout*10) if timeout <= 6553 else '\xFF\xFF'
         data = self.send_command(0x04, to + str(data), timeout+500)
         if data and tuple(data[0:4]) != (0, 0, 0, 0):
             raise CommunicationError(data[0:4])
@@ -424,7 +424,7 @@ class Device(nfc.dev.Device):
     def listen_ttf(self, target, timeout):
         assert type(target) == nfc.clf.TTF
         
-        timeout_msec = int(timeout * 1000)
+        timeout_msec = int(timeout * 1000) + 1 if timeout else 0
         log.debug("listen_ttf for {0} msec".format(timeout_msec))
 
         if target.br is None:
@@ -435,29 +435,30 @@ class Device(nfc.dev.Device):
         self.chipset.tg_set_protocol("\x00\x01\x01\x00\x02\x07")
 
         data = None
-        while timeout > 0:
-            start_time = time.time()
-            timeout_msec = int(timeout * 1000)
+        time_to_return = time.time() + timeout
+
+        while timeout_msec > 0:
             try:
                 data = self.chipset.tg_comm_rf(
                     mdaa=False, recv_timeout=timeout_msec,
                     transmit_data=data)
+            except CommunicationError as error:
+                if error != "RECEIVE_TIMEOUT_ERROR":
+                    log.debug(error)
+            else:
                 tech = ('106A', '212F', '424F')[data[0]-11]
                 log.info("{0} {1}".format(tech, str(data).encode("hex")))
                 if data[7:].startswith("\x06\x00"):
                     data = ("\x01" + target.idm + target.pmm
                             + (target.sys if data[7+4] == 1 else ''))
                     data = chr(len(data) + 1) + data
-                    timeout = max(start_time + timeout - time.time(), 0.1)
+                    timeout_msec = 100
                     continue
                 elif data[9:].startswith(target.idm):
                     break
                 else:
                     data = None
-            except CommunicationError as error:
-                if error != "RECEIVE_TIMEOUT_ERROR":
-                    log.debug(error)
-            timeout -= time.time() - start_time
+            timeout_msec = int(time_to_return - time.time() * 1000)
         else:
             return None
 
@@ -468,7 +469,7 @@ class Device(nfc.dev.Device):
     def listen_dep(self, target, timeout):
         assert type(target) == nfc.clf.DEP
         
-        timeout_msec = int(timeout * 1000)
+        timeout_msec = int(timeout * 1000) + 1 if timeout else 0
         log.debug("listen_dep for {0} msec".format(timeout_msec))
 
         nfca_cfg = bytearray((0x01, 0x00, 0x40))
@@ -493,15 +494,19 @@ class Device(nfc.dev.Device):
         self.chipset.tg_set_protocol("\x00\x01\x01\x00\x02\x07")
 
         data = None
-        while timeout > 0:
-            start_time = time.time()
-            timeout_msec = int(timeout * 1000)
+        time_to_return = time.time() + timeout
+
+        while timeout_msec > 0:
             try:
                 data = self.chipset.tg_comm_rf(
                     mdaa=mdaa, recv_timeout=timeout_msec,
                     nfca_params=str(nfca_params),
                     nfcf_params=str(nfcf_params),
                     transmit_data=data)
+            except CommunicationError as error:
+                if error != "RECEIVE_TIMEOUT_ERROR":
+                    log.warning(error)
+            else:
                 tech = ('106A', '212F', '424F')[data[0]-11]
                 log.debug("{0} {1}".format(tech, str(data).encode("hex")))
                 if mdaa is True:
@@ -512,16 +517,13 @@ class Device(nfc.dev.Device):
                         data = ("\x01" + nfcf_target.idm + nfcf_target.pmm
                                 + (nfcf_target.sys if data[7+4] == 1 else ''))
                         data = chr(len(data) + 1) + data
-                        timeout = max(start_time + timeout - time.time(), 0.1)
+                        timeout_msec = 100
                         continue
                     elif data[8:].startswith('\xD4\x00' + nfcf_target.idm):
                         break
                     else: data = None
                 else: data = None
-            except CommunicationError as error:
-                if error != "RECEIVE_TIMEOUT_ERROR":
-                    log.warning(error)
-            timeout -= time.time() - start_time
+            timeout_msec = int(time_to_return - time.time() * 1000)
         else:
             return None
 
@@ -532,7 +534,7 @@ class Device(nfc.dev.Device):
         return target, data[7:]
 
     def send_cmd_recv_rsp(self, data, timeout):
-        timeout_msec = int(timeout * 1000 * 2)
+        timeout_msec = int(timeout * 1000) + 1 if timeout else 0
         try:
             return self.chipset.in_comm_rf(data, timeout_msec)
         except CommunicationError as error:
@@ -542,7 +544,7 @@ class Device(nfc.dev.Device):
             raise nfc.clf.TransmissionError
 
     def send_rsp_recv_cmd(self, data, timeout):
-        timeout_msec = int(timeout * 1000)
+        timeout_msec = int(timeout * 1000) + 1 if timeout else 0
         try:
             data = self.chipset.tg_comm_rf(
                 guard_time=500, recv_timeout=timeout_msec, transmit_data=data)
