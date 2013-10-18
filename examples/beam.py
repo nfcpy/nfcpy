@@ -72,6 +72,8 @@ def add_send_parser(parser):
         "'next' and 'cycle' start with the first message and then count up, "
         "the difference is that 'next' stops at the last message while "
         "'cycle' continues with first."))
+    parser.add_argument(
+        "--timeit", action="store_true", help="measure transfer time")
 
 def add_send_link_parser(parser):
     parser.set_defaults(func=run_send_link_action)
@@ -82,8 +84,14 @@ def add_send_link_parser(parser):
 
 def run_send_link_action(args, llc):
     sp = nfc.ndef.SmartPosterRecord(args.uri)
-    if args.title: sp.title = args.title
-    nfc.snep.SnepClient(llc).put(nfc.ndef.Message(sp))
+    if args.title:
+        sp.title = args.title
+    if args.timeit:
+        t0 = time.time()
+    if not nfc.snep.SnepClient(llc).put(nfc.ndef.Message(sp)):
+        log.error("failed to send message")
+    elif args.timeit:
+        print("message sent in {0:.3f} seconds".format(time.time() - t0))
 
 def add_send_text_parser(parser):
     parser.set_defaults(func=run_send_text_action)
@@ -94,8 +102,14 @@ def add_send_text_parser(parser):
 
 def run_send_text_action(args, llc):
     record = nfc.ndef.TextRecord(args.text)
-    if args.lang: record.language = args.lang
-    nfc.snep.SnepClient(llc).put(nfc.ndef.Message(record))
+    if args.lang:
+        record.language = args.lang
+    if args.timeit:
+        t0 = time.time()
+    if not nfc.snep.SnepClient(llc).put(nfc.ndef.Message(record)):
+        log.error("failed to send message")
+    elif args.timeit:
+        print("message sent in {0:.3f} seconds".format(time.time() - t0))
 
 def add_send_file_parser(parser):
     parser.set_defaults(func=run_send_file_action)
@@ -121,7 +135,12 @@ def run_send_file_action(args, llc):
     except TypeError: pass
 
     record = nfc.ndef.Record(args.type, args.name, data)
-    nfc.snep.SnepClient(llc).put(nfc.ndef.Message(record))
+    if args.timeit:
+        t0 = time.time()
+    if not nfc.snep.SnepClient(llc).put(nfc.ndef.Message(record)):
+        log.error("failed to send message")
+    elif args.timeit:
+        print("message sent in {0:.3f} seconds".format(time.time() - t0))
 
 def add_send_ndef_parser(parser):
     parser.set_defaults(func=run_send_ndef_action)
@@ -154,7 +173,12 @@ def run_send_ndef_action(args, llc):
         args.selected = random.choice(range(len(args.ndef)))
 
     if args.selected < len(args.ndef):
-        nfc.snep.SnepClient(llc).put(args.ndef[args.selected])
+        if args.timeit:
+            t0 = time.time()
+        if not nfc.snep.SnepClient(llc).put(args.ndef[args.selected]):
+            log.error("failed to send message")
+        elif args.timeit:
+            print("message sent in {0:.3f} seconds".format(time.time() - t0))
 
 def add_recv_parser(parser):
     subparsers = parser.add_subparsers(title="receive action", dest="recv",
