@@ -31,13 +31,19 @@ import nfc.llcp
 def send_request(socket, snep_request, send_miu):
     if len(snep_request) <= send_miu:
         return socket.send(snep_request)
-    else:
-        if socket.send(snep_request[0:send_miu]):
-            if socket.recv() == "\x10\x80\x00\x00\x00\x00":
-                for offset in xrange(send_miu, len(snep_request), send_miu):
-                    fragment = snep_request[offset:offset+send_miu]
-                    if not socket.send(fragment): break
-                else: return True
+
+    if not socket.send(snep_request[0:send_miu]):
+        return False
+
+    if socket.recv() != "\x10\x80\x00\x00\x00\x00":
+        return False
+
+    for offset in xrange(send_miu, len(snep_request), send_miu):
+        fragment = snep_request[offset:offset+send_miu]
+        if not socket.send(fragment):
+            return False
+
+    return True
 
 def recv_response(socket, acceptable_length, timeout):
     if socket.poll("recv", timeout):
@@ -138,8 +144,11 @@ class SnepClient(object):
                 snep_response = recv_response(self.socket, 0, timeout)
                 if snep_response is not None:
                     response_code = ord(snep_response[1])
-                    if response_code != 0x81:
+                    if response_code == 0x81:
+                        return True
+                    else:
                         raise SnepError(response_code)
+            return False
         finally:
             if self.release_connection:
                 self.close()
