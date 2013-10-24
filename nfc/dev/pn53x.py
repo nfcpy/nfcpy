@@ -369,8 +369,8 @@ class Chipset(object):
         if data is None or data[0] != 0:
             raise ChipsetError(data)
 
-    def tg_set_meta_data(self, data):
-        data = self.command(0x94, data, timeout=100)
+    def tg_set_meta_data(self, data, timeout):
+        data = self.command(0x94, data, timeout)
         if data is None or data[0] != 0:
             raise ChipsetError(data)
 
