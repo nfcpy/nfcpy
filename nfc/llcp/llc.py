@@ -273,7 +273,7 @@ class LogicalLinkController(object):
             self.cfg['send-lsc'] = pax.lsc
             log.debug("llc cfg {0}".format(self.cfg))
             
-            if type(mac) == nfc.dep.Initiator:
+            if type(mac) == nfc.dep.Initiator and mac.rwt is not None:
                 max_rwt = 4096/13.56E6 * 2**10
                 if mac.rwt > max_rwt:
                     mac.rwt = max_rwt
