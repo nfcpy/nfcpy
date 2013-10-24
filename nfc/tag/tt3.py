@@ -233,7 +233,7 @@ class Type3Tag(object):
         if isinstance(system_code, int):
             system_code = bytearray([system_code/256, system_code%256])
 
-        log.debug("poll for system {0}".format(system_code))
+        log.debug("poll for system {0}".format(str(system_code).encode("hex")))
         cmd = bytearray("\x06\x00" + system_code + "\x00\x00")
 
         try:
