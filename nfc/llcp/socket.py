@@ -59,7 +59,7 @@ class Socket(object):
         return self.llc.resolve(name)
 
     def setsockopt(self, option, value):
-        """Return the value of the given socket option."""
+        """Set the value of the given socket option."""
         return self.llc.setsockopt(self._tco, option, value)
         
     def getsockopt(self, option):
