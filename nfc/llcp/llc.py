@@ -245,7 +245,7 @@ class LogicalLinkController(object):
             self.run = self.run_as_initiator
             role = "Initiator"
         if type(mac) == nfc.dep.Target:
-            gb = mac.activate(gbt='Ffm'+pax.to_string()[2:], wt=8)
+            gb = mac.activate(gbt='Ffm'+pax.to_string()[2:], wt=9)
             self.run = self.run_as_target
             role = "Target"
 
