@@ -126,8 +126,7 @@ class TransmissionControlObject(object):
         with self.recv_ready:
             try: return self.recv_queue.popleft()
             except IndexError: self.recv_ready.wait()
-            try: return self.recv_queue.popleft()
-            except IndexError: return None
+            return self.recv_queue.popleft()
 
     def close(self):
         with self.lock:
@@ -417,7 +416,8 @@ class DataLinkConnection(TransmissionControlObject):
             else: raise TypeError("connect() arg *dest* must be int or string")
             self.state.CONNECT = True
             self.send_queue.append(pdu)
-            pdu = super(DataLinkConnection, self).recv()
+            try: pdu = super(DataLinkConnection, self).recv()
+            except IndexError: raise Error(errno.EPIPE)
             if isinstance(pdu, DisconnectedMode):
                 self.log("connect rejected with reason {0}".format(pdu.reason))
                 self.state.CLOSED = True
