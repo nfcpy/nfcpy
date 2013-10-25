@@ -126,7 +126,8 @@ class TransmissionControlObject(object):
         with self.recv_ready:
             try: return self.recv_queue.popleft()
             except IndexError: self.recv_ready.wait()
-            return self.recv_queue.popleft()
+            try: return self.recv_queue.popleft()
+            except IndexError: return None
 
     def close(self):
         with self.lock:
