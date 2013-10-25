@@ -513,7 +513,8 @@ class DataLinkConnection(TransmissionControlObject):
                 self.acks_ready.notify_all()
                 pdu = Disconnect(self.peer, self.addr)
                 self.send_queue.append(pdu)
-                pdu = super(DataLinkConnection, self).recv()
+                try: super(DataLinkConnection, self).recv()
+                except IndexError: pass
             super(DataLinkConnection, self).close()
             self.acks_ready.notify_all()
             self.send_token.notify_all()
