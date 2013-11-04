@@ -126,7 +126,7 @@ class Initiator(DataExchangeProtocol):
             raise nfc.clf.ProtocolError("14.6.1.1")
 
         try: atr_res = self.send_req_recv_res(atr_req, timeout=2**24/13.56E6)
-        except nfc.clf.TimeoutError: return
+        except nfc.clf.DigitalProtocolError: return
         
         if type(atr_res) != ATR_RES:
             raise nfc.clf.ProtocolError("Table-86")
@@ -139,7 +139,8 @@ class Initiator(DataExchangeProtocol):
 
         if (106, 212, 424).index(target.br) < max(brs):
             psl_req = PSL_REQ(self.did, max(brs) | max(brs)<<3, lr)
-            psl_res = self.send_req_recv_res(psl_req, timeout=1.0)
+            try: psl_res = self.send_req_recv_res(psl_req, timeout=self.rwt)
+            except nfc.clf.DigitalProtocolError: return
             if type(psl_res) != PSL_RES:
                 raise nfc.clf.ProtocolError("Table-86")
             if psl_res.did != psl_req.did:
@@ -206,9 +207,11 @@ class Initiator(DataExchangeProtocol):
             res = self.send_dep_req_recv_dep_res(req, self.rwt)
             self.count.inf_sent += 1
             while res.pfb.type == DEP_RES.TimeoutExtension:
+                log.warning("dep target requested x{0} timeout extension"
+                    .format(res.data[0]))
                 req = RTOX(res.data[0], self.did, self.nad)
-                res = self.send_dep_req_recv_dep_res(req, res.data[0]*self.rwt)
-                log.warning("dep target requested timeout extension")
+                rwt = res.data[0] * self.rwt
+                res = self.send_dep_req_recv_dep_res(req, rwt)
             if res.pfb.type == DEP_RES.PositiveAck and not send_data:
                 raise nfc.clf.ProtocolError("14.12.4.3")
             if res.pfb.pni != self.pni:
@@ -224,7 +227,7 @@ class Initiator(DataExchangeProtocol):
         
         while res.pfb.type == DEP_RES.MoreInformation:
             req = ACK(self.pni, self.did, self.nad)
-            res = self.send_dep_req_recv_dep_res(req, timeout)
+            res = self.send_dep_req_recv_dep_res(req, self.rwt)
             if res.pfb.type == DEP_RES.TimeoutExtension:
                 req = RTOX(res.data[0], self.did, self.nad)
                 res = self.send_dep_req_recv_dep_res(req, res.data[0]*self.rwt)
@@ -255,7 +258,7 @@ class Initiator(DataExchangeProtocol):
             req = ATN()
             for i in range(n_retry_atn):
                 try:
-                    res = self.send_req_recv_res(req, 0.1)
+                    res = self.send_req_recv_res(req, self.rwt)
                 except nfc.clf.DigitalProtocolError:
                     continue
                 else:
@@ -273,7 +276,7 @@ class Initiator(DataExchangeProtocol):
             req = NAK(self.pni, self.did, self.nad)
             for i in range(n_retry_nak):
                 try:
-                    res = self.send_req_recv_res(req, 0.1)
+                    res = self.send_req_recv_res(req, self.rwt)
                 except nfc.clf.DigitalProtocolError:
                     continue
                 else:
