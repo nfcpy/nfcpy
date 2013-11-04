@@ -182,7 +182,7 @@ class Type3Tag(object):
         self.pmm = target.pmm
         self.sys = target.sys
 
-        if self.sys != "\x12\xFC":
+        if self.sys != "\x12\xFC" and self.pmm[0:2] != "\x01\xE0":
             idm, pmm = self.poll(0x12FC)
             if idm is not None and pmm is not None:
                 self.sys = bytearray([0x12, 0xFC])
