@@ -24,15 +24,18 @@ Send an NDEF message to the peer device. The message depends on the
 positional argument that follows the *send* command and additional
 data. ::
 
-  $ beam.py [OPTIONS] send {link,text,file,ndef} [-h] [OPTIONS]
+  $ beam.py send [--timeit] {link,text,file,ndef} [-h] [OPTIONS]
 
+.. option:: --timeit
+
+   Measure and print the time that was needed to send the message.
 
 link
 ----
 
 Send a hyperlink embedded into a smartposter record. ::
 
-  $ beam.py [OPTIONS] send link URI [TITLE]
+  $ beam.py send link URI [TITLE]
 
 .. option:: URI
 
@@ -48,7 +51,7 @@ text
 Send plain text embedded into an NDEF Text Record. The default
 language identifier ``en`` can be changed with the ``--lang`` flag. ::
 
-  $ beam.py [OPTIONS] send text [-h] TEXT [OPTIONS]
+  $ beam.py send text TEXT [OPTIONS]
 
 .. option:: TEXT
 
@@ -66,7 +69,7 @@ and *name* set to the file's mime type and path name, and the payload
 containing the file content. Both record type and name can also be
 explicitly set with the options ``-t`` and ``-n``, respectively. ::
 
-  $ beam.py [OPTIONS] send file [-h] FILE [OPTIONS]
+  $ beam.py send file FILE [OPTIONS]
 
 .. option:: FILE
 
@@ -95,7 +98,7 @@ with the first message and then count up, the difference is that
 ``next`` stops at the last message while ``cycle`` continues with the
 first. ::
 
-  $ beam.py [OPTIONS] send ndef [-h] FILE [OPTIONS]
+  $ beam.py send ndef FILE [OPTIONS]
 
 .. option:: FILE
 
@@ -119,7 +122,7 @@ print
 
 Print the received message to the standard output stream. ::
 
-  $ beam.py [OPTIONS] recv print [-h]
+  $ beam.py recv print
 
 save
 ----
@@ -127,19 +130,19 @@ save
 Save the received message into a file. If the file already exists the
 message is appended. ::
 
-  $ beam.py [OPTIONS] recv save [-h] FILE
+  $ beam.py recv save FILE
 
 .. option:: FILE
 
-   Name of the file to save to. If this is a dash ``-`` then data is
-   written to the standard output stream.
+   Name of the file to save messages received from the remote peer. If
+   the file exists any new messages are appended.
 
 echo
 ----
 
 Receive a message and send it back to the peer device. ::
 
-  $ beam.py [OPTIONS] recv echo [-h]
+  $ beam.py recv echo
 
 send
 ----
