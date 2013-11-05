@@ -476,7 +476,7 @@ class Device(nfc.dev.Device):
         pollrq = "\x00\xFF\xFF\x00\x03"
         nfcid3 = "\x01\xfe" + os.urandom(8)
 
-        for mode, speed in (("active", "424"), ("passive", "424")):
+        for mode, speed in (("passive", "424"), ("active", "424")):
             try:
                 rsp = self.chipset.in_jump_for_dep(
                     mode, speed, pollrq, nfcid3, general_bytes)

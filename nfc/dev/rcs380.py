@@ -523,7 +523,7 @@ class Device(nfc.dev.Device):
                         break
                     else: data = None
                 else: data = None
-            timeout_msec = int(time_to_return - time.time() * 1000)
+            timeout_msec = int((time_to_return - time.time()) * 1000)
         else:
             return None
 

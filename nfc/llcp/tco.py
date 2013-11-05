@@ -416,7 +416,8 @@ class DataLinkConnection(TransmissionControlObject):
             else: raise TypeError("connect() arg *dest* must be int or string")
             self.state.CONNECT = True
             self.send_queue.append(pdu)
-            pdu = super(DataLinkConnection, self).recv()
+            try: pdu = super(DataLinkConnection, self).recv()
+            except IndexError: raise Error(errno.EPIPE)
             if isinstance(pdu, DisconnectedMode):
                 self.log("connect rejected with reason {0}".format(pdu.reason))
                 self.state.CLOSED = True
@@ -512,7 +513,8 @@ class DataLinkConnection(TransmissionControlObject):
                 self.acks_ready.notify_all()
                 pdu = Disconnect(self.peer, self.addr)
                 self.send_queue.append(pdu)
-                pdu = super(DataLinkConnection, self).recv()
+                try: super(DataLinkConnection, self).recv()
+                except IndexError: pass
             super(DataLinkConnection, self).close()
             self.acks_ready.notify_all()
             self.send_token.notify_all()
