@@ -279,7 +279,7 @@ class LogicalLinkController(object):
                     mac.rwt = max_rwt
                     log.warning("NFC-DEP RWT forced to %.3f s" % mac.rwt)
                 if pax.lto / 1E3 < 3 * mac.rwt:
-                    self.cgf['recv-lto'] = int(3000 * mac.rwt) + 1
+                    self.cfg['recv-lto'] = int(3000 * mac.rwt) + 1
                     log.warning("remote LTO forced to 3 x RWT")
 
             self.mac = mac
