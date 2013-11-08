@@ -69,7 +69,7 @@ class UriRecord(Record):
             if i > 0 and self.uri.startswith(p):
                 return chr(i) + self.uri[len(p):]
         else:
-            return "\x00"
+            return "\x00" + self.uri
 
     @data.setter
     def data(self, string):
