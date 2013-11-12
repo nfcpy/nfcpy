@@ -332,9 +332,9 @@ class LogicalLinkController(object):
                     return self.terminate(reason="remote choice")
                 symm = symm + 1 if type(pdu) == Symmetry else 0
                 self.dispatch(pdu)
-                pdu = self.collect(delay=0.01)
+                pdu = self.collect(delay=0.001)
                 if pdu is None and symm >= 10:
-                    pdu = self.collect(delay=0.02)
+                    pdu = self.collect(delay=0.05)
             else:
                 self.terminate(reason="local choice")
         except KeyboardInterrupt:
@@ -359,11 +359,11 @@ class LogicalLinkController(object):
                     return self.terminate(reason="link disruption")
                 if pdu == Disconnect(0, 0):
                     return self.terminate(reason="remote choice")
-                #symm = symm + 1 if type(pdu) == Symmetry else 0
+                symm = symm + 1 if type(pdu) == Symmetry else 0
                 self.dispatch(pdu)
-                pdu = self.collect(delay=0.01)
+                pdu = self.collect(delay=0.001)
                 if pdu is None and symm >= 10:
-                    pdu = self.collect(delay=0.02)
+                    pdu = self.collect(delay=0.05)
                 if pdu is None: pdu = Symmetry()
             else:
                 self.terminate(reason="local choice")
@@ -458,7 +458,10 @@ class LogicalLinkController(object):
     def setsockopt(self, socket, option, value):
         if not isinstance(socket, TransmissionControlObject):
             raise Error(errno.ENOTSOCK)
-        return socket.setsockopt(option, value)
+        if option == SO_RCVMIU:
+            value = min(value, self.cfg['recv-miu'])
+        socket.setsockopt(option, value)
+        return socket.getsockopt(option)
 
     def getsockopt(self, socket, option):
         if not isinstance(socket, TransmissionControlObject):

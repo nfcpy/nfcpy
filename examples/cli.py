@@ -103,7 +103,7 @@ class CommandLineInterface(object):
             "--mode", choices=["t","target","i","initiator"], metavar="{t,i}",
             help="connect as 'target' or 'initiator' (default: both)")
         group.add_argument(
-            "--miu", dest="miu", metavar="INT", type=int, default=1024,
+            "--miu", dest="miu", metavar="INT", type=int, default=2175,
             help="set LLCP Link MIU (default: %(default)s octets)")
         group.add_argument(
             "--lto", metavar="INT", type=int, default=500,

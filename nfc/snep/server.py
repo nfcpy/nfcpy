@@ -34,13 +34,19 @@ import nfc.ndef
 class SnepServer(Thread):
     """ NFC Forum Simple NDEF Exchange Protocol server
     """
-    def __init__(self, llc, service_name, max_ndef_msg_recv_size=1024):
-        self.acceptable_length = max_ndef_msg_recv_size
+    def __init__(self, llc, service_name="urn:nfc:sn:snep",
+                 max_acceptable_length=0x100000,
+                 recv_miu=1984, recv_buf=15):
+        
+        self.max_acceptable_length = min(max_acceptable_length, 0xFFFFFFFF)
         socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
+        recv_miu = socket.setsockopt(nfc.llcp.SO_RCVMIU, recv_miu)
+        recv_buf = socket.setsockopt(nfc.llcp.SO_RCVBUF, recv_buf)
         socket.bind(service_name)
-        addr = socket.getsockname()
-        log.info("snep server bound to port {0}".format(addr))
-        socket.setsockopt(nfc.llcp.SO_RCVBUF, 2)
+        log.info("snep server bound to port {0} (MIU={1}, RW={2}), "
+                 "will accept up to {3} byte NDEF messages"
+                 .format(socket.getsockname(), recv_miu, recv_buf,
+                         self.max_acceptable_length))
         socket.listen(backlog=2)
         Thread.__init__(self, name=service_name,
                         target=self.listen, args=(socket,))
@@ -79,8 +85,8 @@ class SnepServer(Thread):
                     socket.send("\x10\xE1\x00\x00\x00\x00")
                     continue
                 
-                if length > snep_server.acceptable_length:
-                    log.debug("snep msg exceeds acceptable length")
+                if length > snep_server.max_acceptable_length:
+                    log.debug("snep msg exceeds max acceptable length")
                     socket.send("\x10\xFF\x00\x00\x00\x00")
                     continue
 

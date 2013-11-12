@@ -248,7 +248,7 @@ def run_recv_send_action(args, llc, rcvd_ndef_msg):
 class DefaultServer(nfc.snep.SnepServer):
     def __init__(self, args, llc):
         self.args, self.llc = args, llc
-        super(DefaultServer, self).__init__(llc, 'urn:nfc:sn:snep')
+        super(DefaultServer, self).__init__(llc)
 
     def put(self, ndef_message):
         log.info("default snep server got put request")

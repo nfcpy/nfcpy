@@ -31,13 +31,14 @@ import nfc.llcp
 class HandoverServer(Thread):
     """ NFC Forum Connection Handover server
     """
-    def __init__(self, llc, request_size_limit=4096, recv_miu=248, recv_buf=2):
+    def __init__(self, llc, request_size_limit=0x10000,
+                 recv_miu=1984, recv_buf=15):
         socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
-        socket.setsockopt(nfc.llcp.SO_RCVBUF, recv_buf)
-        socket.setsockopt(nfc.llcp.SO_RCVMIU, recv_miu)
+        recv_miu = socket.setsockopt(nfc.llcp.SO_RCVMIU, recv_miu)
+        recv_buf = socket.setsockopt(nfc.llcp.SO_RCVBUF, recv_buf)
         socket.bind('urn:nfc:sn:handover')
-        addr = socket.getsockname()
-        log.info("handover server bound to port {0}".format(addr))
+        log.info("handover server bound to port {0} (MIU={1}, RW={2})"
+                 .format(socket.getsockname(), recv_miu, recv_buf))
         socket.listen(backlog=2)
         Thread.__init__(self, name='urn:nfc:sn:handover',
                         target=self.listen, args=(llc, socket))
