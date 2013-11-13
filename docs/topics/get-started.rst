@@ -492,8 +492,8 @@ if the callback returns :const:`False` or :const:`None` then
 stuff but return immediately and give us the callback parameters. ::
 
   >>> import nfc, threading
-  >>> clf = nfc.ContactlessFrontend('usb)
-  >>> connected = lambda llc: threading.Thread(target=llc.run()).start()
+  >>> clf = nfc.ContactlessFrontend('usb')
+  >>> connected = lambda llc: threading.Thread(target=llc.run).start()
   >>> llc = clf.connect(llcp={'on-connect': connected})
   >>> print llc
   LLC: Local(MIU=128, LTO=100ms) Remote(MIU=1024, LTO=500ms)
@@ -525,8 +525,8 @@ determine the address of the SNEP server, connect to the server and
 finally send some data. ::
 
   >>> import nfc, threading
-  >>> clf = nfc.ContactlessFrontend('usb)
-  >>> connected = lambda llc: threading.Thread(target=llc.run()).start()
+  >>> clf = nfc.ContactlessFrontend('usb')
+  >>> connected = lambda llc: threading.Thread(target=llc.run).start()
   >>> llc = clf.connect(llcp={'on-connect': connected})
   >>> socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
   >>> addr = socket.resolve('urn:nfc:sn:snep')
@@ -568,11 +568,13 @@ there is no need to mess around with binary strings. The
 :mod:`nfc.snep` to have it available. ::
 
   >>> import nfc, nfc.snep, threading
-  >>> clf = nfc.ContactlessFrontend('usb)
-  >>> connected = lambda llc: threading.Thread(target=llc.run()).start()
+  >>> clf = nfc.ContactlessFrontend('usb')
+  >>> connected = lambda llc: threading.Thread(target=llc.run).start()
   >>> llc = clf.connect(llcp={'on-connect': connected})
+  >>> link = nfc.ndef.UriRecord("http://nfcpy.org")
   >>> snep = nfc.snep.SnepClient(llc)
-  >>> snep.put(nfc.ndef.Message(nfc.ndef.SmartPosterRecord("http://nfcpy.org")))
+  >>> snep.put(nfc.ndef.Message(link))
+  True
   >>> clf.close()
 
 The :mod:`nfc.llcp` module documentation contains more information on
