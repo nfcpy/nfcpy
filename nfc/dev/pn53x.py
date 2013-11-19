@@ -621,8 +621,12 @@ class Device(nfc.dev.Device):
         return {'ISO-DEP': True, 'NFC-DEP': True}
 
 def init(transport):
+    if transport.TYPE == "TTY":
+        # send wakeup signal to quit low power battery mode (PN532 1.6)
+        transport.write(bytearray([0x55, 0x55] + 14 * [0x00]))
+
     # write ack to perform a soft reset
-    # raises IOError(EACCES) if we're second
+    # raises IOError(EACCES) if we're second (on USB)
     transport.write(Chipset.ACK)
     
     chipset = Chipset(transport)

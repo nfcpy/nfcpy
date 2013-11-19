@@ -33,6 +33,8 @@ import os
 import re
 
 class TTY(object):
+    TYPE = "TTY"
+    
     @classmethod
     def find(cls, path):
         if not (path.startswith("tty") or path.startswith("com")):
@@ -115,6 +117,8 @@ class TTY(object):
             self.tty = None
         
 class USB(object):
+    TYPE = "USB"
+    
     @classmethod
     def find(cls, path):
         if not path.startswith("usb"):
