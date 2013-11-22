@@ -401,7 +401,7 @@ class ContactlessFrontend(object):
                     result = self._llcp_connect(llcp_options, llc, terminate)
                     if bool(result) is True: return result
                 if rdwr_options:
-                    result = self._rdwr_connect(rdwr_options)
+                    result = self._rdwr_connect(rdwr_options, terminate)
                     if bool(result) is True: return result
                 if card_options:
                     result = self._card_connect(card_options, terminate)
