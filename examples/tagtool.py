@@ -224,7 +224,8 @@ class TagTool(CommandLineInterface):
 
     def on_card_release(self, tag):
         log.info("tag released")
-        return self.emulate_tag_stop(tag)
+        self.emulate_tag_stop(tag)
+        return True
 
     def show_tag(self, tag):
         print(tag)

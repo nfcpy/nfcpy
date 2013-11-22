@@ -195,7 +195,7 @@ class CommandLineInterface(object):
         return True
 
     def on_card_release(self, tag):
-        pass
+        return True
 
     def terminate(self):
         return self.test_completed

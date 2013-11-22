@@ -172,10 +172,21 @@ class ContactlessFrontend(object):
 
     def connect(self, **options):
         """Connect with a contactless target or become connected as a
-        contactless target. Blocks the calling thread until a single
-        activation and deactivation has completed. Connect options are
-        given as keyword arguments with dictionary values. Possible
-        options are:
+        contactless target. The calling thread is blocked until a
+        single activation and deactivation has completed or a callback
+        function supplied as the keyword argument ``terminate``
+        returned True. The result of the terminate function also
+        applies to the loop run after activation, so the example below
+        will make :meth:`~connect()` return after 10 seconds from
+        either waiting for a peer device or when connected. ::
+
+        >>> import nfc, time
+        >>> clf = nfc.ContactlessFrontend('usb')
+        >>> after5s = lambda: time.time() - started > 5
+        >>> started = time.time(); clf.connect(llcp={}, terminate=after5s)
+
+        Connect options are given as keyword arguments with dictionary
+        values. Possible options are:
         
         * ``rdwr={key: value, ...}`` - options for reader/writer operation
         * ``llcp={key: value, ...}`` - options for peer to peer mode operation
@@ -327,7 +338,8 @@ class ContactlessFrontend(object):
             raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
         
         log.debug("connect({0})".format(options))
-        
+
+        terminate = options.get('terminate', lambda: False)
         rdwr_options = options.get('rdwr')
         llcp_options = options.get('llcp')
         card_options = options.get('card')
@@ -384,16 +396,16 @@ class ContactlessFrontend(object):
             return None
         
         try:
-            while True:
+            while not terminate():
                 if llcp_options:
-                    result = self._llcp_connect(llcp_options, llc)
-                    if bool(result): return result
+                    result = self._llcp_connect(llcp_options, llc, terminate)
+                    if bool(result) is True: return result
                 if rdwr_options:
                     result = self._rdwr_connect(rdwr_options)
-                    if bool(result): return result
+                    if bool(result) is True: return result
                 if card_options:
-                    result = self._card_connect(card_options)
-                    if bool(result): return result
+                    result = self._card_connect(card_options, terminate)
+                    if bool(result) is True: return result
         except KeyboardInterrupt as error:
             log.debug(error)
             return False
@@ -401,7 +413,7 @@ class ContactlessFrontend(object):
             log.error(error)
             return False
 
-    def _rdwr_connect(self, options):
+    def _rdwr_connect(self, options, terminate):
         target = self.sense(options.get('targets', []))
         if target is not None:
             log.debug("found target {0}".format(target))
@@ -410,13 +422,13 @@ class ContactlessFrontend(object):
                 log.debug("connected to {0}".format(tag))
                 callback = options['on-connect']
                 if callback and callback(tag):
-                    while tag.is_present:
+                    while not terminate() and tag.is_present:
                         time.sleep(0.1)
                     return True
                 else:
                     return tag
         
-    def _llcp_connect(self, options, llc):
+    def _llcp_connect(self, options, llc, terminate):
         for role in ('target', 'initiator'):
             if options.get('role') is None or options.get('role') == role:
                 DEP = eval("nfc.dep." + role.capitalize())
@@ -424,12 +436,12 @@ class ContactlessFrontend(object):
                     log.debug("connected {0}".format(llc))
                     callback = options['on-connect']
                     if callback and callback(llc):
-                        llc.run()
+                        llc.run(terminate=terminate)
                         return True
                     else:
                         return llc
         
-    def _card_connect(self, options):
+    def _card_connect(self, options, terminate):
         timeout = options.get('timeout', 1.0)
         for target in options.get('targets'):
             activated = self.listen(target, timeout)
@@ -441,7 +453,7 @@ class ContactlessFrontend(object):
                     log.debug("connected as {0}".format(tag))
                     callback = options['on-connect']
                     if callback and callback(tag, command):
-                        while True:
+                        while not terminate():
                             response = (tag.process_command(command)
                                         if command is not None else None)
                             try:
@@ -453,9 +465,8 @@ class ContactlessFrontend(object):
                                 break
                             else:
                                 if command is None: break
-                        callback = options.get('on-release')
-                        if callback: callback(tag=tag)
-                        return True
+                        callback = options.get('on-release', lambda tag: True)
+                        return callback(tag=tag)
                     else:
                         return tag
         
