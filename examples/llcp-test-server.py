@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
 # Copyright 2009-2013 Stephen Tiedemann <stephen.tiedemann@gmail.com>

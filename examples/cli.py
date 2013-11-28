@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
 # Copyright 2012-2013 Stephen Tiedemann <stephen.tiedemann@gmail.com>
