@@ -249,7 +249,7 @@ class Chipset(object):
     def read_register(self, addr):
         if type(addr) is int: addr = [addr]
         data = ''.join([struct.pack(">H", x) for x in addr])
-        data = self.command(0x06, data)
+        data = self.command(0x06, data, timeout=250)
         if data is None or data[0] != 0:
             raise ChipsetError(data)
         return data[1:]
@@ -633,21 +633,26 @@ def init(transport):
     device = Device(chipset)
     
     if chipset.ic == "PN533":
-        # PN533 bug (found with SCL3711): usb manufacturer and product
-        # strings disappear after first use, guess memory corruption; also
-        # happens when read_register with more than 16 addresses.
-        eeprom = bytearray()
-        for addr in range(0xA000, 0xA100, 16):
-            eeprom += chipset.read_register(range(addr, addr+16))
-        index = 0
-        while index < len(eeprom) and eeprom[index] != 0xFF:
-            tlv_tag, tlv_len = eeprom[index], eeprom[index+1]
-            tlv_data = eeprom[index+2:index+2+tlv_len]
-            if tlv_tag == 3:
-                device._device_name = tlv_data[2:].decode("utf-16")
-            if tlv_tag == 4:
-                device._vendor_name = tlv_data[2:].decode("utf-16")
-            index += 2 + tlv_len
+        # PN533 bug: usb manufacturer and product strings disappear
+        # from usb configuration after first use in p2p mode. Thus
+        # we'll read it directly from the EEPROM (but if no EEPROM
+        # is installed we'll have to set fixed strings).
+        try:
+            eeprom = bytearray()
+            for addr in range(0xA000, 0xA100, 16):
+                eeprom += chipset.read_register(range(addr, addr+16))
+            index = 0
+            while index < len(eeprom) and eeprom[index] != 0xFF:
+                tlv_tag, tlv_len = eeprom[index], eeprom[index+1]
+                tlv_data = eeprom[index+2:index+2+tlv_len]
+                if tlv_tag == 3:
+                    device._device_name = tlv_data[2:].decode("utf-16")
+                if tlv_tag == 4:
+                    device._vendor_name = tlv_data[2:].decode("utf-16")
+                index += 2 + tlv_len
+        except nfc.dev.pn53x.ChipsetError:
+            vendor_name = "NXP"
+            device_name = "PN533"
     else:
         vendor_name = transport.manufacturer_name
         if vendor_name:
