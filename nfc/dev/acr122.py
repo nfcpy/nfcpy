@@ -38,11 +38,12 @@ class Chipset(pn53x.Chipset):
         frame = bytearray([0x6B, len(frame)] + 8 * [0x00]) + frame
         transport.write(frame)
         frame = transport.read(1000)
-        if not (frame[0:10] == "830a0000000000028100".decode("hex")
-                and frame[10:17] == "ACR122U"):
+        if not (frame[0] == 0x83 and frame[1] == len(frame) - 10 and
+                frame[5:7] == "\x00\x00" and frame[8] == 0x81 and
+                frame[10:17] == "ACR122U"):
             log.error("failed to retrieve ACR122U version string")
             raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
-        if int(chr(frame[-3])) < 2:
+        if int(chr(frame[17])) < 2:
             log.error("{0} is not supported, need version 2.xx"
                       .format(frame[10:]))
             raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
