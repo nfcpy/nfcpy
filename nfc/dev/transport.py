@@ -227,12 +227,10 @@ class USB(object):
         dev = [d for d in bus.devices if d.filename == dev_id][0]
         self.usb_dev = dev.open()
         try:
-            self.usb_dev.setConfiguration(dev.configurations[0])
             self.usb_dev.claimInterface(0)
         except self.usb.USBError:
+            log.debug("device probably used by another process")
             raise IOError("unusable device")
-        if (dev.idVendor, dev.idProduct) in [(0x54c, 0x193), (0x4cc, 0x531)]:
-            self.usb_dev.reset() # needed for PN531 only
         interface = dev.configurations[0].interfaces[0]
         endpoints = interface[0].endpoints
         bulk_inp = lambda ep: (\
@@ -248,7 +246,6 @@ class USB(object):
     
     def _PYUSB1_open(self, bus_id, dev_id):
         self.usb_dev = self.usb_core.find(bus=bus_id, address=dev_id)
-        self.usb_dev.set_configuration()
         interface = self.usb_util.find_descriptor(self.usb_dev[0])
         bulk_inp = lambda ep: (\
             (self.usb_util.endpoint_type(ep.bmAttributes) ==
