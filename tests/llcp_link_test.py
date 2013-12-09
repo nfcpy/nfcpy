@@ -148,7 +148,7 @@ def test_p2p_pol_connect_and_terminate_disrupted():
 @raises(StopIteration)
 def test_p2p_lis_connect_and_terminate_locally():
     seq = ["F01BD400081122334455667700000000003246666d01011103070103",
-           ("F01FD50108112233XXXXXXXX0000000000083246666d01011103020003070103",
+           ("F01FD50108112233XXXXXXXX0000000000093246666d01011103020003070103",
             None, "F006D404001203"),
            ("F004D50500", None, None), (None, None, "06D406000000"),
            ("06D507000000", None, "06D406010000"),
@@ -164,7 +164,7 @@ def test_p2p_lis_connect_and_terminate_locally():
 @raises(StopIteration)
 def test_p2p_lis_connect_and_terminate_remotely():
     seq = ["F01BD400081122334455667700000000003246666d01011103070103",
-           ("F01FD50108112233XXXXXXXX0000000000083246666d01011103020003070103",
+           ("F01FD50108112233XXXXXXXX0000000000093246666d01011103020003070103",
             None, "F006D404001203"),
            ("F004D50500", None, None), (None, None, "06D406000000"),
            ("06D507000000", None, "06D406010000"),
@@ -180,7 +180,7 @@ def test_p2p_lis_connect_and_terminate_remotely():
 @raises(StopIteration)
 def test_p2p_lis_connect_and_terminate_disrupted():
     seq = ["F01BD400081122334455667700000000003246666d01011103070103",
-           ("F01FD50108112233XXXXXXXX0000000000083246666d01011103020003070103",
+           ("F01FD50108112233XXXXXXXX0000000000093246666d01011103020003070103",
             None, "F006D404001203"),
            ("F004D50500", None, None), (None, None, "06D406000000"),
            ("06D507000000", None, "06D406010000"),
