@@ -276,11 +276,8 @@ class LogicalLinkController(object):
             if type(mac) == nfc.dep.Initiator and mac.rwt is not None:
                 max_rwt = 4096/13.56E6 * 2**10
                 if mac.rwt > max_rwt:
-                    mac.rwt = max_rwt
-                    log.warning("NFC-DEP RWT forced to %.3f s" % mac.rwt)
-                if pax.lto / 1E3 < 3 * mac.rwt:
-                    self.cfg['recv-lto'] = int(3000 * mac.rwt) + 1
-                    log.warning("remote LTO forced to 3 x RWT")
+                    log.warning("NFC-DEP RWT {0:.3f} exceeds max {1:.3f} sec"
+                                .format(mac.rwt, max_rwt))
 
             self.mac = mac
 

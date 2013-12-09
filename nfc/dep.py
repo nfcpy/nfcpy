@@ -198,22 +198,26 @@ class Initiator(DataExchangeProtocol):
             pfb = DEP_REQ.PFB(pdu_type, nad is not None, did is not None, 0)
             return DEP_REQ(pfb, did, nad, data=bytearray([rtox]))
 
-        log.debug("dep raw >> " + str(send_data).encode("hex"))
+        #log.debug("dep raw >> " + str(send_data).encode("hex"))
         send_data = bytearray(send_data)
         
         while send_data:
             data = send_data[0:self.miu]; del send_data[0:self.miu]
             req = INF(self.pni, data, bool(send_data), self.did, self.nad)
-            res = self.send_dep_req_recv_dep_res(req, self.rwt)
+            res = self.send_dep_req_recv_dep_res(req, timeout)
             self.count.inf_sent += 1
-            while res.pfb.type == DEP_RES.TimeoutExtension:
-                log.warning("dep target requested x{0} timeout extension"
-                    .format(res.data[0]))
+            if res.pfb.type == DEP_RES.TimeoutExtension:
                 req = RTOX(res.data[0], self.did, self.nad)
                 rwt = res.data[0] * self.rwt
-                res = self.send_dep_req_recv_dep_res(req, rwt)
-            if res.pfb.type == DEP_RES.PositiveAck and not send_data:
-                raise nfc.clf.ProtocolError("14.12.4.3")
+                log.warning("target requested %.3f sec more time" % rwt)
+                res = self.send_dep_req_recv_dep_res(req, min(timeout, rwt))
+            if res.pfb.type == DEP_RES.TimeoutExtension:
+                log.error("target repeated timeout extension request")
+                raise nfc.clf.TimeoutError("repeated timeout extension")
+            if res.pfb.type == DEP_RES.PositiveAck:
+                self.count.ack_rcvd += 1
+                if not send_data:
+                    raise nfc.clf.ProtocolError("14.12.4.3")
             if res.pfb.pni != self.pni:
                 raise nfc.clf.ProtocolError("14.12.3.3")
             self.pni = (self.pni + 1) & 0x3
@@ -227,10 +231,16 @@ class Initiator(DataExchangeProtocol):
         
         while res.pfb.type == DEP_RES.MoreInformation:
             req = ACK(self.pni, self.did, self.nad)
-            res = self.send_dep_req_recv_dep_res(req, self.rwt)
+            res = self.send_dep_req_recv_dep_res(req, timeout)
+            self.count.ack_sent += 1
             if res.pfb.type == DEP_RES.TimeoutExtension:
                 req = RTOX(res.data[0], self.did, self.nad)
-                res = self.send_dep_req_recv_dep_res(req, res.data[0]*self.rwt)
+                rwt = res.data[0] * self.rwt
+                log.warning("target requested %.3f sec more time" % rwt)
+                res = self.send_dep_req_recv_dep_res(req, min(timeout, rwt))
+            if res.pfb.type == DEP_RES.TimeoutExtension:
+                log.error("target repeated timeout extension request")
+                raise nfc.clf.TimeoutError("repeated timeout extension")
             if (res.pfb.type != DEP_RES.LastInformation and
                 res.pfb.type != DEP_RES.MoreInformation):
                 raise nfc.clf.ProtocolError("14.12.4.7")
@@ -240,7 +250,7 @@ class Initiator(DataExchangeProtocol):
             self.pni = (self.pni + 1) & 0x3
             self.count.inf_rcvd += 1
                 
-        log.debug("dep raw << " + str(recv_data).encode("hex"))
+        #log.debug("dep raw << " + str(recv_data).encode("hex"))
         return str(recv_data)
 
     def send_dep_req_recv_dep_res(self, req, timeout):
@@ -254,55 +264,59 @@ class Initiator(DataExchangeProtocol):
             pfb = DEP_REQ.PFB(pdu_type, nad=False, did=False, pni=0)
             return DEP_REQ(pfb, did=None, nad=None, data=None)
 
-        def request_attention(self, n_retry_atn):
+        def request_attention(self, n_retry_atn, deadline):
             req = ATN()
             for i in range(n_retry_atn):
+                timeout = min(self.rwt, deadline - time())
+                if timeout <= 0: raise nfc.clf.TimeoutError
                 try:
-                    res = self.send_req_recv_res(req, self.rwt)
+                    res = self.send_req_recv_res(req, timeout)
                 except nfc.clf.DigitalProtocolError:
                     continue
-                else:
-                    self.count.atn_sent += 1
-                    if res.pfb.type == DEP_RES.TimeoutExtension:
-                        raise nfc.clf.ProtocolError("14.12.4.4")
-                    if res.pfb.type != DEP_RES.Attention:
-                        raise nfc.clf.ProtocolError("14.12.4.2")
-                    self.count.atn_rcvd += 1
-                    return
-            else:
-                raise nfc.clf.ProtocolError("14.12.5.6")
+                self.count.atn_sent += 1
+                if res.pfb.type == DEP_RES.TimeoutExtension:
+                    raise nfc.clf.ProtocolError("14.12.4.4")
+                if res.pfb.type != DEP_RES.Attention:
+                    raise nfc.clf.ProtocolError("14.12.4.2")
+                self.count.atn_rcvd += 1
+                return
+            raise nfc.clf.ProtocolError("14.12.5.6")
             
-        def request_retransmission(self, n_retry_nak):
+        def request_retransmission(self, n_retry_nak, deadline):
             req = NAK(self.pni, self.did, self.nad)
             for i in range(n_retry_nak):
+                timeout = min(self.rwt, deadline - time())
+                if timeout <= 0: raise nfc.clf.TimeoutError
                 try:
-                    res = self.send_req_recv_res(req, self.rwt)
+                    res = self.send_req_recv_res(req, timeout)
                 except nfc.clf.DigitalProtocolError:
                     continue
-                else:
-                    self.count.nak_sent += 1
-                    if res.pfb.type == DEP_RES.TimeoutExtension:
-                        raise nfc.clf.ProtocolError("14.12.4.4")
-                    if res.pfb.type not in (DEP_RES.LastInformation,
-                                            DEP_RES.MoreInformation):
-                        raise nfc.clf.ProtocolError("14.12.5.4")
-                    return res
-            else:
-                raise nfc.clf.ProtocolError("14.12.5.6")
-
+                self.count.nak_sent += 1
+                if res.pfb.type == DEP_RES.TimeoutExtension:
+                    raise nfc.clf.ProtocolError("14.12.4.4")
+                expected = (DEP_RES.LastInformation, DEP_RES.MoreInformation)
+                if res.pfb.type not in expected:
+                    raise nfc.clf.ProtocolError("14.12.5.4")
+                return res
+            raise nfc.clf.ProtocolError("14.12.5.6")
+        
+        deadline = time() + timeout
         while True:
+            timeout = min(self.rwt, deadline - time())
+            if timeout <= 0: raise nfc.clf.TimeoutError()
             try:
                 res = self.send_req_recv_res(req, timeout)
                 break
             except nfc.clf.TimeoutError:
-                request_attention(self, n_retry_atn=2)
+                request_attention(self, 2, deadline)
                 continue
             except nfc.clf.TransmissionError:
-                res = request_retransmission(self, n_retry_nak=2)
+                res = request_retransmission(self, 2, deadline)
                 break
 
         if res.pfb.type == DEP_RES.NegativeAck:
             raise nfc.clf.ProtocolError("14.12.4.5")
+        
         return res
         
     def send_req_recv_res(self, req, timeout):

@@ -170,7 +170,7 @@ def test_bv_p2p_in_nfcf_atr_res_wt_14():
     dep = nfc.dep.Initiator(ContactlessFrontend(seq))
     assert dep.activate(brs=1) == ""
     send, recv = "004000011002010E", "FFFFFF0102"
-    assert dep.exchange(send.decode("hex"), 1) == recv.decode("hex")
+    assert dep.exchange(send.decode("hex"), 5) == recv.decode("hex")
     assert dep.deactivate()
 
 def test_bv_p2p_in_nfcf_atr_res_wt_15():
@@ -184,7 +184,7 @@ def test_bv_p2p_in_nfcf_atr_res_wt_15():
     dep = nfc.dep.Initiator(ContactlessFrontend(seq))
     assert dep.activate(brs=1) == ""
     send, recv = "004000011002010E", "FFFFFF0102"
-    assert dep.exchange(send.decode("hex"), 1) == recv.decode("hex")
+    assert dep.exchange(send.decode("hex"), 5) == recv.decode("hex")
     assert dep.deactivate()
 
 def test_bv_p2p_in_nfcf_psl_req_res_min_time():
@@ -251,9 +251,9 @@ def test_bv_p2p_in_nfcf_recv_rtox_rwt_max():
     dep = nfc.dep.Initiator(ContactlessFrontend(seq))
     assert dep.activate(brs=1) == ""
     send, recv = "004000011002010E", "0001020304050607"
-    assert dep.exchange(send.decode("hex"), 1) == recv.decode("hex")
+    assert dep.exchange(send.decode("hex"), 5) == recv.decode("hex")
     send, recv = "0001020304050607", "004000011002010E"
-    assert dep.exchange(send.decode("hex"), 1) == recv.decode("hex")
+    assert dep.exchange(send.decode("hex"), 5) == recv.decode("hex")
     assert dep.deactivate()
 
 def test_bv_p2p_in_nfcf_dsl_req_no_did():
