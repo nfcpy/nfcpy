@@ -189,9 +189,9 @@ class Type2Tag(object):
         return s.format(self.atq, self.sak, str(self.uid).encode("hex"))
 
     def __getitem__(self, key):
-        if type(key) is type(int()):
+        if type(key) is int:
             key = slice(key, key+1)
-        if not type(key) is type(slice(1)):
+        if not type(key) is slice:
             raise TypeError("key must be of type int or slice")
         octets = bytearray(key.stop - key.start)
         for i in xrange(key.start, key.stop):
@@ -203,11 +203,11 @@ class Type2Tag(object):
         return octets if len(octets) > 1 else octets[0]
         
     def __setitem__(self, key, value):
-        if type(key) is type(int()):
+        if type(key) is int:
             key = slice(key, key+1)
-        if type(key) is not type(slice(1)):
+        if type(key) is not slice:
             raise TypeError("key must be of type int or slice")
-        if type(value) == type(int()):
+        if type(value) == int:
             value = bytearray([value])
         else:
             value = bytearray(value)
