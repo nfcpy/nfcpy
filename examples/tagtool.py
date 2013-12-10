@@ -37,6 +37,10 @@ from cli import CommandLineInterface
 
 import nfc
 
+tt1_card_map = {
+    "\x11\x48": "Topaz-96 (IRT-5011)",
+    "\x12\x4C": "Topaz-512 (TPZ-505-016)"
+    }
 tt3_card_map = {
     "\x00\xF0": "FeliCa Lite RC-S965",
     "\x00\xF1": "FeliCa Lite-S RC-S966",
@@ -109,8 +113,13 @@ def add_load_parser(parser):
         
 def add_format_parser(parser):
     subparsers = parser.add_subparsers(title="Tag Types", dest="tagtype")
+    add_format_tt1_parser(subparsers.add_parser(
+            'tt1', help='format type 1 tag'))
     add_format_tt3_parser(subparsers.add_parser(
             'tt3', help='format type 3 tag'))
+
+def add_format_tt1_parser(parser):
+    pass
 
 def add_format_tt3_parser(parser):
     parser.add_argument(
@@ -231,12 +240,13 @@ class TagTool(CommandLineInterface):
         print(tag)
         if self.options.verbose:
             if tag.type == "Type1Tag":
-                pass
+                tag._hr = tag.read_id()[0:2]
+                print("  " + tt1_card_map.get(str(tag._hr), "unknown card"))
             elif tag.type == "Type2Tag":
                 pass
             elif tag.type == "Type3Tag":
                 icc = str(tag.pmm[0:2]) # ic code
-                print("  " + tt3_card_map.get(icc, "unknown card type"))
+                print("  " + tt3_card_map.get(icc, "unknown card"))
             elif tag.type == "Type4Tag":
                 pass
         if tag.ndef:
@@ -248,21 +258,22 @@ class TagTool(CommandLineInterface):
             print("  writeable = %s" % ("no", "yes")[tag.ndef.writeable])
             print("  capacity  = %d byte" % tag.ndef.capacity)
             print("  message   = %d byte" % tag.ndef.length)
-            if self.options.verbose:
-                print("NDEF message dump:")
-                print(format_data(tag.ndef.message))
-            print("NDEF record list:")
-            print(tag.ndef.message.pretty())
+            if tag.ndef.length > 0:
+                if self.options.verbose:
+                    print("NDEF message dump:")
+                    print(format_data(tag.ndef.message))
+                print("NDEF record list:")
+                print(tag.ndef.message.pretty())
         if self.options.verbose:
             if tag.type == "Type1Tag":
-                memory = bytearray()
-                for offset in range(0, 256 * 8, 8):
-                    try: memory += tag[offset:offset+8]
+                mem_size = {0x11: 120, 0x12: 512}.get(tag._hr[0], 2048)
+                mem_data = bytearray()
+                for offset in range(0, mem_size, 8):
+                    try: mem_data += tag[offset:offset+8]
                     except nfc.clf.DigitalProtocolError as error:
                         log.error(repr(error)); break
-                #memory_dump = tag[0:8+tag[10]*8]
                 print("TAG memory dump:")
-                print(format_data(memory, w=8))
+                print(format_data(mem_data, w=8))
                 tag.clf.sense([nfc.clf.TTA(uid=tag.uid)])
             elif tag.type == "Type2Tag":
                 memory = bytearray()
@@ -314,8 +325,37 @@ class TagTool(CommandLineInterface):
             log.error("message exceeds tag capacity")
 
     def format_tag(self, tag):
-        if self.options.tagtype == "tt3":
-            self.format_tt3_tag(tag)
+        if tag.type == "Type1Tag" and self.options.tagtype == "tt1":
+            formatted = self.format_tt1_tag(tag)
+        elif tag.type == "Type3Tag" and self.options.tagtype == "tt3":
+            formatted = self.format_tt3_tag(tag)
+        else:
+            print("This is not a type %s tag" % self.options.tagtype[2])
+            return
+
+        if formatted:
+            print("Formatted %s:" % tag.type)
+            print("  version   = %s" % tag.ndef.version)
+            print("  readable  = %s" % ("no", "yes")[tag.ndef.readable])
+            print("  writeable = %s" % ("no", "yes")[tag.ndef.writeable])
+            print("  capacity  = %d byte" % tag.ndef.capacity)
+            print("  message   = %d byte" % tag.ndef.length)
+        else:
+            print("Sorry, I don't know how to format this %s." % tag.type)
+
+    def format_tt1_tag(self, tag):
+        hr = tag.read_id()[0:2]
+        if hr[0] == 0x11:
+            for i, v in enumerate(bytearray.fromhex("E1100E0003000000")):
+                tag.write_byte(8 + i, v)
+        elif hr[0] == 0x12:
+            tag.write_block(1, bytearray.fromhex("E1103F000103F230"))
+            tag.write_block(2, bytearray.fromhex("330203F002030300"))
+        else:
+            return False
+        # re-read the ndef capabilities
+        tag.ndef = nfc.tag.tt1.NDEF(tag)
+        return True
 
     def format_tt3_tag(self, tag):
         block_count = tt3_determine_block_count(tag)
@@ -341,10 +381,10 @@ class TagTool(CommandLineInterface):
         attr = bytearray(str(attr))
         if self.options.crc is not None:
             attr[14:16] = (self.options.crc / 256, self.options.crc % 256)
-    
         tag.write(attr, [0])
-        attr = nfc.tag.tt3.NdefAttributeData(tag.read([0]))
-        log.info("new attribute data: " + attr.pretty())
+        # re-read the ndef capabilities
+        tag.ndef = nfc.tag.tt3.NDEF(tag)
+        return True
 
     def prepare_tag(self):
         if self.options.tagtype == "tt3":
