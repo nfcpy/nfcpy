@@ -195,24 +195,24 @@ class Type1Tag(object):
         return "Type1Tag UID=" + str(self.uid).encode("hex")
 
     def __getitem__(self, key):
-        if type(key) is type(int()):
+        if type(key) is int:
             key = slice(key, key+1)
-        if not type(key) is type(slice(1)):
+        if not type(key) is slice:
             raise TypeError("key must be of type int or slice")
         if key.start > key.stop:
             raise ValueError("start index is greater than stop index")
         if key.stop > len(self._mmap):
-            for block in range(len(self._mmap)/8, key.stop/8 + 1):
+            for block in range(len(self._mmap)/8, key.stop/8):
                 self._mmap += self.read_block(block)
         bytes = self._mmap[key.start:key.stop]
         return bytes if len(bytes) > 1 else bytes[0]
         
     def __setitem__(self, key, value):
-        if type(key) is type(int()):
+        if type(key) is int:
             key = slice(key, key+1)
-        if type(key) is not type(slice(1)):
+        if type(key) is not slice:
             raise TypeError("key must be of type int or slice")
-        if type(value) == type(int()):
+        if type(value) == int:
             value = bytearray([value])
         else:
             value = bytearray(value)
@@ -249,6 +249,13 @@ class Type1Tag(object):
 
     def transceive(self, data, timeout=0.1):
         return self.clf.exchange(data, timeout)
+
+    def read_id(self):
+        """Read header rom and all static memory bytes (blocks 0-14).
+        """
+        log.debug("read all")
+        cmd = "\x78\x00\x00\x00\x00\x00\x00"
+        return self.transceive(cmd)
 
     def read_all(self):
         """Read header rom and all static memory bytes (blocks 0-14).
