@@ -226,6 +226,8 @@ class USB(object):
         bus = [b for b in self.usb.busses() if b.dirname == bus_id][0]
         dev = [d for d in bus.devices if d.filename == dev_id][0]
         self.usb_dev = dev.open()
+        if sys.platform.startswith("darwin"):
+            self.usb_dev.setConfiguration(dev.configurations[0])
         try:
             self.usb_dev.claimInterface(0)
         except self.usb.USBError:
@@ -246,6 +248,8 @@ class USB(object):
     
     def _PYUSB1_open(self, bus_id, dev_id):
         self.usb_dev = self.usb_core.find(bus=bus_id, address=dev_id)
+        if sys.platform.startswith("darwin"):
+            self.usb_dev.set_configuration()
         interface = self.usb_util.find_descriptor(self.usb_dev[0])
         bulk_inp = lambda ep: (\
             (self.usb_util.endpoint_type(ep.bmAttributes) ==
