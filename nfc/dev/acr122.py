@@ -66,6 +66,9 @@ class Chipset(pn53x.Chipset):
         self.transport.write(frame)
         frame = self.transport.read(timeout)
         
+        if len(frame) < 14:
+            strerror = os.strerror(errno.EIO) + " - Received frame too short"
+            raise IOError(errno.EIO, strerror)
         if frame[0] != 0x83:
             strerror = os.strerror(errno.EIO) + " - Unexpected start of frame"
             raise IOError(errno.EIO, strerror)
