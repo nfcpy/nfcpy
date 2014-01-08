@@ -174,7 +174,7 @@ class Type4Tag(object):
         except IndexError:
             log.warning("FSCI with RFU value in Type 4A Answer To Select")
             self.miu = 32
-        fwi = (self.ats[3] >> 4) if (self.ats[3] >> 4 == 15) else 4
+        fwi = (self.ats[3] >> 4) if (self.ats[3] >> 4 != 15) else 4
         self.fwt = 4096 / 13.56E6 * pow(2, fwi)
         if self.clf.capabilities.get('ISO-DEP') is not True:
             self.pni = 0
