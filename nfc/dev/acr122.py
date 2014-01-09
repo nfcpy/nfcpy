@@ -34,50 +34,76 @@ import pn53x
 
 class Chipset(pn53x.Chipset):
     def __init__(self, transport):
-        frame = bytearray([0xFF, 0x00, 0x48, 0x00, 0x00])
-        frame = bytearray([0x6B, len(frame)] + 8 * [0x00]) + frame
-        transport.write(frame)
-        frame = transport.read(1000)
-        if not (frame[0] == 0x83 and frame[1] == len(frame) - 10 and
-                frame[5:7] == "\x00\x00" and frame[8] == 0x81 and
-                frame[10:17] == "ACR122U"):
+        self.transport = transport
+        
+        # read ACR122U firmware version string
+        reader_version = self.ccid_xfr_block(bytearray.fromhex("FF00480000"))
+        if not reader_version.startswith("ACR122U"):
             log.error("failed to retrieve ACR122U version string")
             raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
-        if int(chr(frame[17])) < 2:
-            log.error("{0} is not supported, need version 2.xx"
-                      .format(frame[10:]))
+        
+        if int(chr(reader_version[7])) < 2:
+            log.error("{0} not supported, need 2.xx".format(frame[10:]))
             raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
+
+        log.debug("initialize " + str(reader_version))
+        
+        # set icc power on
+        log.debug("CCID ICC-POWER-ON")
+        frame = bytearray.fromhex("62000000000000000000")
+        transport.write(frame); transport.read(100)
+        
+        # disable autodetection
+        log.debug("Set PICC Operating Parameters")
+        self.ccid_xfr_block(bytearray.fromhex("FF00517F00"))
+        
+        # switch red/green led off/on
+        log.debug("Configure Buzzer and LED")
+        self.ccid_xfr_block(bytearray.fromhex("FF00400E0400000000"))
+        
         super(Chipset, self).__init__(transport)
-            
+        
     def close(self):
+        self.ccid_xfr_block(bytearray.fromhex("FF00400C0400000000"))
         self.transport.close()
         self.transport = None
+
+    def ccid_xfr_block(self, data, timeout=100):
+        frame = struct.pack("<BI5B", 0x6F, len(data), 0, 0, 0, 0, 0) + data
+        self.transport.write(bytearray(frame))
+        frame = self.transport.read(timeout)
+        if not frame or len(frame) < 10:
+            log.error("insufficient data for decoding ccid response")
+            raise IOError(errno.EIO, os.strerror(errno.EIO))
+        if frame[0] != 0x80:
+            log.error("expected a RDR_to_PC_DataBlock")
+            raise IOError(errno.EIO, os.strerror(errno.EIO))
+        if len(frame) != 10 + struct.unpack("<I", frame[1:5])[0]:
+            log.error("RDR_to_PC_DataBlock length mismatch")
+            raise IOError(errno.EIO, os.strerror(errno.EIO))
+        return frame[10:]
         
     def command(self, cmd_code, cmd_data=None, timeout=100):
         """Send a chip command and return the chip response."""
-        cmd_name = self.CMD.get(cmd_code, "PN53x 0x{0:02X}".format(cmd_code))
+        cmd_name = "PN53x "+self.CMD.get(cmd_code, "0x{0:02X}".format(cmd_code))
         log.debug("{0} called with timeout {1} ms".format(cmd_name, timeout))
         
         if cmd_data is None: cmd_data = ""
         frame = bytearray([0xD4, cmd_code]) + bytearray(cmd_data)
         frame = bytearray([0xFF, 0x00, 0x00, 0x00, len(frame)]) + frame
-        frame = bytearray([0x6B, len(frame)] + 8 * [0x00]) + frame
 
-        self.transport.write(frame)
-        frame = self.transport.read(timeout)
+        frame = self.ccid_xfr_block(frame, timeout)
+        if not frame or len(frame) < 4:
+            log.error("insufficient data for decoding chip response")
+            raise IOError(errno.EIO, os.strerror(errno.EIO))
+        if not (frame[0] == 0xD5 and frame[1] == cmd_code + 1):
+            log.error("received invalid chip response")
+            raise IOError(errno.EIO, os.strerror(errno.EIO))
+        if not (frame[-2] == 0x90 and frame[-1] == 0x00):
+            log.error("received pseudo apdu with error status")
+            raise IOError(errno.EIO, os.strerror(errno.EIO))
+        return frame[2:-2]
         
-        if len(frame) < 14:
-            strerror = os.strerror(errno.EIO) + " - Received frame too short"
-            raise IOError(errno.EIO, strerror)
-        if frame[0] != 0x83:
-            strerror = os.strerror(errno.EIO) + " - Unexpected start of frame"
-            raise IOError(errno.EIO, strerror)
-        if frame[-2] == 0x63:
-            strerror = os.strerror(errno.EIO) + " - No response from PN53X"
-            raise IOError(errno.EIO, strerror)
-
-        return frame[12:-2]
-
 class Device(pn53x.Device):
     def __init__(self, bus):
         super(Device, self).__init__(bus)
