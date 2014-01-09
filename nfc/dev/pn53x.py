@@ -484,9 +484,8 @@ class Device(nfc.dev.Device):
                          .format(speed, mode))
                 break
             except ChipsetError as error:
-                if error.errno in (0x01, 0x0A):
-                    return None # timeout
-                else:
+                # errno 0x01/0x0A are passive/active mode timeouts
+                if not error.errno in (0x01, 0x0A):
                     log.warning(error)
                     raise nfc.clf.TransmissionError(str(error))
             except IOError as error:
