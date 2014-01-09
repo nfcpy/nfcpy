@@ -549,7 +549,10 @@ class ContactlessFrontend(object):
             raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
         
         with self.lock:
-            return self.dev.exchange(send_data, timeout)
+            log.debug(">>> %s %.3fs" % (str(send_data).encode("hex"), timeout))
+            rcvd_data = self.dev.exchange(send_data, timeout)
+            log.debug("<<< %s" % str(rcvd_data).encode("hex"))
+            return rcvd_data
 
     def set_communication_mode(self, brm, **kwargs):
         """Set the hardware communication mode. The effect of calling
