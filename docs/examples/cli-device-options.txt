@@ -1,0 +1,31 @@
+.. option:: --device PATH
+
+   Use a specific reader or search only for a subset of readers. The
+   syntax for PATH is:
+
+   * ``usb[:vendor[:product]]`` with optional *vendor* and *product*
+     as four digit hexadecimal numbers, like ``usb:054c:06c3`` would
+     open the first Sony RC-S380 reader and ``usb:054c`` the first
+     Sony reader.
+        
+   * ``usb[:bus[:device]]`` with optional *bus* and *device* number as
+     three-digit decimal numbers, like ``usb:001:023`` would
+     specifically mean the usb device with bus number 1 and device id
+     23 whereas ``usb:001`` would mean to use the first available
+     reader on bus number 1.
+        
+   * ``tty:port:driver`` with mandatory *port* and *driver* name
+     should be used on Posix systems to open the serial port at device
+     node ``/dev/tty<port>`` and load the driver from module
+     ``nfc/dev/<driver>.py``. A typical example would be
+     ``tty:USB0:arygon`` for the Arygon APPx/ADRx at ``/dev/ttyUSB0``.
+        
+   * ``com:port:driver`` with mandatory *port* and *driver* name should
+     be used on Windows systems to open the serial port ``COM<port>``
+     and load the ``nfc/dev/<driver>.py`` driver module.
+        
+   * ``udp[:host][:port]`` with optional *host* name or address and
+     *port* number will use a fake communication channel over
+     UDP/IP. Either value may be omitted in which case *host* defaults
+     to 'localhost' and *port* defaults to 54321.
+

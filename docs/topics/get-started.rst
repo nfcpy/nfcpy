@@ -1,8 +1,9 @@
+***************
 Getting started
-===============
+***************
 
 Installation
-------------
+============
 
 .. _Bazaar:
    http://bazaar.canonical.com/en/
@@ -81,18 +82,21 @@ be printed. See :doc:`../examples/tagtool` for other options.
      $ echo "blacklist pn533" | sudo tee -a /etc/modprobe.d/blacklist-nfc.conf
 
    Root permissions are usually needed for the USB readers and ``sudo
-   python`` is an easy fix, however not quite convinient and maybe a
-   bit dangerous. A better solution is to add a udev rule and make the
-   reader accessible to a normal user, like the following rules would
-   allow members of the *plugdev* group to access an SCL-3711 or
-   RC-S380 if stored in ``'/etc/udev/rules.d/nfcdev.rules'``. ::
+   python`` is an easy fix, however not quite convinient and
+   potentially dangerous. A better solution is to add a udev rule and
+   make the reader accessible to a normal user, like the following
+   rules would allow members of the *plugdev* group to access an
+   SCL-3711 or RC-S380 if stored in
+   ``'/etc/udev/rules.d/nfcdev.rules'``. ::
 
-     SUBSYSTEM=="usb", ACTION=="add", ATTRS{idVendor}=="04e6", ATTRS{idProduct}=="5591", GROUP="plugdev" # SCM SCL-3711
-     SUBSYSTEM=="usb", ACTION=="add", ATTRS{idVendor}=="054c", ATTRS{idProduct}=="06c1", GROUP="plugdev" # Sony RC-S380
+     SUBSYSTEM=="usb", ACTION=="add", ATTRS{idVendor}=="04e6", \
+       ATTRS{idProduct}=="5591", GROUP="plugdev" # SCM SCL-3711
+     SUBSYSTEM=="usb", ACTION=="add", ATTRS{idVendor}=="054c", \
+       ATTRS{idProduct}=="06c1", GROUP="plugdev" # Sony RC-S380
 
 
 Open a reader
--------------
+=============
 
 The main entrance to nfcpy is the :class:`nfc.ContactlessFrontend`
 class. When initialized with a *path* argument it tries to locate and
@@ -134,7 +138,7 @@ found whereas ``ContactlessFrontend('...')`` raises :exc:`IOError`
 if a reader was not found.
 
 Read/write tags
----------------
+===============
 
 With a reader opened the next step to get an NFC communication running
 is to use the :meth:`nfc.clf.ContactlessFrontend.connect` method.
@@ -297,10 +301,10 @@ the message to be read back from the tag and finally printed.
    API documentation as well as the :ref:`ndef-tutorial` tutorial to
    learn how *nfcpy* maps to the concepts of the NDEF specification.
 
-Become a card
--------------
+Pretend a card
+==============
 
-How do we get *nfcpy* to be a card? We supply *card* options to
+How do we get *nfcpy* to be a card? Supply ``card`` options to
 :meth:`nfc.ContactlessFrontend.connect`. ::
 
   >>> import nfc
@@ -330,9 +334,9 @@ option. ::
    *nfcpy* supports tag emulation only for NFC Forum Type 3 Tag and
    requires a Sony RC-S380 contactless frontend. The only alternative
    to an RC-S380 is to use the UDP driver that simulates NFC
-   communication over UDP/IP. The use the UDP driver initialize
+   communication over UDP/IP. To use the UDP driver initialize
    ContactlessFrontend with the string ``udp`` and use
-   ``'examples/tagtool.py --device udp'`` as card reader.
+   ``examples/tagtool.py --device udp`` as card reader.
 
 You can read the tag we've created for example with the excellent `NXP
 Tag Info`_ app available for free in the Android app store. It will
@@ -405,7 +409,7 @@ on. Finally, press ``Ctrl-C`` to stop the card working.
 
 
 Work with a peer
-----------------
+================
 
 The best part of NFC comes when the limitations of a single master
 controlling a poor servant are overcome. This is achieved by the NFC

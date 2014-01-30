@@ -19,9 +19,12 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-#
-# Simple NDEF Exchange Protocol (SNEP)
-# 
+
+"""
+The nfc.snep module implements the NFC Forum Simple NDEF Exchange
+Protocol (SNEP) specification and provides a server and client class
+for applications to easily send or receive SNEP messages.
+"""
 
 from nfc.snep.server import SnepServer
 from nfc.snep.client import SnepClient

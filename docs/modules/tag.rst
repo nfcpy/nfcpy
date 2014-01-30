@@ -1,29 +1,28 @@
-==================
-``nfc.tag`` module
-==================
+nfc.tag
+=======
 
 .. automodule:: nfc.tag
 
-Type 1 Tag
-==========
+nfc.tag.tt1.Type1Tag
+--------------------
 
 .. autoclass:: nfc.tag.tt1.Type1Tag()
    :members:
 
-Type 2 Tag
-==========
+nfc.tag.tt2.Type2Tag
+--------------------
 
 .. autoclass:: nfc.tag.tt2.Type2Tag()
    :members:
 
-Type 3 Tag
-==========
+nfc.tag.tt3.Type3Tag
+--------------------
 
 .. autoclass:: nfc.tag.tt3.Type3Tag()
    :members:
 
-Type 4 Tag
-==========
+nfc.tag.tt4.Type4Tag
+--------------------
 
 .. autoclass:: nfc.tag.tt4.Type4Tag()
    :members:

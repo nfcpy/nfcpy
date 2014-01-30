@@ -1,17 +1,14 @@
-==============
-``nfc`` module
-==============
+nfc
+===
 
 .. automodule:: nfc
 
-Contactless Frontend
-====================
+nfc.ContactlessFrontend
+-----------------------
 
 .. autoclass:: nfc.ContactlessFrontend
    :members:
 
-Target Classes
-==============
 
 .. autoclass:: nfc.clf.TTA
 

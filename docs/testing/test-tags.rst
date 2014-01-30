@@ -1,12 +1,10 @@
-==================
+******************
 Generate Test Tags
-==================
+******************
 
-This tutorial provides reipes to generate tags for testing reader
-compliance with the NFC Forum Tag Type, NDEF and RTD
-specifications. All test data can generated and written to physical
-tags using tools in the ``examples/`` directory and it is assumed that
-commands are run from there.
+This page contains instructions to generate tags for testing reader
+compliance with NFC Forum Tag Type, NDEF and RTD specifications. The
+tools used are in the ``examples`` directory.
 
 Type 3 Tags
 ===========
@@ -17,12 +15,14 @@ Attribute Block Tests
 This is a collection of tags to test processing of the the Type 3 Tag
 attribute information block. These can be used to verify if the NFC
 device correctly reads or writes tags with different attribute
-information, both valid and invalid. Below figure (from the NFC Forum Type 3 Tag Operation Specification) shows the Attribute Information Format.
+information, both valid and invalid. Below figure (from the NFC Forum
+Type 3 Tag Operation Specification) shows the Attribute Information
+Format.
 
 .. image:: ../images/tt3attrblock.png
 
 TT3_READ_BV_001
-~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^
 
 ::
 
@@ -34,7 +34,7 @@ TT3_READ_BV_001
 * Expected: Fully used tag. Read all data stored (Len)
 
 TT3_READ_BV_002
-~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^
 
 ::
 
@@ -47,7 +47,7 @@ TT3_READ_BV_002
   block at a time)
 
 TT3_READ_BV_003
-~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^
 
 ::
 
@@ -59,7 +59,7 @@ TT3_READ_BV_003
 * Read Nbmax blocks (NOT read Nbr blocks)
 
 TT3_READ_BV_004
-~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^
 
 ::
 
@@ -71,7 +71,7 @@ TT3_READ_BV_004
 * Identify as „corrupted data“ (previous write interrupted)
 
 TT3_READ_BV_005
-~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^
 
 ::
 
@@ -83,7 +83,7 @@ TT3_READ_BV_005
 * Identify as „Corrupted data“ (invalid length)
 
 TT3_READ_BV_006
-~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^
 
 ::
 
@@ -97,7 +97,7 @@ TT3_READ_BV_006
 * Requires a tag with more than 4 kbyte NDEF capacity
 
 TT3_READ_BI_001
-~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^
 
 ::
 
@@ -109,7 +109,7 @@ TT3_READ_BI_001
 * Identify as „Corrupted data“ (invalid attribute information block)
 
 TT3_READ_BI_002
-~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^
 
 ::
 
@@ -121,7 +121,7 @@ TT3_READ_BI_002
 * Identify as „Corrupted data“ (invalid attribute information block)
 
 TT3_READ_BI_003
-~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^
 
 ::
 
@@ -133,7 +133,7 @@ TT3_READ_BI_003
 * Identify as unknown version
 
 TT3_READ_BI_004
-~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^
 
 ::
 
@@ -145,7 +145,7 @@ TT3_READ_BI_004
 * Ignore when reading RWFlag = 0x00 
 
 TT3_WRITE_BV_001
-~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^
 
 ::
 
@@ -155,7 +155,7 @@ TT3_WRITE_BV_001
 * Identify as „Read Only“. Write prohibited. (normal read-only tag)
 
 TT3_WRITE_BV_002
-~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^
 
 ::
 
@@ -165,7 +165,7 @@ TT3_WRITE_BV_002
 * Identify as „Read/Write“. Write permitted. (normal writtable tag)
 
 TT3_WRITE_BV_003
-~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^
 
 ::
 

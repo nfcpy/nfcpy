@@ -1,14 +1,14 @@
-===================
-``nfc.snep`` module
-===================
+.. _snep-tutorial:
+.. currentmodule:: nfc.snep
 
-.. automodule:: nfc.snep
+*****************************
+Simple NDEF Exchange Protocol
+*****************************
 
-This module provides a client and server for the NFC Forum Simple NDEF
-Exchange Protocol (SNEP). SNEP is an application-level protocol for
-sending and retrieving NDEF Messages between two NFC peer devices. It
-is implemented in many smartphones and typically used to push
-phonebook contacts or website URLs to another phone.
+The NFC Forum Simple NDEF Exchange Protocol (SNEP) allows two NFC
+devices to exchange NDEF Messages. It is implemented in many
+smartphones and typically used to push phonebook contacts or web page
+URLs to another phone.
 
 SNEP is a stateless request/response protocol. The client sends a
 request to the server, the server processes that request and returns a
@@ -76,9 +76,9 @@ NDEF message to put could be rejected if it is more than 1024 octets,
 though smartphones generally seem to support more.
 
 Default Server
-==============
+--------------
 
-A basic *Default SNEP Server* can be buiil with *nfcpy* like in the
+A basic *Default SNEP Server* can be built with *nfcpy* like in the
 following example, where all error and exception handling has been sacrified for brevity. ::
 
   import nfc
@@ -117,7 +117,7 @@ size of NDEF messages that can be received, the
           nfc.snep.SnepServer.__init__(self, llc, "urn:nfc:sn:snep", 10*1024)
 
 Using SNEP Put
-==============
+--------------
 
 Sending an NDEF message to the *Default SNEP Server* is easily done
 with an instance of :class:`nfc.snep.SnepClient` and is basically to
@@ -172,8 +172,8 @@ nothing. ::
   clf = nfc.ContactlessFrontend("usb")
   clf.connect(llcp={'on-startup': startup, 'on-connect': connected})
 
-Private Server
-==============
+Private Servers
+---------------
 
 The SNEP protocol can be used for other, non-standard, communication
 between a server and client component. A private server can be run on
@@ -265,17 +265,3 @@ flexibility that won't change. ::
   clf.connect(llcp={'on-connect': connected})
 
 
-Module documentation
-====================
-
-SNEP Server
------------
-
-.. autoclass:: SnepServer
-   :members:
-
-SNEP Client
------------
-
-.. autoclass:: SnepClient
-   :members:

@@ -1,7 +1,8 @@
 .. _ndef-tutorial:
 
+************************
 NFC Data Exchange Format
-========================
+************************
 
 NDEF (NFC Data Exchange Format) is a binary message format to exchange
 application-defined payloads between NFC Forum Devices or to store
@@ -17,7 +18,7 @@ NDEF decoding and encoding is provided by the :mod:`nfc.ndef` module.
 >>> import nfc.ndef
 
 Parsing NDEF
-------------
+============
 
 An :class:`nfc.ndef.Message` class can be initialized with an NDEF
 message octet string to parse that data into the sequence of NDEF
@@ -152,7 +153,7 @@ insufficient data to parse
 ndef type name format 0 doesn't allow a type string
 
 Creating NDEF
--------------
+=============
 
 An :class:`nfc.ndef.Record` class can be initialized with an NDEF
 
@@ -178,11 +179,11 @@ The serialized form of an :class:`nfc.ndef.Message` object is produced with :fun
 '\x99\x01\x0f\x03Tid1\x02enHello World!Y\x01\x0e\x03Tid2\x02deHallo Welt!'
 
 
-Specialized Records
--------------------
+Specific Records
+================
 
 Text Record
-~~~~~~~~~~~
+-----------
 
 >>> import nfc.ndef
 >>> record = nfc.ndef.TextRecord("Hello World!")
@@ -192,7 +193,7 @@ language = en
 encoding = UTF-8
 
 Uri Record
-~~~~~~~~~~
+----------
 
 >>> import nfc.ndef
 >>> record = nfc.ndef.UriRecord("http://nfcpy.org")
@@ -200,7 +201,7 @@ Uri Record
 uri = http://nfcpy.org
 
 Smart Poster Record
-~~~~~~~~~~~~~~~~~~~
+-------------------
 
 >>> import nfc.ndef
 >>> uri = "https://launchpad.net/nfcpy"
