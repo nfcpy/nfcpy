@@ -5,21 +5,15 @@ Getting started
 Installation
 ============
 
-.. _Bazaar:
-   http://bazaar.canonical.com/en/
+.. _Bazaar: http://bazaar.canonical.com/en/
 
-.. _nfcpy trunk:
-   https://code.launchpad.net/~stephen-tiedemann/nfcpy/trunk
+.. _Launchpad: https://launchpad.net/
 
-.. _Launchpad:
-   https://launchpad.net/
+.. _nfcpy trunk: https://code.launchpad.net/~stephen-tiedemann/nfcpy/trunk
 
-**1. Get the source**
+**1. Get the code**
 
-It is not yet possible to install *nfcpy* from PyPI - the Python
-Package Index or download a tarball. Install requires to use a
-`Bazaar`_ client and create a local branch. For a Debian based system
-this is as easy as: ::
+To get the latest development version: ::
 
   $ sudo apt-get install bzr
   $ cd <somedir>
@@ -35,6 +29,14 @@ choose the *Typical Installation* that includes the *Bazaar Explorer
 GUI Application*. Start *Bazaar Explorer*, go to *Get project source
 from elsewhere* and create a local **branch** of ``lp:nfcpy`` into
 ``C:/src/nfcpy`` or some other directory of choice.
+
+A release versions can be branched from the appropriate series, for
+example to grab the latest 0.0.x release.::
+
+  $ bzr branch lp:nfcpy/0.9
+
+Tarballs of released versions are available for download at
+https://launchpad.net/nfcpy.
 
 **2. Install Python**
 
