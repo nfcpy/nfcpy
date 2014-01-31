@@ -276,7 +276,6 @@ class Type2Tag(object):
         """
         log.debug("write block #{0}".format(block))
         assert(len(data) == 4)
-        assert(block > 3)
         if not self._page == block / 256:
             self._page = block / 256
             rsp = self.transceive("\xC2\xFF")
