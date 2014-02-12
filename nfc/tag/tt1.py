@@ -161,7 +161,7 @@ class NDEF(object):
             tag[0x09] = 0x10
             tag[0x0B] = 0x00
             offset = self._ndef_tlv_offset + 1
-            if len(data) < 255:
+            if nlen < 255:
                 tag[offset] = nlen
                 offset += 1
             else:
@@ -202,7 +202,7 @@ class Type1Tag(object):
         if key.start > key.stop:
             raise ValueError("start index is greater than stop index")
         if key.stop > len(self._mmap):
-            for block in range(len(self._mmap)/8, key.stop/8):
+            for block in range(len(self._mmap)/8, key.stop/8 + 1):
                 self._mmap += self.read_block(block)
         bytes = self._mmap[key.start:key.stop]
         return bytes if len(bytes) > 1 else bytes[0]
