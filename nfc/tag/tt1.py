@@ -161,7 +161,7 @@ class NDEF(object):
             tag[0x09] = 0x10
             tag[0x0B] = 0x00
             offset = self._ndef_tlv_offset + 1
-            if len(data) < 255:
+            if nlen < 255:
                 tag[offset] = nlen
                 offset += 1
             else:
