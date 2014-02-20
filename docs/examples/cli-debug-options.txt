@@ -1,0 +1,28 @@
+.. option:: -q
+
+   Do not print log messages except for errors and warnings.
+
+.. option:: -d MODULE
+
+   Output debug messages for MODULE to the log facility. Logs are
+   written to <stderr> unless a log file is set with ``-f``. MODULE is
+   a string that corresponds to an *nfcpy* module or individual file,
+   with dots between path components. For example, ``-d nfc`` enables
+   all *nfcpy* debug logs, ``-d nfc.tag`` enables debug logs for all
+   tag types, and ``-d nfc.tag.tt3`` enables debug logs only for type
+   3 tags. This option may be given multiple times to enable debug
+   logs for several modules.
+
+.. option:: -f LOGFILE
+
+   Write debug log messages to <LOGFILE> instead of <stderr>. Info,
+   warning and error logs will still be printed to <stderr> unless
+   ``-q`` is set to supress info messages on <stderr>.
+
+.. option:: --nolog-symm
+
+   When operating in peer mode this option prevents logging of LLCP
+   Symmetry PDUs from the ``nfc.llcp.llc`` module. Symmetry PDUs are
+   exchanged regularly and quite frequently over an LLCP Link and are
+   logged by default if debug output is enabled for the llcp module.
+

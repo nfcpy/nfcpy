@@ -1,0 +1,28 @@
+.. option:: --mode {t,i}
+
+   Restrict the choice of NFC-DEP connection setup role to either
+   ``Target`` (only listen) or ``Initiator`` (only poll). If this
+   option is not given the dafault is to alternate between both roles
+   with a randomized listen time.
+
+.. option:: --miu INT
+
+   Set a specific value for the LLCP Link MIU. The dafault value is
+   2175 octets.
+
+.. option:: --lto INT
+
+   Set a specific LLCP Link Timeout value. The default link timeout is
+   500 milliseconds.
+
+.. option:: --listen-time INT
+
+   Set the time to listen for initialization command from an NFC-DEP
+   Initiator. The default listen time is 250 milliseconds.
+
+.. option:: --no-aggregation
+
+   Disable outbound packet aggregation for LLCP, i.e. do not generate
+   LLCP AGF PDUs if multiple packets are waiting to be send. This is
+   mostly to achieve communication with some older/buggy
+   implementations.

@@ -1,75 +1,35 @@
-===================
-nfcpy documentation
-===================
+##########################################
+Python module for near field communication
+##########################################
 
-The *nfcpy* module implements NFC Forum specifications for wireless short-range data exchange with NFC devices and tags. It is written in Python and aims to provide an easy-to-use, yet powerful API for Python applications.
+Release v\ |version|
 
-.. note::
+The **nfcpy** module implements NFC Forum specifications for wireless
+short-range data exchange with NFC devices and tags. It is written in
+Python and aims to provide an easy-to-use yet powerful framework for
+Python applications. The software is licensed under the 
+`EUPL <http://ec.europa.eu/idabc/eupl>`_.
 
-   The documentation is work in progress and still incomplete. Bear with
-   me that this changes.
+To send a web link to a smartphone:
+
+  >>> import nfc, nfc.snep, threading
+  >>> connected = lambda llc: threading.Thread(target=llc.run).start()
+  >>> uri = nfc.ndef.Message(nfc.ndef.UriRecord("http://nfcpy.org"))
+  >>> clf = nfc.ContactlessFrontend('usb')
+  >>> llc = clf.connect(llcp={'on-connect': connected})
+  >>> nfc.snep.SnepClient(llc).put(uri)
+  True
+  >>> clf.close()
 
 .. toctree::
-   :hidden:
-   :glob:
+   :maxdepth: 2
 
    overview
-   topics/*
-   examples/*
-
-:doc:`overview`
-   Hardware and software requirements, implementation status and references.
-
-Tutorials
-=========
-
-:doc:`topics/get-started`
-    Get started with the nfcpy module and example programs.
-
-:doc:`topics/ndef`
-    How to parse or generate NDEF records and messages.
-
-:doc:`topics/test-tags`
-    Recipes to generate tags for testing tag readers.
-
-:doc:`topics/projects`
-   How *nfcpy* can be used to do more or less useful stuff.
-    
-
-Examples
-========
-
-:doc:`examples/helloworld`
-   A straightforward example of NDEF read and write.
-
-:doc:`examples/tagtool`
-   Read or write or format tags for NDEF use.
-
-:doc:`examples/ndeftool`
-   Generate or inspect or reorganize NDEF data.
-
-:doc:`examples/beam`
-   Exchange NDEF data with a smartphone.
-
-:doc:`examples/handover-test`
-   A test tool for dynamic connection handover.
-
-Reference
-=========
-
-.. toctree::
-
-    api/nfc
-    api/tag
-    api/ndef
-    api/llcp
-    api/snep
-    api/handover
-
-Indices
-=======
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+   topics/get-started
+   topics/ndef
+   topics/llcp
+   topics/snep
+   examples/index
+   testing/index
+   modules/index
 

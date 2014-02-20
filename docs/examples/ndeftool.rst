@@ -5,23 +5,24 @@ ndeftool.py
 The **ndeftool** intends to be a swiss army knife for working with
 NDEF data. ::
 
-  $ ndeftool.py [-h|--help] [options] command
-
-.. program:: ndeftool.py
-
-.. option:: -v
-
-   Print informational messages to the stderr output device.
-
-.. option:: -d
-
-   Print debugging information to the stderr output device.
-
-Commands
-========
+  $ ndeftool.py [-h] [-v] [-d] {print,make,pack,split,cat} ...
 
 .. contents::
    :local:
+
+Options
+=======
+
+.. option:: -v
+
+   Print informational messages.
+
+.. option:: -d
+
+   Print debug information.
+
+Commands
+========
 
 print
 -----
@@ -36,15 +37,16 @@ format and is read from *message-file* or standard input if
 make
 ----
 
-The **make** command allows generating specific NDEF messages. The type of message is determined by a further sub-command:
+The **make** command allows generating specific NDEF messages. The
+type of message is determined by a further sub-command:
 
 * **make smartposter** - creates a smartposter record
 * **make wificfg** - creates a WiFi Configuration record
 * **make wifipwd** - creates a WiFi Password record
 * **make btcfg** - creates a Bluetooth out-of-band record
 
-smartposter
-~~~~~~~~~~~
+make smartposter
+^^^^^^^^^^^^^^^^
 
 The **make smartposter** command creates a smartposter message for the
 uniform resource identifier *reference*::
@@ -82,8 +84,8 @@ Options:
    output). The ``-o`` option also switches the output format to raw
    bytes versus the hexadecimal string written to stdout.
    
-wificfg
-~~~~~~~
+make wificfg
+^^^^^^^^^^^^
 
 The **make wificfg** command creates a configuration token for the WiFi network with SSID *network-name*. Without further options this command creates configuration data for an open network::
 
@@ -144,8 +146,8 @@ Options:
    state set to 'activating'. This option is mutually exclusive with
    the ``--active`` and ``--inactive`` options.
 
-wifipwd
-~~~~~~~
+make wifipwd
+^^^^^^^^^^^^
 
 The **make wifipwd** command creates a password token for the WiFi Protected Setup registration protocol, signed with the first 160 bits of SHA-256 hash of the enrollee's public key in *public-key-file*.::
 
@@ -172,8 +174,8 @@ Options:
    output). The ``-o`` option also switches the output format to raw
    bytes versus the hexadecimal string written to stdout.
    
-btcfg
-~~~~~
+make btcfg
+^^^^^^^^^^
 
 The **make btcfg** command creates an out-of-band configuration record for a Bluetooth device.::
 
@@ -329,8 +331,8 @@ Options:
    bytes versus the hexadecimal string written to stdout.
 
 
-Example use
-===========
+Examples
+========
 
 To build a smartposter that points to the nfcpy documentation page: ::
 

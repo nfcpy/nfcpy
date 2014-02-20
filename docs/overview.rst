@@ -1,32 +1,16 @@
+********
 Overview
-========
+********
 
 Requirements
-------------
+============
 
 * Python 2.6 or newer but not Python 3.x
 * pyUSB and libusb (for native USB readers)
 * pySerial (for serial readers on COM or USB)
 
-Installation
-------------
-
-A tarball or install package is not yet available. Installation means
-to branch the repository at https://code.launchpad.net/nfcpy into a
-local directory and import the nfc module or execute commands from
-that directory (or add the directory to PYTHONPATH).
-
-Installation on (Ubuntu) Linux is as easy as: ::
-
-  $ sudo apt-get install bzr # to download from repository
-  $ sudo apt-get install python-usb # for USB readers
-  $ sudo apt-get install python-serial # for TTY readers
-  $ cd <some-dir>
-  $ bzr branch lp:nfcpy # creates a copy in ./trunk/
-  $ examples/tagtool.py show # then touch a tag
-
 Supported Hardware
-------------------
+==================
 
 * Sony RC-S330/360/370/380
 * SCM SCL-3710/11/12
@@ -55,11 +39,14 @@ Notes:
   controller frame (which may happen if the card sets ISO-DEP MIU
   as 256).
 
-* The ACR122U is disabled as P2P Listener because the listen time
-  can't be set shorter than 5 seconds.
+* The ACR122U is disabled as P2P Listener because the listen time can
+  not be set less than 5 seconds. Also, because the reader has an MCU
+  that controls a PN532 to implement the USB CCID protocol, it is
+  generally less usable for NFC P2P communication due to the MCU
+  interfering with settings made directly to the PN532.
 
 Implementation Status
----------------------
+=====================
 
 ====================================  =========================
 Specification                         Status
@@ -85,11 +72,6 @@ AD Bluetooth Secure Simple Pairing    implemented
 ====================================  =========================
 
 References
-----------
+==========
+
 * NFC Forum Specifications: http://www.nfc-forum.org/specs/
-
-.. [RTD] NFC Record Type Definition (RTD) Technical Specification,
-         Version 1.0, NFC Forum
-
-.. [NDEF] NFC Data Exchange Format (NDEF)Technical Specification,
-          Version 1.0, NFC Forum

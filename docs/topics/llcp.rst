@@ -1,15 +1,12 @@
-===================
-``nfc.llcp`` module
-===================
+.. _llcp-tutorial:
+.. currentmodule:: nfc.llcp
 
-.. automodule:: nfc.llcp
-
-This module implements the NFC Forum Logical Link Control Protocol
-(LLCP) specification and provides a socket interface to use the
-connection-less and connection-mode transport facilities of LLCP.
+*****************************
+Logical Link Control Protocol
+*****************************
 
 The Logical Link Control Protocol allows multiplexed communications
-between two NFC Forum Peer Devices and either peer can send protocol
+between two NFC Forum Peer Devices where either peer can send protocol
 data units at any time (asynchronous balanced mode). The communication
 endpoints are called Service Access Points (SAP) and are addressed by
 a 6 bit numerical identifier. Protocol data units are exchanged
@@ -22,11 +19,11 @@ between 32 and 63 are unregistered and normally used as a source
 address by client applications that send or connect to peer services.
 
 The interface to realize LLCP client and server applications in nfcpy
-is implemented by the :class:`Socket` class. A socket is created with
-the :class:`~nfc.llcp.llc.LogicalLinkController` instance and the
-*socket type* as arguments to the :class:`Socket` constructor. The
-:meth:`nfc.ContactlessFrontend.connect` method accepts callback
-functions that will receive the active
+is implemented by the :class:`nfc.llcp.Socket` class. A socket is
+created with a :class:`~nfc.llcp.llc.LogicalLinkController` instance
+and the *socket type* as arguments to the :class:`Socket`
+constructor. The :meth:`nfc.ContactlessFrontend.connect` method
+accepts callback functions that will receive the active
 :class:`~nfc.llcp.llc.LogicalLinkController` instance as argument. ::
 
    import nfc
@@ -59,7 +56,7 @@ Forum well-known or an externally defined service name.
   service name of a special SNEP server used by the NFC Forum during
   validation of the SNEP secification.
 
-In nfcpy a service name can be registered with :meth:`~Socket.bind`
+In nfcpy a service name can be registered with :meth:`Socket.bind`
 and a service name string as the address parameter. The allocated
 service access point address number can then be retrived with
 :meth:`~Socket.getsockname`. A remote service name can be resolved
@@ -223,11 +220,4 @@ application can use :meth:`~Socket.getsockopt` with option
 :const:`nfc.llcp.SO_RCVBSSY` to learn it's own *busy* state and
 :const:`nfc.llcp.SO_SNDBSY` to learn the remote application's *busy*
 state.
-
-
-nfc.llcp.Socket
----------------
-
-.. autoclass:: nfc.llcp.Socket
-   :members:
 

@@ -1,16 +1,20 @@
-===================
-``nfc.ndef`` module
-===================
+nfc.ndef
+========
+
+.. contents::
+   :local:
 
 .. automodule:: nfc.ndef
 
-Message
-=======
+nfc.ndef.Message
+----------------
+
 .. autoclass:: Message
    :members:
 
-Record
-======
+nfc.ndef.Record
+---------------
+
 .. autoclass:: Record
    :members:
 
@@ -18,68 +22,81 @@ Record
    :show-inheritance:
    :members:
 
-TextRecord
-==========
+nfc.ndef.TextRecord
+-------------------
+
 .. autoclass:: TextRecord
    :show-inheritance:
    :members:
 
-UriRecord
-=========
+nfc.ndef.UriRecord
+------------------
+
 .. autoclass:: UriRecord
    :show-inheritance:
    :members:
 
-SmartPosterRecord
-=================
+nfc.ndef.SmartPosterRecord
+--------------------------
+
 .. autoclass:: SmartPosterRecord
    :show-inheritance:
    :members:
 
-Connection Handover
-===================
+nfc.ndef.HandoverRequestMessage
+-------------------------------
 
-HandoverRequestMessage
-----------------------
 .. autoclass:: HandoverRequestMessage
    :members:
 
-HandoverSelectMessage
----------------------
+nfc.ndef.HandoverSelectMessage
+------------------------------
+
 .. autoclass:: HandoverSelectMessage
    :members:
 
-HandoverCarrierRecord
----------------------
+nfc.ndef.HandoverCarrierRecord
+------------------------------
+
 .. autoclass:: HandoverCarrierRecord
    :show-inheritance:
    :members:
 
-Data Structures
----------------
+nfc.ndef.handover.Version
+-------------------------
+
 .. autoclass:: nfc.ndef.handover.Version()
    :members:
+
+nfc.ndef.handover.Carrier
+-------------------------
 
 .. autoclass:: nfc.ndef.handover.Carrier()
    :members:
 
+nfc.ndef.handover.HandoverError
+-------------------------------
+
 .. autoclass:: nfc.ndef.handover.HandoverError()
    :members:
 
-BluetoothConfigRecord
----------------------
-.. autoclass:: BluetoothConfigRecord()
+nfc.ndef.BluetoothConfigRecord
+------------------------------
+
+.. autoclass:: nfc.ndef.BluetoothConfigRecord()
    :show-inheritance:
    :members:
 
-WifiConfigRecord
-----------------
+nfc.ndef.WifiConfigRecord
+-------------------------
+
 .. autoclass:: WifiConfigRecord()
    :show-inheritance:
    :members:
 
-WifiPasswordRecord
-------------------
+nfc.ndef.WifiPasswordRecord
+---------------------------
+
 .. autoclass:: WifiPasswordRecord()
    :show-inheritance:
    :members:

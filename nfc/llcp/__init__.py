@@ -20,6 +20,12 @@
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
 
+"""
+The nfc.llcp module implements the NFC Forum Logical Link Control
+Protocol (LLCP) specification and provides a socket interface to use
+the connection-less and connection-mode transport facilities of LLCP.
+"""
+
 import logging
 log = logging.getLogger(__name__)
 

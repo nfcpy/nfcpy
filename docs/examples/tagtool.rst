@@ -8,75 +8,16 @@ also be used to format for NDEF use. ::
 
   $ tagtool.py [-h|--help] [options] command
 
-.. program:: tagtool.py
+.. contents::
+   :local:
 
-.. option:: -l, --loop
+Options
+=======
 
-   Repeat the command endlessly, use Control-C to abort.
-
-.. option:: --wait
-
-   After reading or writing a tag wait until it is removed before
-   returning. This option is implicit when the option ``--loop`` is
-   set. Only relevant for reader/writer mode.
-
-.. option:: -v
-
-   Be verbose. Print more information about the tags found. 
-
-.. option:: -q
-
-   Be quiet. Print as little information as possible, this usually
-   means the intended output as well as errors and warnings.
-
-.. option:: -d MODULE
-
-   Output debug messages for MODULE to the log facility. Logs are
-   written to <stderr> unless a log file is set with ``-f``. MODULE is
-   a string that corresponds to an *nfcpy* module or individual file,
-   with dots between path components. For example, ``-f nfc`` enables
-   all *nfcpy* debug logs, ``-d nfc.tag`` enables debug logs for all
-   tag types, and ``-d nfc.tag.tt3`` enables debug logs only for type
-   3 tags. This option may be given multiple times to enable debug
-   logs for several modules.
-
-.. option:: -f LOGFILE
-
-   Write debug log messages to <LOGFILE> instead of <stderr>. Info,
-   warning and error logs will still be printed to <stderr> unless
-   ``-q`` is set to supress info messages on <stderr>.
-
-.. option:: --device PATH
-
-   Use a specific reader or search only for a subset of readers. The
-   syntax for PATH is:
-
-   * ``usb[:vendor[:product]]`` with optional *vendor* and *product*
-     as four digit hexadecimal numbers, like ``usb:054c:06c3`` would
-     open the first Sony RC-S380 reader and ``usb:054c`` the first
-     Sony reader.
-        
-   * ``usb[:bus[:device]]`` with optional *bus* and *device* number as
-     three-digit decimal numbers, like ``usb:001:023`` would
-     specifically mean the usb device with bus number 1 and device id
-     23 whereas ``usb:001`` would mean to use the first available
-     reader on bus number 1.
-        
-   * ``tty:port:driver`` with mandatory *port* and *driver* name
-     should be used on Posix systems to open the serial port at device
-     node ``/dev/tty<port>`` and load the driver from module
-     ``nfc/dev/<driver>.py``. A typical example would be
-     ``tty:USB0:arygon`` for the Arygon APPx/ADRx at ``/dev/ttyUSB0``.
-        
-   * ``com:port:driver`` with mandatory *port* and *driver* name should
-     be used on Windows systems to open the serial port ``COM<port>``
-     and load the ``nfc/dev/<driver>.py`` driver module.
-        
-   * ``udp[:host][:port]`` with optional *host* name or address and
-     *port* number will use a fake communication channel over
-     UDP/IP. Either value may be omitted in which case *host* defaults
-     to 'localhost' and *port* defaults to 54321.
-
+.. include:: cli-general-options.txt
+.. include:: cli-reader-options.txt
+.. include:: cli-debug-options.txt
+.. include:: cli-device-options.txt
 
 Commands
 ========
@@ -90,9 +31,9 @@ show
 The **show** command prints information about a tag, including NDEF
 data if present.::
 
-  $ ndeftool.py [options] show [-h] [-v]
+  $ tagtool.py [options] show [-h] [-v]
 
-.. program:: tagtool.py dump
+.. program:: tagtool.py show
 
 .. option:: -v
 
@@ -139,10 +80,20 @@ The **format** command writes NDEF capability information for an empty
 NDEF memory area on NFC Forum compliant tags. The tag type must be
 specified. The only currently supported tag type it **tt3**. ::
 
-  $ tagtool.py [options] format [-h] {tt3} ...
+  $ tagtool.py [options] format [-h] {tt1,tt3} ...
+
+format tt1
+^^^^^^^^^^
+
+The **format tt1** command formats the NDEF partition on a Type 1
+Tag. ::
+
+  $ tagtool.py [options] format tt1 [-h]
+
+.. program:: tagtool.py format tt1
 
 format tt3
-~~~~~~~~~~
+^^^^^^^^^^
 
 The **format tt3** command formats the NDEF partition on a Type 3
 Tag. With no additional options it does format for the maximum
@@ -153,7 +104,7 @@ weird tag formats for testing reader implementations. ::
                                     [--max INT] [--rfu INT] [--wf INT]
                                     [--rw INT] [--len INT] [--crc INT]
 
-.. program:: tagtool.py format
+.. program:: tagtool.py format tt3
 
 .. option:: --ver STR
 
@@ -250,7 +201,7 @@ type it **tt3**. ::
    overwritten.
 
 emulate tt3
-~~~~~~~~~~~
+^^^^^^^^^^^
 
 The **emulate tt3** command emulates an NFC Forum Type 3 Tag. ::
 
@@ -279,8 +230,8 @@ The **emulate tt3** command emulates an NFC Forum Type 3 Tag. ::
    The bitrate to listen for and respond with. Must be either 212
    or 424. Defaults to 212 kbps.
 
-Recipes
-=======
+Examples
+========
 
 Copy NDEF from one tag to another::
 

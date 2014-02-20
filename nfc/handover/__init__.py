@@ -19,9 +19,13 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-#
-# NFC Forum Connection Handover Protocol
-# 
+
+"""
+The nfc.handover module implements the NFC Forum Connection Handover
+1.2 protocol as a server and client class that simplify realization of
+handover selector and requester functionality.
+
+"""
 
 from nfc.handover.server import HandoverServer
 from nfc.handover.client import HandoverClient

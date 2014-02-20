@@ -17,8 +17,22 @@ Blackberry and Windows Phone 8. ::
 
 .. program:: beam.py
 
+.. contents::
+   :local:
+
+Options
+=======
+
+.. include:: cli-general-options.txt
+.. include:: cli-peermode-options.txt
+.. include:: cli-debug-options.txt
+.. include:: cli-device-options.txt
+
+Commands
+========
+
 send
-====
+----
 
 Send an NDEF message to the peer device. The message depends on the
 positional argument that follows the *send* command and additional
@@ -30,8 +44,8 @@ data. ::
 
    Measure and print the time that was needed to send the message.
 
-link
-----
+send link
+^^^^^^^^^
 
 Send a hyperlink embedded into a smartposter record. ::
 
@@ -39,14 +53,14 @@ Send a hyperlink embedded into a smartposter record. ::
 
 .. option:: URI
 
-   The uniform resource identifier, for example ``http://nfcpy.org``.
+   The resource identifier, for example ``http://nfcpy.org``.
 
 .. option:: TITLE
 
    The smartposter title, for example ``"nfcpy project home"``.
 
-text
-----
+send text
+^^^^^^^^^
 
 Send plain text embedded into an NDEF Text Record. The default
 language identifier ``en`` can be changed with the ``--lang`` flag. ::
@@ -61,8 +75,8 @@ language identifier ``en`` can be changed with the ``--lang`` flag. ::
 
    The language code to use when constructing the NDEF Text Record.
 
-file
-----
+send file
+^^^^^^^^^
 
 Send a data file. This will construct a single NDEF record with *type*
 and *name* set to the file's mime type and path name, and the payload
@@ -84,16 +98,16 @@ explicitly set with the options ``-t`` and ``-n``, respectively. ::
 
    Set the record name (identifier).
 
-ndef
-----
+send ndef
+^^^^^^^^^
 
 Send an NDEF message read from file. The file may contain multiple
 messages and if it does, then the strategy to select a specific
 message for sending can be specified with the ``--select STRATEGY``
 option. For strategies that select a different message per touch
 beam.py must be called with the ``--loop`` flag. The strategies
-``first``, ``last`` and ``random`` select the first, last or a random
-message from the file. The strategies ``next`` and ``cycle`` start
+``first``, ``last`` and ``random`` select the first, or last, or a
+random message from FILE. The strategies ``next`` and ``cycle`` start
 with the first message and then count up, the difference is that
 ``next`` stops at the last message while ``cycle`` continues with the
 first. ::
@@ -110,22 +124,22 @@ first. ::
    ``last``, ``next``, ``cycle``, ``random``.
 
 recv
-====
+----
 
 Receive an NDEF message from the peer device. The next positional
 argument determines what is done with the received message. ::
 
   $ beam.py [OPTIONS] recv {print,save,echo,send} [-h] [OPTIONS]
 
-print
------
+recv print
+^^^^^^^^^^
 
 Print the received message to the standard output stream. ::
 
   $ beam.py recv print
 
-save
-----
+recv save
+^^^^^^^^^
 
 Save the received message into a file. If the file already exists the
 message is appended. ::
@@ -137,15 +151,15 @@ message is appended. ::
    Name of the file to save messages received from the remote peer. If
    the file exists any new messages are appended.
 
-echo
-----
+recv echo
+^^^^^^^^^
 
 Receive a message and send it back to the peer device. ::
 
   $ beam.py recv echo
 
-send
-----
+recv send
+^^^^^^^^^
 
 Receive a message and send back a corresponding message if such is
 found in the *translations* file. The *translations* file must contain
@@ -159,3 +173,47 @@ the corresponding outbound message is then sent back. ::
 .. option:: TRANSLATIONS
 
    A file with a sequence of NDEF messages.
+
+Examples
+========
+
+Get a smartphone to open the nfcpy project page (which in fact just
+points to the code repository and documentation). ::
+
+  $ beam.py send link http://nfcpy.org "nfcpy project home"
+
+Send the source file ``beam.py``. On an Android phone this should pop
+up the "new tag collected" screen and show that a ``text/x-python``
+media type has been received. ::
+
+  $ beam.py send file beam.py
+
+The file ``beam.py`` is about 11 KB and may take some time to
+transfer, depending on the phone hardware and software. With a Google
+Nexus 10 it takes as little as 500 milliseconds while a Nexus 4 won't
+do it under 2.5 seconds. ::
+
+  $ beam.py send --timeit file beam.py
+
+Receive a single NDEF message from the peer device and save it to
+*message.ndef* (note that if *message.ndef* exists the received data
+will be appended): ::
+
+  $ beam.py recv save message.ndef
+
+With the :option:`--loop` option it gets easy to collect messages into
+a single file. ::
+
+  $ beam.py --loop recv save collected.ndef
+
+A file that contains a sequence of request/response message pairs can
+be used to send a specific response message whenever the associated
+request message was received. ::
+
+  $ echo -n "this is a request message" > request.txt
+  $ ndeftool.py pack -n '' request.txt -o request.ndef
+  $ echo -n "this is my reponse message" > response.txt
+  $ ndeftool.py pack -n '' response.txt -o response.ndef
+  $ cat request.ndef response.ndef > translation.ndef
+  $ beam.py recv send translation.ndef
+

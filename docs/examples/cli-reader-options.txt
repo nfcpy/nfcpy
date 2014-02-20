@@ -1,0 +1,5 @@
+.. option:: --wait
+
+   After reading or writing a tag wait until it is removed before
+   returning. This option is implicit when the option ``--loop`` is
+   set. Only relevant for reader/writer mode.
