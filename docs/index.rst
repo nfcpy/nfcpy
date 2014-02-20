@@ -2,7 +2,7 @@
 Python module for near field communication
 ##########################################
 
-Release v\ |version|.
+Release v\ |version|
 
 The **nfcpy** module implements NFC Forum specifications for wireless
 short-range data exchange with NFC devices and tags. It is written in
