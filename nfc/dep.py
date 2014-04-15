@@ -119,7 +119,7 @@ class Initiator(DataExchangeProtocol):
             nfcid3 = target.idm + '\x00\x00'
 
         ppi = (lr << 4) | (bool(gbi) << 1) | int(bool(self.nad))
-        did = int(bool(self.did))
+        did = 0 if self.did is None else self.did
         
         atr_req = ATR_REQ(nfcid3, did, 0, 0, ppi, gbi)
         if len(atr_req) > 64:
