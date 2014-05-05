@@ -209,18 +209,25 @@ class USB(object):
     @property
     def manufacturer_name(self):
         if self.manufacturer_name_id:
-            return self.get_string(100, self.manufacturer_name_id)
+            return self.get_string(self.manufacturer_name_id)
         
     @property
     def product_name(self):
         if self.product_name_id:
-            return self.get_string(100, self.product_name_id)
+            return self.get_string(self.product_name_id)
 
-    def _PYUSB0_get_string(self, length, index, langid=-1):
-        return self.usb_dev.getString(index, length, langid)
+    def _PYUSB0_get_string(self, index, langid=-1):
+        return self.usb_dev.getString(index, 126, langid)
         
-    def _PYUSB1_get_string(self, length, index, langid=None):
-        return self.usb_util.get_string(self.usb_dev, length, index, langid)
+    def _PYUSB1_get_string(self, index, langid=None):
+        # Prior to version 1.0.0b2 pyusb's' util.get_string() needed a
+        # length parameter which has since been removed. The try/except
+        # clause helps support older versions until pyusb 1.0.0 is
+        # finally released and sufficiently spread.
+        try:
+            return self.usb_util.get_string(self.usb_dev, index, langid)
+        except TypeError:
+            return self.usb_util.get_string(self.usb_dev, 126, index, langid)
         
     def _PYUSB0_open(self, bus_id, dev_id):
         bus = [b for b in self.usb.busses() if b.dirname == bus_id][0]
