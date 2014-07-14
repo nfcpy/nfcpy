@@ -191,8 +191,10 @@ type it **tt3**. ::
 
 .. option:: -s SIZE
 
-   The maximum size for NDEF data. Depending on the tag type this may
-   be rounded to the nearest multiple of the tag storage granularity.
+   The minimum size for NDEF data. Depending on the tag type this may
+   be rounded up to the nearest multiple of the tag storage
+   granularity. If NDEF data is provided the size may be adjusted to
+   fit the length of the data.
 
 .. option:: -p FILE
 

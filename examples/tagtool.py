@@ -160,7 +160,7 @@ def add_emulate_parser(parser):
         help="keep tag memory (when --loop is set)")
     parser.add_argument(
         "-s", dest="size", type=int, default="1024",
-        help="ndef data area size (default: %(default)s)")
+        help="minimum ndef data area size (default: %(default)s)")
     parser.add_argument(
         "-p", dest="preserve", metavar="FILE", type=argparse.FileType('wb'),
         help="preserve tag memory when released")
@@ -185,6 +185,30 @@ def add_emulate_tt3_parser(parser):
     parser.add_argument(
         "--bitrate", choices=["212", "424"], default="212",
         help="bitrate to listen (default: %(default)s)")
+    parser.add_argument(
+        "--ver", metavar="STR", default="1.0",
+        help="ndef mapping version number (default: %(default)s)")
+    parser.add_argument(
+        "--nbr", metavar="INT", type=int, default=8,
+        help="max write blocks at once (default: %(default)s)")
+    parser.add_argument(
+        "--nbw", metavar="INT", type=int, default=12,
+        help="max read blocks at once (default: %(default)s)")
+    parser.add_argument(
+        "--max", metavar="INT", type=int,
+        help="maximum number of blocks (default: computed)")
+    parser.add_argument(
+        "--rfu", metavar="INT", type=int, default=0,
+        help="value to set for reserved bytes (default: %(default)s)")
+    parser.add_argument(
+        "--wf", metavar="INT", type=int, default=0,
+        help="write-flag attribute value (default: %(default)s)")
+    parser.add_argument(
+        "--rw", metavar="INT", type=int, default=1,
+        help="read-write flag attribute value (default: %(default)s)")
+    parser.add_argument(
+        "--crc", metavar="INT", type=int,
+        help="checksum attribute value (default: computed)")
 
 class TagTool(CommandLineInterface):
     def __init__(self):
@@ -405,29 +429,36 @@ class TagTool(CommandLineInterface):
             else:
                 self.options.data = ""
 
-        if not (hasattr(self.options, "ndef_data_area") and self.options.keep):
+        if not (hasattr(self.options, "tt3_data") and self.options.keep):
             if self.options.input:
-                self.options.ndef_data_area = \
-                    bytearray(16) + bytearray(self.options.data) + \
-                    bytearray(max(0, self.options.size-len(self.options.data)))
-            #elif self.options.preserve:
-            #    log.info("reading tag data from {0!r}"
-            #             .format(self.options.preserve.name))
-            #    data = self.options.preserve.read()
-            #    if len(data) % 16 != 0:
-            #        log.warning("memory data truncated to 16 byte boundary")
-            #    self.options.ndef_data_area = bytearray(data)
+                ndef_data_size = len(self.options.data)
+                ndef_area_size = ((ndef_data_size + 15) // 16) * 16
+                ndef_area_size = max(ndef_area_size, self.options.size)
+                ndef_data_area = bytearray(self.options.data) + \
+                                 bytearray(ndef_area_size - ndef_data_size)
             else:
-                self.options.ndef_data_area = bytearray(16 + self.options.size)
+                ndef_data_area = bytearray(self.options.size)
 
             # set attribute data
             attr = nfc.tag.tt3.NdefAttributeData()
-            attr.version = "1.0"
-            attr.nbr, attr.nbw = (12, 8)
-            attr.capacity = len(self.options.ndef_data_area) - 16
-            attr.writeable = True
+            attr.version = self.options.ver
+            attr.nbr, attr.nbw = self.options.nbr, self.options.nbw
+            attr.capacity = len(ndef_data_area)
+            if self.options.max is not None:
+                attr.capacity = self.options.max * 16
+            attr.rfu = 4 * [self.options.rfu]
+            attr.wf = self.options.wf
+            attr.rw = self.options.rw
             attr.length = len(self.options.data)
-            self.options.ndef_data_area[0:16] = str(attr)
+            attr.writing = bool(self.options.wf)
+            attr.writeable = bool(self.options.rw)
+            attribute_data = bytearray(str(attr))
+            if self.options.crc is not None:
+                attribute_data[14] = self.options.crc / 256
+                attribute_data[15] = self.options.crc % 256
+
+            log.info(nfc.tag.tt3.NdefAttributeData(attribute_data).pretty())
+            self.options.tt3_data = attribute_data + ndef_data_area
 
         idm = bytearray.fromhex(self.options.idm)
         pmm = bytearray.fromhex(self.options.pmm)
@@ -441,22 +472,22 @@ class TagTool(CommandLineInterface):
     def emulate_tag_stop(self, tag):
         if self.options.preserve:
             self.options.preserve.seek(0)
-            self.options.preserve.write(self.options.ndef_data_area)
+            self.options.preserve.write(self.options.tt3_data)
             log.info("wrote tag memory to file '{0}'"
                      .format(self.options.preserve.name))
 
     def emulate_tt3_tag(self, tag, command):
         def ndef_read(block_number, rb, re):
             log.debug("tt3 read block #{0}".format(block_number))
-            if block_number < len(self.options.ndef_data_area) / 16:
+            if block_number < len(self.options.tt3_data) / 16:
                 first, last = block_number*16, (block_number+1)*16
-                block_data = self.options.ndef_data_area[first:last]
+                block_data = self.options.tt3_data[first:last]
                 return block_data
         def ndef_write(block_number, block_data, wb, we):
             log.debug("tt3 write block #{0}".format(block_number))
-            if block_number < len(self.options.ndef_data_area) / 16:
+            if block_number < len(self.options.tt3_data) / 16:
                 first, last = block_number*16, (block_number+1)*16
-                self.options.ndef_data_area[first:last] = block_data
+                self.options.tt3_data[first:last] = block_data
                 return True
 
         tag.add_service(0x0009, ndef_read, ndef_write)
