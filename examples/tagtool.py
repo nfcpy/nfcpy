@@ -189,10 +189,10 @@ def add_emulate_tt3_parser(parser):
         "--ver", metavar="STR", default="1.0",
         help="ndef mapping version number (default: %(default)s)")
     parser.add_argument(
-        "--nbr", metavar="INT", type=int, default=8,
+        "--nbr", metavar="INT", type=int, default=12,
         help="max write blocks at once (default: %(default)s)")
     parser.add_argument(
-        "--nbw", metavar="INT", type=int, default=12,
+        "--nbw", metavar="INT", type=int, default=8,
         help="max read blocks at once (default: %(default)s)")
     parser.add_argument(
         "--max", metavar="INT", type=int,
