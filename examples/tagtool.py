@@ -69,8 +69,6 @@ def tt3_determine_block_count(tag):
             data = tag.read([block], 9)
             block += 1
     except Exception:
-        if tag.pmm[0:2] == "\x00\xF0":
-            block -= 1 # last block on FeliCa Lite is unusable
         return block
 
 def tt3_determine_block_read_once_count(tag, block_count):
@@ -383,6 +381,8 @@ class TagTool(CommandLineInterface):
 
     def format_tt3_tag(self, tag):
         block_count = tt3_determine_block_count(tag)
+        if tag.pmm[0:2] in ("\x00\xF0", "\x00\xF1"):
+            block -= 1 # last block on FeliCa Lite/S is unusable
         print("tag has %d user data blocks" % block_count)
         nbr = tt3_determine_block_read_once_count(tag, block_count)
         print("%d block(s) can be read at once" % nbr)
@@ -392,6 +392,12 @@ class TagTool(CommandLineInterface):
         if self.options.nbw is not None: nbw = self.options.nbw
         if self.options.nbr is not None: nbr = self.options.nbr
         
+        if tag.pmm[0:2] in ("\x00\xF0", "\x00\xF1"):
+            # Check NDEF system code support on FeliCa Lite-S
+            mc = tag.read(blocks=[0x88])
+            if mc[3] != 0x01:
+                tag.write(mc[0:3]+"\x01"+mc[4:16], blocks=[0x88])
+            
         attr = nfc.tag.tt3.NdefAttributeData()
         attr.version = self.options.ver
         attr.nbr, attr.nbw = (nbr, nbw)
