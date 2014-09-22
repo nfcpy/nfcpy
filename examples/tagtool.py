@@ -382,7 +382,7 @@ class TagTool(CommandLineInterface):
     def format_tt3_tag(self, tag):
         block_count = tt3_determine_block_count(tag)
         if tag.pmm[0:2] in ("\x00\xF0", "\x00\xF1"):
-            block -= 1 # last block on FeliCa Lite/S is unusable
+            block_count -= 1 # last block on FeliCa Lite/S is unusable
         print("tag has %d user data blocks" % block_count)
         nbr = tt3_determine_block_read_once_count(tag, block_count)
         print("%d block(s) can be read at once" % nbr)
