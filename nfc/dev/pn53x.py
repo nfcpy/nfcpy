@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2009-2011 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2009-2014 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -377,14 +377,12 @@ class Chipset(object):
 class Device(nfc.dev.Device):
     def __init__(self, chipset):
         self.chipset = chipset
+        self._chipset_name = chipset.ic + 'v' + chipset.fw
         
         # perform a communication line test
         if self.chipset.diagnose("line", "nfcpy") is not True:
             raise IOError(errno.EIO, os.strerror(errno.EIO))
         
-        self._vendor_name = "NXP"
-        self._device_name = self.chipset.ic
-
         RWT_WTX = {'PN531': (14, 7), "PN532": (14, 7), "PN533": (8, 1)}
         rwt, wtx = RWT_WTX[self.chipset.ic]
 
@@ -408,6 +406,8 @@ class Device(nfc.dev.Device):
             pass
 
     def sense(self, targets, gbi=None):
+        self.modulation_type = None
+        
         if targets is None and gbi is not None:
             return self.sense_dep(gbi)
         
@@ -435,7 +435,7 @@ class Device(nfc.dev.Device):
             self.chipset.rf_configuration(0x01, "\x00") # RF-OFF
             return None
 
-        self.exchange = self.send_cmd_recv_rsp
+        self.exchange = self.tag_send_cmd_recv_rsp
         return target
 
     def sense_tta(self):
@@ -444,6 +444,7 @@ class Device(nfc.dev.Device):
         rsp = self.chipset.in_list_passive_target("106A", "")
         if rsp is not None:
             log.debug("found NFC-A target @ 106 kbps")
+            self.modulation_type = "Mifare"
             cfg = rsp[1::-1] + rsp[2:3]
             uid = rsp[4:4+rsp[3]]
             ats = rsp[4+rsp[3]:]
@@ -453,6 +454,7 @@ class Device(nfc.dev.Device):
             rsp = self.chipset.in_list_passive_target("106J", "")
             if rsp is not None:
                 log.debug("found NFC-A TT1 target @ 106 kbps")
+                self.modulation_type = "Jewel"
                 return nfc.clf.TTA(br=106, cfg=rsp[1::-1], uid=rsp[2:])
 
     def sense_ttb(self):
@@ -467,6 +469,7 @@ class Device(nfc.dev.Device):
         if rsp  and len(rsp) >= 18:
             if len(rsp) == 18: rsp += "\xff\xff"
             log.debug("found NFC-F target @ {0} kbps".format(br))
+            self.modulation_type = "Felica"
             return nfc.clf.TTF(br, rsp[2:10], rsp[10:18], rsp[18:20])
     
     def sense_dep(self, general_bytes):
@@ -500,7 +503,7 @@ class Device(nfc.dev.Device):
                           rsp[10], rsp[11], rsp[12], rsp[13],
                           rsp[14], str(rsp[15:]).encode("hex")))
         
-        self.exchange = self.send_cmd_recv_rsp
+        self.exchange = self.dep_send_cmd_recv_rsp
         return rsp[15:]
 
     def listen_dep(self, target, timeout):
@@ -550,15 +553,37 @@ class Device(nfc.dev.Device):
             log.warning(error)
             return None
         
-        self.exchange = self.send_rsp_recv_cmd
+        self.exchange = self.dep_send_rsp_recv_cmd
         return (target, recv_data)
 
-    def send_cmd_recv_rsp(self, send_data, timeout):
+    def tag_send_cmd_recv_rsp(self, send_data, timeout):
         non_dep_to, timeout = timeout_to_index(timeout)
+        log.debug("set response timeout to {0} ms".format(timeout*1000))
         self.chipset.rf_configuration(0x02, bytearray([11, 11, non_dep_to]))
-        self.chipset.rf_configuration(0x04, bytearray([3]))
-        
-        msec = min(100 + 3 * int(timeout * 1000), 2550)
+
+        try:
+            if self.modulation_type == "Jewel":
+                data, more = self.chipset.in_data_exchange(send_data, 5000)
+            else:
+                data = self.chipset.in_communicate_thru(send_data, 5000)
+            return data
+        except ChipsetError as error:
+            if error.errno == 1:
+                log.debug(error)
+                raise nfc.clf.TimeoutError
+            else:
+                log.debug(error)
+                raise nfc.clf.TransmissionError(str(error))
+        except IOError as error:
+            if error.errno == errno.ETIMEDOUT:
+                log.debug(error)
+                raise nfc.clf.TimeoutError("send_cmd_recv_rsp")
+            else:
+                log.error(error)
+                raise error # Transport broken -> give up
+
+    def dep_send_cmd_recv_rsp(self, send_data, timeout):
+        msec = min(int(timeout * 1000 + 0.9), 2550)
         miu = self.chipset.max_packet_data_size - 2
 
         try:
@@ -586,8 +611,8 @@ class Device(nfc.dev.Device):
                 log.error(error)
                 raise error # Transport broken -> give up
 
-    def send_rsp_recv_cmd(self, send_data, timeout):
-        timeout_msec = int(timeout * 1000)
+    def dep_send_rsp_recv_cmd(self, send_data, timeout):
+        timeout_msec = int(timeout * 1000 + 0.9)
         miu = self.chipset.max_packet_data_size - 2
         try:
             offset = 0
@@ -617,7 +642,7 @@ class Device(nfc.dev.Device):
 
     @property
     def capabilities(self):
-        return {'ISO-DEP': True, 'NFC-DEP': True}
+        return {'NFC-DEP': True}
 
 def init(transport):
     if transport.TYPE == "TTY":
@@ -650,8 +675,7 @@ def init(transport):
                     device._vendor_name = tlv_data[2:].decode("utf-16")
                 index += 2 + tlv_len
         except nfc.dev.pn53x.ChipsetError:
-            vendor_name = "NXP"
-            device_name = "PN533"
+            pass
     else:
         vendor_name = transport.manufacturer_name
         if vendor_name:
