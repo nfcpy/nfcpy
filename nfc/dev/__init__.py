@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2009-2013 Stephen Tiedemann <stephen.tiedemann@gmail.com>
+# Copyright 2009-2014 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -91,7 +91,8 @@ def connect(path):
 
 class Device(object):
     def __str__(self):
-        return "{dev.vendor} {dev.product} at {dev.path}".format(dev=self)
+        return ' '.join((self.vendor, self.product, self.pcd)).strip() + \
+            " at " + self.path
         
     @property
     def vendor(self):
@@ -102,12 +103,15 @@ class Device(object):
         return self._device_name if hasattr(self, "_device_name") else ''
         
     @property
+    def pcd(self):
+        return self._chipset_name if hasattr(self, "_chipset_name") else ''
+        
+    @property
     def path(self):
         return self._path
 
     @property
     def capabilities(self):
-        log.warning("Driver.capabilities should be implemented.")
         return {}
 
     def sense(self, targets):
@@ -117,35 +121,30 @@ class Device(object):
         possible target types. The return value is an activated target
         with a possibly updated specification (bitrate) or None.
         """
-        log.warning("Driver.sense() should be implemented.")
         time.sleep(1)
         return None
 
     def listen_tta(self, target, timeout):
         """Wait *timeout* seconds to become initialized as a *target*
         for Type A communication."""
-        log.warning("Driver.listen_tta() is not implemented.")
         time.sleep(timeout)
         return None
 
     def listen_ttb(self, target, timeout):
         """Wait *timeout* seconds to become initialized as a *target*
         for Type B communication."""
-        log.warning("Driver.listen_ttb() is not implemented.")
         time.sleep(timeout)
         return None
 
     def listen_ttf(self, target, timeout):
         """Wait *timeout* seconds to become initialized as a *target*
         for Type F communication."""
-        log.warning("Driver.listen_ttf() is not implemented.")
         time.sleep(timeout)
         return None
 
     def listen_dep(self, target, timeout):
         """Wait *timeout* seconds to become initialized as a *target*
         for data exchange protocol."""
-        log.warning("Driver.listen_dep() is not implemented.")
         time.sleep(timeout)
         return None
 
@@ -161,7 +160,6 @@ class Device(object):
         raised. Other nfc.clf.DigitalProtocolExceptions may be raised
         if an error is detected during communication.
         """
-        log.warning("Driver.exchange() should be implemented.")
         return None
 
     def set_communication_mode(self, brm, **kwargs):
@@ -178,5 +176,4 @@ class Device(object):
         bitrate and modulation shall not be changed but only optional
         parameters executed.
         """
-        log.warning("Driver.set_communication_mode() should be implemented.")
         return None
