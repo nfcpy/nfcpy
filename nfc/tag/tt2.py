@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2009-2013 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2009-2014 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -114,6 +114,11 @@ class NDEF(object):
         """Is True if data can be written to the NDEF tag."""
         return self._cc[3] & 0x0F == 0x00
 
+    @writeable.setter
+    def writeable(self, value):
+        self._cc[3] = self._cc[3] & 0xF0 if value else self._cc[3] | 0x0F
+        with self._tag as tag: tag[15] = self._cc[3]
+
     @property
     def length(self):
         """NDEF message data length."""
@@ -166,8 +171,8 @@ class NDEF(object):
                 tag[offset+1] = nlen / 256
                 tag[offset+2] = nlen % 256
 
-class Type2Tag(object):
-    type = "Type2Tag"
+class Type2Tag(nfc.tag.Tag):
+    TYPE = "Type2Tag"
     
     def __init__(self, clf, target):
         clf.set_communication_mode('', check_crc='OFF')
@@ -178,15 +183,11 @@ class Type2Tag(object):
         self._mmap = dict()
         self._sync = set()
         self._page = 0
-        self.ndef = None
-        if self[12] == 0xE1:
-            try: self.ndef = NDEF(self)
-            except Exception as error:
-                log.error("while reading ndef: {0!r}".format(error))
+        self._ndef = None
 
     def __str__(self):
-        s = "Type2Tag ATQ={0:04x} SAK={1:02x} UID={2}"
-        return s.format(self.atq, self.sak, str(self.uid).encode("hex"))
+        s = " ATQ={tag.atq:04x} SAK={tag.sak:02x}"
+        return nfc.tag.Tag.__str__(self) + s.format(tag=self)
 
     def __getitem__(self, key):
         if type(key) is int:
@@ -226,19 +227,44 @@ class Type2Tag(object):
 
     def __exit__(self, exc_type, exc_value, traceback):
         if exc_type is None:
-            for i in sorted(self._sync):
-                self.write(i, self._mmap[i/4][(i*4)%16:(i*4)%16+4])
-            self._sync.clear()
-            self._mmap.clear()
+            self.synchronize()
         
+    def synchronize(self):
+        """Write changed blocks of the internal memory into the tag."""
+        log.debug("synchronize blocks {0}".format(tuple(self._sync)))
+        for i in sorted(self._sync):
+            self.write(i, self._mmap[i/4][(i*4)%16:(i*4)%16+4])
+        self._sync.clear()
+        self._mmap.clear()
+        
+    @property
+    def ndef(self):
+        if self._ndef is None and self[12] == 0xE1:
+            try:
+                self._ndef = NDEF(self)
+            except Exception as error:
+                log.error("while reading ndef: {0!r}".format(error))
+        return self._ndef
+                
     @property
     def is_present(self):
         """Returns True if the tag is still within communication range."""
         try: return bool(self.read(0))
         except nfc.clf.DigitalProtocolError: return False
 
-    def transceive(self, data, timeout=0.1):
-        return self.clf.exchange(data, timeout)
+    def transceive(self, data, timeout=0.1, rlen=None):
+        data = self.clf.exchange(data, timeout)
+        
+        if rlen is None or len(data) == rlen:
+            return data
+        elif len(data) == rlen + 2:
+            if crca(data, rlen) != data[rlen:rlen+2]:
+                raise nfc.clf.TransmissionError("4.4.1.3")
+            return data[0:rlen]
+        elif len(data) == 1 and data[0] != 0x0A:
+            raise nfc.clf.ProtocolError("9.6.2.3")
+        else:
+            raise nfc.clf.ProtocolError("9.6.2")
 
     def read(self, block):
         """Read 16-byte of data from the tag. The *block* argument
@@ -257,18 +283,10 @@ class Type2Tag(object):
             else: raise nfc.clf.ProtocolError("9.8.3.3")
             
         try:
-            rsp = self.transceive("\x30" + chr(block % 256))
+            return self.transceive("\x30" + chr(block % 256), rlen=16)
         except nfc.clf.TimeoutError:
             raise nfc.clf.TimeoutError("9.9.1.3")
         
-        if len(rsp) == 16 or (len(rsp) == 18 and crca(rsp, 16) == rsp[16:18]):
-            return rsp[0:16]
-        if len(rsp) == 18:
-            raise nfc.clf.TransmissionError("4.4.1.3")
-        if len(rsp) == 1 and rsp[0] != 0x0A:
-            raise nfc.clf.ProtocolError("9.6.2.3")
-        raise nfc.clf.ProtocolError("9.6.2")
-
     def write(self, block, data):
         """Write 4-byte of data to the tag. The *block* argument
         specifies the offset in multiples of 4 bytes. The *data*

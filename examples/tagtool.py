@@ -31,6 +31,7 @@ import time
 import string
 import struct
 import argparse
+import hmac, hashlib
 
 sys.path.insert(1, os.path.split(sys.path[0])[0])
 from cli import CommandLineInterface
@@ -208,6 +209,14 @@ def add_emulate_tt3_parser(parser):
         "--crc", metavar="INT", type=int,
         help="checksum attribute value (default: computed)")
 
+def add_protect_parser(parser):
+    parser.add_argument(
+        "-p", dest="password",
+        help="protect with password if possible")
+    parser.add_argument(
+        "--unreadable", action="store_true",
+        help="make tag unreadable without password")
+
 class TagTool(CommandLineInterface):
     def __init__(self):
         parser = ArgumentParser(
@@ -216,6 +225,9 @@ class TagTool(CommandLineInterface):
         parser.add_argument(
             "-v", "--verbose", action="store_true",
             help="show more information")
+        parser.add_argument(
+            "-p", dest="authenticate", metavar="PASSWORD",
+            help="unlock with password if supported")
         subparsers = parser.add_subparsers(
             title="commands", dest="command")
         add_show_parser(subparsers.add_parser(
@@ -226,27 +238,33 @@ class TagTool(CommandLineInterface):
                 'load', help='write ndef data to tag'))
         add_format_parser(subparsers.add_parser(
                 'format', help='format ndef tag'))
+        add_protect_parser(subparsers.add_parser(
+                'protect', help='write protect a tag'))
         add_emulate_parser(subparsers.add_parser(
-                'emulate', help='emulate ndef tag'))
+                'emulate', help='emulate an ndef tag'))
 
+        self.rdwr_commands = {"show": self.show_tag,
+                              "dump": self.dump_tag,
+                              "load": self.load_tag,
+                              "format": self.format_tag,
+                              "protect": self.protect_tag,}
+    
         super(TagTool, self).__init__(
             parser, groups="rdwr card dbg clf")
 
     def on_rdwr_startup(self, clf, targets):
-        if self.options.command in ("show", "dump", "load", "format"):
-            log.info("touch a tag")
+        if self.options.command in self.rdwr_commands.keys():
+            print("** waiting for a tag **", file=sys.stderr)
             return targets
 
     def on_rdwr_connect(self, tag):
-        commands = {"show": self.show_tag, "dump": self.dump_tag,
-                    "load": self.load_tag, "format": self.format_tag}
-        commands[self.options.command](tag)
+        self.rdwr_commands[self.options.command](tag)
         return self.options.wait or self.options.loop
     
     def on_card_startup(self, clf, targets):
         if self.options.command == "emulate":
             target = self.prepare_tag()
-            log.info("touch a reader")
+            print("** waiting for a reader **", file=sys.stderr)
             return [target]
 
     def on_card_connect(self, tag, command):
@@ -260,6 +278,17 @@ class TagTool(CommandLineInterface):
 
     def show_tag(self, tag):
         print(tag)
+        
+        if self.options.authenticate:
+            if (tag.product.startswith("NXP NTAG21") or
+                tag.product.startswith("FeliCa Lite-S")):
+                key, msg = self.options.authenticate, tag.identifier
+                password = hmac.new(key, msg, hashlib.sha256).digest()
+                if not tag.authenticate(password):
+                    print("password authentication failed"); return
+            else:
+                print("this tag can not be unlocked with password"); return
+            
         if self.options.verbose:
             if tag.type == "Type1Tag":
                 tag._hr = tag.read_id()[0:2]
@@ -271,6 +300,7 @@ class TagTool(CommandLineInterface):
                 print("  " + tt3_card_map.get(icc, "unknown card"))
             elif tag.type == "Type4Tag":
                 pass
+        
         if tag.ndef:
             print("NDEF capabilities:")
             if self.options.verbose and tag.type == "Type3Tag":
@@ -286,6 +316,7 @@ class TagTool(CommandLineInterface):
                     print(format_data(tag.ndef.message))
                 print("NDEF record list:")
                 print(tag.ndef.message.pretty())
+        
         if self.options.verbose:
             if tag.type == "Type1Tag":
                 mem_size = {0x11: 120, 0x12: 512}.get(tag._hr[0], 2048)
@@ -334,17 +365,31 @@ class TagTool(CommandLineInterface):
             log.info("not an ndef tag")
             return
 
-        log.info("old message: \n" + tag.ndef.message.pretty())
+        if self.options.authenticate:
+            if (tag.product.startswith("NXP NTAG21") or
+                tag.product.startswith("FeliCa Lite-S")):
+                key, msg = self.options.authenticate, tag.identifier
+                password = hmac.new(key, msg, hashlib.sha256).digest()
+                if not tag.authenticate(password):
+                    print("password authentication failed"); return
+                tag.ndef.writeable = True
+            else:
+                print("this tag can not be unlocked with password"); return
+            
+        print("old message: \n" + tag.ndef.message.pretty())
         try:
             tag.ndef.message = nfc.ndef.Message(self.options.data)
             if tag.ndef.changed:
-                log.info("new message: \n" + tag.ndef.message.pretty())
+                print("new message: \n" + tag.ndef.message.pretty())
             else:
-                log.info("new message is same as old message")
+                print("new message is same as old message")
         except nfc.tag.AccessError:
-            log.error("this tag is not writeable")
+            print("this tag is not writeable")
         except nfc.tag.CapacityError:
-            log.error("message exceeds tag capacity")
+            print("message exceeds tag capacity")
+
+        if self.options.authenticate:
+            tag.ndef.writeable = False
 
     def format_tag(self, tag):
         if tag.type == "Type1Tag" and self.options.tagtype == "tt1":
@@ -415,6 +460,43 @@ class TagTool(CommandLineInterface):
         # re-read the ndef capabilities
         tag.ndef = nfc.tag.tt3.NDEF(tag)
         return True
+
+    def protect_tag(self, tag):
+        print(tag)
+        
+        if self.options.authenticate:
+            if not (tag.product.startswith("NXP NTAG21") or
+                    tag.product.startswith("FeliCa Lite-S")):
+                print("this tag can not be unlocked with password"); return
+            
+            key, msg = self.options.authenticate, tag.identifier
+            password = hmac.new(key, msg, hashlib.sha256).digest()
+            if not tag.authenticate(password):
+                print("password authentication failed"); return
+            
+        if self.options.password:
+            if len(self.options.password) < 8:
+                print("password must be at least eight characters")
+                return
+            if not (tag.product.startswith("NXP NTAG21") or
+                    tag.product.startswith("FeliCa Lite-S")):
+                print("this tag can not be protected with password")
+                return
+            key, msg = self.options.password, tag.identifier
+            password = hmac.new(key, msg, hashlib.sha256).digest()
+            tag.protect(password, self.options.unreadable)
+            if tag.ndef is not None:
+                tag.ndef.writeable = False
+            print("this tag is now password protected")
+            return
+
+        if self.options.lock:
+            if tag.type in ("Type3Tag", "Type4Tag"):
+                print("this tag does not have lock bits")
+                self.options.lock = False
+            elif self.options.undo:
+                print("lock bits can not be undone")
+                self.options.lock = False
 
     def prepare_tag(self):
         if self.options.tagtype == "tt3":

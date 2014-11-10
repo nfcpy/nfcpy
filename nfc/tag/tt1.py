@@ -1,7 +1,7 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2011-2013
-#   Stephen Tiedemann <stephen.tiedemann@googlemail.com>, 
+# Copyright 2011-2014
+#   Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #   Alexander Knaub <sanyok.og@googlemail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
@@ -177,8 +177,8 @@ class NDEF(object):
         with self._tag as tag:
             tag[8] = 0xE1
 
-class Type1Tag(object):
-    type = "Type1Tag"
+class Type1Tag(nfc.tag.Tag):
+    TYPE = "Type1Tag"
     
     def __init__(self, clf, target):
         self.clf = clf
@@ -190,9 +190,6 @@ class Type1Tag(object):
             try: self.ndef = NDEF(self)
             except Exception as error:
                 log.error("while reading ndef: {0!r}".format(error))
-
-    def __str__(self):
-        return "Type1Tag UID=" + str(self.uid).encode("hex")
 
     def __getitem__(self, key):
         if type(key) is int:

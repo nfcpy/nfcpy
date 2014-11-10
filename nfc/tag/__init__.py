@@ -25,6 +25,24 @@ log = logging.getLogger(__name__)
 
 from tag import activate, emulate
 
+class Tag(object):
+    @property
+    def type(self):
+        return self.TYPE
+
+    @property
+    def product(self):
+        return self._product if hasattr(self, "_product") else self.type
+
+    @property
+    def identifier(self):
+        return str(self.uid if hasattr(self, "uid") else self.idm)
+
+    def __str__(self):
+        try: s = self.type + ' ' + self._product
+        except AttributeError: s = self.type
+        return s + ' ID=' + self.identifier.encode("hex").upper()
+
 class Error: pass
 class AccessError(Error): pass
 class CapacityError(Error): pass

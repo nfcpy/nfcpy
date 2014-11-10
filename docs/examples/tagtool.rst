@@ -161,6 +161,40 @@ weird tag formats for testing reader implementations. ::
    ``0<=INT<=65535``. If this option is not specified the automatically
    computed checksum is written.
 
+protect
+-------
+
+The **protect** command attempts to protect the tag against write
+modifications, optionally also against unauthorized read
+access. Support for protection depends on the tag type and
+product. Without options the the default attempt is protect with lock
+bits, be warned that this can not be undone. Lock bits are only
+available for type 1 and type 2 tags. With option ``-p`` the
+protection will be based on a password and further modifications are
+possible for anyone in posession of the password. Password protection
+works on NXP NTAG 21x type 2 tags and Sony FeliCa Lite-S type 3
+tags. ::
+
+  $ tagtool.py protect [-h] [-p PASSWORD] [--unreadable]
+
+.. program:: tagtool.py protect
+
+.. option:: -p PASSWORD
+
+   Protect the tag with the given PASSWORD. This works only for the
+   NXP NTAG 21x type 2 tags and Sony FeliCa Lite-S type 3 tags. The
+   password string is used as a key to compute an HMAC-SHA256 with the
+   tag identifier (UID or IDm) as the message. The final password is
+   the leftmost number of octets as needed for the tag product, 6
+   octets for an NTAG 21x and 16 octets for a FeliCa Lite-S.
+
+.. option:: --unreadable
+
+   This option can only be used with password based protection. The
+   result is that the tag will become unreadable without a password,
+   i.e. the content is completely hidden. Further reads must then use
+   the ``tagtool.py -p PASSWORD <command>``. 
+
 emulate
 -------
 

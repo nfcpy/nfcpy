@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2012-2013 Stephen Tiedemann <stephen.tiedemann@gmail.com>
+# Copyright 2012-2014 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -158,8 +158,8 @@ class NDEF(object):
         ndef_size = [(len(data) - 2) / 256, (len(data) - 2) % 256]
         self.tag.update_binary(0, bytearray(ndef_size))
 
-class Type4Tag(object):
-    type = "Type4Tag"
+class Type4Tag(nfc.tag.Tag):
+    TYPE = "Type4Tag"
 
     def __init__(self, clf, target):
         log.debug("init {0}".format(target))
@@ -185,9 +185,10 @@ class Type4Tag(object):
             log.error("while reading ndef: {0!r}".format(error))
 
     def __str__(self):
-        hx = lambda x: str(x) if x is None else str(x).encode("hex")
-        return "Type4Tag ATQ={0:04x} SAK={1:02x} UID={2} ATS={3}".format(
-            self.atq, self.sak, hx(self.uid), hx(self.ats))
+        hx = lambda x: str(x) if x is None else str(x).encode("hex").upper()
+        s = " ATQ={tag.atq:04x} SAK={tag.sak:02x} ATS={ats}"
+        return nfc.tag.Tag.__str__(self) + s.format(
+            tag=self, ats=hx(self.ats))
 
     def transceive(self, command, timeout=None):
         if timeout is None: timeout = self.fwt + 0.01

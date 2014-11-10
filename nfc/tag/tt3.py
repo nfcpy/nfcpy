@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2009-2013 Stephen Tiedemann <stephen.tiedemann@gmail.com>
+# Copyright 2009-2014 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -173,8 +173,8 @@ class NDEF(object):
         self.attr.writing = False # writing finished
         self.tag.write(str(self.attr), [0])
 
-class Type3Tag(object):
-    type = "Type3Tag"
+class Type3Tag(nfc.tag.Tag):
+    TYPE = "Type3Tag"
     
     def __init__(self, clf, target):
         self.clf = clf
@@ -199,11 +199,10 @@ class Type3Tag(object):
             self.ndef = None
 
     def __str__(self):
-        params = list()
-        params.append(str(self.idm).encode("hex"))
-        params.append(str(self.pmm).encode("hex"))
-        params.append(str(self.sys).encode("hex"))
-        return "Type3Tag IDm=%s PMm=%s SYS=%s" % tuple(params)
+        s = " PMM={pmm} SYS={sys}"
+        return nfc.tag.Tag.__str__(self) + s.format(
+            pmm=str(self.pmm).encode("hex").upper(),
+            sys=str(self.sys).encode("hex").upper())
 
     @property
     def is_present(self):
