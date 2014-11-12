@@ -95,7 +95,7 @@ class MifareUltralightC(tt2.Type2Tag):
         s.append(" 43: " + cfg[3] + " (AUTH1)")
         return s
 
-    def protect(self, password=None, read_protect=False):
+    def protect(self, password=None, read_protect=False, from_page=0):
         if password is not None:
             if password == "":
                 # set the factory key
@@ -111,8 +111,8 @@ class MifareUltralightC(tt2.Type2Tag):
             self.write(45, key1[4:8])
             self.write(46, key2[0:4])
             self.write(47, key2[4:8])
-            # protect from memory page 3
-            self[42*4] = 0x03
+            # protect from memory page
+            self[42*4] = from_page
             # set or unset read protection
             self[43*4] = 0x00 if read_protect else 0x01
             self.synchronize()
@@ -220,7 +220,7 @@ class NTAG21x(tt2.Type2Tag):
         except nfc.clf.TimeoutError:
             return False
 
-    def protect(self, password=None, read_protect=False):
+    def protect(self, password=None, read_protect=False, from_page=0):
         log.debug("protect tag")
         if password is not None:
             if password == "":
@@ -236,8 +236,8 @@ class NTAG21x(tt2.Type2Tag):
             # write PWD and PACK
             for i in range(6):
                 self[cfgaddr+8+i] = key[i]
-            # start protection from page 3
-            self[cfgaddr+3] = 0x03
+            # start protection from page
+            self[cfgaddr+3] = from_page
             # set/clear protection bit
             self[cfgaddr+4] = (self[cfgaddr+4] & 0x7F) | (read_protect << 7)
             self.synchronize()
