@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2009-2013 Stephen Tiedemann <stephen.tiedemann@gmail.com>
+# Copyright 2009-2014 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -58,7 +58,8 @@ class Chipset(pn53x.Chipset):
     def read_register(self, addr):
         if type(addr) is int: addr = [addr]
         addr = ''.join([struct.pack(">H", x) for x in addr])
-        return self.command(0x06, addr)
+        data = self.command(0x06, addr)
+        return data if len(data) > 1 else data[0]
     
     def in_data_exchange_tt3(self, data, timeout, *args, **kwargs):
         data = self.command(0x42, data, timeout)

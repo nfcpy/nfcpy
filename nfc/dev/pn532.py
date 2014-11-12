@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2011-2014 Stephen Tiedemann <stephen.tiedemann@gmail.com>
+# Copyright 2014 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -20,7 +20,7 @@
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
 #
-# Driver for the a NXP PN531 based contactless reader
+# Driver for the a NXP PN532 based contactless reader
 #
 import logging
 log = logging.getLogger(__name__)
@@ -47,18 +47,7 @@ class Chipset(pn53x.Chipset):
         self.command(0x08, data, timeout=250)
 
 class Device(pn53x.Device):
-    def __init__(self, bus):
-        super(Device, self).__init__(bus)
-
-    def close(self):
-        self.chipset.close()
-
-    def listen_dep(self, target, timeout):
-        # PN531 screws up in target mode, only one run is successful.
-        # Thereafter the USB descriptor and whatever else is broken.
-        log.warning("listen mode is disabled for this device")
-        time.sleep(timeout)
-        return None
+    pass
 
 def init(transport):
     chipset = Chipset(transport)

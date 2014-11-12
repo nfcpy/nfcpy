@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2011-2013 Stephen Tiedemann <stephen.tiedemann@gmail.com>
+# Copyright 2011-2014 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -30,9 +30,9 @@ import time
 import errno
 import struct
 
-import pn53x
+import pn532
 
-class Chipset(pn53x.Chipset):
+class Chipset(pn532.Chipset):
     def __init__(self, transport):
         self.transport = transport
         
@@ -104,7 +104,7 @@ class Chipset(pn53x.Chipset):
             raise IOError(errno.EIO, os.strerror(errno.EIO))
         return frame[2:-2]
         
-class Device(pn53x.Device):
+class Device(pn532.Device):
     def __init__(self, bus):
         super(Device, self).__init__(bus)
 

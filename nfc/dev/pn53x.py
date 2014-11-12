@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2009-2014 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2009-2014 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -248,11 +248,19 @@ class Chipset(object):
 
     def read_register(self, addr):
         if type(addr) is int: addr = [addr]
-        data = ''.join([struct.pack(">H", x) for x in addr])
+        data = ''.join([struct.pack(">H", a) for a in addr])
         data = self.command(0x06, data, timeout=250)
         if data is None or data[0] != 0:
             raise ChipsetError(data)
-        return data[1:]
+        return data[1:] if len(data) > 2 else data[1]
+
+    def write_register(self, addr, rval):
+        if type(addr) is int: addr = [addr]
+        if type(rval) is int: rval = [rval]
+        data = ''.join([struct.pack(">HB", a, v) for a, v in zip(addr, rval)])
+        data = self.command(0x08, data, timeout=250)
+        if data is None or data[0] != 0:
+            raise ChipsetError(data)
 
     def pn531_set_parameters(self, use_nad=False, use_did=False,
                              auto_atr_res=True, use_irq=False,
@@ -639,6 +647,21 @@ class Device(nfc.dev.Device):
             else:
                 log.error(error)
                 raise error # Transport broken
+
+    def set_communication_mode(self, brm, **kwargs):
+        if self.exchange == self.tag_send_cmd_recv_rsp:
+            try:
+                enable = 0x00 if kwargs['add_crc'] == 'OFF' else 0x80
+                tx_mode = self.chipset.read_register(0x6302)
+                self.chipset.write_register(0x6302, (tx_mode & 0x7F) | enable)
+            except KeyError:
+                pass
+            try:
+                enable = 0x00 if kwargs['check_crc'] == 'OFF' else 0x80
+                rx_mode = self.chipset.read_register(0x6303)
+                self.chipset.write_register(0x6303, (rx_mode & 0x7F) | enable)
+            except KeyError:
+                pass
 
     @property
     def capabilities(self):

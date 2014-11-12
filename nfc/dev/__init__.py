@@ -41,7 +41,7 @@ usb_device_map = {
     (0x054c, 0x02e1) : "rcs956", # Sony RC-S330/360/370
     (0x054c, 0x06c1) : "rcs380", # Sony RC-S380
     (0x054c, 0x06c3) : "rcs380", # Sony RC-S380
-    (0x072f, 0x2200) : "acr122", # Arygon ACR122U
+    (0x072f, 0x2200) : "acr122", # ACS ACR122U
     }
 
 def connect(path):
