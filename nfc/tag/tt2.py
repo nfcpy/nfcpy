@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2009-2014 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2009-2014 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -31,7 +31,8 @@ class NDEF(object):
     def __init__(self, tag):
         self._tag = tag
         self._cc = tag[12:16]
-        log.debug("capability container " + str(self._cc).encode("hex"))
+        log.debug("found ndef capability container "
+                  + str(self._cc).encode("hex").upper())
         self._skip = set([])
         self._msg = bytearray()
         self.changed # force initial read
@@ -175,11 +176,11 @@ class Type2Tag(nfc.tag.Tag):
     TYPE = "Type2Tag"
     
     def __init__(self, clf, target):
-        clf.set_communication_mode('', check_crc='OFF')
         self.clf = clf
         self.atq = target.cfg[0] << 8 | target.cfg[1]
         self.sak = target.cfg[2]
         self.uid = target.uid
+        self._usermem = slice(16, 16*4)
         self._mmap = dict()
         self._sync = set()
         self._page = 0
@@ -194,13 +195,22 @@ class Type2Tag(nfc.tag.Tag):
             key = slice(key, key+1)
         if not type(key) is slice:
             raise TypeError("key must be of type int or slice")
+        if key.start is None:
+            key = slice(0, key.stop)
+        if key.stop is None:
+            key = slice(key.start, self._usermem.stop)
+
         octets = bytearray(key.stop - key.start)
         for i in xrange(key.start, key.stop):
-            data = self._mmap.get(i/16, None)
-            if data is None:
+            try:
+                data = self._mmap[i/16]
+            except KeyError:
                 data = self.read((i/16)*4)
+                if data is None:
+                    raise IndexError
                 self._mmap[i/16] = data
             octets[i-key.start] = data[i%16]
+
         return octets if len(octets) > 1 else octets[0]
         
     def __setitem__(self, key, value):
@@ -237,6 +247,30 @@ class Type2Tag(nfc.tag.Tag):
         self._sync.clear()
         self._mmap.clear()
         
+    def dump(self):
+        ispchr = lambda x: x >= 32 and x <= 126
+        oprint = lambda o: ' '.join(['%02x' % x for x in o])
+        cprint = lambda o: ''.join([chr(x) if ispchr(x) else '.' for x in o])
+        s = list()
+        s.append("  0: " + oprint(self[ 0: 4]) + " (UID0-UID2, BCC0)")
+        s.append("  1: " + oprint(self[ 4: 8]) + " (UID3-UID6)")
+        s.append("  2: " + oprint(self[ 8:12]) + " (BCC1, INT, LOCK0-LOCK1)")
+        s.append("  3: " + oprint(self[12:16]) + " (OTP0-OTP3)")
+        last_octets = None; same_octets = []
+        for i in range(self._usermem.start, self._usermem.stop, 4):
+            octets = self[i:i+4]
+            if octets == last_octets:
+                same_octets.append(i/4)
+                if i < self._usermem.stop - 4:
+                    continue
+            if bool(same_octets):
+                s.append("  *")
+                same_octets = []
+            s.append("{0:3d}: {1} |{2}|".format(
+                i/4, oprint(self[i:i+4]), cprint(self[i:i+4])))
+            last_octets = octets
+        return s
+
     @property
     def ndef(self):
         if self._ndef is None and self[12] == 0xE1:
@@ -253,47 +287,65 @@ class Type2Tag(nfc.tag.Tag):
         except nfc.clf.DigitalProtocolError: return False
 
     def transceive(self, data, timeout=0.1, rlen=None):
-        data = self.clf.exchange(data, timeout)
-        
-        if rlen is None or len(data) == rlen:
-            return data
-        elif len(data) == rlen + 2:
-            if crca(data, rlen) != data[rlen:rlen+2]:
-                raise nfc.clf.TransmissionError("4.4.1.3")
-            return data[0:rlen]
-        elif len(data) == 1 and data[0] != 0x0A:
-            raise nfc.clf.ProtocolError("9.6.2.3")
-        else:
-            raise nfc.clf.ProtocolError("9.6.2")
+        try:
+            #log.debug(">> " + str(data).encode("hex"))
+            data = self.clf.exchange(data, timeout)
+            #log.debug("<< " + str(data).encode("hex"))
+        except nfc.clf.TimeoutError:
+            log.debug("timeout error in transceive method")
+            raise nfc.clf.TimeoutError("mute tag")
 
+        if rlen is not None and len(data) == rlen + 2:
+            if crca(data, rlen) != data[rlen:rlen+2]:
+                log.debug("checksum error in received data")
+                raise nfc.clf.TransmissionError("wrong crc")
+            return data[0:rlen]
+
+        return data
+        
     def read(self, block):
-        """Read 16-byte of data from the tag. The *block* argument
-        specifies the offset in multiples of 4 bytes (i.e. block
-        number 1 will return bytes 4 to 19). The data returned is a
-        byte array of length 16.
+        """Read 16-byte of data from the tag. The *block* argument specifies
+        the offset in multiples of 4 bytes (i.e. block number 1 will
+        return bytes 4 to 19). The data returned is a byte array of
+        length 16 or None if the block is outside the readable memory
+        range.
         """
-        log.debug("read block #{0}".format(block))
+        log.debug("read blocks {0}-{1}".format(block, block+3))
         if self._page != block / 256:
             self._page = block / 256
-            rsp = self.transceive("\xC2\xFF")
+            try:
+                rsp = self.transceive("\xC2\xFF")
+            except nfc.clf.TimeoutError:
+                log.debug("sector select part 1 failed with timeout")
+                return None
             if not (len(rsp) == 1 and rsp[0] == 0x0A):
-                raise nfc.clf.ProtocolError("9.8.3.1")
-            try: self.transceive(chr(self._page) + 3*chr(0), timeout=0.001)
-            except nfc.clf.TimeoutError: pass
-            else: raise nfc.clf.ProtocolError("9.8.3.3")
+                log.debug("sector select part 1 not acknowledged")
+                return None
+            try:
+                rsp = self.transceive(chr(self._page)+"\0\0\0", timeout=0.001)
+                log.debug("this block seems not be addressable")
+                return None
+            except nfc.clf.TimeoutError:
+                pass
             
-        try:
-            return self.transceive("\x30" + chr(block % 256), rlen=16)
-        except nfc.clf.TimeoutError:
-            raise nfc.clf.TimeoutError("9.9.1.3")
-        
+        data = self.transceive("\x30" + chr(block % 256), rlen=16)
+        if len(data) != 16:
+            log.debug("invalid read response" + str(data).encode("hex"))
+            return None
+
+        log.debug(' '.join([str(data[i:i+4]).encode("hex") \
+                            for i in range(0, 16, 4)]))
+        return data
+
     def write(self, block, data):
         """Write 4-byte of data to the tag. The *block* argument
         specifies the offset in multiples of 4 bytes. The *data*
         argument must be a string or bytearray of length 4.
         """
-        log.debug("write block #{0}".format(block))
+        log.debug("write {0!r} to block {1}".format(
+            str(data).encode("hex"), block))
         assert(len(data) == 4)
+        
         if not self._page == block / 256:
             self._page = block / 256
             rsp = self.transceive("\xC2\xFF")
@@ -304,7 +356,7 @@ class Type2Tag(nfc.tag.Tag):
             else: raise nfc.clf.ProtocolError("9.8.3.3")
 
         try:
-            rsp = self.transceive("\xA2" + chr(block % 256) + str(data))
+            rsp = self.transceive("\xA2" + chr(block % 256) + data)
         except nfc.clf.TimeoutError:
             raise nfc.clf.TimeoutError("9.9.1.3")
         

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2010-2013 Stephen Tiedemann <stephen.tiedemann@gmail.com>
+# Copyright 2010-2014 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -258,6 +258,23 @@ class TagTool(CommandLineInterface):
             return targets
 
     def on_rdwr_connect(self, tag):
+        if self.options.authenticate is not None:
+            if (tag.product.startswith("NXP NTAG21") or
+                tag.product.startswith("FeliCa Lite-S") or
+                tag.product.startswith("Mifare Ultralight C")):
+                if len(self.options.authenticate) > 0:
+                    key, msg = self.options.authenticate, tag.identifier
+                    password = hmac.new(key, msg, hashlib.sha256).digest()
+                else:
+                    password = "" # use factory default password
+                if not tag.authenticate(password):
+                    print("password authentication failed")
+                    return False
+            else:
+                print(tag)
+                print("this tag can not be unlocked with password")
+                return False
+            
         self.rdwr_commands[self.options.command](tag)
         return self.options.wait or self.options.loop
     
@@ -279,16 +296,6 @@ class TagTool(CommandLineInterface):
     def show_tag(self, tag):
         print(tag)
         
-        if self.options.authenticate:
-            if (tag.product.startswith("NXP NTAG21") or
-                tag.product.startswith("FeliCa Lite-S")):
-                key, msg = self.options.authenticate, tag.identifier
-                password = hmac.new(key, msg, hashlib.sha256).digest()
-                if not tag.authenticate(password):
-                    print("password authentication failed"); return
-            else:
-                print("this tag can not be unlocked with password"); return
-            
         if self.options.verbose:
             if tag.type == "Type1Tag":
                 tag._hr = tag.read_id()[0:2]
@@ -329,14 +336,8 @@ class TagTool(CommandLineInterface):
                 print(format_data(mem_data, w=8))
                 tag.clf.sense([nfc.clf.TTA(uid=tag.uid)])
             elif tag.type == "Type2Tag":
-                memory = bytearray()
-                for offset in range(0, 256 * 4, 16):
-                    try: memory += tag[offset:offset+16]
-                    except nfc.clf.DigitalProtocolError as error:
-                        log.error(repr(error)); break
                 print("TAG memory dump:")
-                print(format_data(memory))
-                tag.clf.sense([nfc.clf.TTA(uid=tag.uid)])
+                print('\n'.join(tag.dump()))
             elif tag.type == "Type3Tag":
                 pass
             elif tag.type == "Type4Tag":
@@ -366,16 +367,8 @@ class TagTool(CommandLineInterface):
             return
 
         if self.options.authenticate:
-            if (tag.product.startswith("NXP NTAG21") or
-                tag.product.startswith("FeliCa Lite-S")):
-                key, msg = self.options.authenticate, tag.identifier
-                password = hmac.new(key, msg, hashlib.sha256).digest()
-                if not tag.authenticate(password):
-                    print("password authentication failed"); return
-                tag.ndef.writeable = True
-            else:
-                print("this tag can not be unlocked with password"); return
-            
+            tag.ndef.writeable = True
+
         print("old message: \n" + tag.ndef.message.pretty())
         try:
             tag.ndef.message = nfc.ndef.Message(self.options.data)
@@ -464,26 +457,23 @@ class TagTool(CommandLineInterface):
     def protect_tag(self, tag):
         print(tag)
         
-        if self.options.authenticate:
+        if self.options.password is not None:
             if not (tag.product.startswith("NXP NTAG21") or
-                    tag.product.startswith("FeliCa Lite-S")):
-                print("this tag can not be unlocked with password"); return
-            
-            key, msg = self.options.authenticate, tag.identifier
-            password = hmac.new(key, msg, hashlib.sha256).digest()
-            if not tag.authenticate(password):
-                print("password authentication failed"); return
-            
-        if self.options.password:
-            if len(self.options.password) < 8:
-                print("password must be at least eight characters")
-                return
-            if not (tag.product.startswith("NXP NTAG21") or
-                    tag.product.startswith("FeliCa Lite-S")):
+                    tag.product.startswith("FeliCa Lite-S") or
+                    tag.product.startswith("Mifare Ultralight C")):
                 print("this tag can not be protected with password")
                 return
-            key, msg = self.options.password, tag.identifier
-            password = hmac.new(key, msg, hashlib.sha256).digest()
+            if len(self.options.password) >= 8:
+                print("generating diversified key from password")
+                key, msg = self.options.password, tag.identifier
+                password = hmac.new(key, msg, hashlib.sha256).digest()
+            elif len(self.options.password) == 0:
+                print("using factory default key for password")
+                password = ""
+            else:
+                print("password must be at least 8 characters")
+                return
+            
             tag.protect(password, self.options.unreadable)
             if tag.ndef is not None:
                 tag.ndef.writeable = False

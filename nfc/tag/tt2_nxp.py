@@ -1,0 +1,342 @@
+# -*- coding: latin-1 -*-
+# -----------------------------------------------------------------------------
+# Copyright 2014 Stephen Tiedemann <stephen.tiedemann@gmail.com>
+#
+# Licensed under the EUPL, Version 1.1 or - as soon they 
+# will be approved by the European Commission - subsequent
+# versions of the EUPL (the "Licence");
+# You may not use this work except in compliance with the
+# Licence.
+# You may obtain a copy of the Licence at:
+#
+# http://www.osor.eu/eupl
+#
+# Unless required by applicable law or agreed to in
+# writing, software distributed under the Licence is
+# distributed on an "AS IS" basis,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+# express or implied.
+# See the Licence for the specific language governing
+# permissions and limitations under the Licence.
+# -----------------------------------------------------------------------------
+
+import logging
+log = logging.getLogger(__name__)
+
+import os
+
+import nfc.tag
+from . import tt2
+
+def activate(clf, target):
+    try:
+        log.debug("check if authenticate command is available")
+        rsp = clf.exchange('\x1A\x00', timeout=0.01)
+        clf.sense([nfc.clf.TTA(uid=target.uid)])
+        clf.set_communication_mode('', check_crc='OFF')
+        if rsp.startswith("\xAF"):
+            return MifareUltralightC(clf, target)
+        if rsp == "\x00":
+            return NTAG203(clf, target)
+    except nfc.clf.TimeoutError:
+        log.debug("nope, authenticate command is not supported")
+
+    clf.sense([nfc.clf.TTA(uid=target.uid)])
+    clf.set_communication_mode('', check_crc='OFF')
+
+    try:
+        log.debug("check if version command is available")
+        version = clf.exchange('\x60', timeout=0.01)
+        log.debug("version = " + ' '.join(["%02X" % x for x in version]))
+        if version[0:3] == "\x00\x04\x03" and version[4] == 0x01:
+            return MifareUltralightEV1(clf, target, version)
+        elif version.startswith("\x00\x04\x04\x01\x01\x00\x0B\x03"):
+            return NTAG210(clf, target)
+        elif version.startswith("\x00\x04\x04\x01\x01\x00\x0E\x03"):
+            return NTAG212(clf, target)
+        elif version.startswith("\x00\x04\x04\x02\x01\x00\x0F\x03"):
+            return NTAG213(clf, target)
+        elif version.startswith("\x00\x04\x04\x02\x01\x00\x11\x03"):
+            return NTAG215(clf, target)
+        elif version.startswith("\x00\x04\x04\x02\x01\x00\x13\x03"):
+            return NTAG216(clf, target)
+        else:
+            log.debug("no match for this version number")
+    except nfc.clf.TimeoutError:
+        log.debug("nope, version command is not supported")
+
+    clf.sense([nfc.clf.TTA(uid=target.uid)])
+    clf.set_communication_mode('', check_crc='OFF')
+
+    return MifareUltralight(clf, target)
+
+class MifareUltralight(tt2.Type2Tag):
+    def __init__(self, clf, target):
+        super(MifareUltralight, self).__init__(clf, target)
+        self._product = "Mifare Ultralight (MF01CU1)"
+        self._usermem = slice(16, 64)
+        
+class MifareUltralightC(tt2.Type2Tag):
+    def __init__(self, clf, target):
+        super(MifareUltralightC, self).__init__(clf, target)
+        self._product = "Mifare Ultralight C (MF01CU2)"
+        self._usermem = slice(16, 160)
+        
+    def dump(self):
+        oprint = lambda o: ' '.join(['%02x' % x for x in o])
+        s = super(MifareUltralightC, self).dump()
+        try:
+            cfg = [oprint(self[i:i+4]) for i in range(160, 176, 4)]
+        except IndexError:
+            cfg = ["?? ?? ?? ??"] * 4
+        s.append(" 40: " + cfg[0] + " (LOCK2-LOCK3)")
+        s.append(" 41: " + cfg[1] + " (CNTR0-CNTR1)")
+        s.append(" 42: " + cfg[2] + " (AUTH0)")
+        s.append(" 43: " + cfg[3] + " (AUTH1)")
+        return s
+
+    def protect(self, password=None, read_protect=False):
+        if password is not None:
+            if password == "":
+                # set the factory key
+                key = "IEMKAERB!NACUOYF"
+            else:
+                key = password[0:16]
+                assert len(key) == 16
+            log.debug("protect with key " + key.encode("hex"))
+            # split the key and reverse
+            key1, key2 = key[7::-1], key[15:7:-1]
+            # write directly because key is unreadable
+            self.write(44, key1[0:4])
+            self.write(45, key1[4:8])
+            self.write(46, key2[0:4])
+            self.write(47, key2[4:8])
+            # protect from memory page 3
+            self[42*4] = 0x03
+            # set or unset read protection
+            self[43*4] = 0x00 if read_protect else 0x01
+            self.synchronize()
+
+    def authenticate(self, password):
+        from pyDes import triple_des, CBC
+        if password == "":
+            # try with the factory key
+            key = "IEMKAERB!NACUOYF"
+        else:
+            key = password[0:16]
+            assert len(key) == 16
+        
+        log.debug("authenticate with key " + str(key).encode("hex"))
+        
+        rsp = self.transceive("\x1A\x00", rlen=9)
+        m1 = str(rsp[1:9])
+        iv = "\x00\x00\x00\x00\x00\x00\x00\x00"
+        rb = triple_des(key, CBC, iv).decrypt(m1)
+        
+        log.debug("received challenge")
+        log.debug("iv = " + str(iv).encode("hex"))
+        log.debug("m1 = " + str(m1).encode("hex"))
+        log.debug("rb = " + str(rb).encode("hex"))
+        
+        ra = os.urandom(8)
+        iv = str(rsp[1:9])
+        m2 = triple_des(key, CBC, iv).encrypt(ra + rb[1:8] + rb[0])
+        
+        log.debug("sending response")
+        log.debug("ra = " + str(ra).encode("hex"))
+        log.debug("iv = " + str(iv).encode("hex"))
+        log.debug("m2 = " + str(m2).encode("hex"))
+        try:
+            rsp = self.transceive("\xAF" + m2, rlen=9)
+            if len(rsp) != 9: return False
+        except (nfc.clf.TimeoutError, nfc.clf.TransmissionError):
+            return False
+        
+        m3 = str(rsp[1:9])
+        iv = m2[8:16]
+        log.debug("received confirmation")
+        log.debug("iv = " + str(iv).encode("hex"))
+        log.debug("m3 = " + str(m3).encode("hex"))
+        
+        return triple_des(key, CBC, iv).decrypt(m3) == ra[1:9] + ra[0]
+        
+class MifareUltralightEV1(tt2.Type2Tag):
+    def __init__(self, clf, target):
+        super(MifareUltralightEV1, self).__init__(clf, target)
+        self._product = "Mifare Ultralight EV1"
+        if version[6] == 0x0E:
+            self._usermem = slice(16, 144)
+        version_map = {
+            "\x00\x04\x03\x01\x01\x00\x0B\x03": "MF0UL11",
+            "\x00\x04\x03\x02\x01\x00\x0B\x03": "MF0ULH11",
+            "\x00\x04\x03\x01\x01\x00\x0E\x03": "MF0UL21",
+            "\x00\x04\x03\x02\x01\x00\x0E\x03": "MF0ULH21",
+        }
+        try:
+            self._product += " ({0})".format(version_map[version])
+        except KeyError:
+            pass
+
+    @property
+    def signature(self):
+        log.debug("tag signature")
+        return self.transceive("\x3C\x00", rlen=32)
+
+class NTAG203(tt2.Type2Tag):
+    def __init__(self, clf, target):
+        super(NTAG203, self).__init__(clf, target)
+        self._usermem = slice(16, 160)
+        self._product = "NXP NTAG203"
+        
+    def dump(self):
+        oprint = lambda o: ' '.join(['%02x' % x for x in o])
+        s = super(NTAG203, self).dump()
+        try:
+            cfg = [oprint(self[i:i+4]) for i in range(160, 168, 4)]
+        except IndexError:
+            cfg = ["?? ?? ?? ??"] * 4
+        s.append(" 40: " + cfg[0] + " (LOCK2-LOCK3)")
+        s.append(" 41: " + cfg[1] + " (CNTR0-CNTR1)")
+        return s
+    
+class NTAG21x(tt2.Type2Tag):
+    @property
+    def signature(self):
+        log.debug("tag signature")
+        return self.transceive("\x3C\x00", rlen=32)
+
+    def authenticate(self, password):
+        if password == "":
+            # try with the factory key
+            key = bytearray.fromhex("FF FF FF FF 00 00")
+        else:
+            key = bytearray(password[0:6])
+            assert len(key) == 6
+        
+        log.debug("authenticate with key " + str(key).encode("hex"))
+        try:
+            rsp = self.transceive("\x1b" + key[0:4], rlen=2)
+            return rsp == key[4:6]
+        except nfc.clf.TimeoutError:
+            return False
+
+    def protect(self, password=None, read_protect=False):
+        log.debug("protect tag")
+        if password is not None:
+            if password == "":
+                # try with the factory key
+                key = bytearray.fromhex("FF FF FF FF 00 00")
+            else:
+                key = bytearray(password[0:6])
+                assert len(key) == 6
+        
+            log.debug("protect with key " + str(key).encode("hex"))
+
+            cfgaddr = self._usermem.stop + (0, 4)[self._usermem.stop > 64]
+            # write PWD and PACK
+            for i in range(6):
+                self[cfgaddr+8+i] = key[i]
+            # start protection from page 3
+            self[cfgaddr+3] = 0x03
+            # set/clear protection bit
+            self[cfgaddr+4] = (self[cfgaddr+4] & 0x7F) | (read_protect << 7)
+            self.synchronize()
+
+class NTAG210(NTAG21x):
+    def __init__(self, clf, target):
+        super(NTAG210, self).__init__(clf, target)
+        self._usermem = slice(16, 64)
+        self._product = "NXP NTAG210"
+        
+    def dump(self):
+        oprint = lambda o: ' '.join(['%02x' % x for x in o])
+        s = super(NTAG210, self).dump()
+        try:
+            cfg = [oprint(self[i:i+4]) for i in range(64, 80, 4)]
+        except IndexError:
+            cfg = ["?? ?? ?? ??"] * 4
+        s.append(" 16: " + cfg[0] + " (MIRROR_BYTE, RFU, MIRROR_PAGE, AUTH0)")
+        s.append(" 17: " + cfg[1] + " (ACCESS)")
+        s.append(" 18: " + cfg[2] + " (PWD0-PWD3)")
+        s.append(" 19: " + cfg[3] + " (PACK0-PACK1)")
+        return s
+
+class NTAG212(NTAG21x):
+    def __init__(self, clf, target):
+        super(NTAG212, self).__init__(clf, target)
+        self._usermem = slice(16, 144)
+        self._product = "NXP NTAG212"
+        
+    def dump(self):
+        oprint = lambda o: ' '.join(['%02x' % x for x in o])
+        s = super(NTAG212, self).dump()
+        try:
+            cfg = [oprint(self[i:i+4]) for i in range(144, 164, 4)]
+        except IndexError:
+            cfg = ["?? ?? ?? ??"] * 4
+        s.append(" 36: " + cfg[0] + " (LOCK2-LOCK4)")
+        s.append(" 37: " + cfg[1] + " (MIRROR_BYTE, RFU, MIRROR_PAGE, AUTH0)")
+        s.append(" 38: " + cfg[2] + " (ACCESS)")
+        s.append(" 39: " + cfg[3] + " (PWD0-PWD3)")
+        s.append(" 40: " + cfg[4] + " (PACK0-PACK1)")
+        return s
+
+class NTAG213(NTAG21x):
+    def __init__(self, clf, target):
+        super(NTAG213, self).__init__(clf, target)
+        self._usermem = slice(16, 160)
+        self._product = "NXP NTAG213"
+        
+    def dump(self):
+        oprint = lambda o: ' '.join(['%02x' % x for x in o])
+        s = super(NTAG213, self).dump()
+        try:
+            cfg = [oprint(self[i:i+4]) for i in range(160, 180, 4)]
+        except IndexError:
+            cfg = ["?? ?? ?? ??"] * 4
+        s.append(" 40: " + cfg[0] + " (LOCK2-LOCK4)")
+        s.append(" 41: " + cfg[1] + " (MIRROR, RFU, MIRROR_PAGE, AUTH0)")
+        s.append(" 42: " + cfg[2] + " (ACCESS)")
+        s.append(" 43: " + cfg[3] + " (PWD0-PWD3)")
+        s.append(" 44: " + cfg[4] + " (PACK0-PACK1)")
+        return s
+
+class NTAG215(NTAG21x):
+    def __init__(self, clf, target):
+        super(NTAG215, self).__init__(clf, target)
+        self._usermem = slice(16, 520)
+        self._product = "NXP NTAG215"
+        
+    def dump(self):
+        oprint = lambda o: ' '.join(['%02x' % x for x in o])
+        s = super(NTAG215, self).dump()
+        try:
+            cfg = [oprint(self[i:i+4]) for i in range(520, 550, 4)]
+        except IndexError:
+            cfg = ["?? ?? ?? ??"] * 4
+        s.append("130: " + cfg[0] + " (LOCK2-LOCK4)")
+        s.append("131: " + cfg[1] + " (MIRROR, RFU, MIRROR_PAGE, AUTH0)")
+        s.append("132: " + cfg[2] + " (ACCESS)")
+        s.append("133: " + cfg[3] + " (PWD0-PWD3)")
+        s.append("134: " + cfg[4] + " (PACK0-PACK1)")
+        return s
+
+class NTAG216(NTAG21x):
+    def __init__(self, clf, target):
+        super(NTAG216, self).__init__(clf, target)
+        self._usermem = slice(16, 904)
+        self._product = "NXP NTAG216"
+
+    def dump(self):
+        oprint = lambda o: ' '.join(['%02x' % x for x in o])
+        s = super(NTAG216, self).dump()
+        try:
+            cfg = [oprint(self[i:i+4]) for i in range(904, 924, 4)]
+        except IndexError:
+            cfg = ["?? ?? ?? ??"] * 4
+        s.append("226: " + cfg[0] + " (LOCK2-LOCK4)")
+        s.append("227: " + cfg[1] + " (MIRROR, RFU, MIRROR_PAGE, AUTH0)")
+        s.append("228: " + cfg[2] + " (ACCESS)")
+        s.append("229: " + cfg[3] + " (PWD0-PWD3)")
+        s.append("230: " + cfg[4] + " (PACK0-PACK1)")
+        return s

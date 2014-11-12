@@ -48,15 +48,11 @@ def activate_tt1(clf, target):
     
 def activate_tt2(clf, target):
     import nfc.tag.tt2
+    clf.set_communication_mode('', check_crc='OFF')
     if target.uid[0] == 0x04: # NXP
-        import nfc.tag.ntag21x
-        try:
-            version = str(clf.exchange('\x60', timeout=0.1))
-            product = nfc.tag.ntag21x.NTAG_VERSION_MAP.get(version)
-            if product: return nfc.tag.ntag21x.Tag(clf, target, product)
-        except nfc.clf.DigitalProtocolError:
-            target = clf.sense([nfc.clf.TTA(uid=target.uid)])
-
+        import nfc.tag.tt2_nxp
+        tag = nfc.tag.tt2_nxp.activate(clf, target)
+        if tag is not None: return tag
     return nfc.tag.tt2.Type2Tag(clf, target)
     
 def activate_tt3(clf, target):

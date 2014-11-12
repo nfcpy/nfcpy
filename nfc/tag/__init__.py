@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2013 Stephen Tiedemann <stephen.tiedemann@gmail.com>
+# Copyright 2013-2014 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -39,7 +39,7 @@ class Tag(object):
         return str(self.uid if hasattr(self, "uid") else self.idm)
 
     def __str__(self):
-        try: s = self.type + ' ' + self._product
+        try: s = self.type + ' ' + repr(self._product)
         except AttributeError: s = self.type
         return s + ' ID=' + self.identifier.encode("hex").upper()
 
