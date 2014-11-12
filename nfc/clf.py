@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2009-2013 Stephen Tiedemann <stephen.tiedemann@gmail.com>
+# Copyright 2009-2014 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -563,7 +563,7 @@ class ContactlessFrontend(object):
         '212F' shall switch to 212 kbps Type F communication. Other
         communication parameters may be changed with optional keyword
         arguments. Currently implemented by the RC-S380 driver are the
-        parameters 'add-crc' and 'check-crc' when running as
+        parameters 'add_crc' and 'check_crc' when running as
         initator. It is possible to set *brm* to an empty string if
         bitrate and modulation shall not be changed but only optional
         parameters executed.
