@@ -85,14 +85,22 @@ class MifareUltralightC(tt2.Type2Tag):
     def dump(self):
         oprint = lambda o: ' '.join(['%02x' % x for x in o])
         s = super(MifareUltralightC, self).dump()
-        try:
-            cfg = [oprint(self[i:i+4]) for i in range(160, 176, 4)]
-        except IndexError:
-            cfg = ["?? ?? ?? ??"] * 4
-        s.append(" 40: " + cfg[0] + " (LOCK2-LOCK3)")
-        s.append(" 41: " + cfg[1] + " (CNTR0-CNTR1)")
-        s.append(" 42: " + cfg[2] + " (AUTH0)")
-        s.append(" 43: " + cfg[3] + " (AUTH1)")
+        
+        footer = dict(zip(range(40, 44),
+                          ("UID0-UID2, BCC0",
+                           "UID3-UID6",
+                           "BCC1, INT, LOCK0-LOCK1",
+                           "OTP0-OTP3")))
+        
+        for i in sorted(footer.keys()):
+            data = self.read(i)
+            if data is None:
+                s.append("{0:3}: {1} ({2})".format(
+                    i, "?? ?? ?? ??", footer[i]))
+            else:
+                s.append("{0:3}: {1} ({2})".format(
+                    i, oprint(data[0:4]), footer[i]))
+
         return s
 
     def protect(self, password=None, read_protect=False, from_page=0):
@@ -191,12 +199,18 @@ class NTAG203(tt2.Type2Tag):
     def dump(self):
         oprint = lambda o: ' '.join(['%02x' % x for x in o])
         s = super(NTAG203, self).dump()
-        try:
-            cfg = [oprint(self[i:i+4]) for i in range(160, 168, 4)]
-        except IndexError:
-            cfg = ["?? ?? ?? ??"] * 4
-        s.append(" 40: " + cfg[0] + " (LOCK2-LOCK3)")
-        s.append(" 41: " + cfg[1] + " (CNTR0-CNTR1)")
+
+        footer = dict(zip(range(40, 42), ("LOCK2-LOCK3", "CNTR0-CNTR1")))
+        
+        for i in sorted(footer.keys()):
+            data = self.read(i)
+            if data is None:
+                s.append("{0:3}: {1} ({2})".format(
+                    i, "?? ?? ?? ??", footer[i]))
+            else:
+                s.append("{0:3}: {1} ({2})".format(
+                    i, oprint(data[0:4]), footer[i]))
+
         return s
     
 class NTAG21x(tt2.Type2Tag):
@@ -242,6 +256,19 @@ class NTAG21x(tt2.Type2Tag):
             self[cfgaddr+4] = (self[cfgaddr+4] & 0x7F) | (read_protect << 7)
             self.synchronize()
 
+    def dump(self, footer):
+        oprint = lambda o: ' '.join(['%02x' % x for x in o])
+        s = super(NTAG21x, self).dump()
+        for i in sorted(footer.keys()):
+            data = self.read(i)
+            if data is None:
+                s.append("{0:3}: {1} ({2})".format(
+                    i, "?? ?? ?? ??", footer[i]))
+            else:
+                s.append("{0:3}: {1} ({2})".format(
+                    i, oprint(data[0:4]), footer[i]))
+        return s
+
 class NTAG210(NTAG21x):
     def __init__(self, clf, target):
         super(NTAG210, self).__init__(clf, target)
@@ -249,17 +276,10 @@ class NTAG210(NTAG21x):
         self._product = "NXP NTAG210"
         
     def dump(self):
-        oprint = lambda o: ' '.join(['%02x' % x for x in o])
-        s = super(NTAG210, self).dump()
-        try:
-            cfg = [oprint(self[i:i+4]) for i in range(64, 80, 4)]
-        except IndexError:
-            cfg = ["?? ?? ?? ??"] * 4
-        s.append(" 16: " + cfg[0] + " (MIRROR_BYTE, RFU, MIRROR_PAGE, AUTH0)")
-        s.append(" 17: " + cfg[1] + " (ACCESS)")
-        s.append(" 18: " + cfg[2] + " (PWD0-PWD3)")
-        s.append(" 19: " + cfg[3] + " (PACK0-PACK1)")
-        return s
+        footer = dict(zip(range(16, 20),
+                          ("MIRROR_BYTE, RFU, MIRROR_PAGE, AUTH0",
+                           "ACCESS", "PWD0-PWD3", "PACK0-PACK1")))
+        return super(NTAG210, self).dump(footer)
 
 class NTAG212(NTAG21x):
     def __init__(self, clf, target):
@@ -268,12 +288,17 @@ class NTAG212(NTAG21x):
         self._product = "NXP NTAG212"
         
     def dump(self):
+        text = ("LOCK2-LOCK4", "MIRROR_BYTE, RFU, MIRROR_PAGE, AUTH0",
+                "ACCESS", "PWD0-PWD3", "PACK0-PACK1")
+        footer = dict(zip(range(36, 36+len(text)), text))
+        return super(NTAG212, self).dump(footer)
+        
         oprint = lambda o: ' '.join(['%02x' % x for x in o])
         s = super(NTAG212, self).dump()
         try:
             cfg = [oprint(self[i:i+4]) for i in range(144, 164, 4)]
         except IndexError:
-            cfg = ["?? ?? ?? ??"] * 4
+            cfg = ["?? ?? ?? ??"] * 5
         s.append(" 36: " + cfg[0] + " (LOCK2-LOCK4)")
         s.append(" 37: " + cfg[1] + " (MIRROR_BYTE, RFU, MIRROR_PAGE, AUTH0)")
         s.append(" 38: " + cfg[2] + " (ACCESS)")
@@ -288,18 +313,10 @@ class NTAG213(NTAG21x):
         self._product = "NXP NTAG213"
         
     def dump(self):
-        oprint = lambda o: ' '.join(['%02x' % x for x in o])
-        s = super(NTAG213, self).dump()
-        try:
-            cfg = [oprint(self[i:i+4]) for i in range(160, 180, 4)]
-        except IndexError:
-            cfg = ["?? ?? ?? ??"] * 4
-        s.append(" 40: " + cfg[0] + " (LOCK2-LOCK4)")
-        s.append(" 41: " + cfg[1] + " (MIRROR, RFU, MIRROR_PAGE, AUTH0)")
-        s.append(" 42: " + cfg[2] + " (ACCESS)")
-        s.append(" 43: " + cfg[3] + " (PWD0-PWD3)")
-        s.append(" 44: " + cfg[4] + " (PACK0-PACK1)")
-        return s
+        text = ("LOCK2-LOCK4", "MIRROR, RFU, MIRROR_PAGE, AUTH0",
+                "ACCESS", "PWD0-PWD3", "PACK0-PACK1")
+        footer = dict(zip(range(40, 40+len(text)), text))
+        return super(NTAG213, self).dump(footer)
 
 class NTAG215(NTAG21x):
     def __init__(self, clf, target):
@@ -308,18 +325,10 @@ class NTAG215(NTAG21x):
         self._product = "NXP NTAG215"
         
     def dump(self):
-        oprint = lambda o: ' '.join(['%02x' % x for x in o])
-        s = super(NTAG215, self).dump()
-        try:
-            cfg = [oprint(self[i:i+4]) for i in range(520, 550, 4)]
-        except IndexError:
-            cfg = ["?? ?? ?? ??"] * 4
-        s.append("130: " + cfg[0] + " (LOCK2-LOCK4)")
-        s.append("131: " + cfg[1] + " (MIRROR, RFU, MIRROR_PAGE, AUTH0)")
-        s.append("132: " + cfg[2] + " (ACCESS)")
-        s.append("133: " + cfg[3] + " (PWD0-PWD3)")
-        s.append("134: " + cfg[4] + " (PACK0-PACK1)")
-        return s
+        text = ("LOCK2-LOCK4", "MIRROR, RFU, MIRROR_PAGE, AUTH0",
+                "ACCESS", "PWD0-PWD3", "PACK0-PACK1")
+        footer = dict(zip(range(130, 130+len(text)), text))
+        return super(NTAG215, self).dump(footer)
 
 class NTAG216(NTAG21x):
     def __init__(self, clf, target):
@@ -328,15 +337,7 @@ class NTAG216(NTAG21x):
         self._product = "NXP NTAG216"
 
     def dump(self):
-        oprint = lambda o: ' '.join(['%02x' % x for x in o])
-        s = super(NTAG216, self).dump()
-        try:
-            cfg = [oprint(self[i:i+4]) for i in range(904, 924, 4)]
-        except IndexError:
-            cfg = ["?? ?? ?? ??"] * 4
-        s.append("226: " + cfg[0] + " (LOCK2-LOCK4)")
-        s.append("227: " + cfg[1] + " (MIRROR, RFU, MIRROR_PAGE, AUTH0)")
-        s.append("228: " + cfg[2] + " (ACCESS)")
-        s.append("229: " + cfg[3] + " (PWD0-PWD3)")
-        s.append("230: " + cfg[4] + " (PACK0-PACK1)")
-        return s
+        text = ("LOCK2-LOCK4", "MIRROR, RFU, MIRROR_PAGE, AUTH0",
+                "ACCESS", "PWD0-PWD3", "PACK0-PACK1")
+        footer = dict(zip(range(226, 226+len(text)), text))
+        return super(NTAG216, self).dump(footer)

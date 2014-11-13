@@ -251,24 +251,46 @@ class Type2Tag(nfc.tag.Tag):
         ispchr = lambda x: x >= 32 and x <= 126
         oprint = lambda o: ' '.join(['%02x' % x for x in o])
         cprint = lambda o: ''.join([chr(x) if ispchr(x) else '.' for x in o])
+        
+        header = ("UID0-UID2, BCC0",
+                  "UID3-UID6",
+                  "BCC1, INT, LOCK0-LOCK1",
+                  "OTP0-OTP3")
+        
         s = list()
-        s.append("  0: " + oprint(self[ 0: 4]) + " (UID0-UID2, BCC0)")
-        s.append("  1: " + oprint(self[ 4: 8]) + " (UID3-UID6)")
-        s.append("  2: " + oprint(self[ 8:12]) + " (BCC1, INT, LOCK0-LOCK1)")
-        s.append("  3: " + oprint(self[12:16]) + " (OTP0-OTP3)")
-        last_octets = None; same_octets = []
-        for i in range(self._usermem.start, self._usermem.stop, 4):
-            octets = self[i:i+4]
-            if octets == last_octets:
-                same_octets.append(i/4)
-                if i < self._usermem.stop - 4:
-                    continue
-            if bool(same_octets):
+        for i in range(4):
+            data = self.read(i)
+            if data is None:
+                s.append("{0:3}: {1} ({2})".format(
+                    i, "?? ?? ?? ??", header[i]))
+            else:
+                s.append("{0:3}: {1} ({2})".format(
+                    i, oprint(data[0:4]), header[i]))
+        
+        userpages = list()
+        for i in range(self._usermem.start/4, self._usermem.stop/4):
+            data = self.read(i)
+            if data is None:
+                unreadable_pages = self._usermem.stop/4 - i
+                userpages.extend(["?? ?? ?? ?? |....|"] * unreadable_pages)
+                break
+            userpages.append("{0} |{1}|".format(
+                oprint(data[0:4]), cprint(data[0:4])))
+
+        last_page = None; same_pages = False
+        for i, page in enumerate(userpages):
+            if page == last_page:
+                same_pages = True
+                continue
+            if same_pages:
                 s.append("  *")
-                same_octets = []
-            s.append("{0:3d}: {1} |{2}|".format(
-                i/4, oprint(self[i:i+4]), cprint(self[i:i+4])))
-            last_octets = octets
+                same_pages = False
+            s.append(("%3d: " % (i+4)) + page)
+            last_page = page
+        if same_pages:
+            s.append("  *")
+            s.append(("%3d: " % (i+4)) + page)
+        
         return s
 
     @property
@@ -288,9 +310,9 @@ class Type2Tag(nfc.tag.Tag):
 
     def transceive(self, data, timeout=0.1, rlen=None):
         try:
-            #log.debug(">> " + str(data).encode("hex"))
+            log.debug(">> " + str(data).encode("hex"))
             data = self.clf.exchange(data, timeout)
-            #log.debug("<< " + str(data).encode("hex"))
+            log.debug("<< " + str(data).encode("hex"))
         except nfc.clf.TimeoutError:
             log.debug("timeout error in transceive method")
             raise nfc.clf.TimeoutError("mute tag")
@@ -330,7 +352,12 @@ class Type2Tag(nfc.tag.Tag):
             
         data = self.transceive("\x30" + chr(block % 256), rlen=16)
         if len(data) != 16:
-            log.debug("invalid read response" + str(data).encode("hex"))
+            if len(data) == 1 and data[0] == 0x00:
+                log.debug("received nak response")
+                self.clf.sense([nfc.clf.TTA(uid=self.uid)])
+                self.clf.set_communication_mode('', check_crc='OFF')
+            else:
+                log.debug("invalid response " + str(data).encode("hex"))
             return None
 
         log.debug(' '.join([str(data[i:i+4]).encode("hex") \
