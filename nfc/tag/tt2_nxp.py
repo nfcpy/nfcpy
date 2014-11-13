@@ -292,19 +292,6 @@ class NTAG212(NTAG21x):
                 "ACCESS", "PWD0-PWD3", "PACK0-PACK1")
         footer = dict(zip(range(36, 36+len(text)), text))
         return super(NTAG212, self).dump(footer)
-        
-        oprint = lambda o: ' '.join(['%02x' % x for x in o])
-        s = super(NTAG212, self).dump()
-        try:
-            cfg = [oprint(self[i:i+4]) for i in range(144, 164, 4)]
-        except IndexError:
-            cfg = ["?? ?? ?? ??"] * 5
-        s.append(" 36: " + cfg[0] + " (LOCK2-LOCK4)")
-        s.append(" 37: " + cfg[1] + " (MIRROR_BYTE, RFU, MIRROR_PAGE, AUTH0)")
-        s.append(" 38: " + cfg[2] + " (ACCESS)")
-        s.append(" 39: " + cfg[3] + " (PWD0-PWD3)")
-        s.append(" 40: " + cfg[4] + " (PACK0-PACK1)")
-        return s
 
 class NTAG213(NTAG21x):
     def __init__(self, clf, target):
