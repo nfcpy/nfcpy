@@ -259,20 +259,18 @@ class TagTool(CommandLineInterface):
 
     def on_rdwr_connect(self, tag):
         if self.options.authenticate is not None:
-            if (tag.product.startswith("NXP NTAG21") or
-                tag.product.startswith("FeliCa Lite-S") or
-                tag.product.startswith("Mifare Ultralight C")):
-                if len(self.options.authenticate) > 0:
-                    key, msg = self.options.authenticate, tag.identifier
-                    password = hmac.new(key, msg, hashlib.sha256).digest()
-                else:
-                    password = "" # use factory default password
-                if not tag.authenticate(password):
-                    print("password authentication failed")
-                    return False
+            if len(self.options.authenticate) > 0:
+                key, msg = self.options.authenticate, tag.identifier
+                password = hmac.new(key, msg, hashlib.sha256).digest()
             else:
+                password = "" # use factory default password
+            result = tag.authenticate(password)
+            if result is False:
+                print("I'm sorry, but authentication failed.")
+                return False
+            if result is None:
                 print(tag)
-                print("this tag can not be unlocked with password")
+                print("I don't know how to authenticate this tag.")
                 return False
             
         self.rdwr_commands[self.options.command](tag)
@@ -339,7 +337,8 @@ class TagTool(CommandLineInterface):
                 print("TAG memory dump:")
                 print('\n'.join(tag.dump()))
             elif tag.type == "Type3Tag":
-                pass
+                print("TAG memory dump:")
+                print('\n'.join(tag.dump()))
             elif tag.type == "Type4Tag":
                 pass
 
