@@ -56,8 +56,9 @@ def activate_tt2(clf, target):
     return nfc.tag.tt2.Type2Tag(clf, target)
     
 def activate_tt3(clf, target):
-    import nfc.tag.tt3
-    return nfc.tag.tt3.Type3Tag(clf, target)
+    import nfc.tag.tt3, nfc.tag.tt3_sony
+    tag = nfc.tag.tt3_sony.activate(clf, target)
+    return tag if tag else nfc.tag.tt3.Type3Tag(clf, target)
     
 def activate_tt4(clf, target):
     import nfc.tag.tt4
