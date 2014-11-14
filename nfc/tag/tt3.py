@@ -177,7 +177,7 @@ class Type3Tag(nfc.tag.Tag):
     TYPE = "Type3Tag"
     
     def __init__(self, clf, target):
-        self.clf = clf
+        super(Type3Tag, self).__init__(clf)
         self.idm = target.idm
         self.pmm = target.pmm
         self.sys = target.sys
@@ -204,9 +204,7 @@ class Type3Tag(nfc.tag.Tag):
             pmm=str(self.pmm).encode("hex").upper(),
             sys=str(self.sys).encode("hex").upper())
 
-    @property
-    def is_present(self):
-        """True if the tag is still within communication range."""
+    def _is_present(self):
         rto = ((self.rto[0] + self.rto[1]) * self.rto[2]) + 5E-3
         try:
             cmd = "\x04" + self.idm
@@ -253,6 +251,7 @@ class Type3Tag(nfc.tag.Tag):
         argument holds a list of integers representing the block numbers to
         read. The data is returned as a character string."""
 
+        if type(blocks) is int: blocks = [blocks]
         log.debug("read blocks {1} from service {0}".format(service, blocks))
         cmd  = "\x06" + self.idm # ReadWithoutEncryption
         cmd += "\x01" + ("%02X%02X" % (service%256,service/256)).decode("hex")
@@ -271,7 +270,10 @@ class Type3Tag(nfc.tag.Tag):
         if rsp[10] != 0 or rsp[11] != 0:
             raise IOError("tt3 cmd error {0:02x} {1:02x}".format(*rsp[10:12]))
         data = str(rsp[13:])
-        log.debug("<<< {0}".format(data.encode("hex")))
+        
+        for b in range(0, len(data), 16):
+            log.debug(' '.join([str(data[b+i:b+i+4]).encode("hex") \
+                                for i in range(0, 16, 4)]))
         return data
 
     def write(self, data, blocks, service=ndef_write_service):
@@ -281,11 +283,16 @@ class Type3Tag(nfc.tag.Tag):
         write. The *data* argument must be a character string with length
         equal to the number of blocks times 16."""
 
+        if type(blocks) is int: blocks = [blocks]
         log.debug("write blocks {1} to service {0}".format(service, blocks))
         if len(data) != len(blocks) * 16:
             log.error("data length does not match block-count * 16")
             raise ValueError("invalid data length for given number of blocks")
-        log.debug(">>> {0}".format(str(data).encode("hex")))
+
+        for b in range(0, len(data), 16):
+            log.debug(' '.join([str(data[b+i:b+i+4]).encode("hex") \
+                                for i in range(0, 16, 4)]))
+
         cmd  = "\x08" + self.idm # ReadWithoutEncryption
         cmd += "\x01" + ("%02X%02X" % (service%256,service/256)).decode("hex")
         cmd += chr(len(blocks))

@@ -26,6 +26,14 @@ log = logging.getLogger(__name__)
 from tag import activate, emulate
 
 class Tag(object):
+    def __init__(self, clf):
+        self._clf = clf
+        self._ndef = None
+
+    @property
+    def clf(self):
+        return self._clf
+        
     @property
     def type(self):
         return self.TYPE
@@ -37,6 +45,31 @@ class Tag(object):
     @property
     def identifier(self):
         return str(self.uid if hasattr(self, "uid") else self.idm)
+
+    @property
+    def ndef(self):
+        return self._ndef
+
+    @property
+    def is_present(self):
+        """Reads True if the tag is still within communication range,
+        False if not."""
+        return self._is_present()
+
+    def authenticate(self, password=None):
+        """Authenticate the tag using *password*. If the tag supports
+        authentication the method returns True for success and
+        otherwise False. If the tag does not support authentication,
+        or it is not yet implemented in nfcpy, the return value is
+        None.
+
+        """
+        log.debug("this tag can not be authenticated with nfcpy")
+        return None
+
+    def protect(self, password=None, read_protect=False, protect_from=0):
+        log.debug("this tag can not be protected with nfcpy")
+        return None
 
     def __str__(self):
         try: s = self.type + ' ' + repr(self._product)

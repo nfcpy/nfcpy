@@ -176,7 +176,7 @@ class Type2Tag(nfc.tag.Tag):
     TYPE = "Type2Tag"
     
     def __init__(self, clf, target):
-        self.clf = clf
+        super(Type2Tag, self).__init__(clf)
         self.atq = target.cfg[0] << 8 | target.cfg[1]
         self.sak = target.cfg[2]
         self.uid = target.uid
@@ -302,9 +302,7 @@ class Type2Tag(nfc.tag.Tag):
                 log.error("while reading ndef: {0!r}".format(error))
         return self._ndef
                 
-    @property
-    def is_present(self):
-        """Returns True if the tag is still within communication range."""
+    def _is_present(self):
         try: return bool(self.read(0))
         except nfc.clf.DigitalProtocolError: return False
 
