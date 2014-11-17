@@ -24,6 +24,7 @@ import logging
 log = logging.getLogger(__name__)
 
 import os
+from pyDes import triple_des, CBC
 
 import nfc.tag
 from . import tt3
@@ -36,10 +37,19 @@ def activate(clf, target):
             return FelicaLiteS(clf, target)
     return None
 
+def generate_mac(data, key, iv):
+    # data is first split into tuples of 8 character bytes, each tuple then
+    # reversed and joined, finally all joined back to one string that is
+    # then triple des encrypted with key and initialization vector iv. The
+    # mac is the last 8 bytes and returned in reversed order.
+    txt = ''.join([''.join(reversed(x)) for x in zip(*[iter(data)]*8)])
+    return triple_des(key, CBC, iv).encrypt(txt)[:-9:-1]
+        
 class FelicaLite(tt3.Type3Tag):
     def __init__(self, clf, target):
         super(FelicaLite, self).__init__(clf, target)
         self._product = "FeliCa Lite (RC-S965)"
+        self._sk = None
         
     def dump(self):
         ispchr = lambda x: x >= 32 and x <= 126
@@ -50,7 +60,7 @@ class FelicaLite(tt3.Type3Tag):
         
         userblocks = list()
         for i in range(0, 14):
-            data = bytearray(self.read(i))
+            data = bytearray(super(FelicaLite, self).read(i))
             if data is None:
                 unreadable_pages = self._userblocks.stop - i
                 userblocks.extend(["?? ?? ?? ?? |....|"] * unreadable_pages)
@@ -72,7 +82,7 @@ class FelicaLite(tt3.Type3Tag):
             s.append("  *")
             s.append("{0:3}: ".format(i) + block)
         
-        data = bytearray(self.read(14))
+        data = bytearray(super(FelicaLite, self).read(14))
         s.append(" 14: {0} ({1})".format(
             oprint(data), "REGA[4]B[4]C[8]"))
 
@@ -83,7 +93,7 @@ class FelicaLite(tt3.Type3Tag):
         config = dict(zip(range(0x80, 0x80+len(text)), text))
         
         for i in sorted(config.keys()):
-            data = bytearray(self.read(i))
+            data = bytearray(super(FelicaLite, self).read(i))
             if data is None:
                 s.append("{0:3}: {1}({2})".format(
                     i, 16 * "?? ", config[i]))
@@ -104,7 +114,6 @@ class FelicaLite(tt3.Type3Tag):
             log.debug("protect with key " + key.encode("hex"))            
 
     def authenticate(self, password):
-        from pyDes import triple_des, CBC
         if password == "":
             # try with the factory key
             key = "\x00" * 16
@@ -127,20 +136,34 @@ class FelicaLite(tt3.Type3Tag):
 
         # read the id block and mac
         data = self.read([0x82, 0x81])
-        txt = data[7::-1] + data[15:7:-1]
-        mac = data[-9:-17:-1]
         
-        if mac == triple_des(sk, CBC, rc[0:8]).encrypt(txt)[8:]:
+        if data[-16:-8] == generate_mac(data[0:-16], sk, iv=rc[0:8]):
             log.debug("tag is authenticated")
-            self._sk = sk; self._iv = rc[:8]
+            self._sk = sk; self._iv = rc[0:8]
             return True
         else:
             log.debug("tag not authenticated")
             return False
 
+    def read(self, blocks):
+        if self._sk is None:
+            return super(FelicaLite, self).read(blocks)
+            
+        if type(blocks) is int: blocks = [blocks]
+        log.debug("read blocks {0} with mac".format(blocks))
+        
+        data = str()
+        for i in range(0, len(blocks), 3):
+            rsp = super(FelicaLite, self).read(blocks[i:i+3] + [0x81])
+            if rsp[-16:-8] == generate_mac(rsp[0:-16], self._sk, self._iv):
+                data += rsp[0:len(blocks[i:i+3])*16]
+            else: log.warning("mac verification failed")
+
+        return data
+
 class FelicaLiteS(FelicaLite):
     def __init__(self, clf, target):
-        super(FelicaLite, self).__init__(clf, target)
+        super(FelicaLiteS, self).__init__(clf, target)
         self._product = "FeliCa Lite-S (RC-S966)"
 
     def dump(self):
