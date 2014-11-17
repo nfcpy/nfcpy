@@ -181,15 +181,10 @@ class Type1Tag(nfc.tag.Tag):
     TYPE = "Type1Tag"
     
     def __init__(self, clf, target):
-        self.clf = clf
+        super(Type1Tag, self).__init__(clf)
         self.uid = target.uid
         self._mmap = self.read_all()[2:]
         self._sync = set()
-        self.ndef = None
-        if self[8] == 0xE1:
-            try: self.ndef = NDEF(self)
-            except Exception as error:
-                log.error("while reading ndef: {0!r}".format(error))
 
     def __getitem__(self, key):
         if type(key) is int:
@@ -235,14 +230,18 @@ class Type1Tag(nfc.tag.Tag):
                     block = sorted(self._sync).pop(0) / 8
                     self.write_block(block, self._mmap[block<<3:(block+1)<<3])
                     self._sync -= set(range(block<<3, (block+1)<<3))
-        
-    @property
-    def is_present(self):
-        """Returns True if the tag is still within communication range."""
-        try:
-            data = self.transceive("\x78\x00\x00"+self.uid)
-            return data and len(data) == 6
+
+    def _read_ndef(self):
+        if self[8] == 0xE1:
+            try:
+                return NDEF(self)
+            except Exception as error:
+                log.error("while reading ndef: {0!r}".format(error))
+
+    def _is_present(self):
+        try: data = self.transceive("\x78\x00\x00"+self.uid)
         except nfc.clf.DigitalProtocolError: return False
+        else: return bool(data and len(data) == 6)
 
     def transceive(self, data, timeout=0.1):
         return self.clf.exchange(data, timeout)

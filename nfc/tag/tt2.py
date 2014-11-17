@@ -300,10 +300,9 @@ class Type2Tag(nfc.tag.Tag):
                 log.error("while reading ndef: {0!r}".format(error))
                 
     def _is_present(self):
-        try:
-            return bool(self.read(0))
-        except nfc.clf.DigitalProtocolError:
-            return False
+        try: data = self.transceive("\x30\x00", rlen=16)
+        except nfc.clf.DigitalProtocolError: return False
+        else: return bool(data and len(data) == 16)
 
     def transceive(self, data, timeout=0.1, rlen=None):
         try:

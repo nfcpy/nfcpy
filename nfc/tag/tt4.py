@@ -162,8 +162,7 @@ class Type4Tag(nfc.tag.Tag):
     TYPE = "Type4Tag"
 
     def __init__(self, clf, target):
-        log.debug("init {0}".format(target))
-        self.clf = clf
+        super(Type4Tag, self).__init__(clf)
         self.atq = target.cfg[0] << 8 | target.cfg[1]
         self.sak = target.cfg[2]
         self.uid = target.uid
@@ -178,17 +177,23 @@ class Type4Tag(nfc.tag.Tag):
         self.fwt = 4096 / 13.56E6 * pow(2, fwi)
         if self.clf.capabilities.get('ISO-DEP') is not True:
             self.pni = 0
-        self.ndef = None
-        try:
-            self.ndef = NDEF(self)
-        except Exception as error:
-            log.error("while reading ndef: {0!r}".format(error))
 
     def __str__(self):
         hx = lambda x: str(x) if x is None else str(x).encode("hex").upper()
         s = " ATQ={tag.atq:04x} SAK={tag.sak:02x} ATS={ats}"
         return nfc.tag.Tag.__str__(self) + s.format(
             tag=self, ats=hx(self.ats))
+
+    def _read_ndef(self):
+        try:
+            return NDEF(self)
+        except Exception as error:
+            log.error("while reading ndef: {0!r}".format(error))
+
+    def _is_present(self):
+        try: data = self.transceive("\x00\xB0\x00\x00\x02")
+        except nfc.clf.DigitalProtocolError: return False
+        else: return bool(data and len(data) == 4 and data[-2:] == "\x90\x00")
 
     def transceive(self, command, timeout=None):
         if timeout is None: timeout = self.fwt + 0.01
@@ -232,15 +237,6 @@ class Type4Tag(nfc.tag.Tag):
             
         return response
                 
-    @property
-    def is_present(self):
-        """True if the tag is still within communication range."""
-        try:
-            self.read_binary(0, 2)
-            return True
-        except:
-            return False
-
     def select_file(self, p1, p2, data, expected_response_length=None):
         """Select a file or directory with parameters defined in
         ISO/IEC 7816-4"""
