@@ -192,17 +192,18 @@ class Type3Tag(nfc.tag.Tag):
         self.rto = ((rto&0x07)+1, (rto>>3&0x07)+1, 302E-6 * 4**(rto >> 6))
         self.wto = ((wto&0x07)+1, (wto>>3&0x07)+1, 302E-6 * 4**(wto >> 6))
 
-        try:
-            self.ndef = NDEF(self) if self.sys == "\x12\xFC" else None
-        except Exception as error:
-            log.error("while reading ndef: {0!r}".format(error))
-            self.ndef = None
-
     def __str__(self):
         s = " PMM={pmm} SYS={sys}"
         return nfc.tag.Tag.__str__(self) + s.format(
             pmm=str(self.pmm).encode("hex").upper(),
             sys=str(self.sys).encode("hex").upper())
+
+    def _read_ndef(self):
+        if self.sys == "\x12\xFC":
+            try:
+                return NDEF(self)
+            except Exception as error:
+                log.error("while reading ndef: {0!r}".format(error))
 
     def _is_present(self):
         rto = ((self.rto[0] + self.rto[1]) * self.rto[2]) + 5E-3

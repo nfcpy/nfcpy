@@ -48,6 +48,8 @@ class Tag(object):
 
     @property
     def ndef(self):
+        if self._ndef is None:
+            self._ndef = self._read_ndef()
         return self._ndef
 
     @property

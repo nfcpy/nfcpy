@@ -184,7 +184,6 @@ class Type2Tag(nfc.tag.Tag):
         self._mmap = dict()
         self._sync = set()
         self._page = 0
-        self._ndef = None
 
     def __str__(self):
         s = " ATQ={tag.atq:04x} SAK={tag.sak:02x}"
@@ -293,18 +292,18 @@ class Type2Tag(nfc.tag.Tag):
         
         return s
 
-    @property
-    def ndef(self):
-        if self._ndef is None and self[12] == 0xE1:
+    def _read_ndef(self):
+        if self[12] == 0xE1:
             try:
-                self._ndef = NDEF(self)
+                return NDEF(self)
             except Exception as error:
                 log.error("while reading ndef: {0!r}".format(error))
-        return self._ndef
                 
     def _is_present(self):
-        try: return bool(self.read(0))
-        except nfc.clf.DigitalProtocolError: return False
+        try:
+            return bool(self.read(0))
+        except nfc.clf.DigitalProtocolError:
+            return False
 
     def transceive(self, data, timeout=0.1, rlen=None):
         try:
