@@ -214,6 +214,9 @@ def add_protect_parser(parser):
         "-p", dest="password",
         help="protect with password if possible")
     parser.add_argument(
+        "--from", metavar="BLOCK", dest="protect_from", type=int, default=0,
+        help="first block to protect (default: %(default)s)")
+    parser.add_argument(
         "--unreadable", action="store_true",
         help="make tag unreadable without password")
 
@@ -457,11 +460,6 @@ class TagTool(CommandLineInterface):
         print(tag)
         
         if self.options.password is not None:
-            if not (tag.product.startswith("NXP NTAG21") or
-                    tag.product.startswith("FeliCa Lite-S") or
-                    tag.product.startswith("Mifare Ultralight C")):
-                print("this tag can not be protected with password")
-                return
             if len(self.options.password) >= 8:
                 print("generating diversified key from password")
                 key, msg = self.options.password, tag.identifier
@@ -470,22 +468,18 @@ class TagTool(CommandLineInterface):
                 print("using factory default key for password")
                 password = ""
             else:
-                print("password must be at least 8 characters")
+                print("A password should be at least 8 characters.")
                 return
             
-            tag.protect(password, self.options.unreadable)
-            if tag.ndef is not None:
-                tag.ndef.writeable = False
-            print("this tag is now password protected")
+            result = tag.protect(password, self.options.unreadable,
+                                 self.options.protect_from)
+            if result is True:
+                print("This tag is now protected.")
+            elif result is False:
+                print("Failed to protect this tag.")
+            elif result is None:
+                print("Sorry, but this tag can not be protected.")
             return
-
-        if self.options.lock:
-            if tag.type in ("Type3Tag", "Type4Tag"):
-                print("this tag does not have lock bits")
-                self.options.lock = False
-            elif self.options.undo:
-                print("lock bits can not be undone")
-                self.options.lock = False
 
     def prepare_tag(self):
         if self.options.tagtype == "tt3":
