@@ -125,6 +125,8 @@ class MifareUltralightC(tt2.Type2Tag):
             # set or unset read protection
             self[43*4] = 0x00 if read_protect else 0x01
             self.synchronize()
+            return True
+        return False
 
     def authenticate(self, password):
         from pyDes import triple_des, CBC
@@ -257,6 +259,8 @@ class NTAG21x(tt2.Type2Tag):
             # set/clear protection bit
             self[cfgaddr+4] = (self[cfgaddr+4] & 0x7F) | (read_protect << 7)
             self.synchronize()
+            return True
+        return False
 
     def dump(self, footer):
         oprint = lambda o: ' '.join(['%02x' % x for x in o])
