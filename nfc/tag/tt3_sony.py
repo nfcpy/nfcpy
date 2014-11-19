@@ -85,7 +85,7 @@ class FelicaLite(tt3.Type3Tag):
             s.append("  *")
             s.append("{0:3}: ".format(i) + block)
         
-        data = bytearray(super(FelicaLite, self).read(14))
+        data = bytearray(tt3.Type3Tag.read(self, 14))
         s.append(" 14: {0} ({1})".format(
             oprint(data), "REGA[4]B[4]C[8]"))
 
@@ -96,7 +96,7 @@ class FelicaLite(tt3.Type3Tag):
         config = dict(zip(range(0x80, 0x80+len(text)), text))
         
         for i in sorted(config.keys()):
-            data = bytearray(super(FelicaLite, self).read(i))
+            data = bytearray(tt3.Type3Tag.read(self, i))
             if data is None:
                 s.append("{0:3}: {1}({2})".format(
                     i, 16 * "?? ", config[i]))
@@ -184,7 +184,7 @@ class FelicaLite(tt3.Type3Tag):
         
     def read(self, blocks):
         if self._sk is None:
-            return super(FelicaLite, self).read(blocks)
+            return tt3.Type3Tag.read(self, blocks)
             
         if type(blocks) is int: blocks = [blocks]
         log.debug("read blocks {0} with mac".format(blocks))
@@ -192,7 +192,7 @@ class FelicaLite(tt3.Type3Tag):
         data = str()
         encrypted_blocks = unpack(">H", self._id[10:12])[0]
         for i in range(0, len(blocks), 3):
-            rsp = super(FelicaLite, self).read(blocks[i:i+3] + [0x81])
+            rsp = tt3.Type3Tag.read(self, blocks[i:i+3] + [0x81])
             if rsp[-16:-8] == generate_mac(rsp[0:-16], self._sk, self._iv):
                 for k in range(len(rsp)//16-1):
                     if encrypted_blocks & (1<<blocks[i+k]):
@@ -219,7 +219,7 @@ class FelicaLiteS(FelicaLite):
         config = dict(zip(range(0x90, 0x90+len(text)), text))
         
         for i in sorted(config.keys()):
-            data = bytearray(self.read([i]))
+            data = bytearray(tt3.Type3Tag.read(self, [i]))
             if data is None:
                 s.append("{0:3}: {1}({2})".format(
                     i, 16 * "?? ", config[i]))
