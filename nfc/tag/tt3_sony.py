@@ -50,7 +50,6 @@ class FelicaLite(tt3.Type3Tag):
     def __init__(self, clf, target):
         super(FelicaLite, self).__init__(clf, target)
         self._product = "FeliCa Lite (RC-S965)"
-        self._sk = self._iv = self._ck = None
         self._mc = bytearray(self.read(0x88))
         self._id = bytearray(self.read(0x82))
         
@@ -146,6 +145,14 @@ class FelicaLite(tt3.Type3Tag):
         return True
 
     def authenticate(self, password):
+        # Perform internal authentication, i.e. ensure that the tag has the
+        # same card key as in password. If the password is an empty string we
+        # try with the factory key of all zero.
+        # Internal authentication starts with a random challenge (rc1 || rc2)
+        # that we write to the tag. Because the tag works little endian, we
+        # reverse the order of rc1 and rc2 bytes when writing. The session key
+        # becomes the triple_des encryption of the random challenge under the
+        # card key and with an initialization vector of all zero.
         if password == "":
             # try with the factory key
             key = 16 * "\x00"
@@ -154,28 +161,41 @@ class FelicaLite(tt3.Type3Tag):
             assert len(key) == 16
         
         log.debug("authenticate with key " + str(key).encode("hex"))
-
-        # write random challenge to rc block
+        self._authenticated = False
+        
+        # Internal authentication starts with a random challenge (rc1 || rc2)
+        # that we write to the rc block. Because the tag works little endian,
+        # we reverse the order of rc1 and rc2 bytes when writing.
         rc = os.urandom(16)
         log.debug("rc1 = " + rc[:8].encode("hex"))
         log.debug("rc2 = " + rc[8:].encode("hex"))
         self.write(rc[7::-1] + rc[15:7:-1], 0x80)
 
-        # generate session key (iv is all zero)
+        # The session key becomes the triple_des encryption of the random
+        # challenge under the card key and with an initialization vector of
+        # all zero.
         sk = triple_des(key, CBC, 8 * '\0').encrypt(rc)
         log.debug("sk1 = " + sk[:8].encode("hex"))
         log.debug("sk2 = " + sk[8:].encode("hex"))
 
-        # read the id block and mac
+        # By reading the id and mac block together we get the mac that the
+        # tag has generated over the id block data under it's session key
+        # generated the same way as we did) and with rc1 as the
+        # initialization vector.
         data = self.read([0x82, 0x81])
-        
+
+        # Now we check if we calculate the same mac with our session key.
+        # Note that, because of endianess, data must be reversed in chunks
+        # of 8 bytes as does the 8 byte mac - this is all done within the
+        # generate_mac() function.
         if data[-16:-8] == generate_mac(data[0:-16], sk, iv=rc[0:8]):
-            log.debug("tag is authenticated")
+            log.debug("tag authentication completed")
             self._sk = sk; self._iv = rc[0:8]; self._ck = key
-            return True
+            self._authenticated = True
         else:
-            log.debug("tag not authenticated")
-            return False
+            log.debug("tag authentication failed")
+
+        return self._authenticated
 
     def format(self):
         attr = bytearray.fromhex("10040100 0D000000 00000100 00000000")
@@ -183,7 +203,7 @@ class FelicaLite(tt3.Type3Tag):
         self.write(attr, 0)
         
     def read(self, blocks):
-        if self._sk is None:
+        if not self._authenticated:
             return tt3.Type3Tag.read(self, blocks)
             
         if type(blocks) is int: blocks = [blocks]
@@ -215,17 +235,50 @@ class FelicaLiteS(FelicaLite):
         oprint = lambda o: ' '.join(['%02x' % x for x in o])
         s = super(FelicaLiteS, self).dump()
         
-        text = ("WCNT[3]",)#, "MAC_A[8], WCNT[3]", "STATE")
+        text = ("WCNT[3]", "MAC_A[8]", "STATE")
         config = dict(zip(range(0x90, 0x90+len(text)), text))
         
         for i in sorted(config.keys()):
-            data = bytearray(tt3.Type3Tag.read(self, [i]))
-            if data is None:
-                s.append("{0:3}: {1}({2})".format(
-                    i, 16 * "?? ", config[i]))
+            try:
+                data = bytearray(tt3.Type3Tag.read(self, [i]))
+            except Exception as e:
+                log.debug(e)
+                s.append("{0:3}: {1}({2})".format(i, 16 * "?? ", config[i]))
             else:
-                s.append("{0:3}: {1} ({2})".format(
-                    i, oprint(data), config[i]))
+                s.append("{0:3}: {1} ({2})".format(i, oprint(data), config[i]))
         
         return s
 
+    def authenticate(self, password):
+        if super(FelicaLiteS, self).authenticate(password):
+            # At this point we have achieved internal authentication, i.e we
+            # know that the tag has the same card key as in password. We now
+            # reset the authentication status and do external authentication
+            # to assure the tag that we have the right card key.
+            self._authenticated = False
+
+            # The write count is the first three byte of the wcnt block.
+            wcnt = self.read(0x90)[0:3]
+            log.debug("write count is 0x{0}".format(wcnt[::-1].encode("hex")))
+
+            # We must generate the mac_a block to write 01h into the ext_auth
+            # byte of the state block. The mac for write is generated with 
+            # a flipped session key (sk = sk2 || sk1). The data to encrypt for
+            # the mac is composed of write count and block numbers (8 byte)
+            # and the state block data we want to write (01h for ext_auth plus
+            # 15 zero bytes).
+            flip = lambda sk: sk[8:16] + sk[0:8]
+            data = wcnt + "\x00\x92\x00\x91\x00" + "\x01" + 15 * "\x00"
+            maca = generate_mac(data, flip(self._sk), self._iv) + wcnt + 5*"\0"
+            self.write(data[8:24] + maca, [0x92, 0x91])
+
+            # To check if mutual authentication succeeded we read the state
+            # block and look at the value of the ext_auth byte. If it's 01h
+            # then we are authenticated, any other value say's we're not.
+            if self.read(0x92)[0] == "\x01":
+                log.debug("mutual authentication completed")
+                self._authenticated = True
+            else:
+                log.debug("mutual authentication failed")
+
+            return self._authenticated
