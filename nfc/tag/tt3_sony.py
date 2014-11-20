@@ -148,12 +148,8 @@ class FelicaLite(tt3.Type3Tag):
         # Perform internal authentication, i.e. ensure that the tag has the
         # same card key as in password. If the password is an empty string we
         # try with the factory key of all zero.
-        if password == "":
-            # try with the factory key
-            key = 16 * "\x00"
-        else:
-            key = password[0:16]
-            assert len(key) == 16
+        key = 16 * "\0" if password == "" else password[0:16]
+        assert len(key) == 16
         
         log.debug("authenticate with key " + str(key).encode("hex"))
         self._authenticated = False
