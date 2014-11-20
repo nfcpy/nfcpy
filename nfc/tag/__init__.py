@@ -29,6 +29,7 @@ class Tag(object):
     def __init__(self, clf):
         self._clf = clf
         self._ndef = None
+        self._authenticated = False
 
     @property
     def clf(self):
@@ -54,18 +55,20 @@ class Tag(object):
 
     @property
     def is_present(self):
-        """Reads True if the tag is still within communication range,
-        False if not."""
+        """True if the tag is within communication range."""
         return self._is_present()
 
+    @property
+    def is_authenticated(self):
+        """True if the tag was successfully authenticated."""
+        return self._authenticated
+        
     def authenticate(self, password=None):
         """Authenticate the tag using *password*. If the tag supports
         authentication the method returns True for success and
         otherwise False. If the tag does not support authentication,
         or it is not yet implemented in nfcpy, the return value is
-        None.
-
-        """
+        None."""
         log.debug("this tag can not be authenticated with nfcpy")
         return None
 
