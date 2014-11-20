@@ -148,11 +148,6 @@ class FelicaLite(tt3.Type3Tag):
         # Perform internal authentication, i.e. ensure that the tag has the
         # same card key as in password. If the password is an empty string we
         # try with the factory key of all zero.
-        # Internal authentication starts with a random challenge (rc1 || rc2)
-        # that we write to the tag. Because the tag works little endian, we
-        # reverse the order of rc1 and rc2 bytes when writing. The session key
-        # becomes the triple_des encryption of the random challenge under the
-        # card key and with an initialization vector of all zero.
         if password == "":
             # try with the factory key
             key = 16 * "\x00"
