@@ -38,11 +38,15 @@ def activate(clf, target):
             return FelicaLiteS(clf, target)
     return None
 
-def generate_mac(data, key, iv):
-    # data is first split into tuples of 8 character bytes, each tuple then
+def generate_mac(data, key, iv, flip_key=False):
+    # Data is first split into tuples of 8 character bytes, each tuple then
     # reversed and joined, finally all joined back to one string that is
-    # then triple des encrypted with key and initialization vector iv. The
-    # mac is the last 8 bytes and returned in reversed order.
+    # then triple des encrypted with key and initialization vector iv. If
+    # flip_key is True then the key halfs will be exchanged (this is used
+    # to generate a mac for write). The resulting mac is the last 8 bytes
+    # returned in reversed order.
+    assert len(data) % 8 == 0 and len(key) == 16 and len(iv) == 8
+    if flip_key is True: key = key[8:] + key[:8]
     txt = ''.join([''.join(reversed(x)) for x in zip(*[iter(data)]*8)])
     return triple_des(key, CBC, iv).encrypt(txt)[:-9:-1]
         
@@ -50,6 +54,7 @@ class FelicaLite(tt3.Type3Tag):
     def __init__(self, clf, target):
         super(FelicaLite, self).__init__(clf, target)
         self._product = "FeliCa Lite (RC-S965)"
+        self._nbr = 4
         self._mc = bytearray(self.read(0x88))
         self._id = bytearray(self.read(0x82))
         
@@ -62,29 +67,30 @@ class FelicaLite(tt3.Type3Tag):
         
         userblocks = list()
         for i in range(0, 14):
-            data = bytearray(self.read(i))
-            if data is None:
-                unreadable_pages = self._userblocks.stop - i
-                userblocks.extend(["?? ?? ?? ?? |....|"] * unreadable_pages)
-                break
-            userblocks.append("{0} |{1}|".format(
-                oprint(data), cprint(data)))
+            try:
+                data = bytearray(self.read(i))
+            except Exception as e:
+                log.debug(e)
+                userblocks.append("{0}|{1}|".format(16*"?? ", 16*"."))
+            else:
+                userblocks.append("{0} |{1}|".format(
+                    oprint(data), cprint(data)))
 
-        last_block = None; same_blocks = False
+        last_block = None; same_blocks = 0
         for i, block in enumerate(userblocks):
             if block == last_block:
-                same_blocks = True
+                same_blocks += 1
                 continue
             if same_blocks:
-                s.append(" *")
-                same_blocks = False
+                if same_blocks > 1: s.append("  *")
+                same_blocks = 0
             s.append("{0:3}: ".format(i) + block)
             last_block = block
         if same_blocks:
-            s.append("  *")
+            if same_blocks > 1: s.append("  *")
             s.append("{0:3}: ".format(i) + block)
         
-        data = bytearray(tt3.Type3Tag.read(self, 14))
+        data = bytearray(self._read_command(14))
         s.append(" 14: {0} ({1})".format(
             oprint(data), "REGA[4]B[4]C[8]"))
 
@@ -95,7 +101,7 @@ class FelicaLite(tt3.Type3Tag):
         config = dict(zip(range(0x80, 0x80+len(text)), text))
         
         for i in sorted(config.keys()):
-            data = bytearray(tt3.Type3Tag.read(self, i))
+            data = bytearray(self._read_command(i))
             if data is None:
                 s.append("{0:3}: {1}({2})".format(
                     i, 16 * "?? ", config[i]))
@@ -126,7 +132,7 @@ class FelicaLite(tt3.Type3Tag):
             self.write(key[7::-1] + key[15:7:-1], 0x87)
 
             if read_protect and protect_from < 14:
-                log.debug("encrypt data blocks {0} to 13".format(protect_from))
+                log.debug("encrypt blocks {0}--13".format(protect_from))
                 for block in range(protect_from, 14):
                     data = self.read(block)
                     data = triple_des(key, CBC, 8*chr(block)).encrypt(data)
@@ -136,10 +142,10 @@ class FelicaLite(tt3.Type3Tag):
                 self.write(self._id, 0x82)
 
         if protect_from < 14:
-            log.debug("set blocks {0} to 13 to readonly".format(protect_from))
+            log.debug("write protect blocks {0}--13".format(protect_from))
             self._mc[0:2] = pack("<H", 0x7FFF ^ (2**14 - 2**protect_from))
 
-        log.debug("set system blocks to readonly")
+        log.debug("write protect system blocks 82,83,84,86,87")
         self._mc[2] = 0x00
         self.write(self._mc, 0x88)
         return True
@@ -188,34 +194,59 @@ class FelicaLite(tt3.Type3Tag):
 
         return self._authenticated
 
-    def format(self):
-        attr = bytearray.fromhex("10040100 0D000000 00000100 00000000")
-        attr[14:16] = pack(">H", sum(attr[0:14]))
-        self.write(attr, 0)
+    def format(self, wipe=False):
+        if self._mc[3] != 0x01:
+            if self._mc[2] == 0xFF:
+                self._mc[3] = 0x01; self.write(self._mc, 0x88)
+                self._sys = bytearray.fromhex("12FC")
+            else:
+                log.error("this tag can no longer be formatted for ndef")
+
+        if self._mc[3] == 0x01:
+            attr = bytearray.fromhex("10040100 0D000000 00000100 00000000")
+            attr[14:16] = pack(">H", sum(attr[0:14]))
+            self.write(attr, 0)
+            if wipe is True:
+                self.write(13 * 16 * "\0", range(1, 14))
         
     def read(self, blocks):
+        # Read a list of data blocks. If we are not authenticated than
+        # this will simply call the base read method. Otherwise, we
+        # iterate over the block list and read up to 3 blocks with
+        # mac. The block list may also be an integer. If the user
+        # blocks are read protected, i.e. were encrypted with
+        # protect(.., read_protect=True,..), then we decrypt the data
+        # before return.
         if not self._authenticated:
-            return tt3.Type3Tag.read(self, blocks)
-            
+            return super(FelicaLite, self).read(blocks)
+
+        assert self._ck != None
         if type(blocks) is int: blocks = [blocks]
-        log.debug("read blocks {0} with mac".format(blocks))
-        
-        data = str()
+
+        data = ""
         encrypted_blocks = unpack(">H", self._id[10:12])[0]
-        for i in range(0, len(blocks), 3):
-            rsp = tt3.Type3Tag.read(self, blocks[i:i+3] + [0x81])
-            if rsp[-16:-8] == generate_mac(rsp[0:-16], self._sk, self._iv):
-                for k in range(len(rsp)//16-1):
-                    if encrypted_blocks & (1<<blocks[i+k]):
-                        log.debug("decrypt block {0}".format(blocks[i+k]))
-                        tdea = triple_des(self._ck, CBC, 8*chr(blocks[i+k]))
-                        data += tdea.decrypt(rsp[k*16:(k+1)*16])
-                    else:
-                        data += rsp[k*16:(k+1)*16]
-            else:
-                log.warning("mac verification failed")
+        for i in range(0, len(blocks), self._nbr-1):
+            part = self.read_with_mac(blocks[i:i+self._nbr-1])
+            for k in range(len(part)//16):
+                if encrypted_blocks & (1<<blocks[i+k]):
+                    log.debug("decrypt block {0}".format(blocks[i+k]))
+                    tdea = triple_des(self._ck, CBC, 8*chr(blocks[i+k]))
+                    data += tdea.decrypt(part[k*16:k*16+16])
+                else:
+                    data += part[k*16:k*16+16]
 
         return data
+
+    def read_with_mac(self, blocks):
+        assert self._sk != None and self._iv != None
+        if type(blocks) is int: blocks = [blocks]
+        log.debug("read {0} block(s) with mac".format(len(blocks)))
+        
+        data = self._read_command(blocks + [0x81])
+        data, mac = data[0:-16], data[-16:-8]
+        if mac == generate_mac(data, self._sk, self._iv):
+            return data
+        else: log.warning("mac verification failed")
 
 class FelicaLiteS(FelicaLite):
     def __init__(self, clf, target):
@@ -231,7 +262,7 @@ class FelicaLiteS(FelicaLite):
         
         for i in sorted(config.keys()):
             try:
-                data = bytearray(tt3.Type3Tag.read(self, [i]))
+                data = bytearray(self._read_command(i))
             except Exception as e:
                 log.debug(e)
                 s.append("{0:3}: {1}({2})".format(i, 16 * "?? ", config[i]))
@@ -242,34 +273,101 @@ class FelicaLiteS(FelicaLite):
 
     def authenticate(self, password):
         if super(FelicaLiteS, self).authenticate(password):
-            # At this point we have achieved internal authentication, i.e we
-            # know that the tag has the same card key as in password. We now
-            # reset the authentication status and do external authentication
-            # to assure the tag that we have the right card key.
+            # At this point we have achieved internal authentication,
+            # i.e we know that the tag has the same card key as in
+            # password. We now reset the authentication status and do
+            # external authentication to assure the tag that we have
+            # the right card key.
             self._authenticated = False
 
-            # The write count is the first three byte of the wcnt block.
-            wcnt = self.read(0x90)[0:3]
-            log.debug("write count is 0x{0}".format(wcnt[::-1].encode("hex")))
-
-            # We must generate the mac_a block to write 01h into the ext_auth
-            # byte of the state block. The mac for write is generated with 
-            # a flipped session key (sk = sk2 || sk1). The data to encrypt for
-            # the mac is composed of write count and block numbers (8 byte)
-            # and the state block data we want to write (01h for ext_auth plus
-            # 15 zero bytes).
-            flip = lambda sk: sk[8:16] + sk[0:8]
-            data = wcnt + "\x00\x92\x00\x91\x00" + "\x01" + 15 * "\x00"
-            maca = generate_mac(data, flip(self._sk), self._iv) + wcnt + 5*"\0"
-            self.write(data[8:24] + maca, [0x92, 0x91])
-
-            # To check if mutual authentication succeeded we read the state
-            # block and look at the value of the ext_auth byte. If it's 01h
-            # then we are authenticated, any other value say's we're not.
+            # To authenticate to the tag we write a 01h into the
+            # ext_auth byte of the state block (block 0x92). The other
+            # bytes of the state block can be all set to zero.
+            self.write_with_mac("\x01" + 15*"\0", 0x92)
+            
+            # Now read the state block and check the value of the
+            # ext_auth to see if we are authenticated. If it's 01h
+            # then we are, otherwise not.
             if self.read(0x92)[0] == "\x01":
                 log.debug("mutual authentication completed")
                 self._authenticated = True
             else:
                 log.debug("mutual authentication failed")
 
-            return self._authenticated
+        return self._authenticated
+
+    def write(self, data, blocks):
+        # Write a list of data blocks. If we are not authenticated
+        # than this will simply call the base write method. Otherwise,
+        # we iterate over the block list and write each block with
+        # mac. For convinience, the block list can also be an integer.
+        if not self._authenticated:
+            return super(FelicaLiteS, self).write(data, blocks)
+
+        if type(blocks) is int: blocks = [blocks]
+        assert len(data) == len(blocks) * 16
+        
+        for i, block in enumerate(blocks):
+            self.write_with_mac(data[i*16:i*16+16], block)
+
+    def write_with_mac(self, data, block):
+        # Write a single data block protected with a mac. The tag will
+        # only accept the write if it generated the same mac value.
+        assert self._sk != None and self._iv != None
+        assert len(data) == 16 and type(block) is int
+        log.debug("write {0} block with mac".format(1))
+
+        # The write count is the first three byte of the wcnt block.
+        wcnt = self._read_command(0x90)[0:3]
+        log.debug("write count is 0x{0}".format(wcnt[::-1].encode("hex")))
+        
+        # We must generate the mac_a block to write the data. The data
+        # to encrypt to the mac is composed of write count and block
+        # numbers (8 byte) and the data we want to write. The mac for
+        # write must be generated with the key flipped (sk2 || sk1).
+        flip = lambda sk: sk[8:16] + sk[0:8]
+        data = wcnt + "\x00" + chr(block) + "\x00\x91\x00" + data
+        maca = generate_mac(data, flip(self._sk), self._iv) + wcnt + 5*"\0"
+        self._write_command(data[8:24] + maca, [block, 0x91])
+
+    def protect(self, password=None, read_protect=False, protect_from=0):
+        log.debug("protect(password={0!r}, read_protect={1}, protect_from={2})"
+                  .format(password, read_protect, protect_from))
+        assert protect_from >= 0
+
+        mc = self._mc
+        if password is not None:
+            if self._mc[2] != 255 and mc[5] == 0:
+                log.debug("system block protected, can't write key")
+                return False
+                
+            if password == "":
+                # set the factory key
+                key = 16 * "\x00"
+            else:
+                key = password[0:16]
+                assert len(key) == 16
+
+            log.debug("protect with key " + key.encode("hex"))
+            ckv = unpack("<H", self.read(0x86)[0:2])[0]
+            self.write(pack("<H", min(ckv + 1, 0xFFFF)) + 14*"\0", 0x86)
+            self.write(key[7::-1] + key[15:7:-1], 0x87)
+
+            if read_protect and protect_from < 14:
+                log.debug("read protect blocks {0}--13".format(protect_from))
+                protect_mask = pack("<H", 2**14 - 2**protect_from)
+                mc[6:8] = protect_mask
+
+        if protect_from < 14:
+            log.debug("write protect blocks {0}--13".format(protect_from))
+            protect_mask = pack("<H", 2**14 - 2**protect_from)
+            mc[8:10] = mc[10:12] = protect_mask
+            
+        log.debug("write protect system blocks 82,83,84,86,87")
+        mc[2] = 0x00 # set system blocks 82,83,84,86,87 to read only
+        mc[5] = 0x01 # but allow write with mac to ck and ckv block
+        self._write_command(mc, 0x88)
+        self._mc = bytearray(self._read_command(0x88))
+        log.debug("MC: {0}".format(str(self._mc).encode("hex")))
+        return True
+

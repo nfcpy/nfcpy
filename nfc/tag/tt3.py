@@ -127,14 +127,7 @@ class NDEF(object):
     def changed(self):
         """True if the message has changed since last read."""
         self._attr = None
-        blocks = range(1, (self.attr.length + 15) / 16 + 1)
-        data = ""
-        while len(blocks) > self.attr.nbr:
-            block_list = blocks[0:self.attr.nbr]
-            data += self.tag.read(blocks[0:self.attr.nbr])
-            del blocks[0:self.attr.nbr]
-        if len(blocks) > 0:
-            data += self.tag.read(blocks)
+        data = self.tag.read(range(1, 1 + (self.attr.length+15)/16))
         old_data, self._data = self._data, data[0:self.attr.length]
         return self._data != old_data
 
@@ -191,6 +184,9 @@ class Type3Tag(nfc.tag.Tag):
         rto, wto = self.pmm[5], self.pmm[6]
         self.rto = ((rto&0x07)+1, (rto>>3&0x07)+1, 302E-6 * 4**(rto >> 6))
         self.wto = ((wto&0x07)+1, (wto>>3&0x07)+1, 302E-6 * 4**(wto >> 6))
+
+        self._nbr = 1
+        self._nbw = 1
 
     def __str__(self):
         s = " PMM={pmm} SYS={sys}"
@@ -253,7 +249,23 @@ class Type3Tag(nfc.tag.Tag):
         read. The data is returned as a character string."""
 
         if type(blocks) is int: blocks = [blocks]
-        log.debug("read blocks {1} from service {0}".format(service, blocks))
+        log.debug("read {0} block(s) from service {1}"
+                  .format(len(blocks), service))
+
+        data = ""
+        for i in range(0, len(blocks), self._nbr):
+            data += self._read_command(blocks[i:i+self._nbr], service)
+
+        return data
+
+    def _read_command(self, blocks, service=ndef_read_service):
+        """Read service data blocks from tag. The *service* argument is the
+        tag type 3 service code to use, 0x000b for reading NDEF. The *blocks*
+        argument holds a list of integers representing the block numbers to
+        read. The data is returned as a character string."""
+
+        if type(blocks) is int: blocks = [blocks]
+        log.debug("blocks to read: " + repr(blocks)[1:-1])
         cmd  = "\x06" + self.idm # ReadWithoutEncryption
         cmd += "\x01" + ("%02X%02X" % (service%256,service/256)).decode("hex")
         cmd += chr(len(blocks))
@@ -283,12 +295,20 @@ class Type3Tag(nfc.tag.Tag):
         argument holds a list of integers representing the block numbers to
         write. The *data* argument must be a character string with length
         equal to the number of blocks times 16."""
-
+        
         if type(blocks) is int: blocks = [blocks]
-        log.debug("write blocks {1} to service {0}".format(service, blocks))
-        if len(data) != len(blocks) * 16:
-            log.error("data length does not match block-count * 16")
-            raise ValueError("invalid data length for given number of blocks")
+        assert len(data) == len(blocks) * 16
+        log.debug("write {0} block(s) to service {1}"
+                  .format(len(blocks), service))
+        
+        for i in range(0, len(blocks), self._nbw):
+            part = slice(i * 16, (i + self._nbw) * 16)
+            self._write_command(data[part], blocks[i:i+self._nbw], service)
+
+    def _write_command(self, data, blocks, service=ndef_write_service):
+        if type(blocks) is int: blocks = [blocks]
+        assert len(data) == len(blocks) * 16
+        log.debug("blocks to write: " + repr(blocks)[1:-1])
 
         for b in range(0, len(data), 16):
             log.debug(' '.join([str(data[b+i:b+i+4]).encode("hex") \
