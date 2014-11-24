@@ -31,12 +31,43 @@ import nfc.tag
 from . import tt3
 
 def activate(clf, target):
-    if target.sys == "\x88\xB4":
-        if target.pmm[1] == 0xF0:
-            return FelicaLite(clf, target)
-        if target.pmm[1] == 0xF1:
-            return FelicaLiteS(clf, target)
+    # http://www.sony.net/Products/felica/business/tech-support/list.html
+    if target.pmm[1] == 0xF0:
+        return FelicaLite(clf, target)
+    if target.pmm[1] == 0xF1:
+        return FelicaLiteS(clf, target)
+    if target.pmm[1] in FelicaStandard.IC_CODE_MAP.keys():
+        return FelicaStandard(clf, target)
+    if target.pmm[1] in (0x06, 0x07) + tuple(range(0x10, 0x1F)):
+        return FelicaMobile(clf, target)
     return None
+
+class FelicaStandard(tt3.Type3Tag):
+    IC_CODE_MAP = {
+        # IC    IC-NAME    NBR NBW
+        0x00: ("RC-S830",    8,  8), # RC-S831/833
+        0x01: ("RC-S915",   12,  8), # RC-S860/862/863/864/891
+        0x02: ("RC-S919",    1,  1), # RC-S890
+        0x08: ("RC-S952",   12,  8),
+        0x09: ("RC-S953",   12,  8),
+        0x0C: ("RC-S954",   12,  8),
+        0x0D: ("RC-S960",   12, 10), # RC-S880/889
+        0x20: ("RC-S962",   12, 10), # RC-S885/888
+        0x32: ("RC-SA00/1",  1,  1),
+        0x35: ("RC-SA00/2",  1,  1),
+    }
+    def __init__(self, clf, target):
+        super(FelicaStandard, self).__init__(clf, target)
+        self._product = "FeliCa Standard ({0})".format(
+            FelicaStandard.IC_CODE_MAP[target.pmm[1]][0])
+        self._nbr, self._nbw = FelicaStandard.IC_CODE_MAP[target.pmm[1]][1:3]
+
+class FelicaMobile(tt3.Type3Tag):
+    def __init__(self, clf, target):
+        super(FelicaMobile, self).__init__(clf, target)
+        self._product = "FeliCa Mobile " + \
+                        "1.0" if self.pmm[1] < 0x10 else \
+                        "2.0" if self.pmm[1] < 0x14 else "3.0"
 
 def generate_mac(data, key, iv, flip_key=False):
     # Data is first split into tuples of 8 character bytes, each tuple then
@@ -370,4 +401,3 @@ class FelicaLiteS(FelicaLite):
         self._mc = bytearray(self._read_command(0x88))
         log.debug("MC: {0}".format(str(self._mc).encode("hex")))
         return True
-
