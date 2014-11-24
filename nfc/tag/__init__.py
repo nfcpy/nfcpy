@@ -31,6 +31,17 @@ class Tag(object):
         self._ndef = None
         self._authenticated = False
 
+    def __str__(self):
+        try: s = self.type + ' ' + repr(self._product)
+        except AttributeError: s = self.type
+        return s + ' ID=' + self.identifier.encode("hex").upper()
+
+    def dump(self):
+        """The dump() method returns a list of strings describing the memory
+        structure of the tag, suitable for printing with join(). The
+        list format has been choose to allow custom indentation."""
+        return []
+
     @property
     def clf(self):
         return self._clf
@@ -75,11 +86,6 @@ class Tag(object):
     def protect(self, password=None, read_protect=False, protect_from=0):
         log.debug("this tag can not be protected with nfcpy")
         return None
-
-    def __str__(self):
-        try: s = self.type + ' ' + repr(self._product)
-        except AttributeError: s = self.type
-        return s + ' ID=' + self.identifier.encode("hex").upper()
 
 class Error: pass
 class AccessError(Error): pass
