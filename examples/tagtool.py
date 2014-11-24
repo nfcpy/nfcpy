@@ -42,14 +42,6 @@ tt1_card_map = {
     "\x11\x48": "Topaz-96 (IRT-5011)",
     "\x12\x4C": "Topaz-512 (TPZ-505-016)"
     }
-tt3_card_map = {
-    "\x00\xF0": "FeliCa Lite RC-S965",
-    "\x00\xF1": "FeliCa Lite-S RC-S966",
-    "\x01\xE0": "FeliCa Plug RC-S801/RC-S802",
-    "\x01\x20": "FeliCa Card RC-S962 [424 kbps, 4KB FRAM]",
-    "\x03\x01": "FeliCa Card RC-S860 [212 kbps, 4KB FEPROM]",
-    "\x0f\x0d": "FeliCa Card RC-S889 [424 kbps, 9KB FRAM]",
-    }
 
 def format_data(data, w=16):
     printable = string.digits + string.letters + string.punctuation + ' '
@@ -301,16 +293,9 @@ class TagTool(CommandLineInterface):
             if tag.type == "Type1Tag":
                 tag._hr = tag.read_id()[0:2]
                 print("  " + tt1_card_map.get(str(tag._hr), "unknown card"))
-            elif tag.type == "Type2Tag":
-                pass
-            elif tag.type == "Type3Tag":
-                icc = str(tag.pmm[0:2]) # ic code
-                print("  " + tt3_card_map.get(icc, "unknown card"))
-            elif tag.type == "Type4Tag":
-                pass
         
         if tag.ndef:
-            print("NDEF capabilities:")
+            print("NDEF Capabilities:")
             if self.options.verbose and tag.type == "Type3Tag":
                 print("  [%s]" % tag.ndef.attr.pretty())
             print("  version   = %s" % tag.ndef.version)
@@ -319,31 +304,12 @@ class TagTool(CommandLineInterface):
             print("  capacity  = %d byte" % tag.ndef.capacity)
             print("  message   = %d byte" % tag.ndef.length)
             if tag.ndef.length > 0:
-                if self.options.verbose:
-                    print("NDEF message dump:")
-                    print(format_data(tag.ndef.message))
-                print("NDEF record list:")
+                print("NDEF Message:")
                 print(tag.ndef.message.pretty())
         
         if self.options.verbose:
-            if tag.type == "Type1Tag":
-                mem_size = {0x11: 120, 0x12: 512}.get(tag._hr[0], 2048)
-                mem_data = bytearray()
-                for offset in range(0, mem_size, 8):
-                    try: mem_data += tag[offset:offset+8]
-                    except nfc.clf.DigitalProtocolError as error:
-                        log.error(repr(error)); break
-                print("TAG memory dump:")
-                print(format_data(mem_data, w=8))
-                tag.clf.sense([nfc.clf.TTA(uid=tag.uid)])
-            elif tag.type == "Type2Tag":
-                print("TAG memory dump:")
-                print('\n'.join(tag.dump()))
-            elif tag.type == "Type3Tag":
-                print("TAG memory dump:")
-                print('\n'.join(tag.dump()))
-            elif tag.type == "Type4Tag":
-                pass
+            print("Memory Dump:")
+            print('  ' + '\n  '.join(tag.dump()))
 
     def dump_tag(self, tag):
         if tag.ndef:
@@ -420,6 +386,8 @@ class TagTool(CommandLineInterface):
         return True
 
     def format_tt3_tag(self, tag):
+        #tag.format(wipe=True)
+        #return True
         block_count = tt3_determine_block_count(tag)
         if tag.pmm[0:2] in ("\x00\xF0", "\x00\xF1"):
             block_count -= 1 # last block on FeliCa Lite/S is unusable
