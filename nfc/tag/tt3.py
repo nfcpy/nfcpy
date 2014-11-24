@@ -194,6 +194,34 @@ class Type3Tag(nfc.tag.Tag):
             pmm=str(self.pmm).encode("hex").upper(),
             sys=str(self.sys).encode("hex").upper())
 
+    def dump(self):
+        ispchr = lambda x: x >= 32 and x <= 126
+        oprint = lambda o: ' '.join(['%02x' % x for x in o])
+        cprint = lambda o: ''.join([chr(x) if ispchr(x) else '.' for x in o])
+        
+        s = list()
+        last_data = None; same_data = 0
+        
+        for i in xrange(0xFFFF):
+            try: data = bytearray(self.read(i))
+            except: break
+            if data == last_data:
+                same_data += 1
+                continue
+            if same_data:
+                if same_data > 1: s.append("  *")
+                same_data = 0
+            s.append("{0:04X}: {1} |{2}|".format(
+                i, oprint(data), cprint(data)))
+            last_data = data
+
+        if same_data:
+            if same_data > 1: s.append("  *")
+            s.append("{0:04X}: {1} |{2}|".format(
+                i, oprint(data), cprint(data)))
+        
+        return s
+
     def _read_ndef(self):
         if self.sys == "\x12\xFC":
             try:
@@ -265,7 +293,7 @@ class Type3Tag(nfc.tag.Tag):
         read. The data is returned as a character string."""
 
         if type(blocks) is int: blocks = [blocks]
-        log.debug("blocks to read: " + repr(blocks)[1:-1])
+        log.debug("block numbers to read: " + repr(blocks)[1:-1])
         cmd  = "\x06" + self.idm # ReadWithoutEncryption
         cmd += "\x01" + ("%02X%02X" % (service%256,service/256)).decode("hex")
         cmd += chr(len(blocks))
@@ -308,7 +336,7 @@ class Type3Tag(nfc.tag.Tag):
     def _write_command(self, data, blocks, service=ndef_write_service):
         if type(blocks) is int: blocks = [blocks]
         assert len(data) == len(blocks) * 16
-        log.debug("blocks to write: " + repr(blocks)[1:-1])
+        log.debug("block numbers to write: " + repr(blocks)[1:-1])
 
         for b in range(0, len(data), 16):
             log.debug(' '.join([str(data[b+i:b+i+4]).encode("hex") \
