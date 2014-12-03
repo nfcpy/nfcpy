@@ -29,9 +29,6 @@ import errno
 import threading
 
 import nfc.dev
-import nfc.dep
-import nfc.tag
-import nfc.llcp
 
 class TTA(object):
     """Represents a Type A target. The integer *br* is the
@@ -345,6 +342,7 @@ class ContactlessFrontend(object):
         card_options = options.get('card')
 
         if isinstance(rdwr_options, dict):
+            import nfc.tag
             rdwr_options.setdefault('targets', [
                     TTA(br=106, cfg=None, uid=None), TTB(br=106),
                     TTF(br=424, idm=None, pmm=None, sys=None),
@@ -358,9 +356,10 @@ class ContactlessFrontend(object):
                 if not 'on-connect' in rdwr_options:
                     rdwr_options['on-connect'] = lambda tag: True
         elif rdwr_options is not None:
-            raise TypeError("argument *rdrw* must be a dictionary")
+            raise TypeError("argument *rdwr* must be a dictionary")
         
         if isinstance(llcp_options, dict):
+            import nfc.llcp, nfc.dep
             llc = nfc.llcp.llc.LogicalLinkController(
                 recv_miu=llcp_options.get('miu', 128),
                 send_lto=llcp_options.get('lto', 100),
@@ -376,6 +375,7 @@ class ContactlessFrontend(object):
             raise TypeError("argument *llcp* must be a dictionary")
 
         if isinstance(card_options, dict):
+            import nfc.tag
             if 'on-startup' in card_options:
                 targets = card_options.get('targets', [])
                 targets = card_options['on-startup'](self, targets)
