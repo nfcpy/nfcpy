@@ -43,45 +43,54 @@ tt1_card_map = {
     "\x12\x4C": "Topaz-512 (TPZ-505-016)"
     }
 
-def format_data(data, w=16):
-    printable = string.digits + string.letters + string.punctuation + ' '
-    if type(data) is not type(str()):
-        data = str(data)
-    s = []
-    for i in range(0, len(data), w):
-        s.append("  {offset:04x}: ".format(offset=i))
-        s[-1] += ' '.join(["%02x" % ord(c) for c in data[i:i+w]]) + ' '
-        s[-1] += (8 + w*3 - len(s[-1])) * ' '
-        s[-1] += ''.join([c if c in printable else '.' for c in data[i:i+w]])
-    return '\n'.join(s)
+def parse_version(string):
+    try: major_version, minor_version = map(int, string.split('.'))
+    except ValueError, AttributeError:
+        msg = "%r is not a version string, expecting <int>.<int>"
+        raise argparse.ArgumentTypeError(msg % string)
+    if major_version < 0 or major_version > 15:
+        msg = "major version %r is out of range, expecting 0...15"
+        raise argparse.ArgumentTypeError(msg % major_version)
+    if minor_version < 0 or minor_version > 15:
+        msg = "minor version %r is out of range, expecting 0...15"
+        raise argparse.ArgumentTypeError(msg % minor_version)
+    return major_version << 4 | minor_version
 
-def tt3_determine_block_count(tag):
-    block = 0
-    try:
-        while True:
-            data = tag.read([block], 9)
-            block += 1
-    except Exception:
-        return block
+def parse_uint8(string):
+    for base in (10, 16):
+        try:
+            value = int(string, base)
+            if value >= 0 and value <= 0xff:
+                return value
+        except ValueError:
+            pass
+    else:
+        msg = "%r can not be read as an 8-bit unsigned integer"
+        raise argparse.ArgumentTypeError(msg % string)
 
-def tt3_determine_block_read_once_count(tag, block_count):
-    try:
-        for i in range(block_count):
-            tag.read(range(i+1))
-        else:
-            return block_count
-    except Exception:
-        return i
+def parse_uint16(string):
+    for base in (10, 16):
+        try:
+            value = int(string, base)
+            if value >= 0 and value <= 0xffff:
+                return value
+        except ValueError:
+            pass
+    else:
+        msg = "%r can not be read as a 16-bit unsigned integer"
+        raise argparse.ArgumentTypeError(msg % string)
 
-def tt3_determine_block_write_once_count(tag, block_count):
-    try:
-        for i in range(block_count):
-            data = tag.read(range(i+1))
-            tag.write(data, range(i+1))
-        else:
-            return block_count
-    except Exception:
-        return i
+def parse_uint24(string):
+    for base in (10, 16):
+        try:
+            value = int(string, base)
+            if value >= 0 and value <= 0xffffff:
+                return value
+        except ValueError:
+            pass
+    else:
+        msg = "%r can not be read as a 24-bit unsigned integer"
+        raise argparse.ArgumentTypeError(msg % string)
 
 #
 # command parsers
@@ -103,6 +112,12 @@ def add_load_parser(parser):
         help="ndef data file ('-' reads from stdin)")
         
 def add_format_parser(parser):
+    parser.add_argument(
+        "--wipe", metavar="BYTE", type=int, default=None,
+        help="overwrite all data with BYTE")
+    parser.add_argument(
+        "--version", metavar="x.y", type=parse_version,
+        help="ndef mapping version, default is latest")
     subparsers = parser.add_subparsers(title="Tag Types", dest="tagtype")
     add_format_tt1_parser(subparsers.add_parser(
             'tt1', help='format type 1 tag'))
@@ -114,32 +129,32 @@ def add_format_tt1_parser(parser):
 
 def add_format_tt3_parser(parser):
     parser.add_argument(
-        "--ver", metavar="STR", default="1.0",
-        help="ndef mapping version number (default: %(default)s)")
+        "--ver", metavar="x.y", type=parse_version,
+        help="ndef mapping version")
     parser.add_argument(
-        "--nbr", metavar="INT", type=int,
+        "--nbr", metavar="BYTE", type=parse_uint8,
         help="number of blocks that can be written at once")
     parser.add_argument(
-        "--nbw", metavar="INT", type=int,
+        "--nbw", metavar="BYTE", type=parse_uint8,
         help="number of blocks that can be read at once")
     parser.add_argument(
-        "--max", metavar="INT", type=int,
-        help="maximum number of blocks (nmaxb x 16 == capacity)")
+        "--max", metavar="SHORT", type=parse_uint16,
+        help="maximum number of blocks (nmaxb)")
     parser.add_argument(
-        "--rfu", metavar="INT", type=int, default=0,
-        help="value to set for reserved bytes (default: %(default)s)")
+        "--rfu", metavar="BYTE", type=parse_uint8,
+        help="value to set for reserved bytes")
     parser.add_argument(
-        "--wf", metavar="INT", type=int, default=0,
-        help="write-flag attribute value (default: %(default)s)")
+        "--wf", metavar="BYTE", type=parse_uint8,
+        help="write-flag attribute value")
     parser.add_argument(
-        "--rw", metavar="INT", type=int, default=1,
-        help="read-write flag attribute value (default: %(default)s)")
+        "--rw", metavar="BYTE", type=parse_uint8,
+        help="read-write flag attribute value")
     parser.add_argument(
-        "--len", metavar="INT", type=int, default=0,
-        help="ndef length attribute value (default: %(default)s)")
+        "--len", metavar="INT", type=parse_uint24,
+        help="ndef length attribute value")
     parser.add_argument(
-        "--crc", metavar="INT", type=int,
-        help="checksum attribute value (default: computed)")
+        "--crc", metavar="INT", type=parse_uint16,
+        help="checksum attribute value")
         
 def add_emulate_parser(parser):
     parser.description = "Emulate an ndef tag."    
@@ -177,7 +192,7 @@ def add_emulate_tt3_parser(parser):
         "--bitrate", choices=["212", "424"], default="212",
         help="bitrate to listen (default: %(default)s)")
     parser.add_argument(
-        "--ver", metavar="STR", default="1.0",
+        "--ver", metavar="x.y", type=parse_version, default="1.0",
         help="ndef mapping version number (default: %(default)s)")
     parser.add_argument(
         "--nbr", metavar="INT", type=int, default=12,
@@ -296,9 +311,6 @@ class TagTool(CommandLineInterface):
         
         if tag.ndef:
             print("NDEF Capabilities:")
-            if self.options.verbose and tag.type == "Type3Tag":
-                print("  [%s]" % tag.ndef.attr.pretty())
-            print("  version   = %s" % tag.ndef.version)
             print("  readable  = %s" % ("no", "yes")[tag.ndef.readable])
             print("  writeable = %s" % ("no", "yes")[tag.ndef.writeable])
             print("  capacity  = %d byte" % tag.ndef.capacity)
@@ -331,26 +343,25 @@ class TagTool(CommandLineInterface):
             except TypeError: pass
 
         if tag.ndef is None:
-            log.info("not an ndef tag")
+            log.info("This is not an ndef tag.")
             return
 
-        if self.options.authenticate:
-            tag.ndef.writeable = True
-
-        print("old message: \n" + tag.ndef.message.pretty())
+        new_ndef_message = nfc.ndef.Message(self.options.data)
+        if new_ndef_message == tag.ndef.message:
+            print("The tag already contains the message to write.")
+            return
+            
+        print("Old message: \n" + tag.ndef.message.pretty())
         try:
-            tag.ndef.message = nfc.ndef.Message(self.options.data)
-            if tag.ndef.changed:
-                print("new message: \n" + tag.ndef.message.pretty())
+            tag.ndef.message = new_ndef_message
+            if tag.ndef.has_changed:
+                print("The message on the tag differs from what I wrote!")
             else:
-                print("new message is same as old message")
+                print("New message: \n" + tag.ndef.message.pretty())
         except nfc.tag.AccessError:
-            print("this tag is not writeable")
+            print("This tag is not writeable.")
         except nfc.tag.CapacityError:
-            print("message exceeds tag capacity")
-
-        if self.options.authenticate:
-            tag.ndef.writeable = False
+            print("The message exceeds the tag capacity.")
 
     def format_tag(self, tag):
         if tag.type == "Type1Tag" and self.options.tagtype == "tt1":
@@ -362,14 +373,14 @@ class TagTool(CommandLineInterface):
             return
 
         if formatted:
-            print("Formatted %s:" % tag.type)
-            print("  version   = %s" % tag.ndef.version)
-            print("  readable  = %s" % ("no", "yes")[tag.ndef.readable])
-            print("  writeable = %s" % ("no", "yes")[tag.ndef.writeable])
-            print("  capacity  = %d byte" % tag.ndef.capacity)
-            print("  message   = %d byte" % tag.ndef.length)
+            print("Formatted %s" % tag)
+            if tag.ndef:
+                print("  readable  = %s" % ("no", "yes")[tag.ndef.readable])
+                print("  writeable = %s" % ("no", "yes")[tag.ndef.writeable])
+                print("  capacity  = %d byte" % tag.ndef.capacity)
+                print("  message   = %d byte" % tag.ndef.length)
         else:
-            print("Sorry, I don't know how to format this %s." % tag.type)
+            print("Sorry, I don't know how to format this %s." % tag)
 
     def format_tt1_tag(self, tag):
         hr = tag.read_id()[0:2]
@@ -386,42 +397,29 @@ class TagTool(CommandLineInterface):
         return True
 
     def format_tt3_tag(self, tag):
-        #tag.format(wipe=True)
-        #return True
-        block_count = tt3_determine_block_count(tag)
-        if tag.pmm[0:2] in ("\x00\xF0", "\x00\xF1"):
-            block_count -= 1 # last block on FeliCa Lite/S is unusable
-        print("tag has %d user data blocks" % block_count)
-        nbr = tt3_determine_block_read_once_count(tag, block_count)
-        print("%d block(s) can be read at once" % nbr)
-        nbw = tt3_determine_block_write_once_count(tag, block_count)
-        print("%d block(s) can be written at once" % nbw)
-        if self.options.max is not None: block_count = self.options.max + 1
-        if self.options.nbw is not None: nbw = self.options.nbw
-        if self.options.nbr is not None: nbr = self.options.nbr
-        
-        if tag.pmm[0:2] in ("\x00\xF0", "\x00\xF1"):
-            # Check NDEF system code support on FeliCa Lite-S
-            mc = tag.read(blocks=[0x88])
-            if mc[3] != 0x01:
-                tag.write(mc[0:3]+"\x01"+mc[4:16], blocks=[0x88])
-            
-        attr = nfc.tag.tt3.NdefAttributeData()
-        attr.version = self.options.ver
-        attr.nbr, attr.nbw = (nbr, nbw)
-        attr.capacity = (block_count - 1) * 16
-        attr.rfu = 4 * [self.options.rfu]
-        attr.wf = self.options.wf
-        attr.writing = bool(self.options.wf)
-        attr.rw = self.options.rw
-        attr.writeable = bool(self.options.rw)
-        attr.length = self.options.len
-        attr = bytearray(str(attr))
+        tag.format(version=self.options.version, wipe=self.options.wipe)
+        attribute_data = tag.read_from_ndef_service(0)
+        if self.options.ver is not None:
+            attribute_data[0] = self.options.ver
+        if self.options.nbr is not None:
+            attribute_data[1] = self.options.nbr
+        if self.options.nbw is not None:
+            attribute_data[2] = self.options.nbw
+        if self.options.max is not None:
+            attribute_data[3:5] = struct.pack(">H", self.options.max)
+        if self.options.rfu is not None:
+            attribute_data[5:9] = 4 * [self.options.rfu]
+        if self.options.wf is not None:
+            attribute_data[9] = self.options.wf
+        if self.options.rw is not None:
+            attribute_data[10] = self.options.rw
+        if self.options.len is not None:
+            attribute_data[11:14] = struct.pack(">I", self.options.len)[1:]
         if self.options.crc is not None:
-            attr[14:16] = (self.options.crc / 256, self.options.crc % 256)
-        tag.write(attr, [0])
-        # re-read the ndef capabilities
-        tag.ndef = nfc.tag.tt3.NDEF(tag)
+            attribute_data[14:16] = struct.pack(">H", self.options.crc)
+        else:
+            attribute_data[14:16] = struct.pack(">H", sum(attribute_data[:14]))
+        attribute_data = tag.write_to_ndef_service(attribute_data, 0)
         return True
 
     def protect_tag(self, tag):
@@ -478,25 +476,20 @@ class TagTool(CommandLineInterface):
             else:
                 ndef_data_area = bytearray(self.options.size)
 
-            # set attribute data
-            attr = nfc.tag.tt3.NdefAttributeData()
-            attr.version = self.options.ver
-            attr.nbr, attr.nbw = self.options.nbr, self.options.nbw
-            attr.capacity = len(ndef_data_area)
-            if self.options.max is not None:
-                attr.capacity = self.options.max * 16
-            attr.rfu = 4 * [self.options.rfu]
-            attr.wf = self.options.wf
-            attr.rw = self.options.rw
-            attr.length = len(self.options.data)
-            attr.writing = bool(self.options.wf)
-            attr.writeable = bool(self.options.rw)
-            attribute_data = bytearray(str(attr))
-            if self.options.crc is not None:
-                attribute_data[14] = self.options.crc / 256
-                attribute_data[15] = self.options.crc % 256
-
-            log.info(nfc.tag.tt3.NdefAttributeData(attribute_data).pretty())
+            # create attribute data
+            attribute_data = bytearray(16)
+            attribute_data[0] = self.options.ver
+            attribute_data[1] = self.options.nbr
+            attribute_data[2] = self.options.nbw
+            if self.options.max is None:
+                nmaxb = len(ndef_data_area) // 16
+            else: nmaxb = self.options.max
+            attribute_data[3:5] = struct.pack(">H", nmaxb)
+            attribute_data[5:9] = 4 * [self.options.rfu]
+            attribute_data[9] = self.options.wf
+            attribute_data[10:14] = struct.pack(">I", len(self.options.data))
+            attribute_data[10] = self.options.rw
+            attribute_data[14:16] = struct.pack(">H", sum(attribute_data[:14]))
             self.options.tt3_data = attribute_data + ndef_data_area
 
         idm = bytearray.fromhex(self.options.idm)
