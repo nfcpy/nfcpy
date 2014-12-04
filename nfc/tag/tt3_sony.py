@@ -504,13 +504,31 @@ class FelicaLite(tt3.Type3Tag):
         return True
 
     def authenticate(self, password):
-        # Perform internal authentication, i.e. ensure that the tag has the
-        # same card key as in password. If the password is an empty string we
-        # try with the factory key of all zero.
-        key = 16 * "\0" if password == "" else password[0:16]
+        """Authenticate with a FeliCa Lite Tag.
+
+        A FeliCa Lite Tag is authenticated by a procedure that allows
+        both the reader and the tag to calculate a session key from a
+        random challenge send by the reader and a key that is securely
+        stored on the tag and provided to :meth:`authenticate` as the
+        *password* argument. If the tag was protected with an earlier
+        call ot :meth:`protect` then obviously the same password
+        should be used here.
+
+        After successful authentication the :meth:`read_with_mac`
+        method can be used to read data such that it can not be
+        falsified on transmission.
+
+        """
+        if len(password) < 16:
+            raise ValueError("'password' must be at least length 16")
+
+        # Perform internal authentication, i.e. ensure that the tag
+        # has the same card key as in password. If the password string
+        # (or bytearray) is empty, we'll try with the factory key.
+        key = bytearray(password[0:16] if password else 16 * "\0")
         assert len(key) == 16
         
-        log.debug("authenticate with key " + str(key).encode("hex"))
+        log.debug("authenticate with key " + hexlify(key))
         self._authenticated = False
         
         # Internal authentication starts with a random challenge (rc1 || rc2)
@@ -771,6 +789,23 @@ class FelicaLiteS(FelicaLite):
         return True
 
     def authenticate(self, password):
+        """Authenticate with a FeliCa Lite-S Tag.
+
+        FeliCa Lite-S supports enhanced security functions, one of
+        them is the mutual authentication performed by this
+        method. The first part of mutual authentication is to
+        authenticate the tag with :meth:`FelicaLite.authenticate`. If
+        successful, the shared session key is used to generate the
+        integrity check value for write operation to update a specific
+        memory block. If that was successful then the tag is ensured
+        that the reader has the correct card key.
+        
+        After successful authentication the
+        :meth:`~FelicaLite.read_with_mac` and :meth:`write_with_mac`
+        methods can be used to read and write data such that it can
+        not be falsified on transmission.
+
+        """
         if super(FelicaLiteS, self).authenticate(password):
             # At this point we have achieved internal authentication,
             # i.e we know that the tag has the same card key as in
