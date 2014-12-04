@@ -457,9 +457,10 @@ class FelicaLite(tt3.Type3Tag):
     def protect(self, password=None, read_protect=False, protect_from=0):
         """Protect a FeliCa Lite Tag.
 
-        A FeliCa Lite Tag can be write protected with a custom
-        password or the default manufacturer key (used if password is
-        an empty string or bytearray). Read protection is not
+        A FeliCa Lite Tag can be provisioned with a custom password
+        (or the default manufacturer key if the password is an empty
+        string or bytearray) to later verify that data read from the
+        then write protected tag is genuine. Read protection is not
         supported.
         
         A non-empty *password* must provide at least 128 bit key
@@ -504,7 +505,7 @@ class FelicaLite(tt3.Type3Tag):
         return True
 
     def authenticate(self, password):
-        """Authenticate with a FeliCa Lite Tag.
+        """Authenticate a FeliCa Lite Tag.
 
         A FeliCa Lite Tag is authenticated by a procedure that allows
         both the reader and the tag to calculate a session key from a
@@ -726,7 +727,7 @@ class FelicaLiteS(FelicaLite):
         """Protect a FeliCa Lite-S Tag.
 
         A FeliCa Lite-S Tag can be write and read protected with a
-        custom password or the default manufacturer key (used if
+        custom password (or the default manufacturer key if the
         password is an empty string or bytearray). Note that the
         *read_protect* flag is only evaluated if *password* is not
         :const:`None`.
@@ -789,7 +790,7 @@ class FelicaLiteS(FelicaLite):
         return True
 
     def authenticate(self, password):
-        """Authenticate with a FeliCa Lite-S Tag.
+        """Mutually authenticate with a FeliCa Lite-S Tag.
 
         FeliCa Lite-S supports enhanced security functions, one of
         them is the mutual authentication performed by this
