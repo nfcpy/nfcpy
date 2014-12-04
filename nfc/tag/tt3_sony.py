@@ -517,7 +517,7 @@ class FelicaLite(tt3.Type3Tag):
         log.debug("protect(password={0!r}, read_protect={1}, protect_from={2})"
                   .format(password, read_protect, protect_from))
         
-        if password and len(password) < 16
+        if password and len(password) < 16:
             raise ValueError("'password' must be at least length 16")
 
         if protect_from < 0:
@@ -745,7 +745,7 @@ class FelicaLiteS(FelicaLite):
         log.debug("protect(password={0!r}, read_protect={1}, protect_from={2})"
                   .format(password, read_protect, protect_from))
 
-        if password and len(password) < 16
+        if password and len(password) < 16:
             raise ValueError("'password' must be at least length 16")
 
         if protect_from < 0:
