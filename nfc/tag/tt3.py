@@ -25,6 +25,7 @@ log = logging.getLogger(__name__)
 
 from struct import pack, unpack
 from binascii import hexlify
+import time
 
 import nfc.tag
 import nfc.clf
@@ -607,7 +608,8 @@ class Type3Tag(nfc.tag.Tag):
         cmd = chr(2+len(idm)+len(cmd_data)) + chr(cmd_code) + idm + cmd_data
         log.debug(">> {0:02x} {1:02x} {2} {3} ({4}s)".format(
             cmd[0], cmd[1], hexlify(cmd[2:10]), hexlify(cmd[10:]), timeout))
-        
+
+        started = time.time()
         try:
             rsp = self.clf.exchange(cmd, timeout)
         except nfc.clf.TimeoutError:
@@ -634,9 +636,9 @@ class Type3Tag(nfc.tag.Tag):
             log.debug("<< {0:02x} {1:02x} {2} {3}".format(
                 rsp[0], rsp[1], hexlify(rsp[2:10]), hexlify(rsp[10:])))
             return rsp[10:]
-        log.debug("<< {0:02x} {1:02x} {2} {3} {4}".format(
+        log.debug("<< {0:02x} {1:02x} {2} {3} {4} ({elapsed:f}s)".format(
             rsp[0], rsp[1], hexlify(rsp[2:10]), hexlify(rsp[10:12]),
-            hexlify(rsp[12:])))
+            hexlify(rsp[12:]), elapsed=time.time()-started))
         return rsp[12:]
         
 
