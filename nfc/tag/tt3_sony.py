@@ -505,7 +505,11 @@ class FelicaLite(tt3.Type3Tag):
         password or the default manufacturer key (used if password is
         an empty string or bytearray). Read protection is not
         supported.
-
+        
+        A non-empty *password* must provide at least 128 bit key
+        material, in other words it must be a string or bytearray of
+        length 16 or more.
+        
         The memory unit for the value of *protect_from* is 16 byte,
         thus with ``protect_from=2`` bytes 0 to 31 are not protected.
 
@@ -513,26 +517,25 @@ class FelicaLite(tt3.Type3Tag):
         log.debug("protect(password={0!r}, read_protect={1}, protect_from={2})"
                   .format(password, read_protect, protect_from))
         
+        if password and len(password) < 16
+            raise ValueError("'password' must be at least length 16")
+
         if protect_from < 0:
             raise ValueError("'protect_from' can not be negative")
         
         if read_protect:
-            log.warning("this tag can not be read protected")
+            log.info("this tag can not be read protected")
             return False
 
         if password is not None:
             if self._mc[2] != 0xFF:
-                log.debug("system block protected, can't write key")
+                log.info("system block protected, can't write key")
                 return False
-                
-            if password == "":
-                # set the factory key
-                key = 16 * "\x00"
-            else:
-                key = password[0:16]
-                assert len(key) == 16
 
-            log.debug("protect with key " + key.encode("hex"))
+            # if password is empty use factory key of 16 zero bytes
+            key = bytearray(password[0:16] if password else 16*"\0")
+
+            log.debug("protect with key " + hexlify(key))
             self.write_without_mac(key[7::-1] + key[15:7:-1], 0x87)
 
         if protect_from < 14:
@@ -735,13 +738,18 @@ class FelicaLiteS(FelicaLite):
         *read_protect* flag is only evaluated if *password* is not
         :const:`None`.
 
-        The memory unit for *protect_from* is the same as for
-        :meth:`FelicaLite.protect`.
+        The required *password* length and the memory unit for
+        *protect_from* are the same as for :meth:`FelicaLite.protect`.
 
         """
         log.debug("protect(password={0!r}, read_protect={1}, protect_from={2})"
                   .format(password, read_protect, protect_from))
-        assert protect_from >= 0
+
+        if password and len(password) < 16
+            raise ValueError("'password' must be at least length 16")
+
+        if protect_from < 0:
+            raise ValueError("'protect_from' can not be negative")        
 
         read = self.read_without_mac
         write = self.write_with_mac if self._authenticated \
@@ -753,14 +761,10 @@ class FelicaLiteS(FelicaLite):
                 log.debug("system block protected, can't write key")
                 return False
                 
-            if password == "":
-                # set the factory key
-                key = 16 * "\x00"
-            else:
-                key = password[0:16]
-                assert len(key) == 16
+            # if password is empty use factory key of 16 zero bytes
+            key = bytearray(password[0:16] if password else 16*"\0")
 
-            log.debug("protect with key " + key.encode("hex"))
+            log.debug("protect with key " + hexlify(key))
             ckv = unpack("<H", str(read(0x86)[0:2]))[0]
             write(pack("<H", min(ckv + 1, 0xFFFF)) + 14*"\0", 0x86)
             write(key[7::-1] + key[15:7:-1], 0x87)
