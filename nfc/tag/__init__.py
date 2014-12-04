@@ -295,16 +295,6 @@ class Tag(object):
         log.error("this tag can not be formatted with nfcpy")
         return None
 
-    def authenticate(self, password=None):
-        """Authenticate the tag using *password*. If the tag supports
-        authentication the method returns True for success and
-        otherwise False. If the tag does not support authentication,
-        or it is not implemented, the return value is None.
-
-        """
-        log.error("this tag can not be authenticated with nfcpy")
-        return None
-
     def protect(self, password=None, read_protect=False, protect_from=0):
         """Protect a tag against future write or read access.
 
@@ -334,6 +324,16 @@ class Tag(object):
         
         """
         log.error("this tag can not be protected with nfcpy")
+        return None
+
+    def authenticate(self, password=None):
+        """Authenticate the tag using *password*. If the tag supports
+        authentication the method returns True for success and
+        otherwise False. If the tag does not support authentication,
+        or it is not implemented, the return value is None.
+
+        """
+        log.error("this tag can not be authenticated with nfcpy")
         return None
 
 class TagCommandError(Exception):
