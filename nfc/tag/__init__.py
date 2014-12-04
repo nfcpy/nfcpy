@@ -308,7 +308,30 @@ class Tag(object):
     def protect(self, password=None, read_protect=False, protect_from=0):
         """Protect a tag against future write or read access.
 
+        :meth:`protect` attempts to make a tag readonly for all
+        readers if a *password* is :const:`None`, writeable only after
+        authentication if a *password* is provided, and readable only
+        after authentication if a *password* is provided and the
+        *read_protect* flag is set. The *password* must be a byte or
+        character sequence that provides sufficient key material for
+        the tag specific protect function (this is documented
+        separately for the individual tag types). As a special case,
+        if *password* is set to an empty string the :meth:`protect`
+        method uses a default manufacturer value if such is known.
 
+        The *protect_from* argument sets the first memory unit to be
+        protected. Memory units are tag type specific, for a Type 1 or
+        Type 2 Tag a memory unit is 4 byte, for a Type 3 Tag it is 16
+        byte, and for a Type 4 Tag it is the complete NDEF data area.
+
+        Note that the effect of protecting a tag without password can
+        normally not be reversed.
+
+        The return value of :meth:`protect` is either :const:`True` or
+        :const:`False` depending on whether the operation was
+        successful or not, or :const:`None` if the tag does not
+        support custom protection (or it is not implemented).
+        
         """
         log.error("this tag can not be protected with nfcpy")
         return None

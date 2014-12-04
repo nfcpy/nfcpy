@@ -494,10 +494,27 @@ class FelicaLite(tt3.Type3Tag):
         return self._authenticated
 
     def protect(self, password=None, read_protect=False, protect_from=0):
+        """Protect a FeliCa Lite Tag.
+
+        A FeliCa Lite Tag can be write protected with a custom
+        password or the default manufacturer key (used if password is
+        an empty string or bytearray). Read protection is not
+        supported.
+
+        The memory unit for the value of *protect_from* is 16 byte,
+        thus with ``protect_from=2`` bytes 0 to 31 are not protected.
+
+        """
         log.debug("protect(password={0!r}, read_protect={1}, protect_from={2})"
                   .format(password, read_protect, protect_from))
-        assert protect_from >= 0
         
+        if protect_from < 0:
+            raise ValueError("'protect_from' can not be negative")
+        
+        if read_protect:
+            log.warning("this tag can not be read protected")
+            return False
+
         if password is not None:
             if self._mc[2] != 0xFF:
                 log.debug("system block protected, can't write key")
@@ -512,9 +529,6 @@ class FelicaLite(tt3.Type3Tag):
 
             log.debug("protect with key " + key.encode("hex"))
             self.write_without_mac(key[7::-1] + key[15:7:-1], 0x87)
-
-            if read_protect:
-                log.warning("this tag can not be read protected")
 
         if protect_from < 14:
             log.debug("write protect blocks {0}--13".format(protect_from))
@@ -704,6 +718,18 @@ class FelicaLiteS(FelicaLite):
         return self._authenticated
 
     def protect(self, password=None, read_protect=False, protect_from=0):
+        """Protect a FeliCa Lite-S Tag.
+
+        A FeliCa Lite-S Tag can be write and read protected with a
+        custom password or the default manufacturer key (used if
+        password is an empty string or bytearray). Note that the
+        *read_protect* flag is only evaluated if *password* is not
+        :const:`None`.
+
+        The memory unit for *protect_from* is the same as for
+        :meth:`FelicaLite.protect`.
+
+        """
         log.debug("protect(password={0!r}, read_protect={1}, protect_from={2})"
                   .format(password, read_protect, protect_from))
         assert protect_from >= 0
