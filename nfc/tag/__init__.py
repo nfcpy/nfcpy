@@ -326,11 +326,16 @@ class Tag(object):
         log.error("this tag can not be protected with nfcpy")
         return None
 
-    def authenticate(self, password=None):
-        """Authenticate the tag using *password*. If the tag supports
-        authentication the method returns True for success and
-        otherwise False. If the tag does not support authentication,
-        or it is not implemented, the return value is None.
+    def authenticate(self, password):
+        """Authenticate a tag with a *password*.
+
+        A tag that was once protected with a password requires
+        authentication before write, potentially also read, operations
+        may be performed. The *password* must be the same as the
+        password provided to :meth:`protect`. The return value
+        indicates authentication success with :const:`True` or
+        :const:`False`. For a tag that does not support authentication
+        the return value is :const:`None`.
 
         """
         log.error("this tag can not be authenticated with nfcpy")
