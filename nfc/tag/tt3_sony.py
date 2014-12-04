@@ -355,18 +355,6 @@ class FelicaMobile(FelicaStandard):
                         "2.0" if self.pmm[1] < 0x14 else "3.0"
         self._nbr, self._nbw = 1, 1
 
-def generate_mac(data, key, iv, flip_key=False):
-    # Data is first split into tuples of 8 character bytes, each tuple then
-    # reversed and joined, finally all joined back to one string that is
-    # then triple des encrypted with key and initialization vector iv. If
-    # flip_key is True then the key halfs will be exchanged (this is used
-    # to generate a mac for write). The resulting mac is the last 8 bytes
-    # returned in reversed order.
-    assert len(data) % 8 == 0 and len(key) == 16 and len(iv) == 8
-    if flip_key is True: key = key[8:] + key[:8]
-    txt = ''.join([''.join(reversed(x)) for x in zip(*[iter(str(data))]*8)])
-    return triple_des(key, CBC, iv).encrypt(txt)[:-9:-1]
-        
 class FelicaLite(tt3.Type3Tag):
     """FeliCa Lite is a version of FeliCa with simplified file system and
     security functions. The usable memory is 13 blocks (one block has
@@ -452,6 +440,20 @@ class FelicaLite(tt3.Type3Tag):
         
         return lines
 
+    @staticmethod
+    def generate_mac(data, key, iv, flip_key=False):
+        # Data is first split into tuples of 8 character bytes, each
+        # tuple then reversed and joined, finally all joined back to
+        # one string that is then triple des encrypted with key and
+        # initialization vector iv. If flip_key is True then the key
+        # halfs will be exchanged (this is used to generate a mac for
+        # write). The resulting mac is the last 8 bytes returned in
+        # reversed order.
+        assert len(data) % 8 == 0 and len(key) == 16 and len(iv) == 8
+        if flip_key is True: key = key[8:] + key[:8]
+        txt = ''.join([''.join(reversed(x)) for x in zip(*[iter(str(data))]*8)])
+        return triple_des(key, CBC, iv).encrypt(txt)[:-9:-1]
+        
     def authenticate(self, password):
         # Perform internal authentication, i.e. ensure that the tag has the
         # same card key as in password. If the password is an empty string we
@@ -487,7 +489,7 @@ class FelicaLite(tt3.Type3Tag):
         # Note that, because of endianess, data must be reversed in chunks
         # of 8 bytes as does the 8 byte mac - this is all done within the
         # generate_mac() function.
-        if data[-16:-8] == generate_mac(data[0:-16], sk, iv=rc[0:8]):
+        if data[-16:-8] == self.generate_mac(data[0:-16], sk, iv=rc[0:8]):
             log.debug("tag authentication completed")
             self._sk = sk; self._iv = rc[0:8]
             self._authenticated = True
@@ -630,7 +632,7 @@ class FelicaLite(tt3.Type3Tag):
         
         data = self.read_without_encryption(service_list, block_list)
         data, mac = data[0:-16], data[-16:-8]
-        if mac != generate_mac(data, self._sk, self._iv):
+        if mac != self.generate_mac(data, self._sk, self._iv):
             log.warning("mac verification failed")
         else: return data
 
@@ -813,7 +815,7 @@ class FelicaLiteS(FelicaLite):
         # write must be generated with the key flipped (sk2 || sk1).
         flip = lambda sk: sk[8:16] + sk[0:8]
         data = wcnt + "\x00" + chr(block) + "\x00\x91\x00" + data
-        maca = generate_mac(data, flip(self._sk), self._iv) + wcnt + 5*"\0"
+        maca = self.generate_mac(data, flip(self._sk), self._iv) + wcnt+5*"\0"
 
         # Now we can write the data block with our computed mac to the
         # desired block and the maca block. Write without encryption
