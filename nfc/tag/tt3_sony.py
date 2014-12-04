@@ -33,15 +33,15 @@ from . import tt3
 
 def activate(clf, target):
     # http://www.sony.net/Products/felica/business/tech-support/list.html
-    if target.pmm[1] == 0xF0:
+    if target.pmm[1] in FelicaLite.IC_CODE_MAP.keys():
         return FelicaLite(clf, target)
-    if target.pmm[1] == 0xF1:
+    if target.pmm[1] in FelicaLiteS.IC_CODE_MAP.keys():
         return FelicaLiteS(clf, target)
     if target.pmm[1] in FelicaStandard.IC_CODE_MAP.keys():
         return FelicaStandard(clf, target)
     if target.pmm[1] in (0x06, 0x07) + tuple(range(0x10, 0x1F)):
         return FelicaMobile(clf, target)
-    if target.pmm[1] == 0xE0:
+    if target.pmm[1] in FelicaPlug.IC_CODE_MAP.keys():
         return FelicaPlug(clf, target)
     return None
 
@@ -72,8 +72,8 @@ class FelicaStandard(tt3.Type3Tag):
     def __init__(self, clf, target):
         super(FelicaStandard, self).__init__(clf, target)
         self._product = "FeliCa Standard ({0})".format(
-            FelicaStandard.IC_CODE_MAP[target.pmm[1]][0])
-        self._nbr, self._nbw = FelicaStandard.IC_CODE_MAP[target.pmm[1]][1:3]
+            self.IC_CODE_MAP[target.pmm[1]][0])
+        self._nbr, self._nbw = self.IC_CODE_MAP[target.pmm[1]][1:3]
 
     def _is_present(self):
         # Perform a presence check. Modern FeliCa cards implement the
@@ -375,6 +375,9 @@ class FelicaLite(tt3.Type3Tag):
     integrity of data reads.
 
     """
+    IC_CODE_MAP = {
+        0xF0: "FeliCa Lite (RC-S965)",
+    }
     class NDEF(tt3.Type3Tag.NDEF):
         def __init__(self, tag):
             tag.read_from_ndef_service = tag.read_without_mac
@@ -392,7 +395,7 @@ class FelicaLite(tt3.Type3Tag):
             
     def __init__(self, clf, target):
         super(FelicaLite, self).__init__(clf, target)
-        self._product = "FeliCa Lite (RC-S965)"
+        self._product = self.IC_CODE_MAP[target.pmm[1]]
         self._mc = self.read_without_mac(0x88)
         self._nbr = 4; self._nbw = 1
         
@@ -663,6 +666,10 @@ class FelicaLiteS(FelicaLite):
     authentication for data reads.
 
     """
+    IC_CODE_MAP = {
+        0xF1: "FeliCa Lite-S (RC-S966)",
+        0xF2: "FeliCa Link (RC-S730) Lite-S Mode",
+    }
     class NDEF(FelicaLite.NDEF):
         def __init__(self, tag):
             if tag.is_authenticated:
@@ -671,7 +678,7 @@ class FelicaLiteS(FelicaLite):
     
     def __init__(self, clf, target):
         super(FelicaLiteS, self).__init__(clf, target)
-        self._product = "FeliCa Lite-S (RC-S966)"
+        self._product = self.IC_CODE_MAP[target.pmm[1]]
 
     def dump(self):
         oprint = lambda o: ' '.join(['%02x' % x for x in o])
@@ -820,8 +827,14 @@ class FelicaPlug(tt3.Type3Tag):
     microcontrollers.
 
     """
+    IC_CODE_MAP = {
+        0xE0: "FeliCa Plug (RC-S926)",
+        0xE1: "FeliCa Link (RC-S730) Plug Mode",
+    }
     
     def __init__(self, clf, target):
         super(FelicaPlug, self).__init__(clf, target)
-        self._product = "FeliCa Plug (RC-S926)"
+        self._nbr, self._nbw = (12, 12)
+        self._product = self.IC_CODE_MAP[target.pmm[1]]
+            
 
