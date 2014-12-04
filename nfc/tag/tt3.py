@@ -188,10 +188,10 @@ class Type3Tag(nfc.tag.Tag):
             return data
 
         def _write_ndef_data(self, data):
-            attributes = self._read_attribute_data()
             if not self.writeable or len(data) > self.capacity:
                 return False
             
+            attributes = self._read_attribute_data()
             attributes['writef'] = 0x0F
             self._write_attribute_data(attributes)
 

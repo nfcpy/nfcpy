@@ -122,14 +122,24 @@ class Tag(object):
             return self._capacity
 
         @property
-        def readable(self):
-            """True if data can be read from the NDEF tag."""
+        def is_readable(self):
+            """:const:`True` if the NDEF data are is readable."""
             return self._readable
 
         @property
-        def writeable(self):
-            """True if data can be written to the NDEF tag."""
+        def readable(self):
+            log.warning("'ndef.readable' is deprecated, use 'is_readable'")
+            return self.is_readable
+
+        @property
+        def is_writeable(self):
+            """:const:`True` if the NDEF data area is writeable."""
             return self._writeable
+
+        @property
+        def writeable(self):
+            log.warning("'ndef.writeable' is deprecated, use 'is_writeable'")
+            return self.is_writeable
 
         @property
         def has_changed(self):
@@ -199,10 +209,10 @@ class Tag(object):
         @message.setter
         def message(self, msg):
             if not self.writeable:
-                raise nfc.tag.AccessError
+                raise AttributeError("ndef message is not writeable")
             data = bytearray(str(msg))
             if len(data) > self.capacity:
-                raise nfc.tag.CapacityError
+                raise ValueError("ndef message size exceeds capacity")
             self._write_ndef_data(data)
             self._data = data
 
@@ -378,6 +388,3 @@ class TagCommandError(Exception):
     def __int__(self):
         return self._errno
 
-class Error: pass
-class AccessError(Error): pass
-class CapacityError(Error): pass

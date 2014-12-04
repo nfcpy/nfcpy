@@ -343,25 +343,27 @@ class TagTool(CommandLineInterface):
             except TypeError: pass
 
         if tag.ndef is None:
-            log.info("This is not an ndef tag.")
+            print("This is not an NDEF Tag.")
             return
 
-        new_ndef_message = nfc.ndef.Message(self.options.data)
-        if new_ndef_message == tag.ndef.message:
-            print("The tag already contains the message to write.")
+        if not tag.ndef.is_writeable:
+            print("This Tag is not writeable.")
             return
             
-        print("Old message: \n" + tag.ndef.message.pretty())
-        try:
-            tag.ndef.message = new_ndef_message
-            if tag.ndef.has_changed:
-                print("The message on the tag differs from what I wrote!")
-            else:
-                print("New message: \n" + tag.ndef.message.pretty())
-        except nfc.tag.AccessError:
-            print("This tag is not writeable.")
-        except nfc.tag.CapacityError:
-            print("The message exceeds the tag capacity.")
+        new_ndef_message = nfc.ndef.Message(self.options.data)
+        if new_ndef_message == tag.ndef.message:
+            print("The Tag already contains the message to write.")
+            return
+
+        if len(str(new_ndef_message)) > tag.ndef.capacity:
+            print("The new message exceeds the Tag's capacity.")
+            return
+        
+        print("Old message:")
+        print(tag.ndef.message.pretty())
+        tag.ndef.message = new_ndef_message
+        print("New message:")
+        print(tag.ndef.message.pretty())
 
     def format_tag(self, tag):
         if tag.type == "Type1Tag" and self.options.tagtype == "tt1":
@@ -380,7 +382,7 @@ class TagTool(CommandLineInterface):
                 print("  capacity  = %d byte" % tag.ndef.capacity)
                 print("  message   = %d byte" % tag.ndef.length)
         else:
-            print("Sorry, I don't know how to format this %s." % tag)
+            print("Sorry, I could not format this %s" % tag)
 
     def format_tt1_tag(self, tag):
         hr = tag.read_id()[0:2]
@@ -397,30 +399,33 @@ class TagTool(CommandLineInterface):
         return True
 
     def format_tt3_tag(self, tag):
-        tag.format(version=self.options.version, wipe=self.options.wipe)
-        attribute_data = tag.read_from_ndef_service(0)
-        if self.options.ver is not None:
-            attribute_data[0] = self.options.ver
-        if self.options.nbr is not None:
-            attribute_data[1] = self.options.nbr
-        if self.options.nbw is not None:
-            attribute_data[2] = self.options.nbw
-        if self.options.max is not None:
-            attribute_data[3:5] = struct.pack(">H", self.options.max)
-        if self.options.rfu is not None:
-            attribute_data[5:9] = 4 * [self.options.rfu]
-        if self.options.wf is not None:
-            attribute_data[9] = self.options.wf
-        if self.options.rw is not None:
-            attribute_data[10] = self.options.rw
-        if self.options.len is not None:
-            attribute_data[11:14] = struct.pack(">I", self.options.len)[1:]
-        if self.options.crc is not None:
-            attribute_data[14:16] = struct.pack(">H", self.options.crc)
-        else:
-            attribute_data[14:16] = struct.pack(">H", sum(attribute_data[:14]))
-        attribute_data = tag.write_to_ndef_service(attribute_data, 0)
-        return True
+        if tag.format(version=self.options.version, wipe=self.options.wipe):
+            attribute_data = tag.read_from_ndef_service(0)
+            if self.options.ver is not None:
+                attribute_data[0] = self.options.ver
+            if self.options.nbr is not None:
+                attribute_data[1] = self.options.nbr
+            if self.options.nbw is not None:
+                attribute_data[2] = self.options.nbw
+            if self.options.max is not None:
+                attribute_data[3:5] = struct.pack(">H", self.options.max)
+            if self.options.rfu is not None:
+                attribute_data[5:9] = 4 * [self.options.rfu]
+            if self.options.wf is not None:
+                attribute_data[9] = self.options.wf
+            if self.options.rw is not None:
+                attribute_data[10] = self.options.rw
+            if self.options.len is not None:
+                attribute_data[11:14] = struct.pack(">I", self.options.len)[1:]
+            if self.options.crc is not None:
+                attribute_data[14:16] = struct.pack(">H", self.options.crc)
+            else:
+                checksum = sum(attribute_data[:14])
+                attribute_data[14:16] = struct.pack(">H", checksum)
+            tag.write_to_ndef_service(attribute_data, 0)
+            return True
+        else: # tag.format() failed
+            return False
 
     def protect_tag(self, tag):
         print(tag)

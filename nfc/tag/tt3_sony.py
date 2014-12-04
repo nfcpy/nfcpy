@@ -366,26 +366,31 @@ class FelicaLite(tt3.Type3Tag):
     IC_CODE_MAP = {
         0xF0: "FeliCa Lite (RC-S965)",
     }
+    
     class NDEF(tt3.Type3Tag.NDEF):
-        def __init__(self, tag):
-            tag.read_from_ndef_service = tag.read_without_mac
-            tag.write_to_ndef_service = tag.write_without_mac
-            if tag.is_authenticated:
-                tag.read_from_ndef_service = tag.read_with_mac
-            super(FelicaLite.NDEF, self).__init__(tag)
-
         def _read_attribute_data(self):
+            log.debug("FelicaLite.read_attribute_data")
             attributes = super(FelicaLite.NDEF, self)._read_attribute_data()
             if attributes is not None and self._tag.is_authenticated:
-                # when authenticated we always also need to read the mac
+                # when authenticated we need to make room for the mac
+                self._original_nbr = attributes['nbr']
                 attributes['nbr'] = min(attributes['nbr'], 3)
             return attributes
             
+        def _write_attribute_data(self, attributes):
+            log.debug("FelicaLite.read_attribute_data")
+            if self._tag.is_authenticated:
+                attributes = attributes.copy()
+                attributes['nbr'] = self._original_nbr
+            super(FelicaLite.NDEF, self)._write_attribute_data(attributes)
+
     def __init__(self, clf, target):
         super(FelicaLite, self).__init__(clf, target)
         self._product = self.IC_CODE_MAP[target.pmm[1]]
         self._mc = self.read_without_mac(0x88)
         self._nbr = 4; self._nbw = 1
+        self.read_from_ndef_service = self.read_without_mac
+        self.write_to_ndef_service = self.write_without_mac
         
     def dump(self):
         ispchr = lambda x: x >= 32 and x <= 126
@@ -450,9 +455,9 @@ class FelicaLite(tt3.Type3Tag):
         # write). The resulting mac is the last 8 bytes returned in
         # reversed order.
         assert len(data) % 8 == 0 and len(key) == 16 and len(iv) == 8
-        if flip_key is True: key = key[8:] + key[:8]
-        txt = ''.join([''.join(reversed(x)) for x in zip(*[iter(str(data))]*8)])
-        return triple_des(key, CBC, iv).encrypt(txt)[:-9:-1]
+        key = str(key[8:] + key[:8]) if flip_key else str(key)
+        txt = [''.join(reversed(x)) for x in zip(*[iter(str(data))]*8)]
+        return triple_des(key, CBC, iv).encrypt(''.join(txt))[:-9:-1]
         
     def protect(self, password=None, read_protect=False, protect_from=0):
         """Protect a FeliCa Lite Tag.
@@ -520,17 +525,18 @@ class FelicaLite(tt3.Type3Tag):
         falsified on transmission.
 
         """
-        if len(password) < 16:
+        if password and len(password) < 16:
             raise ValueError("'password' must be at least length 16")
 
         # Perform internal authentication, i.e. ensure that the tag
         # has the same card key as in password. If the password string
         # (or bytearray) is empty, we'll try with the factory key.
-        key = bytearray(password[0:16] if password else 16 * "\0")
-        assert len(key) == 16
+        key = str(bytearray(password[0:16])) if password else 16 * "\0"
         
         log.debug("authenticate with key " + hexlify(key))
         self._authenticated = False
+        self.read_from_ndef_service = self.read_without_mac
+        self.write_to_ndef_service = self.write_without_mac
         
         # Internal authentication starts with a random challenge (rc1 || rc2)
         # that we write to the rc block. Because the tag works little endian,
@@ -561,6 +567,7 @@ class FelicaLite(tt3.Type3Tag):
             log.debug("tag authentication completed")
             self._sk = sk; self._iv = rc[0:8]
             self._authenticated = True
+            self.read_from_ndef_service = self.read_with_mac
         else:
             log.debug("tag authentication failed")
 
@@ -569,20 +576,23 @@ class FelicaLite(tt3.Type3Tag):
     def format(self, version=None, wipe=False):
         assert version is None or type(version) is int
         assert wipe is None or type(wipe) is int
+
+        if not self.sys == 0x12FC and self._mc[3] & 0x01:
+            self.sys = 0x12FC
         
-        if self.sys != 0x12FC and self._mc[2] != 0xFF:
+        if not self.sys == 0x12FC and self._mc[2] != 0xFF:
             log.error("this tag can no longer be changed to ndef")
             return False
 
         # A FeliCa Lite tag only responds with system code 12FC if it
         # is configured to be ndef compatible. If this tag is not
         # we'll attempt to set that configuration bit.
-        if self._mc[3] & 0x01 != 0x01:
+        if not self._mc[3] & 0x01:
             self._mc[3] |= 0x01;
             self.write_without_mac(self._mc, 0x88)
             self.sys = 0x12FC
 
-        if self.sys != 0x12FC:
+        if not self.sys == 0x12FC:
             log.info("not an ndef tag and can not be made compatible")
             return False
         if version and version != 0x10:
@@ -592,6 +602,9 @@ class FelicaLite(tt3.Type3Tag):
             log.info("this tag is permanently write protected")
             return False
 
+        write = self.write_with_mac if self._authenticated \
+                else self.write_without_mac
+        
         # Count the number of writeable data blocks (that is excluding
         # the attribute block) from the least significant read/write
         # permission bits that are consecutively set to 1.
@@ -606,13 +619,13 @@ class FelicaLite(tt3.Type3Tag):
         attribute_data[:14] = pack(">BBBHxxxxBBxxx", 0x10, 4, 1, nmaxb, 0, 1)
         attribute_data[14:] = pack(">H", sum(attribute_data[:14]))
         log.info("set ndef attributes {}".format(hexlify(attribute_data)))
-        self.write_without_mac(attribute_data, 0)
+        write(attribute_data, 0)
 
         # Overwrite the ndef message area if a wipe is requested.
         if wipe is not None:
             data = bytearray(chr(wipe) * 16)
             for block in range(1, 14):
-                self.write_without_mac(data, block)
+                write(data, block)
 
         self._ndef = None
         return True
@@ -639,15 +652,17 @@ class FelicaLite(tt3.Type3Tag):
         the block numbers to read. The blocks are read with service
         code 0x000B (NDEF).
 
-        Prior to calling this method the card must be authenticated,
-        otherwise raises :exc:`AssertionError`.
+        If prior to calling this method the tag was not authenticated,
+        a :exc:`RuntimeError` exception is raised.
 
         Command execution errors raise :exc:`~nfc.tag.TagCommandError`.
 
         """
-        assert self._sk != None and self._iv != None
         log.debug("read {0} block(s) with mac".format(len(blocks)))
 
+        if self._sk is None or self._iv is None:
+            raise RuntimeError("tag must be authenticated first")
+        
         service_list = [tt3.ServiceCode(0, 0b001011)]
         block_list = [tt3.BlockCode(n) for n in blocks]
         block_list.append(tt3.BlockCode(0x81))
@@ -694,12 +709,17 @@ class FelicaLiteS(FelicaLite):
         0xF1: "FeliCa Lite-S (RC-S966)",
         0xF2: "FeliCa Link (RC-S730) Lite-S Mode",
     }
-    class NDEF(FelicaLite.NDEF):
-        def __init__(self, tag):
-            if tag.is_authenticated:
-                tag.write_to_ndef_service = tag.write_with_mac
-            super(FelicaLiteS.NDEF, self).__init__(tag)
     
+    class NDEF(FelicaLite.NDEF):
+        def _read_attribute_data(self):
+            log.debug("FelicaLiteS.read_attribute_data")
+            attributes = super(FelicaLiteS.NDEF, self)._read_attribute_data()
+            if attributes is not None and self._tag._authenticated:
+                # when authenticated and user data is writeable
+                rw_bits = unpack("<H", self._tag._mc[0:2])[0]
+                self._writeable = bool(rw_bits & 0x3ff == 0x3ff)
+            return attributes
+
     def __init__(self, clf, target):
         super(FelicaLiteS, self).__init__(clf, target)
         self._product = self.IC_CODE_MAP[target.pmm[1]]
@@ -749,11 +769,15 @@ class FelicaLiteS(FelicaLite):
         write = self.write_with_mac if self._authenticated \
                 else self.write_without_mac            
         
-        mc = self._mc
+        mc = self._mc[:]
         if password is not None:
-            if self._mc[2] != 255 and mc[5] == 0:
-                log.debug("system block protected, can't write key")
-                return False
+            if self._mc[2] != 0xFF: # system block protected
+                if self._mc[5] & 1 == 0: # key change disabled
+                    log.info("card key can not be changed")
+                    return False
+                if self._authenticated is False:
+                    log.info("authentication required to change key")
+                    return False
                 
             # if password is empty use factory key of 16 zero bytes
             key = bytearray(password[0:16] if password else 16*"\0")
@@ -763,7 +787,7 @@ class FelicaLiteS(FelicaLite):
             write(pack("<H", min(ckv + 1, 0xFFFF)) + 14*"\0", 0x86)
             write(key[7::-1] + key[15:7:-1], 0x87)
 
-            assert self.authenticate(key)
+            assert self.authenticate(key) # not supposed to fail
             
             if read_protect and protect_from < 14:
                 log.debug("read protect blocks {0}--13".format(protect_from))
@@ -779,12 +803,8 @@ class FelicaLiteS(FelicaLite):
         mc[2] = 0x00 # set system blocks 82,83,84,86,87 to read only
         mc[5] = 0x01 # but allow write with mac to ck and ckv block
         
-        # Write the new memory control block. By using write_with_mac
-        # we can be sure that the data was written if there's no
-        # exception raised. But even then the block on the card may be
-        # different because some bits can not be flipped back, se we
-        # just read it back.
-        self.write_with_mac(mc, 0x88)
+        # Write the new memory control block.
+        self.write_without_mac(mc, 0x88)
         self._mc = self.read_with_mac(0x88)
         log.debug("MC: {0}".format(str(self._mc).encode("hex")))
         return True
@@ -814,6 +834,8 @@ class FelicaLiteS(FelicaLite):
             # external authentication to assure the tag that we have
             # the right card key.
             self._authenticated = False
+            self.read_from_ndef_service = self.read_without_mac
+            self.write_to_ndef_service = self.write_without_mac
 
             # To authenticate to the tag we write a 01h into the
             # ext_auth byte of the state block (block 0x92). The other
@@ -826,6 +848,8 @@ class FelicaLiteS(FelicaLite):
             if self.read_with_mac(0x92)[0] == 0x01:
                 log.debug("mutual authentication completed")
                 self._authenticated = True
+                self.read_from_ndef_service = self.read_with_mac
+                self.write_to_ndef_service = self.write_with_mac
             else:
                 log.debug("mutual authentication failed")
 
@@ -834,16 +858,21 @@ class FelicaLiteS(FelicaLite):
     def write_with_mac(self, data, block):
         """Write one data block with additional integrity check.
 
-        If :meth:`authenticate` was successfully run
+        If prior to calling this method the tag was not authenticated,
+        a :exc:`RuntimeError` exception is raised.
         
         Command execution errors raise :exc:`~nfc.tag.TagCommandError`.
 
         """
         # Write a single data block protected with a mac. The card
         # will only accept the write if it computed the same mac.
-        assert self._sk != None and self._iv != None
-        assert len(data) == 16 and type(block) is int
         log.debug("write 1 block with mac")
+        if len(data) != 16:
+            raise ValueError("data length must be 16")
+        if type(block) is not int:
+            raise ValueError("block number must be int")
+        if self._sk is None or self._iv is None:
+            raise RuntimeError("tag must be authenticated first")
 
         # The write count is the first three byte of the wcnt block.
         wcnt = str(self.read_without_mac(0x90)[0:3])
