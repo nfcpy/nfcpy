@@ -31,11 +31,24 @@ import nfc.tag
 import nfc.clf
 import nfc.ndef
 
+TIMEOUT_ERROR, CHECKSUM_ERROR, RSP_LENGTH_ERROR, RSP_CODE_ERROR, \
+    TAG_IDM_ERROR, DATA_SIZE_ERROR = range(6)
+        
 class Type3TagCommandError(nfc.tag.TagCommandError):
-    def __init__(self, status_flag_1, status_flag_2):
-        error = status_flag_1<<8 | status_flag_2
-        super(Type3TagCommandError, self).__init__(error)
-
+    errno_str = {
+        CHECKSUM_ERROR: "crc validation failed",
+        RSP_LENGTH_ERROR: "invalid response length",
+        RSP_CODE_ERROR: "invalid response code",
+        TAG_IDM_ERROR: "answer from wrong tag",
+        DATA_SIZE_ERROR: "insufficient data received",
+        # FeliCa Lite specific error codes
+        0x01A6: "invalid service code number or attribute",
+        0x01B1: "authentication required to read (first block in list)",
+        0x02B1: "authentication required to read (second block in list)",
+        0x04B1: "authentication required to read (third block in list)",
+        0x08B1: "authentication required to read (fourth block in list)",
+    }
+    
 class ServiceCode:
     """A service code provides access to a group of data blocks located on
     the card file system. A service code is a 16-bit structure
@@ -427,7 +440,7 @@ class Type3Tag(nfc.tag.Tag):
         data = self.send_cmd_recv_rsp(0x00, data, timeout, send_idm=False)
         if len(data) != (18 if request_code in (1, 2) else 16):
             log.debug("unexpected polling response length")
-            raise Type3TagCommandError(0, 0x10)
+            raise Type3TagCommandError(DATA_SIZE_ERROR)
             
         return (data[0:8], data[8:16]) if len(data) == 16 else \
             (data[0:8], data[8:16], data[16:18])
@@ -482,7 +495,7 @@ class Type3Tag(nfc.tag.Tag):
 
         if data[0] != len(block_list) or len(data) != 1 + len(block_list) * 16:
             log.debug("insufficient data received from tag")
-            raise Type3TagCommandError(0, 0x10)
+            raise Type3TagCommandError(DATA_SIZE_ERROR)
 
         return data[1:]
 
@@ -614,24 +627,24 @@ class Type3Tag(nfc.tag.Tag):
             rsp = self.clf.exchange(cmd, timeout)
         except nfc.clf.TimeoutError:
             log.debug("timed out, the tag has not answered")
-            raise Type3TagCommandError(0, 0)
+            raise Type3TagCommandError(TIMEOUT_ERROR)
             
         if rsp[0] != len(rsp):
             log.debug("incorrect response length {0:02x}".format(rsp[0]))
-            raise Type3TagCommandError(0, 1)
+            raise Type3TagCommandError(RSP_LENGTH_ERROR)
         if rsp[1] != cmd_code + 1:
             log.debug("incorrect response code {0:02x}".format(rsp[1]))
-            raise Type3TagCommandError(0, 2)
+            raise Type3TagCommandError(RSP_CODE_ERROR)
         if send_idm and rsp[2:10] != self.idm:
             log.debug("wrong tag or transaction id " + hexlify(rsp[2:10]))
-            raise Type3TagCommandError(0, 5)
+            raise Type3TagCommandError(TAG_IDM_ERROR)
         if not send_idm:
             log.debug("<< {0:02x} {1:02x} {2}".format(
                 rsp[0], rsp[1], hexlify(rsp[2:])))
             return rsp[2:]
         if check_status and rsp[10] != 0:
             log.debug("tag returned error status " + hexlify(rsp[10:12]))
-            raise Type3TagCommandError(rsp[10], rsp[11])
+            raise Type3TagCommandError(unpack(">H", rsp[10:12])[0])
         if not check_status:
             log.debug("<< {0:02x} {1:02x} {2} {3}".format(
                 rsp[0], rsp[1], hexlify(rsp[2:10]), hexlify(rsp[10:])))
