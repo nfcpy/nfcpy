@@ -351,40 +351,40 @@ class Tag(object):
         log.error("this tag can not be authenticated with nfcpy")
         return None
 
+TIMEOUT_ERROR = 0
+
 class TagCommandError(Exception):
     """The base class for exceptions that are raised when a tag command
-    has not returned the expected result. This may be for some generic
-    reason such as when the tag moved out of communication range or
-    did not recognize the command (most tags do not answer to unknown
-    commands), this would most likely result in a timeout error
-    indicated by :attr:`TagCommandError.errno` equal zero.
+    has not returned the expected result or a a lower stack error was
+    raised.
 
-    All error numbers are betwen 0 and 0xffff, inclusively. Error
-    numbers from 0 to 0x00ff indicate general errors, numbers from
-    0x0100 to 0xffff indicate logical errors received in a tag
-    response.
+    The :attr:`errno` attribute holds a reason code for why the
+    command has failed. Error numbers greater than zero indicate a tag
+    type specific error from one of the exception classes derived from
+    :exc:`TagCommandError` (per tag type module). Error number ``0``
+    indicates a tomeout error. Error numbers less than zero indicate
+    other general errors, no such errors are currently defined.
+
+    The :exc:`TagCommandError` exception populates the *message*
+    attribute of the general exception class with the appropriate
+    error description.
 
     """
-    error_map = {
-        0x0000: "timeout error, the tag has not answered",
-        0x0001: "frame error, invalid response length",
-        0x0002: "frame error, invalid response code",
-        0x0004: "frame error, crc validation failed",
-        0x0005: "frame error, answer from wrong tag",
-        0x0010: "data error, insufficient data received",
+    errno_str = {
+        TIMEOUT_ERROR: "timeout, the tag has not answered",
     }
     
     def __init__(self, errno):
-        default = "tag command error {0:04X}".format(errno)
-        message = TagCommandError.error_map.get(errno, default)
+        default = "tag command error {errno} (0x{errno:x})".format(errno=errno)
+        if errno > 0: message = self.errno_str.get(errno, default)
+        else: message = TagCommandError.errno_str.get(errno, default)
         super(TagCommandError, self).__init__(message)
         self._errno = errno
 
     @property
     def errno(self):
-        """The error number."""
+        """Holds the error reason code."""
         return self._errno
 
     def __int__(self):
         return self._errno
-
