@@ -111,6 +111,14 @@ class Tag(object):
             if self._data is None:
                 raise RuntimeError("failed to read ndef data")
 
+        def _read_ndef_data(self):
+            msg = "_read_ndef_data is not implemented for this tag type"
+            raise NotImplementedError(msg)
+
+        def _write_ndef_data(self, data):
+            msg = "_write_ndef_data is not implemented for this tag type"
+            raise NotImplementedError(msg)
+
         @property
         def length(self):
             """Length of the current NDEF message in bytes."""
