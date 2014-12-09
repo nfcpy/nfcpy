@@ -97,7 +97,7 @@ class Tag(object):
 
             if tag.ndef is not None:
                 print(tag.ndef.message.pretty())
-                if tag.ndef.writeable:
+                if tag.ndef.is_writeable:
                     text_record = nfc.ndef.TextRecord("Hello World")
                     tag.ndef.message = nfc.ndef.Message(text_record)
 
@@ -211,12 +211,13 @@ class Tag(object):
             import nfc.ndef
             try:
                 return nfc.ndef.Message(str(self._data))
-            except nfc.ndef.parser_error:
+            except nfc.ndef.parser_error as error:
+                log.error(repr(error))
                 return nfc.ndef.Message(nfc.ndef.Record())
 
         @message.setter
         def message(self, msg):
-            if not self.writeable:
+            if not self._writeable:
                 raise AttributeError("ndef message is not writeable")
             data = bytearray(str(msg))
             if len(data) > self.capacity:
