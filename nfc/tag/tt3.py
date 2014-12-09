@@ -183,8 +183,8 @@ class Type3Tag(nfc.tag.Tag):
             if attributes is None:
                 log.debug("found no attribute data (maybe checksum error)")
                 return None
-            if attributes['ver'] != 0x10:
-                log.debug("unsupported or invalid ndef mapping version")
+            if attributes['ver'] >> 4 != 1:
+                log.debug("unsupported ndef mapping major version")
                 return None
             
             last_block_number = 1 + (attributes['ln'] + 15) // 16
