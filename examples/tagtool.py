@@ -311,8 +311,8 @@ class TagTool(CommandLineInterface):
         
         if tag.ndef:
             print("NDEF Capabilities:")
-            print("  readable  = %s" % ("no", "yes")[tag.ndef.readable])
-            print("  writeable = %s" % ("no", "yes")[tag.ndef.writeable])
+            print("  readable  = %s" % ("no","yes")[tag.ndef.is_readable])
+            print("  writeable = %s" % ("no","yes")[tag.ndef.is_writeable])
             print("  capacity  = %d byte" % tag.ndef.capacity)
             print("  message   = %d byte" % tag.ndef.length)
             if tag.ndef.length > 0:
@@ -377,8 +377,8 @@ class TagTool(CommandLineInterface):
         if formatted:
             print("Formatted %s" % tag)
             if tag.ndef:
-                print("  readable  = %s" % ("no", "yes")[tag.ndef.readable])
-                print("  writeable = %s" % ("no", "yes")[tag.ndef.writeable])
+                print("  readable  = %s" % ("no","yes")[tag.ndef.is_readable])
+                print("  writeable = %s" % ("no","yes")[tag.ndef.is_writeable])
                 print("  capacity  = %d byte" % tag.ndef.capacity)
                 print("  message   = %d byte" % tag.ndef.length)
         else:
