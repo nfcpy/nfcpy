@@ -476,9 +476,10 @@ class FelicaLite(tt3.Type3Tag):
         thus with ``protect_from=2`` bytes 0 to 31 are not protected.
 
         """
-        log.debug("protect(password={0!r}, read_protect={1}, protect_from={2})"
-                  .format(password, read_protect, protect_from))
+        return super(FelicaLite, self).protect(
+            password, read_protect, protect_from)
         
+    def _protect(self, password, read_protect, protect_from):
         if password and len(password) < 16:
             raise ValueError("'password' must be at least length 16")
 
@@ -525,6 +526,9 @@ class FelicaLite(tt3.Type3Tag):
         falsified on transmission.
 
         """
+        return super(FelicaLite, self).authenticate(password)
+
+    def _authenticate(self, password):
         if password and len(password) < 16:
             raise ValueError("'password' must be at least length 16")
 
@@ -573,7 +577,15 @@ class FelicaLite(tt3.Type3Tag):
 
         return self._authenticated
 
-    def format(self, version=None, wipe=False):
+    def format(self, version=None, wipe=None):
+        """Format a FeliCa Lite Tag for NDEF.
+
+        
+
+        """
+        return super(FelicaLite, self).format(version, wipe)
+        
+    def _format(self, version=None, wipe=False):
         assert version is None or type(version) is int
         assert wipe is None or type(wipe) is int
 
@@ -756,9 +768,10 @@ class FelicaLiteS(FelicaLite):
         *protect_from* are the same as for :meth:`FelicaLite.protect`.
 
         """
-        log.debug("protect(password={0!r}, read_protect={1}, protect_from={2})"
-                  .format(password, read_protect, protect_from))
-
+        return super(FelicaLite, self).protect(
+            password, read_protect, protect_from)
+        
+    def _protect(self, password, read_protect, protect_from):
         if password and len(password) < 16:
             raise ValueError("'password' must be at least length 16")
 

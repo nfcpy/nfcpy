@@ -62,9 +62,11 @@ class ServiceCode:
         self.attribute = attribute
 
     def __repr__(self):
+        """x.__repr__() <==> repr(x)"""
         return "ServiceCode({0}, {1})".format(self.number, self.attribute)
 
     def __str__(self):
+        """x.__str__() <==> str(x)"""
         attribute_map = {
             0b001000: "Random RW with key",
             0b001001: "Random RW w/o key",
@@ -117,10 +119,12 @@ class BlockCode:
         self.service = service
 
     def __repr__(self):
+        """x.__repr__() <==> repr(x)"""
         return "BlockCode({0}, {1}, {2})".format(
             self.number, self.access, self.service)
 
     def __str__(self):
+        """x.__str__() <==> str(x)"""
         s = "BlockCode(number={0}, access={1:03b}, service={2})"
         return s.format(self.number, self.access, self.service)
 
@@ -233,6 +237,7 @@ class Type3Tag(nfc.tag.Tag):
         self._nbr, self._nbw = (1, 1)
 
     def __str__(self):
+        """x.__str__() <==> str(x)"""
         s = " PMM={pmm} SYS={sys:04X}"
         return nfc.tag.Tag.__str__(self) + s.format(
             pmm=hexlify(self.pmm).upper(), sys=self.sys)
@@ -324,6 +329,14 @@ class Type3Tag(nfc.tag.Tag):
         return lines
 
     def format(self, version=None, wipe=None):
+        """Format and blank an NFC Forum Type 3 Tag.
+
+        
+
+        """
+        return super(Type3Tag, self).format(version, wipe)
+        
+    def _format(self, version, wipe):
         assert version is None or type(version) is int
         assert wipe is None or type(wipe) is int
         
@@ -381,7 +394,6 @@ class Type3Tag(nfc.tag.Tag):
             for block in xrange(1, nmaxb + 1):
                 self.write_to_ndef_service(data, block)
 
-        self._ndef = None
         return True
 
     def polling(self, system_code=0xffff, request_code=0, time_slots=0):
@@ -664,6 +676,7 @@ class Type3TagEmulation(object):
         self.services = dict()
 
     def __str__(self):
+        """x.__str__() <==> str(x)"""
         return "Type3TagEmulation IDm={0} PMm={1} SYS={2}".format(
             hexlify(self.idm), hexlify(self.pmm), hexlify(self.sys))
 
