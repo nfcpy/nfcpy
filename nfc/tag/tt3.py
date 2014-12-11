@@ -331,7 +331,23 @@ class Type3Tag(nfc.tag.Tag):
     def format(self, version=None, wipe=None):
         """Format and blank an NFC Forum Type 3 Tag.
 
-        
+        A generic NFC Forum Type 3 Tag can be (re)formatted if it is
+        in either one of blank, initialized or readwrite state. By
+        formatting, all contents of the attribute information block is
+        overwritten with values determined. The number of user data
+        blocks is determined by reading all memory until an error
+        response. Similarily, the maximum number of data block that
+        can be read or written with a single command is determined by
+        sending successively increased read and write commands. The
+        current data length is set to zero. The NDEF mapping version
+        is set to the latest known version number (1.0), unless the
+        *version* argument is provided and it's major version number
+        corresponds to one of the known major version numbers.
+
+        By default, no data other than the attribute block is
+        modified. To overwrite user data the *wipe* argument must be
+        set to an integer value. The lower 8 bits of that value are
+        written to all data bytes that follow the attribute block.
 
         """
         return super(Type3Tag, self).format(version, wipe)
@@ -343,7 +359,7 @@ class Type3Tag(nfc.tag.Tag):
         if self.sys != 0x12FC:
             log.warning("not an ndef tag and can not be made compatible")
             return False
-        if version and version != 0x10:
+        if version and version & 0xF0 != 0x10:
             log.warning("type 3 tag ndef mapping version can only be 0x10")
             return False
         
