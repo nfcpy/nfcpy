@@ -74,17 +74,18 @@ class MifareUltralight(tt2.Type2Tag):
     def __init__(self, clf, target):
         super(MifareUltralight, self).__init__(clf, target)
         self._product = "Mifare Ultralight (MF01CU1)"
-        self._usermem = slice(16, 64)
+
+    def dump(self):
+        return super(MifareUltralight, self)._dump(stop=16)
         
 class MifareUltralightC(tt2.Type2Tag):
     def __init__(self, clf, target):
         super(MifareUltralightC, self).__init__(clf, target)
         self._product = "Mifare Ultralight C (MF01CU2)"
-        self._usermem = slice(16, 160)
         
     def dump(self):
-        oprint = lambda o: ' '.join(['%02x' % x for x in o])
-        s = super(MifareUltralightC, self).dump()
+        oprint = lambda o: ' '.join(['??' if x < 0 else '%02x'%x for x in o])
+        s = super(MifareUltralightC, self)._dump(stop=40)
         
         footer = dict(zip(range(40, 44),
                           ("UID0-UID2, BCC0",
@@ -93,13 +94,10 @@ class MifareUltralightC(tt2.Type2Tag):
                            "OTP0-OTP3")))
         
         for i in sorted(footer.keys()):
-            data = self.read(i)
-            if data is None:
-                s.append("{0:3}: {1} ({2})".format(
-                    i, "?? ?? ?? ??", footer[i]))
-            else:
-                s.append("{0:3}: {1} ({2})".format(
-                    i, oprint(data[0:4]), footer[i]))
+            try: data = self.read(i)[0:4]
+            except tt2.Type2TagCommandError:
+                data = [None, None, None, None]
+            s.append("{0:3}: {1} ({2})".format(i, oprint(data), footer[i]))
 
         return s
 
@@ -175,8 +173,6 @@ class MifareUltralightEV1(tt2.Type2Tag):
     def __init__(self, clf, target):
         super(MifareUltralightEV1, self).__init__(clf, target)
         self._product = "Mifare Ultralight EV1"
-        if version[6] == 0x0E:
-            self._usermem = slice(16, 144)
         version_map = {
             "\x00\x04\x03\x01\x01\x00\x0B\x03": "MF0UL11",
             "\x00\x04\x03\x02\x01\x00\x0B\x03": "MF0ULH11",
@@ -185,8 +181,7 @@ class MifareUltralightEV1(tt2.Type2Tag):
         }
         try:
             self._product += " ({0})".format(version_map[version])
-        except KeyError:
-            pass
+        except KeyError: pass
 
     @property
     def signature(self):
@@ -196,23 +191,20 @@ class MifareUltralightEV1(tt2.Type2Tag):
 class NTAG203(tt2.Type2Tag):
     def __init__(self, clf, target):
         super(NTAG203, self).__init__(clf, target)
-        self._usermem = slice(16, 160)
         self._product = "NXP NTAG203"
         
     def dump(self):
-        oprint = lambda o: ' '.join(['%02x' % x for x in o])
-        s = super(NTAG203, self).dump()
+        oprint = lambda o: ' '.join(['??' if x < 0 else '%02x'%x for x in o])
+        s = super(NTAG203, self)._dump(40)
 
         footer = dict(zip(range(40, 42), ("LOCK2-LOCK3", "CNTR0-CNTR1")))
         
         for i in sorted(footer.keys()):
-            data = self.read(i)
-            if data is None:
-                s.append("{0:3}: {1} ({2})".format(
-                    i, "?? ?? ?? ??", footer[i]))
-            else:
-                s.append("{0:3}: {1} ({2})".format(
-                    i, oprint(data[0:4]), footer[i]))
+            try:
+                data = self.read(i)[0:4]
+            except tt2.Type2TagCommandError:
+                data = [None, None, None, None]
+            s.append("{0:3}: {1} ({2})".format(i, oprint(data), footer[i]))
 
         return s
     
@@ -262,75 +254,68 @@ class NTAG21x(tt2.Type2Tag):
             return True
         return False
 
-    def dump(self, footer):
-        oprint = lambda o: ' '.join(['%02x' % x for x in o])
-        s = super(NTAG21x, self).dump()
+    def _dump(self, stop, footer):
+        oprint = lambda o: ' '.join(['??' if x < 0 else '%02x'%x for x in o])
+        s = super(NTAG21x, self)._dump(stop)
         for i in sorted(footer.keys()):
-            data = self.read(i)
-            if data is None:
-                s.append("{0:3}: {1} ({2})".format(
-                    i, "?? ?? ?? ??", footer[i]))
-            else:
-                s.append("{0:3}: {1} ({2})".format(
-                    i, oprint(data[0:4]), footer[i]))
+            try:
+                data = self.read(i)[0:4]
+            except tt2.Type2TagCommandError:
+                data = [None, None, None, None]
+            s.append("{0:3}: {1} ({2})".format(i, oprint(data), footer[i]))
         return s
 
 class NTAG210(NTAG21x):
     def __init__(self, clf, target):
         super(NTAG210, self).__init__(clf, target)
-        self._usermem = slice(16, 64)
         self._product = "NXP NTAG210"
         
     def dump(self):
         footer = dict(zip(range(16, 20),
                           ("MIRROR_BYTE, RFU, MIRROR_PAGE, AUTH0",
                            "ACCESS", "PWD0-PWD3", "PACK0-PACK1")))
-        return super(NTAG210, self).dump(footer)
+        return super(NTAG210, self)._dump(16, footer)
 
 class NTAG212(NTAG21x):
     def __init__(self, clf, target):
         super(NTAG212, self).__init__(clf, target)
-        self._usermem = slice(16, 144)
         self._product = "NXP NTAG212"
         
     def dump(self):
         text = ("LOCK2-LOCK4", "MIRROR_BYTE, RFU, MIRROR_PAGE, AUTH0",
                 "ACCESS", "PWD0-PWD3", "PACK0-PACK1")
         footer = dict(zip(range(36, 36+len(text)), text))
-        return super(NTAG212, self).dump(footer)
+        return super(NTAG212, self)._dump(36, footer)
 
 class NTAG213(NTAG21x):
     def __init__(self, clf, target):
         super(NTAG213, self).__init__(clf, target)
-        self._usermem = slice(16, 160)
         self._product = "NXP NTAG213"
         
     def dump(self):
         text = ("LOCK2-LOCK4", "MIRROR, RFU, MIRROR_PAGE, AUTH0",
                 "ACCESS", "PWD0-PWD3", "PACK0-PACK1")
         footer = dict(zip(range(40, 40+len(text)), text))
-        return super(NTAG213, self).dump(footer)
+        return super(NTAG213, self)._dump(40, footer)
 
 class NTAG215(NTAG21x):
     def __init__(self, clf, target):
         super(NTAG215, self).__init__(clf, target)
-        self._usermem = slice(16, 520)
         self._product = "NXP NTAG215"
         
     def dump(self):
         text = ("LOCK2-LOCK4", "MIRROR, RFU, MIRROR_PAGE, AUTH0",
                 "ACCESS", "PWD0-PWD3", "PACK0-PACK1")
         footer = dict(zip(range(130, 130+len(text)), text))
-        return super(NTAG215, self).dump(footer)
+        return super(NTAG215, self)._dump(130, footer)
 
 class NTAG216(NTAG21x):
     def __init__(self, clf, target):
         super(NTAG216, self).__init__(clf, target)
-        self._usermem = slice(16, 904)
         self._product = "NXP NTAG216"
 
     def dump(self):
         text = ("LOCK2-LOCK4", "MIRROR, RFU, MIRROR_PAGE, AUTH0",
                 "ACCESS", "PWD0-PWD3", "PACK0-PACK1")
         footer = dict(zip(range(226, 226+len(text)), text))
-        return super(NTAG216, self).dump(footer)
+        return super(NTAG216, self)._dump(226, footer)

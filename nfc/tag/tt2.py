@@ -202,7 +202,6 @@ class Type2Tag(Tag):
         self.sak = target.cfg[2]
         self.uid = target.uid
         self._current_sector = 0
-        self._usermem = slice(16, 64)
 
     def __str__(self):
         """x.__str__() <==> str(x)"""
