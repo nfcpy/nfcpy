@@ -231,6 +231,7 @@ class Tag(object):
         self._authenticated = False
 
     def __str__(self):
+        """x.__str__() <==> str(x)"""
         try: s = self.type + ' ' + repr(self._product)
         except AttributeError: s = self.type
         return s + ' ID=' + self.identifier.encode("hex").upper()
@@ -311,14 +312,22 @@ class Tag(object):
         not implemented in nfcpy.
 
         """
-        log.error("this tag can not be formatted with nfcpy")
-        return None
+        if hasattr(self, "_format"):
+            args = "version={0!r}, wipe={1!r}"
+            args = args.format(version, wipe)
+            log.debug("format({0})".format(args))
+            status = self._format(version, wipe)
+            if status is True: self._ndef = None
+            return status
+        else:
+            log.error("this tag can not be formatted with nfcpy")
+            return None
 
     def protect(self, password=None, read_protect=False, protect_from=0):
         """Protect a tag against future write or read access.
 
         :meth:`protect` attempts to make a tag readonly for all
-        readers if a *password* is :const:`None`, writeable only after
+        readers if *password* is :const:`None`, writeable only after
         authentication if a *password* is provided, and readable only
         after authentication if a *password* is provided and the
         *read_protect* flag is set. The *password* must be a byte or
@@ -342,8 +351,16 @@ class Tag(object):
         support custom protection (or it is not implemented).
         
         """
-        log.error("this tag can not be protected with nfcpy")
-        return None
+        if hasattr(self, "_protect"):
+            args = "password={0!r}, read_protect={1!r}, protect_from={2!r}"
+            args = args.format(password, read_protect, protect_from)
+            log.debug("protect({0})".format(args))
+            status = self._protect(password, read_protect, protect_from)
+            if status is True: self._ndef = None
+            return status
+        else:
+            log.error("this tag can not be protected with nfcpy")
+            return None
 
     def authenticate(self, password):
         """Authenticate a tag with a *password*.
@@ -357,8 +374,15 @@ class Tag(object):
         the return value is :const:`None`.
 
         """
-        log.error("this tag can not be authenticated with nfcpy")
-        return None
+        if hasattr(self, "_protect"):
+            args = "password={0!r}".format(password)
+            log.debug("authenticate({0})".format(args))
+            status = self._authenticate(password)
+            if status is True: self._ndef = None
+            return status
+        else:
+            log.error("this tag can not be authenticated with nfcpy")
+            return None
 
 TIMEOUT_ERROR = 0
 
@@ -371,7 +395,7 @@ class TagCommandError(Exception):
     command has failed. Error numbers greater than zero indicate a tag
     type specific error from one of the exception classes derived from
     :exc:`TagCommandError` (per tag type module). Error number ``0``
-    indicates a tomeout error. Error numbers less than zero indicate
+    indicates a timeout error. Error numbers less than zero indicate
     other general errors, no such errors are currently defined.
 
     The :exc:`TagCommandError` exception populates the *message*
