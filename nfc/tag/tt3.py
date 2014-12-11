@@ -148,6 +148,10 @@ class Type3Tag(nfc.tag.Tag):
     TYPE = "Type3Tag"
 
     class NDEF(nfc.tag.Tag.NDEF):
+        # Type 3 Tag specific implementation of the NDEF access type
+        # class that is returned by the :attr:`nfc.tag:Tag.ndef`
+        # attribute.
+        
         def __init__(self, tag):
             super(Type3Tag.NDEF, self).__init__(tag)
 
