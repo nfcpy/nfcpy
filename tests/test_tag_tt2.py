@@ -413,7 +413,7 @@ tt2_memory_layout_12_readonly = bytearray.fromhex(
     "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 040-043
 )
 
-def test_read_from_readwrite_dynamic_memory_with_null_tlv():
+def test_read_from_readwrite_memory_with_null_tlv():
     txt = "Python module for near field communication"
     msg = nfc.ndef.Message(nfc.ndef.SmartPosterRecord("http://nfcpy.org", txt))
     clf = Type2TagSimulator(tt2_memory_layout_10_readwrite)
@@ -424,7 +424,7 @@ def test_read_from_readwrite_dynamic_memory_with_null_tlv():
     assert tag.ndef.length == 68
     assert tag.ndef.message == msg
 
-def test_read_from_readwrite_dynamic_memory_with_memory_control_tlv():
+def test_read_from_readwrite_memory_with_memory_control_tlv():
     txt = "Python module for near field communication"
     msg = nfc.ndef.Message(nfc.ndef.SmartPosterRecord("http://nfcpy.org", txt))
     clf = Type2TagSimulator(tt2_memory_layout_11_readwrite)
@@ -435,7 +435,7 @@ def test_read_from_readwrite_dynamic_memory_with_memory_control_tlv():
     assert tag.ndef.length == 68
     assert tag.ndef.message == msg
 
-def test_read_from_readwrite_dynamic_memory_with_memory_and_lock_control_tlv():
+def test_read_from_readwrite_memory_with_memory_and_lock_control_tlv():
     txt = "Python module for near field communication"
     msg = nfc.ndef.Message(nfc.ndef.SmartPosterRecord("http://nfcpy.org", txt))
     clf = Type2TagSimulator(tt2_memory_layout_12_readwrite)
@@ -446,7 +446,7 @@ def test_read_from_readwrite_dynamic_memory_with_memory_and_lock_control_tlv():
     assert tag.ndef.length == 68
     assert tag.ndef.message == msg
 
-def test_write_to_initialized_dynamic_memory_with_null_tlv():
+def test_write_to_initialized_memory_with_null_tlv():
     txt = "Python module for near field communication"
     msg = nfc.ndef.Message(nfc.ndef.SmartPosterRecord("http://nfcpy.org", txt))
     clf = Type2TagSimulator(tt2_memory_layout_10_initialized[:])
@@ -458,7 +458,7 @@ def test_write_to_initialized_dynamic_memory_with_null_tlv():
     tag.ndef.message = msg
     assert clf.memory == tt2_memory_layout_10_readwrite
 
-def test_write_to_initialized_dynamic_memory_with_memory_control_tlv():
+def test_write_to_initialized_memory_with_memory_control_tlv():
     txt = "Python module for near field communication"
     msg = nfc.ndef.Message(nfc.ndef.SmartPosterRecord("http://nfcpy.org", txt))
     clf = Type2TagSimulator(tt2_memory_layout_11_initialized[:])
@@ -470,7 +470,7 @@ def test_write_to_initialized_dynamic_memory_with_memory_control_tlv():
     tag.ndef.message = msg
     assert clf.memory == tt2_memory_layout_11_readwrite
 
-def test_write_to_initialized_dynamic_memory_with_memory_and_lock_control_tlv():
+def test_write_to_initialized_memory_with_memory_and_lock_control_tlv():
     txt = "Python module for near field communication"
     msg = nfc.ndef.Message(nfc.ndef.SmartPosterRecord("http://nfcpy.org", txt))
     clf = Type2TagSimulator(tt2_memory_layout_12_initialized[:])
@@ -482,7 +482,7 @@ def test_write_to_initialized_dynamic_memory_with_memory_and_lock_control_tlv():
     tag.ndef.message = msg
     assert clf.memory == tt2_memory_layout_12_readwrite
 
-def test_lock_readwrite_dynamic_memory_with_null_tlv():
+def test_lock_readwrite_memory_with_null_tlv():
     clf = Type2TagSimulator(tt2_memory_layout_10_readwrite[:])
     tag = clf.connect(rdwr={'on-connect': None})
     assert tag.ndef.is_writeable == True
@@ -492,7 +492,7 @@ def test_lock_readwrite_dynamic_memory_with_null_tlv():
     assert tag.protect() == True
     assert clf.memory == tt2_memory_layout_10_readonly
 
-def test_lock_readwrite_dynamic_memory_with_memory_control_tlv():
+def test_lock_readwrite_memory_with_memory_control_tlv():
     clf = Type2TagSimulator(tt2_memory_layout_11_readwrite[:])
     tag = clf.connect(rdwr={'on-connect': None})
     assert tag.ndef.is_writeable == True
@@ -502,7 +502,7 @@ def test_lock_readwrite_dynamic_memory_with_memory_control_tlv():
     assert tag.protect() == True
     assert clf.memory == tt2_memory_layout_11_readonly
 
-def test_lock_readwrite_dynamic_memory_with_memory_and_lock_control_tlv():
+def test_lock_readwrite_memory_with_memory_and_lock_control_tlv():
     clf = Type2TagSimulator(tt2_memory_layout_12_readwrite[:])
     tag = clf.connect(rdwr={'on-connect': None})
     assert tag.ndef.is_writeable == True
@@ -512,21 +512,21 @@ def test_lock_readwrite_dynamic_memory_with_memory_and_lock_control_tlv():
     assert tag.protect() == True
     assert clf.memory == tt2_memory_layout_12_readonly
 
-def test_format_readwrite_dynamic_memory_with_null_tlv():
+def test_format_readwrite_memory_with_null_tlv():
     clf = Type2TagSimulator(tt2_memory_layout_10_readwrite[:])
     tag = clf.connect(rdwr={'on-connect': None})
     assert tag.format(wipe=0) == True
     assert clf.memory == tt2_memory_layout_10_initialized
     assert tag.ndef.length == 0
 
-def test_format_readwrite_dynamic_memory_with_memory_control_tlv():
+def test_format_readwrite_memory_with_memory_control_tlv():
     clf = Type2TagSimulator(tt2_memory_layout_11_readwrite[:])
     tag = clf.connect(rdwr={'on-connect': None})
     assert tag.format(wipe=0) == True
     assert clf.memory == tt2_memory_layout_11_initialized
     assert tag.ndef.length == 0
 
-def test_format_readwrite_dynamic_memory_with_memory_and_lock_control_tlv():
+def test_format_readwrite_memory_with_memory_and_lock_control_tlv():
     clf = Type2TagSimulator(tt2_memory_layout_12_readwrite[:])
     tag = clf.connect(rdwr={'on-connect': None})
     assert tag.format(wipe=0) == True
