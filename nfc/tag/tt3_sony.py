@@ -464,9 +464,9 @@ class FelicaLite(tt3.Type3Tag):
 
         A FeliCa Lite Tag can be provisioned with a custom password
         (or the default manufacturer key if the password is an empty
-        string or bytearray) to later verify that data read from the
-        then write protected tag is genuine. Read protection is not
-        supported.
+        string or bytearray) to ensure that data retrieved by future
+        read operations, after authentication, is genuine. Read
+        protection is not supported.
         
         A non-empty *password* must provide at least 128 bit key
         material, in other words it must be a string or bytearray of
@@ -761,8 +761,8 @@ class FelicaLiteS(FelicaLite):
         A FeliCa Lite-S Tag can be write and read protected with a
         custom password (or the default manufacturer key if the
         password is an empty string or bytearray). Note that the
-        *read_protect* flag is only evaluated if *password* is not
-        :const:`None`.
+        *read_protect* flag is only evaluated when a *password* is
+        provided.
 
         The required *password* length and the memory unit for
         *protect_from* are the same as for :meth:`FelicaLite.protect`.
