@@ -53,12 +53,12 @@ class SmartPosterRecord(Record):
     >>> nfc.ndef.SmartPosterRecord("http://nfcpy.org", "nfcpy")
     >>> nfc.ndef.SmartPosterRecord("http://nfcpy.org", "nfcpy", action="save")
     """
-    def __init__(self, uri, title={}, icons={}, action='default',
+    def __init__(self, uri, title=None, icons=None, action='default',
                  resource_size=None, resource_type=None):
         super(SmartPosterRecord, self).__init__('urn:nfc:wkt:Sp')
         self._title = dict()
-        self.title = title
-        self.icons = icons
+        self.title = title if title else {}
+        self.icons = icons if icons else {}
         self.action = action
         self.resource_size = resource_size
         self.resource_type = resource_type
