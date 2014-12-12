@@ -209,11 +209,14 @@ class Tag(object):
             
             """
             import nfc.ndef
-            try:
-                return nfc.ndef.Message(str(self._data))
-            except nfc.ndef.parser_error as error:
-                log.error(repr(error))
-                return nfc.ndef.Message(nfc.ndef.Record())
+            
+            if len(self._data) > 3:
+                try: return nfc.ndef.Message(str(self._data))
+                except nfc.ndef.parser_error as error:
+                    log.error(repr(error))
+
+            # return an empty record message
+            return nfc.ndef.Message(nfc.ndef.Record())
 
         @message.setter
         def message(self, msg):
