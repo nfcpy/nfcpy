@@ -29,10 +29,26 @@ import time
 
 from nfc.tag import Tag, TagCommandError
 import nfc.clf
-import nfc.ndef
 
 TIMEOUT_ERROR, CHECKSUM_ERROR, INVALID_SECTOR_ERROR, \
     INVALID_PAGE_ERROR, INVALID_RESPONSE_ERROR = range(5)
+
+class Type2TagCommandError(TagCommandError):
+    """Type 2 Tag specific exceptions. Sets 
+    :attr:`~nfc.tag.TagCommandError.errno` to one of:
+    
+    | 1 - CHECKSUM_ERROR 
+    | 2 - INVALID_SECTOR_ERROR 
+    | 3 - INVALID_PAGE_ERROR
+    | 4 - INVALID_RESPONSE_ERROR
+
+    """
+    errno_str = {
+        CHECKSUM_ERROR: "crc validation failed",
+        INVALID_SECTOR_ERROR: "invalid sector number",
+        INVALID_PAGE_ERROR: "invalid page number",
+        INVALID_RESPONSE_ERROR: "invalid response data",
+    }
 
 def read_tlv(memory, offset, skip_bytes):
     # Unpack a Type 2 Tag TLV from tag memory and return tag type, tag
@@ -99,8 +115,7 @@ class Type2Tag(Tag):
     
     class NDEF(Tag.NDEF):
         # Type 2 Tag specific implementation of the NDEF access type
-        # class that is returned by the :attr:`nfc.tag:Tag.ndef`
-        # attribute.
+        # class that is returned by the Tag.ndef attribute.
         
         def __init__(self, tag):
             self._ndef_tlv_offset = 0
@@ -123,7 +138,7 @@ class Type2Tag(Tag):
             offset = 16
             ndef = None
             skip_bytes = set()
-            data_area_size = tag_memory[14] * 8
+            data_area_size = raw_capacity
             while offset < data_area_size + 16:
                 tlv_t, tlv_l, tlv_v = read_tlv(tag_memory, offset, skip_bytes)
                 log.debug("tlv type {0} at offset {1}".format(tlv_t, offset))
@@ -148,7 +163,7 @@ class Type2Tag(Tag):
             return ndef
 
         def _write_ndef_data(self, data):
-            # Write new ndef data to the tag memory. Despite that the
+            # Write new ndef data to the tag memory. Despite the
             # tag memory is rather easy to handle, the extremely
             # generic NFC Forum TLV structure makes this rather
             # complicated. The precondition is that we have already
@@ -651,21 +666,4 @@ class Type2TagMemoryReader(object):
     def synchronize(self):
         """Write pages that contain modified data back to tag memory."""
         self._write_to_tag(stop=len(self))
-
-class Type2TagCommandError(TagCommandError):
-    """Type 2 Tag specific exceptions. Sets 
-    :attr:`~nfc.tag.TagCommandError.errno` to one of:
-    
-    | 1 - CHECKSUM_ERROR 
-    | 2 - INVALID_SECTOR_ERROR 
-    | 3 - INVALID_PAGE_ERROR
-    | 4 - INVALID_RESPONSE_ERROR
-
-    """
-    errno_str = {
-        CHECKSUM_ERROR: "crc validation failed",
-        INVALID_SECTOR_ERROR: "invalid sector number",
-        INVALID_PAGE_ERROR: "invalid page number",
-        INVALID_RESPONSE_ERROR: "invalid response data",
-    }
 
