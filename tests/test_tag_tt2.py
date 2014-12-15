@@ -32,6 +32,7 @@ from nose.tools import raises
 import logging
 logging_level = logging.getLogger().getEffectiveLevel()
 logging.getLogger("nfc.tag.tt2").setLevel(logging_level)
+logging.getLogger("nfc.tag").setLevel(logging_level)
 
 class Type2TagSimulator(nfc.clf.ContactlessFrontend):
     def __init__(self, tag_memory_layout):
@@ -41,7 +42,7 @@ class Type2TagSimulator(nfc.clf.ContactlessFrontend):
 
     def sense(self, targets):
         cfg = bytearray.fromhex("440000")
-        uid = bytearray.fromhex("00000000000000")
+        uid = bytearray.fromhex("31323334353637")
         return nfc.clf.TTA(106, cfg, uid)
 
     def exchange(self, data, timeout):
@@ -61,7 +62,7 @@ class Type2TagSimulator(nfc.clf.ContactlessFrontend):
             return bytearray([0x0A])
         if len(data) == 4 and timeout == 0.001: # SECTOR_SELECT 2
             self.sector = data[0]
-            raise nfc.clf.TimeoutError("simulated")
+        raise nfc.clf.TimeoutError("simulated")
         
     def set_communication_mode(self, brm, **kwargs):
         pass
