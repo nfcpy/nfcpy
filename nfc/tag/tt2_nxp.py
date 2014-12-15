@@ -71,6 +71,11 @@ def activate(clf, target):
     return MifareUltralight(clf, target)
 
 class MifareUltralight(tt2.Type2Tag):
+    """Mifare Ultralight is a simple type 2 tag with no specific
+    features. It can store up to 46 byte NDEF message data. This class
+    does not do much more than to provide the known memory size.
+
+    """
     def __init__(self, clf, target):
         super(MifareUltralight, self).__init__(clf, target)
         self._product = "Mifare Ultralight (MF01CU1)"
@@ -79,6 +84,10 @@ class MifareUltralight(tt2.Type2Tag):
         return super(MifareUltralight, self)._dump(stop=16)
         
 class MifareUltralightC(tt2.Type2Tag):
+    """Mifare Ultralight C provides more memory, to store up to 142 byte
+    NDEF message data, and can be password protected.
+
+    """
     def __init__(self, clf, target):
         super(MifareUltralightC, self).__init__(clf, target)
         self._product = "Mifare Ultralight C (MF01CU2)"
@@ -87,11 +96,8 @@ class MifareUltralightC(tt2.Type2Tag):
         oprint = lambda o: ' '.join(['??' if x < 0 else '%02x'%x for x in o])
         s = super(MifareUltralightC, self)._dump(stop=40)
         
-        footer = dict(zip(range(40, 44),
-                          ("UID0-UID2, BCC0",
-                           "UID3-UID6",
-                           "BCC1, INT, LOCK0-LOCK1",
-                           "OTP0-OTP3")))
+        footer = dict(zip(range(40, 44), (
+            "LOCK2-LOCK3", "CTR0-CTR1", "AUTH0", "AUTH1")))
         
         for i in sorted(footer.keys()):
             try: data = self.read(i)[0:4]
@@ -102,6 +108,26 @@ class MifareUltralightC(tt2.Type2Tag):
         return s
 
     def protect(self, password=None, read_protect=False, protect_from=0):
+        """Protect a Mifare Ultralight C Tag.
+
+        A Mifare Ultrlight C Tag can be provisioned with a custom
+        password (or the default manufacturer key if the password is
+        an empty string or bytearray).  to later verify that data read
+        from the then write protected tag is genuine. Read protection
+        is not supported.
+        
+        A non-empty *password* must provide at least 128 bit key
+        material, in other words it must be a string or bytearray of
+        length 16 or more.
+        
+        The memory unit for the value of *protect_from* is 16 byte,
+        thus with ``protect_from=2`` bytes 0 to 31 are not protected.
+
+        """
+        return super(MifareUltralightC, self).protect(
+            password, read_protect, protect_from)
+
+    def _protect(self, password, read_protect, protect_from):
         assert protect_from >= 0
         if password is not None:
             if password == "":
