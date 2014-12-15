@@ -149,12 +149,8 @@ class Type3Tag(nfc.tag.Tag):
 
     class NDEF(nfc.tag.Tag.NDEF):
         # Type 3 Tag specific implementation of the NDEF access type
-        # class that is returned by the :attr:`nfc.tag:Tag.ndef`
-        # attribute.
+        # class that is returned by the Tag.ndef attribute.
         
-        def __init__(self, tag):
-            super(Type3Tag.NDEF, self).__init__(tag)
-
         def _read_attribute_data(self):
             data = self._tag.read_from_ndef_service(0)
             checksum = unpack(">H", data[14:16])[0]
