@@ -37,6 +37,8 @@ sys.path.insert(1, os.path.split(sys.path[0])[0])
 from cli import CommandLineInterface
 
 import nfc
+import nfc.clf
+import nfc.ndef
 
 tt1_card_map = {
     "\x11\x48": "Topaz-96 (IRT-5011)",
@@ -349,7 +351,7 @@ class TagTool(CommandLineInterface):
         if not tag.ndef.is_writeable:
             print("This Tag is not writeable.")
             return
-            
+
         new_ndef_message = nfc.ndef.Message(self.options.data)
         if new_ndef_message == tag.ndef.message:
             print("The Tag already contains the message to write.")
