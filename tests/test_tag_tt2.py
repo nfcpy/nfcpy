@@ -28,6 +28,7 @@ import nfc.ndef
 
 from binascii import hexlify
 from nose.tools import raises
+from nose.plugins.skip import SkipTest
 
 import logging
 logging_level = logging.getLogger().getEffectiveLevel()
@@ -156,11 +157,7 @@ def test_read_from_static_memory_with_version_two_dot_zero():
     msg = nfc.ndef.Message(nfc.ndef.Record())
     clf = Type2TagSimulator(tt2_memory_layout_5)
     tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.ndef.is_readable == False
-    assert tag.ndef.is_writeable == False
-    assert tag.ndef.capacity == 0
-    assert tag.ndef.length == 0
-    assert tag.ndef.message == msg
+    assert tag.ndef is None
 
 def test_read_from_readwrite_static_memory():
     # TC_T2T_NDA_BV_3_0
@@ -688,4 +685,16 @@ def test_dump_memory_with_identical_pages_3():
     assert len(lines) == len(dump_lines)
     for page, line in enumerate(lines):
         assert line == dump_lines[page]
+
+def test_read_from_static_memory_with_invalid_ndef_data():
+    tag_memory = tt2_memory_layout_2[:]
+    tag_memory[17] = 8 # shrink ndef message length
+    clf = Type2TagSimulator(tag_memory)
+    tag = clf.connect(rdwr={'on-connect': None})
+    assert tag.ndef is not None
+    assert tag.ndef.is_readable == True
+    assert tag.ndef.is_writeable == True
+    assert tag.ndef.capacity == 46
+    assert tag.ndef.length == 8
+    assert tag.ndef.message == nfc.ndef.Message(nfc.ndef.Record())
 

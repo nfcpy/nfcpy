@@ -118,16 +118,20 @@ class Type2Tag(Tag):
         # class that is returned by the Tag.ndef attribute.
         
         def __init__(self, tag):
-            self._ndef_tlv_offset = 0
             super(Type2Tag.NDEF, self).__init__(tag)
+            self._ndef_tlv_offset = 0
 
         def _read_ndef_data(self):
             log.debug("read ndef data")
             tag_memory = Type2TagMemoryReader(self._tag)
             
+            if tag_memory[12] != 0xE1:
+                log.debug("ndef management data is not present")
+                return None
+
             if tag_memory[13] >> 4 != 1:
                 log.debug("unsupported ndef mapping major version")
-                return bytearray()
+                return None
 
             self._readable = bool(tag_memory[15] >> 4 == 0)
             self._writeable = bool(tag_memory[15] & 0xF == 0)
@@ -285,22 +289,6 @@ class Type2Tag(Tag):
 
         return lines
 
-    def _read_ndef(self):
-        # Read ndef data if present. The presence of ndef data is
-        # indicated by the existence of a capability container. The
-        # first byte of the capability container must be 0xE1. Further
-        # checks are not available, but inconsitent data may be
-        # spotted when the NDEF object is initialized.
-        try:
-            self.sector_select(0)
-            data = self.read(0)
-            if data[12] == 0xE1:
-                return self.NDEF(self)
-        except Type2TagCommandError:
-            return
-        except Exception as error: # should be more specific
-            log.error(str(error))
-                
     def _is_present(self):
         # Verify that the tag is still present. This is implemented as
         # reading page 0-3 (from whatever sector is currently active).

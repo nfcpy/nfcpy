@@ -104,12 +104,10 @@ class Tag(object):
         """
         def __init__(self, tag):
             self._tag = tag
+            self._data = None
             self._capacity = 0
             self._readable = False
             self._writeable = False
-            self._data = self._read_ndef_data()
-            if self._data is None:
-                raise RuntimeError("failed to read ndef data")
 
         def _read_ndef_data(self):
             msg = "_read_ndef_data is not implemented for this tag type"
@@ -122,7 +120,7 @@ class Tag(object):
         @property
         def length(self):
             """Length of the current NDEF message in bytes."""
-            return len(self._data)
+            return len(self._data) if self._data else 0
         
         @property
         def capacity(self):
@@ -260,7 +258,9 @@ class Tag(object):
     def ndef(self):
         """An :class:`NDEF` object if found, otherwise :const:`None`."""
         if self._ndef is None:
-            self._ndef = self._read_ndef()
+            ndef = self.NDEF(self)
+            if ndef.has_changed:
+                self._ndef = ndef
         return self._ndef
 
     @property

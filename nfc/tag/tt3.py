@@ -29,7 +29,6 @@ import time
 
 import nfc.tag
 import nfc.clf
-import nfc.ndef
 
 TIMEOUT_ERROR, CHECKSUM_ERROR, RSP_LENGTH_ERROR, RSP_CODE_ERROR, \
     TAG_IDM_ERROR, DATA_SIZE_ERROR = range(6)
@@ -183,6 +182,11 @@ class Type3Tag(nfc.tag.Tag):
             self._tag.write_to_ndef_service(attribute_data, 0)
 
         def _read_ndef_data(self):
+            if self._tag.sys != 0x12FC:
+                try: self._tag.idm, self._tag.pmm = self._tag.polling(0x12FC)
+                except Type3TagCommandError: return None
+                else: self._tag.sys = 0x12FC
+
             attributes = self._read_attribute_data()
             if attributes is None:
                 log.debug("found no attribute data (maybe checksum error)")
@@ -251,25 +255,6 @@ class Type3Tag(nfc.tag.Tag):
             return idm == self.identifier
         except Type3TagCommandError:
             return False
-
-    def _read_ndef(self):
-        # Read NDEF data if possible. If the current system code is
-        # not NFC Forum, check whether it is supported. If it is, then
-        # try to instantiate an NDEF object which will use the tag
-        # methods to read the NDEF management information and message
-        # data. This method is called from nfc.tag.Tag when the *ndef*
-        # attribute is accessed.
-        if self.sys != 0x12FC:
-            try:
-                self.idm, self.pmm = self.polling(0x12FC)
-                self.sys = 0x12FC
-            except Type3TagCommandError:
-                return None
-
-        try:
-            return self.NDEF(self)
-        except Exception as error:
-            log.error(str(error))
 
     def dump(self):
         """Read all data blocks of an NFC Forum Tag.

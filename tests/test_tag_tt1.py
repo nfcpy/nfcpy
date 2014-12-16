@@ -36,8 +36,9 @@ logging.getLogger("nfc.tag.tt1").setLevel(logging_level)
 logging.getLogger("nfc.tag").setLevel(logging_level)
 
 class Type1TagSimulator(nfc.clf.ContactlessFrontend):
-    def __init__(self, tag_memory):
-        self.header = bytearray([0x12 if len(tag_memory)>120 else 0x11, 0xAA])
+    def __init__(self, tag_memory, header_rom=None):
+        self.header = bytearray([0x12 if len(tag_memory)>120 else 0x11, 0xAA])\
+                      if header_rom is None else bytearray(header_rom)
         self.memory = tag_memory
         self.sector = 0
         self.dev = nfc.dev.Device()
@@ -384,3 +385,77 @@ def test_write_to_initialized_static_memory_layout_4():
 def test_transition_to_readonly():
     # TC_T1T_TRANS_BV_1
     raise SkipTest()
+
+################################################################################
+#
+# ADDITIONAL NFCPY TEST CASES
+#
+################################################################################
+
+def test_read_from_static_memory_with_proprietary_header_rom():
+    clf = Type1TagSimulator(tt1_memory_layout_1, header_rom="\0\0")
+    tag = clf.connect(rdwr={'on-connect': None})
+    assert tag.read_all() == "\0\0" + tt1_memory_layout_1
+    assert tag.read_byte(8) == 0xE1
+    assert tag.read_byte(9) == 0x10
+    assert tag.ndef is None
+
+def test_read_from_static_memory_with_no_ndef_magic_byte():
+    tag_memory = tt1_memory_layout_1[:]
+    tag_memory[8] = 0x00 # overwrite ndef magic byte
+    clf = Type1TagSimulator(tag_memory, "\x11\x00")
+    tag = clf.connect(rdwr={'on-connect': None})
+    assert tag.read_all() == "\x11\x00" + tag_memory
+    assert tag.read_byte(8) == 0x00
+    assert tag.read_byte(9) == 0x10
+    assert tag.ndef is None
+
+def test_read_from_static_memory_with_version_zero_dot_one_tag():
+    tag_memory = tt1_memory_layout_1[:]
+    tag_memory[9] = 0x01 # overwrite ndef mapping version
+    clf = Type1TagSimulator(tag_memory, "\x11\x00")
+    tag = clf.connect(rdwr={'on-connect': None})
+    assert tag.read_all() == "\x11\x00" + tag_memory
+    assert tag.read_byte(8) == 0xE1
+    assert tag.read_byte(9) == 0x01
+    assert tag.ndef is None
+
+def test_read_from_static_memory_with_version_nine_dot_zero():
+    tag_memory = tt1_memory_layout_1[:]
+    tag_memory[9] = 0x90 # overwrite ndef mapping version
+    clf = Type1TagSimulator(tag_memory, "\x11\x00")
+    tag = clf.connect(rdwr={'on-connect': None})
+    assert tag.read_all() == "\x11\x00" + tag_memory
+    assert tag.read_byte(8) == 0xE1
+    assert tag.read_byte(9) == 0x90
+    assert tag.ndef is None
+
+def test_read_from_static_memory_with_version_one_dot_nine():
+    tag_memory = tt1_memory_layout_1[:]
+    tag_memory[9] = 0x19 # overwrite ndef mapping version
+    uri = 'http://www.abcdefghijklmnopqrstuvwxyzabcdefg.com'
+    msg = nfc.ndef.Message(nfc.ndef.UriRecord(uri))
+    clf = Type1TagSimulator(tag_memory, "\x11\x00")
+    tag = clf.connect(rdwr={'on-connect': None})
+    assert tag.read_all() == "\x11\x00" + tag_memory
+    assert tag.read_byte(8) == 0xE1
+    assert tag.read_byte(9) == 0x19
+    assert tag.ndef is not None
+    assert tag.ndef.is_readable == True
+    assert tag.ndef.is_writeable == True
+    assert tag.ndef.capacity == 90
+    assert tag.ndef.length == 42
+    assert tag.ndef.message == msg
+
+def test_read_from_static_memory_with_invalid_ndef_data():
+    tag_memory = tt1_memory_layout_1[:]
+    tag_memory[13] = 40 # shrink ndef message length
+    clf = Type1TagSimulator(tag_memory, "\x11\x00")
+    tag = clf.connect(rdwr={'on-connect': None})
+    assert tag.ndef is not None
+    assert tag.ndef.is_readable == True
+    assert tag.ndef.is_writeable == True
+    assert tag.ndef.capacity == 90
+    assert tag.ndef.length == 40
+    assert tag.ndef.message == nfc.ndef.Message(nfc.ndef.Record())
+

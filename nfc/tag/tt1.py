@@ -119,16 +119,29 @@ class Type1Tag(Tag):
         # class that is returned by the Tag.ndef attribute.
         
         def __init__(self, tag):
-            self._ndef_tlv_offset = 0
             super(Type1Tag.NDEF, self).__init__(tag)
+            self._ndef_tlv_offset = 0
 
         def _read_ndef_data(self):
+            # Check and read ndef data from tag. Return None if the
+            # tag is not ndef formatted, i.e. it can not hold ndef
+            # data or does not have (valid) ndef management data.
+            # Otherwise, set state variables and return the ndef
+            # message data as a bytearray (may be zero length).
             log.debug("read ndef data")
             tag_memory = Type1TagMemoryReader(self._tag)
 
+            if tag_memory._header_rom[0] >> 4 != 1:
+                log.debug("proprietary type 1 tag memory structure")
+                return None
+
+            if tag_memory[8] != 0xE1:
+                log.debug("ndef management data is not present")
+                return None
+
             if tag_memory[9] >> 4 != 1:
-                log.debug("unsupported ndef mapping major version")
-                return bytearray()
+                log.debug("unsupported ndef mapping version")
+                return None
 
             self._readable = bool(tag_memory[11] >> 4 == 0)
             self._writeable = bool(tag_memory[11] & 0xF == 0)
@@ -145,10 +158,10 @@ class Type1Tag(Tag):
                 if tlv_t == 0xFE: break
                 elif tlv_t == 0x01:
                     lock_bytes = get_lock_byte_range(tlv_v)
-                    skip_bytes.update(range(*lock_bytes.indices(0x100000)))
+                    skip_bytes.update(range(*lock_bytes.indices(0x800)))
                 elif tlv_t == 0x02:
                     rsvd_bytes = get_rsvd_byte_range(tlv_v)
-                    skip_bytes.update(range(*rsvd_bytes.indices(0x100000)))
+                    skip_bytes.update(range(*rsvd_bytes.indices(0x800)))
                 elif tlv_t == 0x03:
                     ndef = tlv_v; break
                 else:
@@ -302,20 +315,6 @@ class Type1Tag(Tag):
 
         return lines
         
-    def _read_ndef(self):
-        # Read ndef data if present. The presence of ndef data is
-        # indicated by the existence of a capability container. The
-        # first byte of the capability container must be 0xE1. Further
-        # checks are not available, but inconsitent data may be
-        # spotted when the NDEF object is initialized.
-        try:
-            if self.read_id()[0]>>4 == 1 and self.read_byte(8) == 0xE1:
-                return self.NDEF(self)
-        except Type1TagCommandError:
-            pass
-        except Exception as error: # should be more specific
-            log.error(str(error))
-                
     def _is_present(self):
         try: data = self.transceive("\x78\x00\x00"+self.uid)
         except nfc.clf.DigitalProtocolError: return False
@@ -399,6 +398,8 @@ class Type1TagMemoryReader(object):
         self._data_from_tag = bytearray()
         self._data_in_cache = bytearray()
         self._tag = tag
+        # init self._header_rom
+        self._read_from_tag(1)
 
     def __len__(self):
         return len(self._data_from_tag)
@@ -427,7 +428,9 @@ class Type1TagMemoryReader(object):
 
     def _read_from_tag(self, stop):
         if len(self) < 120:
-            self._data_from_tag[0:] = self._tag.read_all()[2:]
+            read_all_data_response = self._tag.read_all()
+            self._header_rom = read_all_data_response[0:2]
+            self._data_from_tag[0:] = read_all_data_response[2:]
             self._data_in_cache[0:] = self._data_from_tag[0:]
         if stop > 120 and len(self) < 128:
             self._data_from_tag[120:128] = self._tag.read_block(15)
@@ -441,7 +444,7 @@ class Type1TagMemoryReader(object):
 
     def _write_to_tag(self, stop):
         try:
-            hr0 = self._tag.read_id()[0]
+            hr0 = self._header_rom[0]
             if hr0 >> 4 == 1 and hr0 & 0x0F != 1:
                 for i in xrange(0, stop, 8):
                     data = self._data_in_cache[i:i+8]
@@ -456,7 +459,6 @@ class Type1TagMemoryReader(object):
                         self._data_from_tag[i] = data
         except Type1TagCommandError as error:
             log.error(str(error))
-            pass
 
     def synchronize(self):
         """Write pages that contain modified data back to tag memory."""
