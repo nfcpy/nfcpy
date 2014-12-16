@@ -32,7 +32,7 @@ import time
 from nfc.tag import Tag, TagCommandError
 import nfc.clf
 
-TIMEOUT_ERROR, CHECKSUM_ERROR, RESPONSE_ERROR, ADDRESS_ERROR, \
+TIMEOUT_ERROR, CHECKSUM_ERROR, RESPONSE_ERROR, WRITE_ERROR, \
     BLOCK_ERROR, SECTOR_ERROR = range(6)
 
 class Type1TagCommandError(TagCommandError):
@@ -41,17 +41,13 @@ class Type1TagCommandError(TagCommandError):
     
     | 1 - CHECKSUM_ERROR
     | 2 - RESPONSE_ERROR
-    | 3 - ADDRESS_ERROR
-    | 4 - BLOCK_ERROR
-    | 5 - SECTOR_ERROR
+    | 3 - WRITE_ERROR
 
     """
     errno_str = {
         CHECKSUM_ERROR: "crc validation failed",
         RESPONSE_ERROR: "invalid response data",
-        ADDRESS_ERROR: "invalid byte address",
-        BLOCK_ERROR: "invalid block number",
-        SECTOR_ERROR: "invalid sector number",
+        WRITE_ERROR: "data write failure",
     }
 
 def read_tlv(memory, offset, skip_bytes):
@@ -108,6 +104,14 @@ def get_capacity(tag_memory_size, offset, skip_bytes):
     return capacity
 
 class Type1Tag(Tag):
+    """Implementation of the NFC Forum Type 1 Tag Operation specification.
+
+    The NFC Forum Type 1 Tag is based on the ISO 14443 Type A
+    technology for frame structure and anticollision (detection)
+    commands, and the Innovision (now Broadcom) Jewel/Topaz commands
+    for accessing the tag memory.
+
+    """
     TYPE = "Type1Tag"
 
     class NDEF(Tag.NDEF):
@@ -208,21 +212,49 @@ class Type1Tag(Tag):
         self.uid = target.uid
 
     def dump(self):
+        """Returns the tag memory blocks as a list of formatted strings.
+
+        :meth:`dump` iterates over all tag memory blocks (8 bytes
+        each) from block zero until the physical end of memory and
+        produces a list of strings that is intended for line by line
+        printing. Multiple consecutive memory block of identical
+        content may be reduced to fewer lines of output, so the number
+        of lines returned does not necessarily correspond to the
+        number of memory blocks present.
+
+        .. warning:: For tags with more than 120 byte memory, the
+            dump() method first overwrites the data block to verify
+            that it is backed by physical memory, then restores the
+            original data. This is necessary because Type 1 Tags do
+            not indicate an error when reading beyond the physical
+            memory space. Be cautious to not remove a tag from the
+            reader when using dump() as otherwise your data may be
+            corrupted.
+
+        """
         return self._dump(stop=None)
         
     def _dump(self, stop=None):
+        # Read and print all data blocks until the non-inclusive stop
+        # block number. Type 1 Tags with dynamic memory seem to return
+        # data for every address, regardless of whether there is
+        # memory mapped or not. To show exactly the memory blocks that
+        # are physically present, blocks from 16-end are first
+        # overwritten with an inverted version of the content and then
+        # recovered. Because WRITE8 returns the new data content, a
+        # non-existing block can be detected.
         ispchr = lambda x: x >= 32 and x <= 126
         oprint = lambda o: ' '.join(['??' if x < 0 else '%02x'%x for x in o])
         cprint = lambda o: ''.join([chr(x) if ispchr(x) else '.' for x in o])
         lprint = lambda fmt, d, i: fmt.format(i, oprint(d), cprint(d))
         
+        txt = ["UID0-UID6, RESERVED", "RESERVED", "LOCK0-LOCK1, OTP0-OTP5",
+               "LOCK2-LOCK3, RESERVED"]
+        
         lines = list()
-
         data = self.read_all()
         hrom, data = data[0:2], data[2:]
 
-        txt = ["UID0-UID6, RESERVED", "RESERVED", "LOCK0-LOCK1, OTP0-OTP5"]
-        
         lines.append("HR0={0:02X}h, HR1={1:02X}h".format(*hrom))
         lines.append("  0: {0} ({1})".format(oprint(data[0:8]), txt[0]))
         for i in xrange(8, 104, 8):
@@ -230,22 +262,10 @@ class Type1Tag(Tag):
         lines.append(" 13: {0} ({1})".format(oprint(data[104:112]), txt[1]))
         lines.append(" 14: {0} ({1})".format(oprint(data[112:120]), txt[2]))
 
-        for i in range (16):
-            self.read_segment(i)
-
-        for i in (0,): #xrange(15, 256):
-            try: data = self.read_block(i)
-            except Type1TagCommandError: break
-
-        return lines
-        
-        header = ("UID0-UID6", "UID3-UID6",
-                  "BCC1, INT, LOCK0-LOCK1", "OTP0-OTP3")
-
-        for i, txt in enumerate(header):
-            try: data = oprint(self.read(i)[0:4])
-            except Type2TagCommandError: data = "?? ?? ?? ??"
-            lines.append("{0:3}: {1} ({2})".format(i, data, txt))
+        if stop is None or stop > 15:
+            try: data = self.read_block(15)
+            except Type1TagCommandError: return lines
+            else: lines.append(" 15: {0} ({1})".format(oprint(data), txt[3]))
 
         data_line_fmt = "{0:>3}: {1} |{2}|"
         same_line_fmt = "{0:>3}  {1} |{2}|"
@@ -257,11 +277,13 @@ class Type1Tag(Tag):
             if same_data > 0:
                 lines.append(lprint(data_line_fmt, this_data, page))
             
-        for i in xrange(4, stop if stop is not None else 0x40000):
+        for i in xrange(16, stop if stop is not None else 256):
             try:
-                self.sector_select(i>>8)
-                this_data = self.read(i)[0:4]
-            except Type2TagCommandError:
+                this_data = self.read_block(i)
+                test_data = bytearray([~b & 0xFF for b in data])
+                self.write_block(i, test_data)
+                self.write_block(i, this_data)
+            except Type1TagCommandError:
                 dump_same_data(same_data, last_data, this_data, i-1)
                 if stop is not None:
                     this_data = last_data = [None, None, None, None]
@@ -279,7 +301,7 @@ class Type1Tag(Tag):
             dump_same_data(same_data, last_data, this_data, i)
 
         return lines
-
+        
     def _read_ndef(self):
         # Read ndef data if present. The presence of ndef data is
         # indicated by the existence of a capability container. The
@@ -352,7 +374,11 @@ class Type1Tag(Tag):
         log.debug("write block {0}".format(block))
         cmd = "\x54" if erase is True else "\x1B"
         cmd = cmd + chr(block) + data + self.uid
-        return self.transceive(cmd)
+        rsp = self.transceive(cmd)
+        if len(rsp) < 9:
+            raise Typ1TagCommandError(RESPONSE_ERROR)
+        if rsp[1:9] != data:
+            raise Type1TagCommandError(WRITE_ERROR)
 
     def transceive(self, data, timeout=0.1):
         started = time.time()
