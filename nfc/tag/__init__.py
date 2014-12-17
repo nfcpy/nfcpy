@@ -23,56 +23,6 @@
 import logging
 log = logging.getLogger(__name__)
 
-def activate(clf, target):
-    import nfc.clf
-    try:
-        if type(target) is nfc.clf.TTA:
-            if target.cfg[0] & 0x1F == 0 and target.cfg[1] & 0x0F == 0x0C:
-                return activate_tt1(clf, target)
-            if len(target.cfg) == 3:
-                if target.cfg[2] & 0x64 == 0x00:
-                    return activate_tt2(clf, target)
-                if target.cfg[2] & 0x24 == 0x20:
-                    return activate_tt4(clf, target)
-        elif type(target) is nfc.clf.TTB:
-            return activate_tt4(clf, target)
-        elif type(target) is nfc.clf.TTF:
-            return activate_tt3(clf, target)
-    except nfc.clf.DigitalProtocolError:
-        return None
-
-def activate_tt1(clf, target):
-    import nfc.tag.tt1
-    return nfc.tag.tt1.Type1Tag(clf, target)
-    
-def activate_tt2(clf, target):
-    import nfc.tag.tt2
-    clf.set_communication_mode('', check_crc='OFF')
-    if target.uid[0] == 0x04: # NXP
-        import nfc.tag.tt2_nxp
-        tag = nfc.tag.tt2_nxp.activate(clf, target)
-        if tag is not None: return tag
-    return nfc.tag.tt2.Type2Tag(clf, target)
-    
-def activate_tt3(clf, target):
-    import nfc.tag.tt3, nfc.tag.tt3_sony
-    tag = nfc.tag.tt3_sony.activate(clf, target)
-    return tag if tag else nfc.tag.tt3.Type3Tag(clf, target)
-    
-def activate_tt4(clf, target):
-    import nfc.tag.tt4
-    return nfc.tag.tt4.Type4Tag(clf, target)
-    
-def emulate(clf, target):
-    import nfc.clf
-    if type(target) is nfc.clf.TTA:
-        log.debug("can't emulate TTA target'")
-    elif type(target) is nfc.clf.TTB:
-        log.debug("can't emulate TTB target'")
-    elif type(target) is nfc.clf.TTF:
-        import nfc.tag.tt3
-        return nfc.tag.tt3.Type3TagEmulation(clf, target)
-
 class Tag(object):
     """The base class for all NFC Tags/Cards. The methods and attributes
     defined here are commonly available but some may, depending on the
@@ -424,3 +374,48 @@ class TagCommandError(Exception):
 
     def __int__(self):
         return self._errno
+
+def activate(clf, target):
+    import nfc.clf
+    try:
+        if type(target) is nfc.clf.TTA:
+            if target.cfg[0] & 0x1F == 0 and target.cfg[1] & 0x0F == 0x0C:
+                return activate_tt1(clf, target)
+            if len(target.cfg) == 3:
+                if target.cfg[2] & 0x64 == 0x00:
+                    return activate_tt2(clf, target)
+                if target.cfg[2] & 0x24 == 0x20:
+                    return activate_tt4(clf, target)
+        elif type(target) is nfc.clf.TTB:
+            return activate_tt4(clf, target)
+        elif type(target) is nfc.clf.TTF:
+            return activate_tt3(clf, target)
+    except nfc.clf.DigitalProtocolError:
+        return None
+
+def activate_tt1(clf, target):
+    import nfc.tag.tt1
+    return nfc.tag.tt1.activate(clf, target)
+    
+def activate_tt2(clf, target):
+    import nfc.tag.tt2
+    return nfc.tag.tt2.activate(clf, target)
+    
+def activate_tt3(clf, target):
+    import nfc.tag.tt3
+    return nfc.tag.tt3.activate(clf, target)
+    
+def activate_tt4(clf, target):
+    import nfc.tag.tt4
+    return nfc.tag.tt4.activate(clf, target)
+    
+def emulate(clf, target):
+    import nfc.clf
+    if type(target) is nfc.clf.TTA:
+        log.debug("can't emulate TTA target'")
+    elif type(target) is nfc.clf.TTB:
+        log.debug("can't emulate TTB target'")
+    elif type(target) is nfc.clf.TTF:
+        import nfc.tag.tt3
+        return nfc.tag.tt3.Type3TagEmulation(clf, target)
+

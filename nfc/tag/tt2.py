@@ -655,3 +655,11 @@ class Type2TagMemoryReader(object):
         """Write pages that contain modified data back to tag memory."""
         self._write_to_tag(stop=len(self))
 
+def activate(clf, target):
+    clf.set_communication_mode('', check_crc='OFF')
+    if target.uid[0] == 0x04: # NXP
+        import nfc.tag.tt2_nxp
+        tag = nfc.tag.tt2_nxp.activate(clf, target)
+        if tag is not None: return tag
+    return Type2Tag(clf, target)
+    

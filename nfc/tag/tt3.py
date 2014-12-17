@@ -820,3 +820,9 @@ class Type3TagEmulation(object):
 
     def request_system_code(self, cmd_data):
         return '\x01' + self.sys
+
+def activate(clf, target):
+    import nfc.tag.tt3_sony
+    tag = nfc.tag.tt3_sony.activate(clf, target)
+    return tag if tag else Type3Tag(clf, target)
+

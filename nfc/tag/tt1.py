@@ -464,3 +464,9 @@ class Type1TagMemoryReader(object):
         """Write pages that contain modified data back to tag memory."""
         self._write_to_tag(stop=len(self))
 
+def activate(clf, target):
+    import nfc.tag.tt1_broadcom
+    tag = nfc.tag.tt1_broadcom.activate(clf, target)
+    if tag is not None: return tag
+    return Type1Tag(clf, target)
+

@@ -268,3 +268,7 @@ class Type4Tag(nfc.tag.Tag):
         rsp = self.transceive(cmd)
         if rsp[-2:] != "\x90\x00":
             raise Type4TagError(rsp[-2:])
+
+def activate(clf, target):
+    return Type4Tag(clf, target)
+
