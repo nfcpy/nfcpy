@@ -293,9 +293,10 @@ class Type1Tag(Tag):
         for i in xrange(16, stop if stop is not None else 256):
             try:
                 this_data = self.read_block(i)
-                test_data = bytearray([~b & 0xFF for b in data])
-                self.write_block(i, test_data)
-                self.write_block(i, this_data)
+                if stop is None:
+                    test_data = bytearray([~b & 0xFF for b in data])
+                    self.write_block(i, test_data)
+                    self.write_block(i, this_data)
             except Type1TagCommandError:
                 dump_same_data(same_data, last_data, this_data, i-1)
                 if stop is not None:
