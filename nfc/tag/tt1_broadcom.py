@@ -49,6 +49,7 @@ class Topaz96(tt1.Type1Tag):
         if wipe is not None:
             tag_memory[14:104] = 90 * chr(wipe & 0xFF)
         tag_memory.synchronize()
+        return True
 
 class Topaz512(tt1.Type1Tag):
     def __init__(self, clf, target):
@@ -56,7 +57,7 @@ class Topaz512(tt1.Type1Tag):
         self._product = "Topaz-512 (TPZ-505-016)"
 
     def dump(self):
-        return super(Topaz96, self)._dump(stop=64)
+        return super(Topaz512, self)._dump(stop=64)
         
     def _format(self, version, wipe):
         tag_memory = tt1.Type1TagMemoryReader(self)
@@ -66,4 +67,5 @@ class Topaz512(tt1.Type1Tag):
             tag_memory[ 24:104] =  80 * chr(wipe & 0xFF)
             tag_memory[128:512] = 384 * chr(wipe & 0xFF)
         tag_memory.synchronize()
+        return True
 
