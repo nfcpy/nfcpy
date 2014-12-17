@@ -24,10 +24,15 @@ import logging
 log = logging.getLogger(__name__)
 
 import os
+from struct import pack, unpack
 
 from . import tt1
 
 class Topaz(tt1.Type1Tag):
+    """The Broadcom Topaz is a small memory tag that can hold up to 94
+    byte ndef message data.
+
+    """
     def __init__(self, clf, target):
         super(Topaz, self).__init__(clf, target)
         self._product = "Topaz (BCM20203T96)"
@@ -52,7 +57,19 @@ class Topaz(tt1.Type1Tag):
         tag_memory.synchronize()
         return True
 
+    def _protect(self, password, read_protect, protect_from):
+        if super(Topaz, self)._protect(password, read_protect, protect_from):
+            self.write_byte(112, 0xFF, erase=False)
+            self.write_byte(113, 0xFF, erase=False)
+            return True
+        else:
+            return False
+
 class Topaz512(tt1.Type1Tag):
+    """The Broadcom Topaz-512 is a memory enhanced version that can hold
+    up to 462 byte ndef message data.
+
+    """
     def __init__(self, clf, target):
         super(Topaz512, self).__init__(clf, target)
         self._product = "Topaz 512 (BCM20203T512)"
@@ -78,6 +95,16 @@ class Topaz512(tt1.Type1Tag):
         
         tag_memory.synchronize()
         return True
+
+    def _protect(self, password, read_protect, protect_from):
+        if super(Topaz, self)._protect(password, read_protect, protect_from):
+            self.write_byte(112, 0xFF, erase=False)
+            self.write_byte(113, 0xFF, erase=False)
+            self.write_byte(120, 0xFF, erase=False)
+            self.write_byte(121, 0xFF, erase=False)
+            return True
+        else:
+            return False
 
 def activate(clf, target):
     hrom = clf.exchange("\x78\x00\x00\x00\x00\x00\x00", timeout=0.01)[0:2]
