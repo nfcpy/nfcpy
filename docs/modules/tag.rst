@@ -15,6 +15,13 @@ nfc.tag.tt1
    :show-inheritance:
    :members:
 
+nfc.tag.tt1_broadcom
+--------------------
+
+.. automodule:: nfc.tag.tt1_broadcom
+   :show-inheritance:
+   :members:
+
 nfc.tag.tt2
 -----------
 
