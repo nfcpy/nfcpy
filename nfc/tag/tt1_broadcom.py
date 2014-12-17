@@ -40,6 +40,17 @@ class Topaz(tt1.Type1Tag):
     def dump(self):
         return super(Topaz, self)._dump(stop=15)
 
+    def format(self, version=None, wipe=None):
+        """Format a Topaz tag for NDEF use.
+
+        The implementation of :meth:`nfc.tag.Tag.format` for a Topaz
+        tag creates a capability container and an NDEF TLV with length
+        zero. Data bytes of the NDEF data area are left untouched
+        unless the wipe argument is set.
+
+        """
+        return super(Type1Tag, self).format(version, wipe)
+
     def _format(self, version, wipe):
         tag_memory = tt1.Type1TagMemoryReader(self)
         tag_memory[8:14] = "\xE1\x10\x0E\x00\x03\x00"
@@ -57,6 +68,17 @@ class Topaz(tt1.Type1Tag):
         tag_memory.synchronize()
         return True
 
+    def protect(self, password=None, read_protect=False, protect_from=0):
+        """In addtion to :meth:`nfc.tag.tt1.Type1Tag.protect` this method
+        tries to set the lock bits to irreversibly protect the tag
+        memory. However, it appears that tags sold have the lock bytes
+        write protected, so this additional effort most likely doesn't
+        have any effect.
+
+        """
+        return super(Type1Tag, self).protect(
+            password, read_protect, protect_from)
+    
     def _protect(self, password, read_protect, protect_from):
         if super(Topaz, self)._protect(password, read_protect, protect_from):
             self.write_byte(112, 0xFF, erase=False)
@@ -77,6 +99,18 @@ class Topaz512(tt1.Type1Tag):
     def dump(self):
         return super(Topaz512, self)._dump(stop=64)
         
+    def format(self, version=None, wipe=None):
+        """Format a Topaz-512 tag for NDEF use.
+
+        The implementation of :meth:`nfc.tag.Tag.format` for a
+        Topaz-512 tag creates a capability container, a Lock Control
+        and a Memory Control TLV, and an NDEF TLV with length
+        zero. Data bytes of the NDEF data area are left untouched
+        unless the wipe argument is set.
+
+        """
+        return super(Type1Tag, self).format(version, wipe)
+
     def _format(self, version, wipe):
         tag_memory = tt1.Type1TagMemoryReader(self)
         tag_memory[ 8:16] = ("E1103F00" "0103F230").decode("hex")
@@ -96,6 +130,17 @@ class Topaz512(tt1.Type1Tag):
         tag_memory.synchronize()
         return True
 
+    def protect(self, password=None, read_protect=False, protect_from=0):
+        """In addtion to :meth:`nfc.tag.tt1.Type1Tag.protect` this method
+        tries to set the lock bits to irreversibly protect the tag
+        memory. However, it appears that tags sold have the lock bytes
+        write protected, so this additional effort most likely doesn't
+        have any effect.
+
+        """
+        return super(Type1Tag, self).protect(
+            password, read_protect, protect_from)
+    
     def _protect(self, password, read_protect, protect_from):
         if super(Topaz, self)._protect(password, read_protect, protect_from):
             self.write_byte(112, 0xFF, erase=False)

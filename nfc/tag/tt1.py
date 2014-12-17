@@ -316,6 +316,15 @@ class Type1Tag(Tag):
 
         return lines
         
+    def protect(self, password=None, read_protect=False, protect_from=0):
+        """The implementation of :meth:`nfc.tag.Tag.protect` for a generic
+        type 1 tag is limited to setting the NDEF data read-only for
+        tags that are already NDEF formatted.
+
+        """
+        return super(Type1Tag, self).protect(
+            password, read_protect, protect_from)
+    
     def _protect(self, password, read_protect, protect_from):
         if password is None:
             if self.ndef is not None:
@@ -331,14 +340,14 @@ class Type1Tag(Tag):
         else: return bool(data and len(data) == 6)
 
     def read_id(self):
-        """Read header rom and all static memory bytes (blocks 0-14).
+        """Returns the 2 byte Header ROM and 4 byte UID.
         """
         log.debug("read identification")
         cmd = "\x78\x00\x00\x00\x00\x00\x00"
         return self.transceive(cmd)
 
     def read_all(self):
-        """Read header rom and all static memory bytes (blocks 0-14).
+        """Returns the 2 byte Header ROM and all 120 byte static memory.
         """
         log.debug("read all static memory")
         cmd = "\x00\x00\x00" + self.uid
@@ -368,8 +377,9 @@ class Type1Tag(Tag):
         return self.transceive(cmd)[1:129]
 
     def write_byte(self, addr, data, erase=True):
-        """Write a single byte to static memory area (blocks 0-14).
-        The target byte is zero'd first if 'erase' is True (default).
+        """Write a single byte to static memory area (blocks 0-14). The
+        target byte is zero'd first if *erase* is True.
+
         """
         log.debug("write byte at address {0} ({0:02X}h)".format(addr))
         cmd = "\x53" if erase is True else "\x1A"
@@ -377,8 +387,9 @@ class Type1Tag(Tag):
         return self.transceive(cmd)
 
     def write_block(self, block, data, erase=True):
-        """Write an 8-byte data block at address (block * 8).
-        The target bytes are zero'd first if 'erase' is True (default).
+        """Write an 8-byte data block at address (block * 8). The target
+        bytes are zero'd first if *erase* is True.
+
         """
         log.debug("write block {0}".format(block))
         cmd = "\x54" if erase is True else "\x1B"
