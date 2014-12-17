@@ -37,7 +37,7 @@ logging.getLogger("nfc.tag").setLevel(logging_level)
 
 class Type1TagSimulator(nfc.clf.ContactlessFrontend):
     def __init__(self, tag_memory, header_rom=None):
-        self.header = bytearray([0x12 if len(tag_memory)>120 else 0x11, 0xAA])\
+        self.header = bytearray([0x12 if len(tag_memory)>120 else 0x11, 0x00])\
                       if header_rom is None else bytearray(header_rom)
         self.memory = tag_memory
         self.sector = 0
