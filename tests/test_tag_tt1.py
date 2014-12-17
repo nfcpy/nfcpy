@@ -459,3 +459,54 @@ def test_read_from_static_memory_with_invalid_ndef_data():
     assert tag.ndef.length == 40
     assert tag.ndef.message == nfc.ndef.Message(nfc.ndef.Record())
 
+def test_format_static_memory_topaz_card():
+    clf = Type1TagSimulator(tt1_memory_layout_1[:], "\x11\x48")
+    tag = clf.connect(rdwr={'on-connect': None})
+    assert tag.format() is True
+    assert tag.ndef is not None
+    assert tag.ndef.is_readable == True
+    assert tag.ndef.is_writeable == True
+    assert tag.ndef.capacity == 90
+    assert tag.ndef.length == 0
+    assert tag.ndef.message == nfc.ndef.Message(nfc.ndef.Record())
+    assert clf.memory[8:14] == "\xE1\x10\x0E\x00\x03\x00"
+
+def test_format_static_memory_topaz_card_with_wipe_zero():
+    clf = Type1TagSimulator(tt1_memory_layout_1[:], "\x11\x48")
+    tag = clf.connect(rdwr={'on-connect': None})
+    assert tag.format(wipe=0) is True
+    assert tag.ndef is not None
+    assert tag.ndef.is_readable == True
+    assert tag.ndef.is_writeable == True
+    assert tag.ndef.capacity == 90
+    assert tag.ndef.length == 0
+    assert tag.ndef.message == nfc.ndef.Message(nfc.ndef.Record())
+    assert clf.memory == tt1_memory_layout_2
+
+def test_format_dynamic_memory_topaz_512_card():
+    clf = Type1TagSimulator(tt1_memory_layout_4[:], "\x12\x4C")
+    tag = clf.connect(rdwr={'on-connect': None})
+    assert tag.format() is True
+    assert tag.ndef is not None
+    assert tag.ndef.is_readable == True
+    assert tag.ndef.is_writeable == True
+    assert tag.ndef.capacity == 462
+    assert tag.ndef.length == 0
+    assert tag.ndef.message == nfc.ndef.Message(nfc.ndef.Record())
+    assert clf.memory[ 8:12] == "\xE1\x10\x3F\x00"
+    assert clf.memory[12:16] == "\x01\x03\xF2\x30"
+    assert clf.memory[16:20] == "\x33\x02\x03\xF0"
+    assert clf.memory[20:24] == "\x02\x03\x03\x00"
+
+def test_format_dynamic_memory_topaz_512_card_with_wipe_zero():
+    clf = Type1TagSimulator(tt1_memory_layout_4[:], "\x12\x4C")
+    tag = clf.connect(rdwr={'on-connect': None})
+    assert tag.format(wipe=0) is True
+    assert tag.ndef is not None
+    assert tag.ndef.is_readable == True
+    assert tag.ndef.is_writeable == True
+    assert tag.ndef.capacity == 462
+    assert tag.ndef.length == 0
+    assert tag.ndef.message == nfc.ndef.Message(nfc.ndef.Record())
+    assert clf.memory == tt1_memory_layout_5
+
