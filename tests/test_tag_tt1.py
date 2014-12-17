@@ -66,8 +66,7 @@ class Type1TagSimulator(nfc.clf.ContactlessFrontend):
         if data[0] == 0x1A and data[3:] == self.uid: # WRITE-NE
             assert data[1] < 128
             data_slice = slice(data[1], data[1] + 1)
-            for offset, i in zip(range(data_slice), range(2, 3)):
-                self.memory[offset] |= data[i]
+            self.memory[data_slice] = data[2:3]
             return bytearray([data[1]]) + self.memory[data_slice]
 
         if len(self.memory) <= 120:
@@ -382,10 +381,6 @@ def test_write_to_initialized_static_memory_layout_4():
     assert tag.ndef.capacity == 462
     assert tag.ndef.length == 461
 
-def test_transition_to_readonly():
-    # TC_T1T_TRANS_BV_1
-    raise SkipTest()
-
 ################################################################################
 #
 # ADDITIONAL NFCPY TEST CASES
@@ -483,7 +478,7 @@ def test_format_static_memory_topaz_card_with_wipe_zero():
     assert tag.ndef.message == nfc.ndef.Message(nfc.ndef.Record())
     assert clf.memory == tt1_memory_layout_2
 
-def test_format_dynamic_memory_topaz_512_card():
+def test_format_dynamic_memory_topaz_card():
     clf = Type1TagSimulator(tt1_memory_layout_4[:], "\x12\x4C")
     tag = clf.connect(rdwr={'on-connect': None})
     assert tag.format() is True
@@ -498,7 +493,7 @@ def test_format_dynamic_memory_topaz_512_card():
     assert clf.memory[16:20] == "\x33\x02\x03\xF0"
     assert clf.memory[20:24] == "\x02\x03\x03\x00"
 
-def test_format_dynamic_memory_topaz_512_card_with_wipe_zero():
+def test_format_dynamic_memory_topaz_card_with_wipe_zero():
     clf = Type1TagSimulator(tt1_memory_layout_4[:], "\x12\x4C")
     tag = clf.connect(rdwr={'on-connect': None})
     assert tag.format(wipe=0) is True
@@ -509,4 +504,12 @@ def test_format_dynamic_memory_topaz_512_card_with_wipe_zero():
     assert tag.ndef.length == 0
     assert tag.ndef.message == nfc.ndef.Message(nfc.ndef.Record())
     assert clf.memory == tt1_memory_layout_5
+
+def test_protect_tag_with_ndef_write_access_restriction():
+    clf = Type1TagSimulator(tt1_memory_layout_1[:], "\x11\x48")
+    tag = clf.connect(rdwr={'on-connect': None})
+    assert tag.protect() is True
+    assert tag.ndef is not None
+    assert tag.ndef.is_readable == True
+    assert tag.ndef.is_writeable == False
 

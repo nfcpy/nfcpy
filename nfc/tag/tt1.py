@@ -316,6 +316,15 @@ class Type1Tag(Tag):
 
         return lines
         
+    def _protect(self, password, read_protect, protect_from):
+        if password is None:
+            if self.ndef is not None:
+                self.write_byte(11, 0x0F, erase=False)
+                return True
+            else: log.warning("no ndef, can't set write access restriction")
+        else: log.warning("this tag can not be protected with a password")
+        return False
+
     def _is_present(self):
         try: data = self.transceive("\x78\x00\x00"+self.uid)
         except nfc.clf.DigitalProtocolError: return False
