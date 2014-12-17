@@ -40,7 +40,6 @@ class Type1TagSimulator(nfc.clf.ContactlessFrontend):
         self.header = bytearray([0x12 if len(tag_memory)>120 else 0x11, 0x00])\
                       if header_rom is None else bytearray(header_rom)
         self.memory = tag_memory
-        self.sector = 0
         self.dev = nfc.dev.Device()
         self.uid = bytearray.fromhex("31323334")
 
