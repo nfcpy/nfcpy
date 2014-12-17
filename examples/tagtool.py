@@ -40,11 +40,6 @@ import nfc
 import nfc.clf
 import nfc.ndef
 
-tt1_card_map = {
-    "\x11\x48": "Topaz-96 (IRT-5011)",
-    "\x12\x4C": "Topaz-512 (TPZ-505-016)"
-    }
-
 def parse_version(string):
     try: major_version, minor_version = map(int, string.split('.'))
     except ValueError, AttributeError:
@@ -120,19 +115,44 @@ def add_format_parser(parser):
     parser.add_argument(
         "--version", metavar="x.y", type=parse_version,
         help="ndef mapping version, default is latest")
-    subparsers = parser.add_subparsers(title="Tag Types", dest="tagtype")
+    subparsers = parser.add_subparsers(
+        title="tag type subcommands", dest="tagtype", metavar='{tt1,tt2,tt3}',
+        help="tag type specific arguments")
+    subparsers.add_parser('any')
+    description = (
+        "The tag type specific arguments are intended to give full "
+        "control over the format creation. Arguments provided here "
+        "are written to the tag regardless of whether they will "
+        "create a valid configuration. It is thus possible to create "
+        "formats that may confuse a reader, as useful for testing.")
     add_format_tt1_parser(subparsers.add_parser(
-            'tt1', help='format type 1 tag'))
+        'tt1', description=description))
+    add_format_tt2_parser(subparsers.add_parser(
+        'tt2', description=description))
     add_format_tt3_parser(subparsers.add_parser(
-            'tt3', help='format type 3 tag'))
+        'tt3', description=description))
 
 def add_format_tt1_parser(parser):
+    parser.add_argument(
+        "--magic", metavar="BYTE", type=parse_uint8,
+        help="value to use as ndef magic byte")
+    parser.add_argument(
+        "--ver", metavar="x.y", type=parse_version,
+        help="ndef mapping major and minor version")
+    parser.add_argument(
+        "--tms", metavar="BYTE", type=parse_uint8,
+        help="tag memory size, 8*(tms+1)")
+    parser.add_argument(
+        "--rwa", metavar="BYTE", type=parse_uint8,
+        help="read write access byte")
+
+def add_format_tt2_parser(parser):
     pass
 
 def add_format_tt3_parser(parser):
     parser.add_argument(
         "--ver", metavar="x.y", type=parse_version,
-        help="ndef mapping version")
+        help="ndef mapping major and minor version")
     parser.add_argument(
         "--nbr", metavar="BYTE", type=parse_uint8,
         help="number of blocks that can be written at once")
@@ -306,11 +326,6 @@ class TagTool(CommandLineInterface):
     def show_tag(self, tag):
         print(tag)
         
-        if self.options.verbose:
-            if tag.type == "Type1Tag":
-                tag._hr = tag.read_id()[0:2]
-                print("  " + tt1_card_map.get(str(tag._hr), "unknown card"))
-        
         if tag.ndef:
             print("NDEF Capabilities:")
             print("  readable  = %s" % ("no","yes")[tag.ndef.is_readable])
@@ -368,66 +383,74 @@ class TagTool(CommandLineInterface):
         print(tag.ndef.message.pretty())
 
     def format_tag(self, tag):
-        if tag.type == "Type1Tag" and self.options.tagtype == "tt1":
-            formatted = self.format_tt1_tag(tag)
-        elif tag.type == "Type3Tag" and self.options.tagtype == "tt3":
-            formatted = self.format_tt3_tag(tag)
-        else:
-            print("This is not a type %s tag" % self.options.tagtype[2])
+        if (self.options.tagtype != "any" and
+            self.options.tagtype[2] != tag.type[4]):
+            print("This is not a Type {0} Tag but you said so."
+                  .format(self.options.tagtype[2]))
             return
 
-        if formatted:
+        if self.options.version is None:
+            version = {'Type1Tag': 0x12, 'Type2Tag': 0x12,
+                       'Type3Tag': 0x12, 'Type4Tag': 0x30}[tag.type]
+        else: version = self.options.version
+            
+        formatted = tag.format(version=version, wipe=self.options.wipe)
+
+        if formatted is True:
+            {'tt1': self.format_tt1_tag, 'tt2': self.format_tt2_tag,
+             'tt3': self.format_tt3_tag, 'tt4': self.format_tt4_tag,
+             'any': lambda tag: None}[self.options.tagtype](tag)
             print("Formatted %s" % tag)
             if tag.ndef:
                 print("  readable  = %s" % ("no","yes")[tag.ndef.is_readable])
                 print("  writeable = %s" % ("no","yes")[tag.ndef.is_writeable])
                 print("  capacity  = %d byte" % tag.ndef.capacity)
                 print("  message   = %d byte" % tag.ndef.length)
+        elif formatted is None:
+            print("Sorry, this tag can not be formatted.")
         else:
-            print("Sorry, I could not format this %s" % tag)
+            print("Sorry, I could not format this tag.")
 
     def format_tt1_tag(self, tag):
-        hr = tag.read_id()[0:2]
-        if hr[0] == 0x11:
-            for i, v in enumerate(bytearray.fromhex("E1100E0003000000")):
-                tag.write_byte(8 + i, v)
-        elif hr[0] == 0x12:
-            tag.write_block(1, bytearray.fromhex("E1103F000103F230"))
-            tag.write_block(2, bytearray.fromhex("330203F002030300"))
-        else:
-            return False
-        # re-read the ndef capabilities
-        tag.ndef = nfc.tag.tt1.NDEF(tag)
-        return True
+        if self.options.magic is not None:
+            tag.write_byte(8, self.options.magic)
+        if self.options.ver is not None:
+            tag.write_byte(9, self.options.ver)
+        if self.options.tms is not None:
+            tag.write_byte(10, self.options.tms)
+        if self.options.rwa is not None:
+            tag.write_byte(11, self.options.rwa)
+
+    def format_tt2_tag(self, tag):
+        pass
 
     def format_tt3_tag(self, tag):
-        if tag.format(version=self.options.version, wipe=self.options.wipe):
-            attribute_data = tag.read_from_ndef_service(0)
-            if self.options.ver is not None:
-                attribute_data[0] = self.options.ver
-            if self.options.nbr is not None:
-                attribute_data[1] = self.options.nbr
-            if self.options.nbw is not None:
-                attribute_data[2] = self.options.nbw
-            if self.options.max is not None:
-                attribute_data[3:5] = struct.pack(">H", self.options.max)
-            if self.options.rfu is not None:
-                attribute_data[5:9] = 4 * [self.options.rfu]
-            if self.options.wf is not None:
-                attribute_data[9] = self.options.wf
-            if self.options.rw is not None:
-                attribute_data[10] = self.options.rw
-            if self.options.len is not None:
-                attribute_data[11:14] = struct.pack(">I", self.options.len)[1:]
-            if self.options.crc is not None:
-                attribute_data[14:16] = struct.pack(">H", self.options.crc)
-            else:
-                checksum = sum(attribute_data[:14])
-                attribute_data[14:16] = struct.pack(">H", checksum)
-            tag.write_to_ndef_service(attribute_data, 0)
-            return True
-        else: # tag.format() failed
-            return False
+        attribute_data = tag.read_from_ndef_service(0)
+        if self.options.ver is not None:
+            attribute_data[0] = self.options.ver
+        if self.options.nbr is not None:
+            attribute_data[1] = self.options.nbr
+        if self.options.nbw is not None:
+            attribute_data[2] = self.options.nbw
+        if self.options.max is not None:
+            attribute_data[3:5] = struct.pack(">H", self.options.max)
+        if self.options.rfu is not None:
+            attribute_data[5:9] = 4 * [self.options.rfu]
+        if self.options.wf is not None:
+            attribute_data[9] = self.options.wf
+        if self.options.rw is not None:
+            attribute_data[10] = self.options.rw
+        if self.options.len is not None:
+            attribute_data[11:14] = struct.pack(">I", self.options.len)[1:]
+        if self.options.crc is not None:
+            attribute_data[14:16] = struct.pack(">H", self.options.crc)
+        else:
+            checksum = sum(attribute_data[:14])
+            attribute_data[14:16] = struct.pack(">H", checksum)
+        tag.write_to_ndef_service(attribute_data, 0)
+
+    def format_tt4_tag(self, tag):
+        pass
 
     def protect_tag(self, tag):
         print(tag)
@@ -534,18 +557,30 @@ class TagTool(CommandLineInterface):
         return True
 
 class ArgparseError(SystemExit):
-    pass
+    def __init__(self, prog, message):
+        super(ArgparseError, self).__init__(2, prog, message)
+    
+    def __str__(self):
+        return '{0}: {1}'.format(self.args[1], self.args[2])
 
 class ArgumentParser(argparse.ArgumentParser):
     def error(self, message):
-        raise ArgparseError(2, '{0}: error: {1}'.format(self.prog, message))
+        raise ArgparseError(self.prog, message)
 
 if __name__ == '__main__':
     try:
         TagTool().run()
     except ArgparseError as e:
+        prog = e.args[1].split()
+    else:
+        sys.exit(0)
+
+    if len(prog) == 1:
         sys.argv = sys.argv + ['show']
-        try:
-            TagTool().run()
-        except ArgparseError:
-            print(e.args[1], file=sys.stderr)
+    elif prog[-1] == "format":
+        sys.argv = sys.argv + ['any']
+
+    try:
+        TagTool().run()
+    except ArgparseError as e:
+        print(e, file=sys.stderr)
