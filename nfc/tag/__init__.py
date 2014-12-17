@@ -273,7 +273,7 @@ class Tag(object):
             if status is True: self._ndef = None
             return status
         else:
-            log.error("this tag can not be formatted with nfcpy")
+            log.debug("this tag can not be formatted with nfcpy")
             return None
 
     def protect(self, password=None, read_protect=False, protect_from=0):
