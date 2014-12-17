@@ -467,15 +467,14 @@ class TagTool(CommandLineInterface):
                 print("A password should be at least 8 characters.")
                 return
             
-            result = tag.protect(password, self.options.unreadable,
-                                 self.options.protect_from)
-            if result is True:
-                print("This tag is now protected.")
-            elif result is False:
-                print("Failed to protect this tag.")
-            elif result is None:
-                print("Sorry, but this tag can not be protected.")
-            return
+        result = tag.protect(password, self.options.unreadable,
+                             self.options.protect_from)
+        if result is True:
+            print("This tag is now protected.")
+        elif result is False:
+            print("Failed to protect this tag.")
+        elif result is None:
+            print("Sorry, but this tag can not be protected.")
 
     def prepare_tag(self):
         if self.options.tagtype == "tt3":
