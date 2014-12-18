@@ -151,7 +151,8 @@ class Type3Tag(nfc.tag.Tag):
         # class that is returned by the Tag.ndef attribute.
         
         def _read_attribute_data(self):
-            data = self._tag.read_from_ndef_service(0)
+            try: data = self._tag.read_from_ndef_service(0)
+            except Type3TagCommandError: return None
             checksum = unpack(">H", data[14:16])[0]
             if sum(data[0:14]) == checksum:
                 ver, nbr, nbw, nmaxb = unpack(">BBBH", data[0:5])
