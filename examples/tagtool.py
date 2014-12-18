@@ -391,7 +391,7 @@ class TagTool(CommandLineInterface):
 
         if self.options.version is None:
             version = {'Type1Tag': 0x12, 'Type2Tag': 0x12,
-                       'Type3Tag': 0x12, 'Type4Tag': 0x30}[tag.type]
+                       'Type3Tag': 0x10, 'Type4Tag': 0x30}[tag.type]
         else: version = self.options.version
             
         formatted = tag.format(version=version, wipe=self.options.wipe)
