@@ -70,7 +70,7 @@ class Type2TagSimulator(nfc.clf.ContactlessFrontend):
 
 ################################################################################
 #
-# NFC FORUM TEST DATA
+# EXTERNALLY DEFINED TEST DATA
 #
 ################################################################################
 
@@ -137,7 +137,7 @@ tt2_memory_layout_9 = (bytearray.fromhex(
 
 ################################################################################
 #
-# NFC FORUM TEST CASES
+# EXTERNALLY DEFINED TEST CASES
 #
 ################################################################################
 
@@ -289,7 +289,7 @@ def test_transition_dynamic_memory_with_lock_control_to_readonly():
 
 ################################################################################
 #
-# ADDITIONAL NFCPY TEST CASES
+# ADDITIONAL NFCPY TEST DATA
 #
 ################################################################################
 
@@ -410,6 +410,12 @@ tt2_memory_layout_12_readonly = bytearray.fromhex(
     "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 036-039
     "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 040-043
 )
+
+################################################################################
+#
+# ADDITIONAL NFCPY TEST CASES
+#
+################################################################################
 
 def test_read_from_readwrite_memory_with_null_tlv():
     txt = "Python module for near field communication"
