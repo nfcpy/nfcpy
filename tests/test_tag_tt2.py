@@ -25,6 +25,7 @@ sys.path.insert(1, os.path.split(sys.path[0])[0])
 
 import nfc
 import nfc.ndef
+import nfc.tag.tt2
 
 from binascii import hexlify
 from nose.tools import raises
@@ -36,33 +37,37 @@ logging.getLogger("nfc.tag.tt2").setLevel(logging_level)
 logging.getLogger("nfc.tag").setLevel(logging_level)
 
 class Type2TagSimulator(nfc.clf.ContactlessFrontend):
-    def __init__(self, tag_memory_layout):
+    def __init__(self, tag_memory_layout, uid="31323334353637"):
         self.memory = tag_memory_layout
         self.sector = 0
         self.dev = nfc.dev.Device()
+        self.uid = bytearray.fromhex(uid)
+        self.tag_is_present = True # to simulate tag removal
 
     def sense(self, targets):
         cfg = bytearray.fromhex("440000")
-        uid = bytearray.fromhex("31323334353637")
-        return nfc.clf.TTA(106, cfg, uid)
+        return nfc.clf.TTA(106, cfg, self.uid)
 
     def exchange(self, data, timeout):
         data = bytearray(data)
-        if data[0] == 0x30: # READ COMMAND
-            offset = self.sector * 1024 + data[1] * 4
-            if offset < len(self.memory):
-                data = self.memory[offset:offset+16]
-                data.extend(self.memory[0:(16-len(data))])
-                return data
-            else: return "\x00" # NAK
-        if data[0] == 0xA2: # WRITE COMMAND
-            offset = self.sector * 1024 + data[1] * 4
-            self.memory[offset:offset+4] = data[2:6]
-            return bytearray([0x0A])
-        if data == "\xC2\xFF": # SECTOR_SELECT 1
-            return bytearray([0x0A])
-        if len(data) == 4 and timeout == 0.001: # SECTOR_SELECT 2
-            self.sector = data[0]
+        if self.tag_is_present:
+            if data[0] == 0x30: # READ COMMAND
+                offset = self.sector * 1024 + data[1] * 4
+                if offset < len(self.memory):
+                    data = self.memory[offset:offset+16]
+                    data.extend(self.memory[0:(16-len(data))])
+                    return data
+                else: return "\x00" # NAK
+            if data[0] == 0xA2: # WRITE COMMAND
+                offset = self.sector * 1024 + data[1] * 4
+                self.memory[offset:offset+4] = data[2:6]
+                return bytearray([0x0A])
+            if data == "\xC2\xFF": # SECTOR_SELECT 1
+                return bytearray([0x0A if len(self.memory) > 1024 else 0xA0])
+            if len(data) == 4 and timeout == 0.001: # SECTOR_SELECT 2
+                if data[0] * 1024 < len(self.memory):
+                    self.sector = data[0]
+                else: return bytearray([0xA0])
         raise nfc.clf.TimeoutError("simulated")
         
     def set_communication_mode(self, brm, **kwargs):
@@ -704,3 +709,96 @@ def test_read_from_static_memory_with_invalid_ndef_data():
     assert tag.ndef.length == 8
     assert tag.ndef.message == nfc.ndef.Message(nfc.ndef.Record())
 
+def test_presence_check_discovers_gone_tag():
+    tag_memory = tt2_memory_layout_1
+    clf = Type2TagSimulator(tag_memory)
+    tag = clf.connect(rdwr={'on-connect': None})
+    assert tag.is_present == True
+    clf.tag_is_present = False
+    assert tag.is_present == False
+
+def test_missing_ndef_management_data():
+    tag_memory = bytearray.fromhex(
+        "04 6F D5 36  11 12 7A 00  79 C8 00 00  00 00 00 00" # 000-003
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 004-007
+    )
+    clf = Type2TagSimulator(tag_memory[:])
+    tag = clf.connect(rdwr={'on-connect': None})
+    assert tag.ndef is None
+
+@raises(nfc.tag.tt2.Type2TagCommandError)
+def test_sector_select_command_with_non_existing_sector_number():
+    clf = Type2TagSimulator(tt2_memory_layout_6)
+    tag = clf.connect(rdwr={'on-connect': None})
+    assert tag.sector_select(1) == 1
+    assert tag.sector_select(2) == 2
+    tag.sector_select(3)
+
+@raises(nfc.tag.tt2.Type2TagCommandError)
+def test_sector_select_command_with_static_memory_layout():
+    clf = Type2TagSimulator(tt2_memory_layout_1)
+    tag = clf.connect(rdwr={'on-connect': None})
+    tag.sector_select(1)
+
+###############################################################################
+#
+# TEST TYPE 2 TAG MEMORY READER
+#
+###############################################################################
+
+def test_memory_reader_assign_byte():
+    clf = Type2TagSimulator(tt2_memory_layout_1[:])
+    tag = clf.connect(rdwr={'on-connect': None})
+    tag_memory = nfc.tag.tt2.Type2TagMemoryReader(tag)
+    tag_memory[0] = 0xFF
+    tag_memory.synchronize()
+    assert clf.memory[0] == 0xFF
+
+@raises(TypeError)
+def test_memory_reader_delete_byte():
+    clf = Type2TagSimulator(tt2_memory_layout_1[:])
+    tag = clf.connect(rdwr={'on-connect': None})
+    tag_memory = nfc.tag.tt2.Type2TagMemoryReader(tag)
+    assert tag_memory[0] == 0x04
+    del tag_memory[0]
+    
+def test_memory_reader_assign_slice_with_matching_length():
+    clf = Type2TagSimulator(tt2_memory_layout_1[:])
+    tag = clf.connect(rdwr={'on-connect': None})
+    tag_memory = nfc.tag.tt2.Type2TagMemoryReader(tag)
+    tag_memory[0:2] = "\x00\x11"
+    tag_memory.synchronize()
+    assert clf.memory[0:2] == "\x00\x11"
+
+@raises(ValueError)
+def test_memory_reader_assign_slice_with_mismatch_length():
+    clf = Type2TagSimulator(tt2_memory_layout_1[:])
+    tag = clf.connect(rdwr={'on-connect': None})
+    tag_memory = nfc.tag.tt2.Type2TagMemoryReader(tag)
+    tag_memory[0:2] = "\x00\x11\x22"
+
+@raises(TypeError)
+def test_memory_reader_delete_slice():
+    clf = Type2TagSimulator(tt2_memory_layout_1[:])
+    tag = clf.connect(rdwr={'on-connect': None})
+    tag_memory = nfc.tag.tt2.Type2TagMemoryReader(tag)
+    assert tag_memory[0:2] == "\x04\x6F"
+    del tag_memory[0:2]
+
+@raises(IndexError)
+def test_memory_reader_read_from_mute_tag():
+    clf = Type2TagSimulator(tt2_memory_layout_1[:])
+    tag = clf.connect(rdwr={'on-connect': None})
+    tag_memory = nfc.tag.tt2.Type2TagMemoryReader(tag)
+    clf.tag_is_present = False
+    tag_memory[0] == 0x04
+
+def test_memory_reader_write_to_mute_tag():
+    clf = Type2TagSimulator(tt2_memory_layout_1[:])
+    tag = clf.connect(rdwr={'on-connect': None})
+    tag_memory = nfc.tag.tt2.Type2TagMemoryReader(tag)
+    assert tag_memory[0] == 0x04
+    clf.tag_is_present = False
+    tag_memory[0] = 0
+    tag_memory.synchronize()
+    assert clf.memory[0] == 0x04

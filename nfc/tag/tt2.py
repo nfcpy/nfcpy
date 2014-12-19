@@ -292,9 +292,14 @@ class Type2Tag(Tag):
     def _is_present(self):
         # Verify that the tag is still present. This is implemented as
         # reading page 0-3 (from whatever sector is currently active).
-        try: data = self.transceive("\x30\x00", rlen=16)
-        except nfc.clf.DigitalProtocolError: return False
-        else: return bool(data and len(data) == 16)
+        try:
+            data = self.transceive("\x30\x00", rlen=16)
+        except Type2TagCommandError as error:
+            if error.errno != TIMEOUT_ERROR:
+                log.warning("unexpected error in presence check: %s" % error)
+            return False
+        else:
+            return bool(data and len(data) == 16)
 
     def format(self, version=None, wipe=None):
         """Erase the NDEF message on a Type 2 Tag.
@@ -526,14 +531,16 @@ class Type2Tag(Tag):
                 except Type2TagCommandError as error:
                     if int(error) == TIMEOUT_ERROR: pass # passive ack
                     else: raise # re-raise for every other error
+                else:
+                    log.debug("sector {0} does not exist".format(sector))
+                    raise Type2TagCommandError(INVALID_SECTOR_ERROR)
             else:
-                log.debug("sector {0} does not exist".format(sector))
+                log.debug("sector select is not supported for this tag")
                 raise Type2TagCommandError(INVALID_SECTOR_ERROR)
 
             log.debug("sector {0} is now selected".format(sector))
             self._current_sector = sector
-        else: # sector equals current sector
-            pass
+        return self._current_sector
 
     def transceive(self, data, timeout=0.1, rlen=None):
         """Send a Type 2 Tag command and receive the response.
