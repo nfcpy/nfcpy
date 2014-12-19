@@ -36,6 +36,15 @@ logging_level = logging.getLogger().getEffectiveLevel()
 logging.getLogger("nfc.tag.tt2").setLevel(logging_level)
 logging.getLogger("nfc.tag").setLevel(logging_level)
 
+def crca(data, size):
+    reg = 0x6363
+    for octet in data[:size]:
+        for pos in range(8):
+            bit = (reg ^ ((octet >> pos) & 1)) & 1
+            reg = reg >> 1
+            if bit: reg = reg ^ 0x8408
+    return bytearray([reg & 0xff, reg >> 8])
+
 class Type2TagSimulator(nfc.clf.ContactlessFrontend):
     def __init__(self, tag_memory_layout, uid="31323334353637"):
         self.memory = tag_memory_layout
@@ -56,7 +65,7 @@ class Type2TagSimulator(nfc.clf.ContactlessFrontend):
                 if offset < len(self.memory):
                     data = self.memory[offset:offset+16]
                     data.extend(self.memory[0:(16-len(data))])
-                    return data
+                    return data + crca(data, len(data))
                 else: return "\x00" # NAK
             if data[0] == 0xA2: # WRITE COMMAND
                 offset = self.sector * 1024 + data[1] * 4
@@ -72,6 +81,7 @@ class Type2TagSimulator(nfc.clf.ContactlessFrontend):
         
     def set_communication_mode(self, brm, **kwargs):
         pass
+
 
 ################################################################################
 #
@@ -739,6 +749,15 @@ def test_sector_select_command_with_static_memory_layout():
     clf = Type2TagSimulator(tt2_memory_layout_1)
     tag = clf.connect(rdwr={'on-connect': None})
     tag.sector_select(1)
+
+@raises(nfc.tag.tt2.Type2TagCommandError)
+def test_read_response_with_wrong_crc():
+    class WrongCrcType2TagSimulator(Type2TagSimulator):
+        def exchange(self, data, timeout):
+            return bytearray(16) + '\xFF\xFF'
+    clf = WrongCrcType2TagSimulator(tt2_memory_layout_1)
+    tag = clf.connect(rdwr={'on-connect': None})
+    tag.read(1)
 
 ###############################################################################
 #
