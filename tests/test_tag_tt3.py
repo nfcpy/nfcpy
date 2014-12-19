@@ -54,6 +54,8 @@ class Type3TagSimulator(nfc.clf.ContactlessFrontend):
         data = bytearray(data)
         if data[1] == 0x06 and data[2:10] == self.idm: # READ W/O ENC
             block_list = self.parse_service_and_block_list(data[10:])
+            maxt = self.calculate_timeout(self.pmm[5], len(block_list))
+            assert timeout == maxt
             data = bytearray()
             for service, block, i in block_list:
                 try:
@@ -63,6 +65,8 @@ class Type3TagSimulator(nfc.clf.ContactlessFrontend):
             return self.encode(0x06, self.idm, chr(len(block_list)) + data)
         if data[1] == 0x08 and data[2:10] == self.idm: # WRITE W/O ENC
             block_list = self.parse_service_and_block_list(data[10:])
+            maxt = self.calculate_timeout(self.pmm[6], len(block_list))
+            assert timeout == maxt
             data = data[-len(block_list)*16:]
             for service, block, i in block_list:
                 print hex(service), hex(block), i
@@ -77,6 +81,11 @@ class Type3TagSimulator(nfc.clf.ContactlessFrontend):
     @staticmethod
     def encode(cmd, idm, data):
         return chr(12+len(data)) + chr(cmd+1) + idm + '\0\0' + data
+
+    @staticmethod
+    def calculate_timeout(pmm_byte, block_count):
+        a, b, e = pmm_byte & 7, pmm_byte>>3 & 7, pmm_byte>>6
+        return 302E-6 * ((b + 1) * block_count + a + 1) * 4**e
 
     @staticmethod
     def parse_service_and_block_list(data):
@@ -107,11 +116,37 @@ class Type3TagSimulator(nfc.clf.ContactlessFrontend):
 
 def test_manufacture_parameter_and_maximum_timing():
     # TC_T3T_MEM_BV_1
-    raise SkipTest
+    ndef_service_data = [bytearray.fromhex(hexstr) for hexstr in [
+        "10 01 01 00  01 00 00 00  00 00 00 00  00 10 00 23",
+        "d1 02 0b 53  70 d1 01 07  55 03 61 62  2e 63 6f 6d",
+    ]]
+    tag_services = {
+        0x0009: ndef_service_data,  0x000B: ndef_service_data,
+    }
+    clf = Type3TagSimulator(tag_services)
+    tag = clf.connect(rdwr={'on-connect': None})
+    send_data = bytearray("0123456789abcdef")
+    tag.write_to_ndef_service(send_data, 1)
+    rcvd_data = tag.read_from_ndef_service(1)
+    assert send_data == rcvd_data
+    tag.write_to_ndef_service(bytearray("\x0F"+15*"\0"), 1)
 
 def test_frame_structure_and_communication_protocol():
     # TC_T3T_FTH_BV_1
-    raise SkipTest
+    ndef_service_data = [bytearray.fromhex(hexstr) for hexstr in [
+        "10 01 01 00  01 00 00 00  00 00 00 00  00 10 00 23",
+        "d1 02 0b 53  70 d1 01 07  55 03 61 62  2e 63 6f 6d",
+    ]]
+    tag_services = {
+        0x0009: ndef_service_data,  0x000B: ndef_service_data,
+    }
+    clf = Type3TagSimulator(tag_services)
+    tag = clf.connect(rdwr={'on-connect': None})
+    send_data = bytearray("0123456789abcdef")
+    tag.write_to_ndef_service(send_data, 1)
+    rcvd_data = tag.read_from_ndef_service(1)
+    assert send_data == rcvd_data
+    tag.write_to_ndef_service(bytearray("\x0F"+15*"\0"), 1)
 
 def test_update_command_and_check_command_with_different_services():
     # TC_T3T_CSE_BV_1
@@ -356,7 +391,38 @@ def test_ndef_detection_and_read_sequence_with_an_incorrect_checksum_value():
 
 def test_ndef_write_sequence():
     # TC_T3T_NDA_BV_4
-    raise SkipTest
+    ndef_service_data = [bytearray.fromhex(hexstr) for hexstr in [
+        "10 0F 0C 00  93 00 00 00  00 00 01 00  00 F0 01 AF",
+        "d1 02 22 53  70 91 01 0e  55 03 6e 66  63 2d 66 6f",
+        "72 75 6d 2e  6f 72 67 51  01 0c 54 02  65 6e 4e 46",
+        "43 20 46 6f  72 75 6d 00  00 00 00 00  00 00 00 00",
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+    ]]
+    tag_services = {
+        0x0009: ndef_service_data,  0x000B: ndef_service_data,
+    }
+    uri = 'http://nfc-forum.org'; title = "NFC Forum Home"
+    msg = nfc.ndef.Message(nfc.ndef.SmartPosterRecord(uri, title))
+    clf = Type3TagSimulator(tag_services)
+    tag = clf.connect(rdwr={'on-connect': None})
+    assert tag.ndef is not None
+    assert tag.ndef.length == 240
+    tag.ndef.message = msg
+    tag = clf.connect(rdwr={'on-connect': None})
+    assert tag.ndef is not None
+    assert tag.ndef.length == 44
+    assert tag.ndef.message == msg
 
 ################################################################################
 #
