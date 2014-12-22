@@ -75,8 +75,8 @@ class Type3TagSimulator(nfc.clf.ContactlessFrontend):
                 except IndexError:
                     return "\x0C\x09" + self.idm + "\x01\xA2"
             return self.encode(0x08, self.idm, '')
-            
-        raise nfc.clf.TimeoutError("invalid command for type 3 tag")
+
+        raise nfc.clf.TimeoutError("unknown command")
 
     @staticmethod
     def encode(cmd, idm, data):
@@ -458,4 +458,70 @@ def test_read_from_ndef_service_with_two_data_blocks():
     assert tag.ndef.capacity == 16
     assert tag.ndef.length == 16
     assert tag.ndef.message == msg
+
+#
+# TEST SEND_CMD_RECV_RSP METHOD
+#
+
+def test_send_cmd_recv_rsp_with_unknown_command():
+    clf = Type3TagSimulator({0x000B: []})
+    tag = clf.connect(rdwr={'on-connect': None})
+    try: tag.send_cmd_recv_rsp(0xFF, "", 1.0)
+    except nfc.tag.tt3.Type3TagCommandError as e:
+        assert e.errno == nfc.tag.tt3.TIMEOUT_ERROR
+
+def test_send_cmd_recv_rsp_with_incorrect_response_length():
+    class MyType3TagSimulator(Type3TagSimulator):
+        def exchange(self, data, timeout):
+            data = self.encode(data[1], self.idm, '')
+            data[0] -= 1
+            return data
+    clf = MyType3TagSimulator({0x000B: []})
+    tag = clf.connect(rdwr={'on-connect': None})
+    try: tag.send_cmd_recv_rsp(0x00, "", 1.0)
+    except nfc.tag.tt3.Type3TagCommandError as e:
+        assert e.errno == nfc.tag.tt3.RSP_LENGTH_ERROR
+
+def test_send_cmd_recv_rsp_with_incorrect_response_code():
+    class MyType3TagSimulator(Type3TagSimulator):
+        def exchange(self, data, timeout):
+            data = self.encode(data[1], self.idm, '')
+            data[1] += 2
+            return data
+    clf = MyType3TagSimulator({0x000B: []})
+    tag = clf.connect(rdwr={'on-connect': None})
+    try: tag.send_cmd_recv_rsp(0x00, "", 1.0)
+    except nfc.tag.tt3.Type3TagCommandError as e:
+        assert e.errno == nfc.tag.tt3.RSP_CODE_ERROR
+
+def test_send_cmd_recv_rsp_with_incorrect_identifier():
+    class MyType3TagSimulator(Type3TagSimulator):
+        def exchange(self, data, timeout):
+            data = self.encode(data[1], self.idm, '')
+            data[2] += 1
+            return data
+    clf = MyType3TagSimulator({0x000B: []})
+    tag = clf.connect(rdwr={'on-connect': None})
+    try: tag.send_cmd_recv_rsp(0x00, "", 1.0)
+    except nfc.tag.tt3.Type3TagCommandError as e:
+        assert e.errno == nfc.tag.tt3.TAG_IDM_ERROR
+
+def test_send_cmd_recv_rsp_with_send_idm_disabled():
+    class MyType3TagSimulator(Type3TagSimulator):
+        def exchange(self, data, timeout):
+            assert data[2:10] != self.idm
+            return chr(2 + len(data[2:])) + chr(data[1]+1) + data[2:]
+    clf = MyType3TagSimulator({0x000B: []})
+    tag = clf.connect(rdwr={'on-connect': None})
+    rsp = tag.send_cmd_recv_rsp(0x00, "\xA5\x5A", 1.0, send_idm=False)
+    assert rsp == "\xA5\x5A"
+
+def test_send_cmd_recv_rsp_with_check_status_disabled():
+    class MyType3TagSimulator(Type3TagSimulator):
+        def exchange(self, data, timeout):
+            return self.encode(data[1], self.idm, data[10:])
+    clf = MyType3TagSimulator({0x000B: []})
+    tag = clf.connect(rdwr={'on-connect': None})
+    rsp = tag.send_cmd_recv_rsp(0x00, "\xA5\x5A", 1.0, check_status=False)
+    assert rsp == "\x00\x00\xA5\x5A"
 
