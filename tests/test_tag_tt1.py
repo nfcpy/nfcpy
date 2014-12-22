@@ -42,6 +42,7 @@ class Type1TagSimulator(nfc.clf.ContactlessFrontend):
         self.memory = tag_memory
         self.dev = nfc.dev.Device()
         self.uid = bytearray.fromhex("31323334")
+        self.tag_is_present = True # to simulate tag removal
 
     def sense(self, targets):
         cfg = bytearray.fromhex("000C")
@@ -50,42 +51,51 @@ class Type1TagSimulator(nfc.clf.ContactlessFrontend):
     def exchange(self, data, timeout):
         print hexlify(data)
         data = bytearray(data)
-        if data[0] == 0x78 and data[1:] == "\0\0\0\0\0\0": # RID
-            return self.header + self.uid
-        if data[0] == 0x00 and data[1:] == "\0\0" + self.uid: # RALL
-            return self.header + self.memory[0:120]
-        if data[0] == 0x01 and data[2:] == "\0" + self.uid: # READ
-            assert data[1] < 128
-            return bytearray([data[1], self.memory[data[1]]])
-        if data[0] == 0x53 and data[3:] == self.uid: # WRITE-E
-            assert data[1] < 128
-            data_slice = slice(data[1], data[1] + 1)
-            self.memory[data_slice] = data[2:3]
-            return bytearray([data[1]]) + self.memory[data_slice]
-        if data[0] == 0x1A and data[3:] == self.uid: # WRITE-NE
-            assert data[1] < 128
-            data_slice = slice(data[1], data[1] + 1)
-            self.memory[data_slice] = data[2:3]
-            return bytearray([data[1]]) + self.memory[data_slice]
+        if self.tag_is_present:
+            if data[0] == 0x78 and data[1:] == "\0\0\0\0\0\0": # RID
+                return self.header + self.uid
+            if data[0] == 0x00 and data[1:] == "\0\0" + self.uid: # RALL
+                return self.header + self.memory[0:120]
+            if data[0] == 0x01 and data[2:] == "\0" + self.uid: # READ
+                assert data[1] < 128
+                return bytearray([data[1], self.memory[data[1]]])
+            if data[0] == 0x53 and data[3:] == self.uid: # WRITE-E
+                assert data[1] < 128
+                data_slice = slice(data[1], data[1] + 1)
+                self.memory[data_slice] = data[2:3]
+                return bytearray([data[1]]) + self.memory[data_slice]
+            if data[0] == 0x1A and data[3:] == self.uid: # WRITE-NE
+                assert data[1] < 128
+                data_slice = slice(data[1], data[1] + 1)
+                self.memory[data_slice] = data[2:3]
+                return bytearray([data[1]]) + self.memory[data_slice]
 
-        if len(self.memory) <= 120:
-            raise nfc.clf.TimeoutError("invalid command for static memory tag")
+            if len(self.memory) <= 120:
+                raise nfc.clf.TimeoutError("invalid command for static memory")
 
-        if data[0] == 0x02 and data[2:] == 8*"\0" + self.uid: # READ8
-            data_slice = slice(data[1] * 8, (data[1] + 1) * 8)
-            return bytearray([data[1]]) + self.memory[data_slice]
-        if data[0] == 0x10 and data[2:] == 8*"\0" + self.uid: # RSEG
-            data_slice = slice((data[1]>>4) * 128, ((data[1]>>4) + 1) * 128)
-            return bytearray([data[1]]) + self.memory[data_slice]
-        if data[0] == 0x54 and data[10:] == self.uid: # WRITE-E8
-            data_slice = slice(data[1] * 8, (data[1] + 1) * 8)
-            self.memory[data_slice] = data[2:10]
-            return bytearray([data[1]]) + self.memory[data_slice]
-        if data[0] == 0x1B and data[10:] == self.uid: # WRITE-NE8
-            data_slice = slice(data[1] * 8, (data[1] + 1) * 8)
-            for offset, i in zip(range(data_slice), range(2, 10)):
-                self.memory[offset] |= data[i]
-            return bytearray([data[1]]) + self.memory[data_slice]
+            if data[0] == 0x02 and data[2:] == 8*"\0" + self.uid: # READ8
+                data_slice = slice(data[1] * 8, (data[1] + 1) * 8)
+                if data_slice.stop <= len(self.memory):
+                    return bytearray([data[1]]) + self.memory[data_slice]
+                else: return bytearray([data[1]]) + bytearray(8)
+            if data[0] == 0x10 and data[2:] == 8*"\0" + self.uid: # RSEG
+                data_slice = slice((data[1]>>4) * 128, ((data[1]>>4)+1) * 128)
+                if data_slice.stop <= len(self.memory):
+                    return bytearray([data[1]]) + self.memory[data_slice]
+                else: return bytearray([data[1]]) + bytearray(128)
+            if data[0] == 0x54 and data[10:] == self.uid: # WRITE-E8
+                data_slice = slice(data[1] * 8, (data[1] + 1) * 8)
+                if data_slice.stop <= len(self.memory):
+                    self.memory[data_slice] = data[2:10]
+                    return bytearray([data[1]]) + self.memory[data_slice]
+                else: return bytearray([data[1]]) + bytearray(8)
+            if data[0] == 0x1B and data[10:] == self.uid: # WRITE-NE8
+                data_slice = slice(data[1] * 8, (data[1] + 1) * 8)
+                if data_slice.stop <= len(self.memory):
+                    for offset, i in zip(range(data_slice), range(2, 10)):
+                        self.memory[offset] |= data[i]
+                    return bytearray([data[1]]) + self.memory[data_slice]
+                else: return bytearray([data[1]]) + bytearray(8)
 
         raise nfc.clf.TimeoutError("invalid command for type 1 tag")
         
@@ -453,6 +463,81 @@ def test_read_from_static_memory_with_invalid_ndef_data():
     assert tag.ndef.length == 40
     assert tag.ndef.message == nfc.ndef.Message(nfc.ndef.Record())
 
+def test_read_from_static_memory_until_terminator_tlv():
+    tag_memory = bytearray.fromhex(
+        "00 11 22 33  44 55 66 77  E1 10 0E 00  00 00 00 00"
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+        "00 00 00 00  00 00 00 FE  55 55 AA AA  00 00 00 00"
+        "01 60 00 00  00 00 00 00"
+    )
+    clf = Type1TagSimulator(tag_memory)
+    tag = clf.connect(rdwr={'on-connect': None})
+    assert tag.ndef is None
+
+def test_read_from_static_memory_with_all_data_zero():
+    tag_memory = bytearray.fromhex(
+        "00 11 22 33  44 55 66 77  E1 10 0E 00  00 00 00 00"
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+        "00 00 00 00  00 00 00 00  55 55 AA AA  00 00 00 00"
+        "01 60 00 00  00 00 00 00"
+    )
+    clf = Type1TagSimulator(tag_memory)
+    tag = clf.connect(rdwr={'on-connect': None})
+    assert tag.ndef is None
+
+def test_read_from_static_memory_with_unknown_tlv():
+    tag_memory = bytearray.fromhex(
+        "00 11 22 33  44 55 66 77  E1 10 0E 00  10 20 30 40"
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+        "00 00 00 00  00 00 00 00  55 55 AA AA  00 00 00 00"
+        "01 60 00 00  00 00 00 00"
+    )
+    clf = Type1TagSimulator(tag_memory)
+    tag = clf.connect(rdwr={'on-connect': None})
+    assert tag.ndef is None
+
+def test_read_from_dynamic_memory_until_terminator_tlv():
+    tag_memory = bytearray.fromhex(
+        "00 11 22 33  44 55 66 77  E1 10 0F 00  00 00 00 00"
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+        "00 00 00 00  00 00 00 00  55 55 AA AA  00 00 00 00"
+        "01 60 00 00  00 00 00 00  00 00 00 00  00 00 00 FE"
+    )
+    clf = Type1TagSimulator(tag_memory)
+    tag = clf.connect(rdwr={'on-connect': None})
+    assert tag.ndef is None
+
+def test_read_from_dynamic_memory_with_all_data_zero():
+    tag_memory = bytearray.fromhex(
+        "00 11 22 33  44 55 66 77  E1 10 0E 00  00 00 00 00"
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+        "00 00 00 00  00 00 00 00  55 55 AA AA  00 00 00 00"
+        "01 60 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+    )
+    clf = Type1TagSimulator(tag_memory)
+    tag = clf.connect(rdwr={'on-connect': None})
+    assert tag.ndef is None
+
 def test_format_static_memory_topaz_card():
     clf = Type1TagSimulator(tt1_memory_layout_1[:], "\x11\x48")
     tag = clf.connect(rdwr={'on-connect': None})
@@ -511,4 +596,99 @@ def test_protect_tag_with_ndef_write_access_restriction():
     assert tag.ndef is not None
     assert tag.ndef.is_readable == True
     assert tag.ndef.is_writeable == False
+
+###############################################################################
+#
+# TEST TYPE 1 TAG DUMP MEMORY
+#
+###############################################################################
+
+def test_dump_static_memory():
+    clf = Type1TagSimulator(tt1_memory_layout_1)
+    tag = clf.connect(rdwr={'on-connect': None})
+    lines = tag.dump()
+    print '\n'.join(lines)
+    assert len(lines) == 16
+    assert lines[-1].startswith(" 14: 01 60 00 00 00 00 00 00")
+
+def test_dump_dynamic_memory():
+    clf = Type1TagSimulator(tt1_memory_layout_4)
+    tag = clf.connect(rdwr={'on-connect': None})
+    lines = tag.dump()
+    print '\n'.join(lines)
+    assert len(lines) > 16
+    assert lines[-1].startswith(" 63: 00 00 00 00 00 00 00 00")
+
+###############################################################################
+#
+# TEST TYPE 1 TAG MEMORY READER
+#
+###############################################################################
+
+def test_memory_reader_assign_byte():
+    clf = Type1TagSimulator(tt1_memory_layout_1[:])
+    tag = clf.connect(rdwr={'on-connect': None})
+    tag_memory = nfc.tag.tt1.Type1TagMemoryReader(tag)
+    tag_memory[0] = 0xFF
+    tag_memory.synchronize()
+    assert clf.memory[0] == 0xFF
+
+@raises(TypeError)
+def test_memory_reader_delete_byte():
+    clf = Type1TagSimulator(tt1_memory_layout_1[:])
+    tag = clf.connect(rdwr={'on-connect': None})
+    tag_memory = nfc.tag.tt1.Type1TagMemoryReader(tag)
+    del tag_memory[0]
+    
+def test_memory_reader_assign_slice_with_matching_length():
+    clf = Type1TagSimulator(tt1_memory_layout_1[:])
+    tag = clf.connect(rdwr={'on-connect': None})
+    tag_memory = nfc.tag.tt1.Type1TagMemoryReader(tag)
+    tag_memory[0:2] = "\x00\x11"
+    tag_memory.synchronize()
+    assert clf.memory[0:2] == "\x00\x11"
+
+@raises(ValueError)
+def test_memory_reader_assign_slice_with_mismatch_length():
+    clf = Type1TagSimulator(tt1_memory_layout_1[:])
+    tag = clf.connect(rdwr={'on-connect': None})
+    tag_memory = nfc.tag.tt1.Type1TagMemoryReader(tag)
+    tag_memory[0:2] = "\x00\x11\x22"
+
+@raises(TypeError)
+def test_memory_reader_delete_slice():
+    clf = Type1TagSimulator(tt1_memory_layout_1[:])
+    tag = clf.connect(rdwr={'on-connect': None})
+    tag_memory = nfc.tag.tt1.Type1TagMemoryReader(tag)
+    del tag_memory[0:2]
+
+def test_memory_reader_read_from_mute_tag():
+    clf = Type1TagSimulator(tt1_memory_layout_4[:])
+    tag = clf.connect(rdwr={'on-connect': None})
+    clf.tag_is_present = False
+    tag_memory = nfc.tag.tt1.Type1TagMemoryReader(tag)
+    try: tag_memory[0]
+    except IndexError: pass
+    clf.tag_is_present = True
+    tag_memory[0]
+    clf.tag_is_present = False
+    try: tag_memory[120]
+    except IndexError: pass
+    clf.tag_is_present = True
+    tag_memory[120]
+    clf.tag_is_present = False
+    try: tag_memory[128]
+    except IndexError: pass
+
+def test_memory_reader_write_to_mute_tag():
+    clf = Type1TagSimulator(tt1_memory_layout_1[:])
+    tag = clf.connect(rdwr={'on-connect': None})
+    tag_memory = nfc.tag.tt1.Type1TagMemoryReader(tag)
+    tag_memory[0] = 0xA5
+    tag_memory.synchronize()
+    assert tag_memory[0] == 0xA5
+    clf.tag_is_present = False
+    tag_memory[0] = 0x5A
+    tag_memory.synchronize()
+    assert clf.memory[0] == 0xA5
 

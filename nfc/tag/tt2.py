@@ -56,7 +56,9 @@ def read_tlv(memory, offset, skip_bytes):
     # this is returned as length -1. The tlv length field can be one
     # or three bytes, if the first byte is 255 then the next two byte
     # carry the length (big endian).
-    tlv_t, offset = (memory[offset], offset+1)
+    while (offset) in skip_bytes: offset += 1
+    try: tlv_t, offset = (memory[offset], offset+1)
+    except IndexError: return (None, None, None)
     if tlv_t in (0x00, 0xFE): return (tlv_t, -1, None)
     tlv_l, offset = (memory[offset], offset+1)
     if tlv_l == 0xFF:
@@ -146,7 +148,8 @@ class Type2Tag(Tag):
             while offset < data_area_size + 16:
                 tlv_t, tlv_l, tlv_v = read_tlv(tag_memory, offset, skip_bytes)
                 log.debug("tlv type {0} at offset {1}".format(tlv_t, offset))
-                if tlv_t == 0xFE: break
+                if tlv_t == 0x00:
+                    pass
                 elif tlv_t == 0x01:
                     lock_bytes = get_lock_byte_range(tlv_v)
                     skip_bytes.update(range(*lock_bytes.indices(0x100000)))
@@ -155,6 +158,8 @@ class Type2Tag(Tag):
                     skip_bytes.update(range(*rsvd_bytes.indices(0x100000)))
                 elif tlv_t == 0x03:
                     ndef = tlv_v; break
+                elif tlv_t == 0xFE or tlv_t is None:
+                    break
                 else:
                     logmsg = "unknown tlv {0} at offset {0}"
                     log.debug(logmsg.format(tlv_t, offset))
@@ -180,8 +185,8 @@ class Type2Tag(Tag):
             # then write all new data into the memory image (skipping
             # bytes as needed) and let that be written to the tag, and
             # finally write the new ndef message tlv length.
-            if self._ndef_tlv_offset == 0:
-                self._read_ndef_data()
+            log.debug("write ndef data {0}{1}".format(
+                hexlify(data[:10]), '...' if len(data)>10 else ''))
             
             tag_memory = self._tag_memory
             skip_bytes = self._skip_bytes

@@ -56,7 +56,9 @@ def read_tlv(memory, offset, skip_bytes):
     # this is returned as length -1. The tlv length field can be one
     # or three bytes, if the first byte is 255 then the next two byte
     # carry the length (big endian).
-    tlv_t, offset = (memory[offset], offset+1)
+    while (offset) in skip_bytes: offset += 1
+    try: tlv_t, offset = (memory[offset], offset+1)
+    except IndexError: return (None, None, None)
     if tlv_t in (0x00, 0xFE): return (tlv_t, -1, None)
     tlv_l, offset = (memory[offset], offset+1)
     if tlv_l == 0xFF:
@@ -155,7 +157,8 @@ class Type1Tag(Tag):
             while offset < tag_memory_size:
                 tlv_t, tlv_l, tlv_v = read_tlv(tag_memory, offset, skip_bytes)
                 log.debug("tlv type {0} at address {1}".format(tlv_t, offset))
-                if tlv_t == 0xFE: break
+                if tlv_t == 0x00:
+                    pass
                 elif tlv_t == 0x01:
                     lock_bytes = get_lock_byte_range(tlv_v)
                     skip_bytes.update(range(*lock_bytes.indices(0x800)))
@@ -164,6 +167,8 @@ class Type1Tag(Tag):
                     skip_bytes.update(range(*rsvd_bytes.indices(0x800)))
                 elif tlv_t == 0x03:
                     ndef = tlv_v; break
+                elif tlv_t == 0xFE or tlv_t is None:
+                    break
                 else:
                     logmsg = "unknown tlv {0} at offset {0}"
                     log.debug(logmsg.format(tlv_t, offset))
@@ -176,10 +181,8 @@ class Type1Tag(Tag):
             return ndef
 
         def _write_ndef_data(self, data):
-            log.debug("write ndef data {0}...".format(hexlify(data[:10])))
-            
-            if self._ndef_tlv_offset == 0:
-                self._read_ndef_data()
+            log.debug("write ndef data {0}{1}".format(
+                hexlify(data[:10]), '...' if len(data)>10 else ''))
             
             tag_memory = self._tag_memory
             skip_bytes = self._skip_bytes
@@ -374,7 +377,10 @@ class Type1Tag(Tag):
         if segment < 0 or segment > 15:
             raise ValueError("segment number must be 0 .. 15")
         cmd = "\x10" + chr(segment<<4) + 8 * chr(0) + self.uid
-        return self.transceive(cmd)[1:129]
+        rsp = self.transceive(cmd)
+        if len(rsp) < 129:
+            raise Type1TagCommandError(RESPONSE_ERROR)
+        return rsp[1:129]
 
     def write_byte(self, addr, data, erase=True):
         """Write a single byte to static memory area (blocks 0-14). The
@@ -449,19 +455,21 @@ class Type1TagMemoryReader(object):
 
     def _read_from_tag(self, stop):
         if len(self) < 120:
-            read_all_data_response = self._tag.read_all()
+            try: read_all_data_response = self._tag.read_all()
+            except Type1TagCommandError: return
             self._header_rom = read_all_data_response[0:2]
             self._data_from_tag[0:] = read_all_data_response[2:]
             self._data_in_cache[0:] = self._data_from_tag[0:]
         if stop > 120 and len(self) < 128:
-            self._data_from_tag[120:128] = self._tag.read_block(15)
-            self._data_in_cache[120:128] = self._data_from_tag[120:128]
+            try: read_block_response = self._tag.read_block(15)
+            except Type1TagCommandError: return
+            self._data_from_tag[120:128] = read_block_response
+            self._data_in_cache[120:128] = read_block_response
         while len(self) < stop:
-            data = self._tag.read_segment(len(self)>>7)
-            if len(data) == 128:
-                self._data_from_tag.extend(data)
-                self._data_in_cache.extend(data)
-            else: break
+            try: data = self._tag.read_segment(len(self)>>7)
+            except Type1TagCommandError: return
+            self._data_from_tag.extend(data)
+            self._data_in_cache.extend(data)
 
     def _write_to_tag(self, stop):
         try:

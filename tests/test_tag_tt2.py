@@ -46,11 +46,11 @@ def crca(data, size):
     return bytearray([reg & 0xff, reg >> 8])
 
 class Type2TagSimulator(nfc.clf.ContactlessFrontend):
-    def __init__(self, tag_memory_layout, uid="31323334353637"):
+    def __init__(self, tag_memory_layout):
         self.memory = tag_memory_layout
         self.sector = 0
         self.dev = nfc.dev.Device()
-        self.uid = bytearray.fromhex(uid)
+        self.uid = self.memory[0:7]
         self.tag_is_present = True # to simulate tag removal
 
     def sense(self, targets):
@@ -443,6 +443,24 @@ def test_read_from_readwrite_memory_with_null_tlv():
     assert tag.ndef.length == 68
     assert tag.ndef.message == msg
 
+def test_read_from_readwrite_memory_until_terminator_tlv():
+    tag_memory = bytearray.fromhex(
+        "00 6F D5 36  11 12 7A 00  79 C8 00 00  E1 10 02 00" # 000-003
+        "00 00 00 00  00 00 00 FE  00 00 00 00  00 00 00 00" # 004-007
+    )
+    clf = Type2TagSimulator(tag_memory)
+    tag = clf.connect(rdwr={'on-connect': None})
+    assert tag.ndef is None
+
+def test_read_from_readwrite_memory_until_end_of_memory():
+    tag_memory = bytearray.fromhex(
+        "00 6F D5 36  11 12 7A 00  79 C8 00 00  E1 10 02 00" # 000-003
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 004-007
+    )
+    clf = Type2TagSimulator(tag_memory)
+    tag = clf.connect(rdwr={'on-connect': None})
+    assert tag.ndef is None
+
 def test_read_from_readwrite_memory_with_memory_control_tlv():
     txt = "Python module for near field communication"
     msg = nfc.ndef.Message(nfc.ndef.SmartPosterRecord("http://nfcpy.org", txt))
@@ -552,9 +570,36 @@ def test_format_readwrite_memory_with_memory_and_lock_control_tlv():
     assert clf.memory == tt2_memory_layout_12_initialized
     assert tag.ndef.length == 0
 
-def test_format_uninitialized_tag():
+def test_not_format_tag_that_has_no_ndef_magic_byte():
     tag_memory = bytearray.fromhex(
         "04 6F D5 36  11 12 7A 00  79 C8 00 00  00 00 00 00" # 000-003
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 004-007
+    )
+    clf = Type2TagSimulator(tag_memory[:])
+    tag = clf.connect(rdwr={'on-connect': None})
+    assert tag.format() == False
+
+def test_not_format_tag_that_has_unknown_mapping_version():
+    tag_memory = bytearray.fromhex(
+        "04 6F D5 36  11 12 7A 00  79 C8 00 00  E1 00 00 00" # 000-003
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 004-007
+    )
+    clf = Type2TagSimulator(tag_memory[:])
+    tag = clf.connect(rdwr={'on-connect': None})
+    assert tag.format() == False
+
+def test_not_format_tag_that_has_no_user_data_memory():
+    tag_memory = bytearray.fromhex(
+        "04 6F D5 36  11 12 7A 00  79 C8 00 00  E1 10 00 00" # 000-003
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 004-007
+    )
+    clf = Type2TagSimulator(tag_memory[:])
+    tag = clf.connect(rdwr={'on-connect': None})
+    assert tag.format() == False
+
+def test_not_format_tag_that_has_write_permission_disabled():
+    tag_memory = bytearray.fromhex(
+        "04 6F D5 36  11 12 7A 00  79 C8 00 00  E1 10 02 01" # 000-003
         "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 004-007
     )
     clf = Type2TagSimulator(tag_memory[:])
@@ -611,10 +656,10 @@ def test_dump_memory_with_stop_argument():
 
 def check_dump_memory_with_stop_argument_smaller_than_memory(stop):
     tag_memory = 4 * (bytearray(range(256)) + bytearray(range(255, -1, -1)))
+    assert stop <= len(tag_memory)//4
     clf = Type2TagSimulator(tag_memory)
     tag = clf.connect(rdwr={'on-connect': None})
-    lines = tag._dump(stop)
-    print '\n'.join(lines)
+    lines = tag._dump(stop) if stop is not None else tag.dump()
     assert len(lines) == len(tag_memory) // 4 if stop is None else stop
     for page, line in enumerate(lines):
         data = tag_memory[page*4:(page+1)*4]
@@ -758,6 +803,18 @@ def test_read_response_with_wrong_crc():
     clf = WrongCrcType2TagSimulator(tt2_memory_layout_1)
     tag = clf.connect(rdwr={'on-connect': None})
     tag.read(1)
+
+def test_presence_check_returns_crc_error():
+    tag_memory = bytearray.fromhex(
+        "00 6F D5 36  11 12 7A 00  79 C8 00 00  00 00 00 00" # 000-003
+        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 004-007
+    )
+    class WrongCrcType2TagSimulator(Type2TagSimulator):
+        def exchange(self, data, timeout):
+            return bytearray(16) + '\xFF\xFF'
+    clf = WrongCrcType2TagSimulator(tag_memory)
+    tag = clf.connect(rdwr={'on-connect': None})
+    assert tag.is_present == False
 
 ###############################################################################
 #
