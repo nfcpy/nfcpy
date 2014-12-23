@@ -39,7 +39,7 @@ def activate(clf, target):
         return FelicaLiteS(clf, target)
     if target.pmm[1] in FelicaStandard.IC_CODE_MAP.keys():
         return FelicaStandard(clf, target)
-    if target.pmm[1] in (0x06, 0x07) + tuple(range(0x10, 0x1F)):
+    if target.pmm[1] in FelicaMobile.IC_CODE_MAP.keys():
         return FelicaMobile(clf, target)
     if target.pmm[1] in FelicaPlug.IC_CODE_MAP.keys():
         return FelicaPlug(clf, target)
@@ -53,7 +53,6 @@ class FelicaStandard(tt3.Type3Tag):
     encrypted.
 
     """
-    
     IC_CODE_MAP = {
         # IC    IC-NAME    NBR NBW
         0x00: ("RC-S830",    8,  8), # RC-S831/833
@@ -347,13 +346,31 @@ class FelicaMobile(FelicaStandard):
     beyond recognition of the Mobile FeliCa OS version.
 
     """
+    IC_CODE_MAP = {
+        # IC   IC-NAME    NBR NBW
+        0x06: ("1.0",       1,  1),
+        0x07: ("1.0",       1,  1),
+        0x10: ("2.0",       1,  1),
+        0x11: ("2.0",       1,  1),
+        0x12: ("2.0",       1,  1),
+        0x13: ("2.0",       1,  1),
+        0x14: ("3.0",       1,  1),
+        0x15: ("3.0",       1,  1),
+        0x16: ("3.0",       1,  1),
+        0x17: ("3.0",       1,  1),
+        0x18: ("3.0",       1,  1),
+        0x19: ("3.0",       1,  1),
+        0x1A: ("3.0",       1,  1),
+        0x1B: ("3.0",       1,  1),
+        0x1C: ("3.0",       1,  1),
+        0x1D: ("3.0",       1,  1),
+        0x1E: ("3.0",       1,  1),
+        0x1F: ("3.0",       1,  1),
+    }
     
     def __init__(self, clf, target):
         super(FelicaMobile, self).__init__(clf, target)
-        self._product = "FeliCa Mobile " + \
-                        "1.0" if self.pmm[1] < 0x10 else \
-                        "2.0" if self.pmm[1] < 0x14 else "3.0"
-        self._nbr, self._nbw = 1, 1
+        self._product = "FeliCa Mobile " + self.IC_CODE_MAP[self.pmm[1]][0]
 
 class FelicaLite(tt3.Type3Tag):
     """FeliCa Lite is a version of FeliCa with simplified file system and

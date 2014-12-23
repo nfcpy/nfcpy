@@ -131,7 +131,7 @@ class BlockCode:
         """Pack the block code for transmission. Returns a 2-3 byte string."""
         bn, am, sx = self.number, self.access, self.service
         return chr(bool(bn < 256)<<7 | (am & 0x7)<<4 | (sx & 0xf)) + \
-            chr(bn) if bn < 256 else pack("<H", bn)
+            (chr(bn) if bn < 256 else pack("<H", bn))
         
 class Type3Tag(nfc.tag.Tag):
     """Implementation of the NFC Forum Type 3 Tag specification.
@@ -210,9 +210,6 @@ class Type3Tag(nfc.tag.Tag):
             return data
 
         def _write_ndef_data(self, data):
-            if not self.writeable or len(data) > self.capacity:
-                return False
-            
             attributes = self._read_attribute_data()
             attributes['writef'] = 0x0F
             self._write_attribute_data(attributes)
@@ -345,7 +342,7 @@ class Type3Tag(nfc.tag.Tag):
         if self.sys != 0x12FC:
             log.warning("not an ndef tag and can not be made compatible")
             return False
-        if version and version & 0xF0 != 0x10:
+        if version and version != 0x10:
             log.warning("type 3 tag ndef mapping version can only be 0x10")
             return False
         
@@ -368,6 +365,7 @@ class Type3Tag(nfc.tag.Tag):
         for i in range(nmaxb + 1):
             try: self.read_from_ndef_service(*range(0, i+1))
             except Type3TagCommandError: break
+        else: i = i + 1
         nbr = i
 
         # To get the number of blocks that can be written in one
@@ -378,6 +376,7 @@ class Type3Tag(nfc.tag.Tag):
             data += self.read_from_ndef_service(i)
             try: self.write_to_ndef_service(data, *range(0, i+1))
             except Type3TagCommandError: break
+        else: i = i + 1
         nbw = i
 
         # We now have all information needed to create and write the
@@ -445,14 +444,16 @@ class Type3Tag(nfc.tag.Tag):
         
         log.debug("polling for system 0x{0:04x}".format(system_code))
         if not time_slots in (0, 1, 3, 7, 15):
-            log.debug("unsafe number of time slots: {0}".format(time_slots))
+            log.debug("invalid number of time slots: {0}".format(time_slots))
+            raise ValueError("invalid number of time slots")
         if not request_code in (0, 1, 2):
-            log.debug("unknown request code value: {0}".format(request_code))
+            log.debug("invalid request code value: {0}".format(request_code))
+            raise ValueError("invalid request code for polling")
 
         timeout = 0.003625 + time_slots * 0.001208
         data = pack(">HBB", system_code, request_code, time_slots)
         data = self.send_cmd_recv_rsp(0x00, data, timeout, send_idm=False)
-        if len(data) != (18 if request_code in (1, 2) else 16):
+        if len(data) != (16 if request_code == 0 else 18):
             log.debug("unexpected polling response length")
             raise Type3TagCommandError(DATA_SIZE_ERROR)
             
@@ -507,7 +508,7 @@ class Type3Tag(nfc.tag.Tag):
         
         data = self.send_cmd_recv_rsp(0x06, data, timeout)
 
-        if data[0] != len(block_list) or len(data) != 1 + len(block_list) * 16:
+        if len(data) != 1 + len(block_list) * 16:
             log.debug("insufficient data received from tag")
             raise Type3TagCommandError(DATA_SIZE_ERROR)
 
