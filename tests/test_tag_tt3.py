@@ -622,6 +622,46 @@ class TestType3TagFelicaMobile:
         tag = clf.connect(rdwr={'on-connect': None})
         assert tag._product.startswith("FeliCa Mobile")
 
+class TestType3TagFelicaLite:
+    sys = "88 B4"
+    idm = "01 02 03 04 05 06 07 08"
+    pmm = "00 F0 FF FF FF FF FF FF"
+    
+    def setup(self):
+        service_data = [bytearray.fromhex(hexstr) for hexstr in [
+            "10 01 01 00  05 00 00 00  00 00 01 00  00 10 00 28",
+            "d1 02 0b 53  70 d1 01 07  55 03 61 62  2e 63 6f 6d",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF",
+        ]] + 113 * [None] + [bytearray.fromhex(hexstr) for hexstr in [
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+        ]]
+        tag_memory = {0x000B: service_data, 0x0009: service_data}
+        self.clf = Type3TagSimulator(tag_memory, self.sys, self.idm, self.pmm)
+        self.tag = self.clf.connect(rdwr={'on-connect': None})
+
+    def test_init(self):
+        assert self.tag._product.startswith("FeliCa Lite")
+
 ################################################################################
 #
 # NFC FORUM TEST CASES
