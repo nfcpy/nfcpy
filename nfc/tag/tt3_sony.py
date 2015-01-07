@@ -21,7 +21,7 @@
 # -----------------------------------------------------------------------------
 
 import logging
-log = logging.getLogger("nfc.tag.tt3")
+log = logging.getLogger(__name__)
 
 import os
 from struct import pack, unpack
@@ -493,6 +493,9 @@ class FelicaLite(tt3.Type3Tag):
         
         The memory unit for the value of *protect_from* is 16 byte,
         thus with ``protect_from=2`` bytes 0 to 31 are not protected.
+        If *protect_from* is zero (the default value) and the Tag has
+        valid NDEF management data, the NDEF RW Flag is set to read
+        only.
 
         """
         return super(FelicaLite, self).protect(
@@ -524,6 +527,12 @@ class FelicaLite(tt3.Type3Tag):
             log.debug("write protect blocks {0}--13".format(protect_from))
             self._mc[0:2] = pack("<H", 0x7FFF ^ (2**14 - 2**protect_from))
 
+        if protect_from == 0 and self.ndef is not None:
+            attribute_data = self.read_without_mac(0)
+            attribute_data[10] = 0x00
+            attribute_data[14:16] = pack('>H', sum(attribute_data[0:14]))
+            self.write_without_mac(attribute_data, 0)
+
         log.debug("write protect system blocks 82,83,84,86,87")
         self._mc[2] = 0x00
         self.write_without_mac(self._mc, 0x88)
@@ -537,12 +546,12 @@ class FelicaLite(tt3.Type3Tag):
         random challenge send by the reader and a key that is securely
         stored on the tag and provided to :meth:`authenticate` as the
         *password* argument. If the tag was protected with an earlier
-        call ot :meth:`protect` then obviously the same password
-        should be used here.
+        call to :meth:`protect` then the same password should
+        successfully authenticate.
 
-        After successful authentication the :meth:`read_with_mac`
-        method can be used to read data such that it can not be
-        falsified on transmission.
+        After authentication the :meth:`read_with_mac` method can be
+        used to read data such that it can not be falsified on
+        transmission.
 
         """
         return super(FelicaLite, self).authenticate(password)
@@ -783,8 +792,15 @@ class FelicaLiteS(FelicaLite):
         *read_protect* flag is only evaluated when a *password* is
         provided.
 
-        The required *password* length and the memory unit for
-        *protect_from* are the same as for :meth:`FelicaLite.protect`.
+        A non-empty *password* must provide at least 128 bit key
+        material, in other words it must be a string or bytearray of
+        length 16 or more.
+        
+        The memory unit for the value of *protect_from* is 16 byte,
+        thus with ``protect_from=2`` bytes 0 to 31 are not protected.
+        If *protect_from* is zero (the default value) and the Tag has
+        valid NDEF management data, the NDEF RW Flag is set to read
+        only.
 
         """
         return super(FelicaLite, self).protect(
@@ -831,6 +847,12 @@ class FelicaLiteS(FelicaLite):
             protect_mask = pack("<H", 2**14 - 2**protect_from)
             mc[8:10] = mc[10:12] = protect_mask
             
+        if protect_from == 0 and self.ndef is not None:
+            attribute_data = self.read_without_mac(0)
+            attribute_data[10] = 0x00
+            attribute_data[14:16] = pack('>H', sum(attribute_data[0:14]))
+            write(attribute_data, 0)
+
         log.debug("write protect system blocks 82,83,84,86,87")
         mc[2] = 0x00 # set system blocks 82,83,84,86,87 to read only
         mc[5] = 0x01 # but allow write with mac to ck and ckv block
