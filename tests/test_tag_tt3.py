@@ -46,7 +46,7 @@ class Type3TagSimulator(nfc.clf.ContactlessFrontend):
         self.mem = tag_memory
         self.idm = bytearray.fromhex(idm)
         self.pmm = bytearray.fromhex(pmm)
-        self.sys = bytearray.fromhex(sys)
+        self.sys = [bytearray.fromhex(sys)]
         self.cmd_counter = 0
         self.tag_is_present = True
         self.expect_command = None
@@ -55,7 +55,7 @@ class Type3TagSimulator(nfc.clf.ContactlessFrontend):
         self.nbr, self.nbw = (None, None)
 
     def sense(self, targets):
-        return nfc.clf.TTF(424, self.idm, self.pmm, self.sys)
+        return nfc.clf.TTF(424, self.idm, self.pmm, self.sys[0])
 
     def exchange(self, data, timeout):
         print hexlify(data)
@@ -71,11 +71,12 @@ class Type3TagSimulator(nfc.clf.ContactlessFrontend):
 
         data = bytearray(data)
         if data[1] == 0x00 and len(data) == 6: # POLLING
-            if data[2:4] in ("\xFF\xFF", self.sys):
+            if data[2:4] in ["\xFF\xFF"] + self.sys:
                 if data[4] == 0x00:
                     return self.encode(0x00, self.idm, self.pmm, '')
                 elif data[4] == 0x01:
-                    return self.encode(0x00, self.idm, self.pmm+self.sys, '')
+                    sys = self.sys[0] if data[2:4] == "\xFF\xFF" else data[2:4]
+                    return self.encode(0x00, self.idm, self.pmm +sys, '')
         if data[1] == 0x06 and data[2:10] == self.idm: # READ W/O ENC
             block_list = self.parse_service_and_block_list(data[10:])
             if self.nbr is not None and len(block_list) > self.nbr:
@@ -89,6 +90,7 @@ class Type3TagSimulator(nfc.clf.ContactlessFrontend):
                 except (IndexError, TypeError):
                     return self.encode(0x06, self.idm, '', "\x01\xA2")
             return self.encode(0x06, self.idm, chr(len(block_list)) + data)
+
         if data[1] == 0x08 and data[2:10] == self.idm: # WRITE W/O ENC
             block_list = self.parse_service_and_block_list(data[10:])
             if self.nbw is not None and len(block_list) > self.nbw:
@@ -102,6 +104,27 @@ class Type3TagSimulator(nfc.clf.ContactlessFrontend):
                 except IndexError:
                     return self.encode(0x08, self.idm, '', "\x01\xA2")
             return self.encode(0x08, self.idm, '')
+
+        if data[1] == 0x02 and data[2:10] == self.idm: # REQUEST SERVICE
+            return self.encode(0x02, self.idm, data[10:], status='')
+
+        if data[1] == 0x04 and data[2:10] == self.idm: # REQUEST RESPONSE
+            return self.encode(0x04, self.idm, chr(0), status='')
+
+        if data[1] == 0x0A and data[2:10] == self.idm: # SEARCH SERVICE CODE
+            #data = {"\x00\x00": '\x00\x00\xFE\xFF', "\x01\x00": '\x09\x00',
+            #        "\x02\x00": '\x0B\x00'}.get(str(data[10:12]), "\xFF\xFF")
+            index = unpack("<H", data[10:12])[0]
+            if index == 0:
+                data = '\x00\x00\xFE\xFF'
+            else:
+                try: data = pack("<H", sorted(self.mem.keys())[index-1])
+                except IndexError: data = "\xFF\xFF"
+            return self.encode(0x0A, self.idm, data, status='')
+
+        if data[1] == 0x0C and data[2:10] == self.idm: # REQUEST SYSTEM CODE
+            data = "\x02\x00\x00\x12\xFC"
+            return self.encode(0x0C, self.idm, data, status='')
 
         raise nfc.clf.TimeoutError("unknown command")
 
@@ -200,8 +223,8 @@ class TestType3Tag:
         ]]
         tag_memory = {0x000B: service_data, 0x0009: service_data}
         clf = Type3TagSimulator(tag_memory, "1234", self.idm, self.pmm)
+        clf.sys.append(bytearray.fromhex("12FC"))
         tag = clf.connect(rdwr={'on-connect': None})
-        clf.sys = bytearray.fromhex("12FC")
         assert tag.ndef is not None
 
     #
@@ -335,7 +358,7 @@ class TestType3Tag:
         
     def test_polling_with_request_system_code(self):
         rsp = self.tag.polling(0xFFFF, request_code=1)
-        assert rsp == (self.clf.idm, self.clf.pmm, self.clf.sys)
+        assert rsp == (self.clf.idm, self.clf.pmm, self.clf.sys[0])
     
     @raises(ValueError)
     def test_polling_with_invalid_request_code(self):
@@ -598,7 +621,36 @@ class TestBlockCode:
 
 class TestType3TagFelicaStandard:
     idm = "01 02 03 04 05 06 07 08"
+    pmm = "00 01 FF FF FF FF FF FF"
 
+    def setup(self):
+        service_data = [bytearray.fromhex(hexstr) for hexstr in [
+            "10 01 01 00  05 00 00 00  00 00 01 00  00 10 00 28",
+            "d1 02 0b 53  70 d1 01 07  55 03 61 62  2e 63 6f 6d",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+        ]]
+        tag_memory = {
+            0x0009: service_data, 0x000B: service_data,
+            0x0048: service_data[1:], 0x0049: service_data[1:],
+            0x004A: service_data[1:], 0x004B: service_data[1:],
+            0x010C: service_data[-1:], 0x010D: service_data[-1:],
+            0x010E: service_data[-1:], 0x010F: service_data[-1:],
+            0x0210: service_data[-1:], 0x0211: service_data[-1:],
+            0x0312: service_data[-1:], 0x0313: service_data[-1:],
+            0x0414: service_data[-1:], 0x0415: service_data[-1:],
+            0x0516: service_data[-1:], 0x0517: service_data[-1:],
+        }
+        self.clf = Type3TagSimulator(tag_memory, "0000", self.idm, self.pmm)
+        self.clf.sys.append(bytearray.fromhex("12FC"))
+        self.tag = self.clf.connect(rdwr={'on-connect': None})
+    
     def test_init_with_ic_code(self):
         for ic in (0, 1, 2, 8, 9, 11, 12, 13, 32, 50, 53):
             yield self.check_init_with_ic_code, ic
@@ -608,6 +660,55 @@ class TestType3TagFelicaStandard:
         clf = Type3TagSimulator(None, "0000", self.idm, pmm)
         tag = clf.connect(rdwr={'on-connect': None})
         assert tag._product.startswith("FeliCa Standard")
+
+    def test_request_service_success(self):
+        sc_list = [nfc.tag.tt3.ServiceCode(0, 9), nfc.tag.tt3.ServiceCode(1, 9)]
+        assert self.tag.request_service(sc_list) == [0x0009, 0x0049]
+
+    @raises(nfc.tag.TagCommandError)
+    def test_request_service_error(self):
+        self.clf.return_response = "\x0B\x03" + self.clf.idm + '\x00'
+        sc_list = [nfc.tag.tt3.ServiceCode(0, 9)]
+        try: self.tag.request_service(sc_list)
+        except nfc.tag.tt3.Type3TagCommandError as error:
+            assert error.errno == nfc.tag.tt3.DATA_SIZE_ERROR; raise
+
+    def test_request_response_success(self):
+        assert self.tag.request_response() == 0
+
+    @raises(nfc.tag.TagCommandError)
+    def test_request_response_error(self):
+        self.clf.return_response = "\x0C\x05" + self.clf.idm + "\0\0"
+        try: self.tag.request_response()
+        except nfc.tag.tt3.Type3TagCommandError as error:
+            assert error.errno == nfc.tag.tt3.DATA_SIZE_ERROR; raise
+
+    def test_search_service_code(self):
+        assert self.tag.search_service_code(0) == (0x0000, 0xFFFE)
+        assert self.tag.search_service_code(1) == (0x0009,)
+        assert self.tag.search_service_code(2) == (0x000B,)
+        assert self.tag.search_service_code(1000) == None
+
+    def test_request_system_code(self):
+        assert self.tag.request_system_code() == [0x0000, 0x12fc]
+
+    @raises(nfc.tag.TagCommandError)
+    def test_request_system_code_failure(self):
+        self.clf.return_response = "\x0C\x0D" + self.clf.idm + '\x01\x02'
+        try: self.tag.request_system_code()
+        except nfc.tag.tt3.Type3TagCommandError as error:
+            assert error.errno == nfc.tag.tt3.DATA_SIZE_ERROR; raise
+
+    def test_is_present_if_present(self):
+        assert self.tag.is_present is True
+
+    def test_is_present_if_gone(self):
+        self.clf.tag_is_present = False
+        assert self.tag.is_present is False
+
+    def test_dump(self):
+        lines = self.tag.dump()
+        assert len(lines) == 58
 
 class TestType3TagFelicaMobile:
     idm = "01 02 03 04 05 06 07 08"
