@@ -327,7 +327,7 @@ class Tag(object):
         the return value is :const:`None`.
 
         """
-        if hasattr(self, "_protect"):
+        if hasattr(self, "_authenticate"):
             args = "password={0!r}".format(password)
             log.debug("authenticate({0})".format(args))
             status = self._authenticate(password)
