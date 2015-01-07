@@ -21,7 +21,7 @@
 # -----------------------------------------------------------------------------
 
 import logging
-log = logging.getLogger(__name__)
+log = logging.getLogger("nfc.tag.tt3")
 
 import os
 from struct import pack, unpack
@@ -191,7 +191,7 @@ class FelicaStandard(tt3.Type3Tag):
                 depth = len(area_stack)
                 area_or_service = self.search_service_code(i)
                 if area_or_service is None:
-                    # Went beyond the largets index. Print overlap
+                    # Went beyond the service index. Print overlap
                     # services if any and exit loop.
                     if len(overlap_services) > 0:
                         lines.extend(print_service(overlap_services, depth))
@@ -251,7 +251,7 @@ class FelicaStandard(tt3.Type3Tag):
         data = self.send_cmd_recv_rsp(0x02, data, timeout, check_status=False)
         if len(data) != 1 + len(service_list) * 2:
             log.debug("insufficient data received from tag")
-            raise tt3.Type3TagCommandError(0, 0x10)
+            raise tt3.Type3TagCommandError(tt3.DATA_SIZE_ERROR)
         return [unpack("<H", data[i:i+2])[0] for i in range(1, len(data), 2)]
         
     def request_response(self):
@@ -274,7 +274,7 @@ class FelicaStandard(tt3.Type3Tag):
         data = self.send_cmd_recv_rsp(0x04, '', timeout, check_status=False)
         if len(data) != 1:
             log.debug("insufficient data received from tag")
-            raise tt3.Type3TagCommandError(0, 0x10)
+            raise tt3.Type3TagCommandError(tt3.DATA_SIZE_ERROR)
         return data[0] # mode
         
     def search_service_code(self, service_index):
@@ -309,6 +309,7 @@ class FelicaStandard(tt3.Type3Tag):
         Command execution errors raise :exc:`~nfc.tag.TagCommandError`.
 
         """
+        log.debug("search service code index {0}".format(service_index))
         a, b, e = self.pmm[3] & 7, self.pmm[3]>>3 & 7, self.pmm[3]>>6
         timeout = 302E-6 * (b + 1 + a + 1) * 4**e
         data = pack("<H", service_index)
@@ -332,12 +333,13 @@ class FelicaStandard(tt3.Type3Tag):
         Command execution errors raise :exc:`~nfc.tag.TagCommandError`.
 
         """
+        log.debug("request system code list")
         a, b, e = self.pmm[3] & 7, self.pmm[3]>>3 & 7, self.pmm[3]>>6
         timeout = 302E-6 * (b + 1 + a + 1) * 4**e
         data = self.send_cmd_recv_rsp(0x0C, '', timeout, check_status=False)
         if len(data) != 1 + data[0] * 2:
             log.debug("insufficient data received from tag")
-            raise tt3.Type3TagCommandError(0, 0x10)
+            raise tt3.Type3TagCommandError(tt3.DATA_SIZE_ERROR)
         return [unpack(">H", data[i:i+2])[0] for i in range(1, len(data), 2)]
         
 class FelicaMobile(FelicaStandard):

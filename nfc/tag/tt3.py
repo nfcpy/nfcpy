@@ -501,8 +501,7 @@ class Type3Tag(nfc.tag.Tag):
                 + chr(len(block_list))
                 + ''.join([bc.pack() for bc in block_list]))
         
-        log.debug("send read without encryption command")
-        log.debug("service/block list: {0} / {1}".format(
+        log.debug("read w/o encryption service/block list: {0} / {1}".format(
             ' '.join([hexlify(sc.pack()) for sc in service_list]),
             ' '.join([hexlify(bc.pack()) for bc in block_list])))
         
@@ -584,8 +583,7 @@ class Type3Tag(nfc.tag.Tag):
                 + ''.join([bc.pack() for bc in block_list])
                 + data)
         
-        log.debug("send write without encryption command")
-        log.debug("service/block list: {0} / {1}".format(
+        log.debug("write w/o encryption service/block list: {0} / {1}".format(
             ' '.join([hexlify(sc.pack()) for sc in service_list]),
             ' '.join([hexlify(bc.pack()) for bc in block_list])))
         
