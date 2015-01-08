@@ -83,13 +83,7 @@ class Type3TagSimulator(nfc.clf.ContactlessFrontend):
                 return self.encode(0x06, self.idm, '', "\x01\xA2")
             maxt = self.calculate_timeout(self.pmm[5], len(block_list))
             assert timeout == maxt
-            data = bytearray()
-            for service, block, i in block_list:
-                try:
-                    data += self.mem[service][block]
-                except (IndexError, TypeError):
-                    return self.encode(0x06, self.idm, '', "\x01\xA2")
-            return self.encode(0x06, self.idm, chr(len(block_list)) + data)
+            return self.read_blocks(block_list)
 
         if data[1] == 0x08 and data[2:10] == self.idm: # WRITE W/O ENC
             block_list = self.parse_service_and_block_list(data[10:])
@@ -97,13 +91,7 @@ class Type3TagSimulator(nfc.clf.ContactlessFrontend):
                 return self.encode(0x08, self.idm, '', "\x01\xA2")
             maxt = self.calculate_timeout(self.pmm[6], len(block_list))
             assert timeout == maxt
-            data = data[-len(block_list)*16:]
-            for service, block, i in block_list:
-                try:
-                    self.mem[service][block][:] = data[i*16:(i+1)*16]
-                except IndexError:
-                    return self.encode(0x08, self.idm, '', "\x01\xA2")
-            return self.encode(0x08, self.idm, '')
+            return self.write_blocks(data[-len(block_list)*16:], block_list)
 
         if data[1] == 0x02 and data[2:10] == self.idm: # REQUEST SERVICE
             return self.encode(0x02, self.idm, data[10:], status='')
@@ -112,8 +100,6 @@ class Type3TagSimulator(nfc.clf.ContactlessFrontend):
             return self.encode(0x04, self.idm, chr(0), status='')
 
         if data[1] == 0x0A and data[2:10] == self.idm: # SEARCH SERVICE CODE
-            #data = {"\x00\x00": '\x00\x00\xFE\xFF', "\x01\x00": '\x09\x00',
-            #        "\x02\x00": '\x0B\x00'}.get(str(data[10:12]), "\xFF\xFF")
             index = unpack("<H", data[10:12])[0]
             if index == 0:
                 data = '\x00\x00\xFE\xFF'
@@ -127,6 +113,23 @@ class Type3TagSimulator(nfc.clf.ContactlessFrontend):
             return self.encode(0x0C, self.idm, data, status='')
 
         raise nfc.clf.TimeoutError("unknown command")
+
+    def read_blocks(self, block_list):
+        data = bytearray()
+        for service, block, i in block_list:
+            try:
+                data += self.mem[service][block]
+            except (IndexError, TypeError):
+                return self.encode(0x06, self.idm, '', "\x01\xA2")
+        return self.encode(0x06, self.idm, chr(len(block_list)) + data)
+
+    def write_blocks(self, data, block_list):
+        for service, block, i in block_list:
+            try:
+                self.mem[service][block][:] = data[i*16:(i+1)*16]
+            except IndexError:
+                return self.encode(0x08, self.idm, '', "\x01\xA2")
+        return self.encode(0x08, self.idm, '')
 
     @staticmethod
     def encode(cmd, idm, data, status='\x00\x00'):
@@ -659,6 +662,7 @@ class TestType3TagFelicaStandard:
         pmm = "00{0:02X}FFFF FFFFFFFF".format(ic)
         clf = Type3TagSimulator(None, "0000", self.idm, pmm)
         tag = clf.connect(rdwr={'on-connect': None})
+        assert isinstance(tag, nfc.tag.tt3_sony.FelicaStandard)
         assert tag._product.startswith("FeliCa Standard")
 
     def test_request_service_success(self):
@@ -721,7 +725,24 @@ class TestType3TagFelicaMobile:
         pmm = "00{0:02X}FFFF FFFFFFFF".format(ic)
         clf = Type3TagSimulator(None, "0000", self.idm, pmm)
         tag = clf.connect(rdwr={'on-connect': None})
+        assert isinstance(tag, nfc.tag.tt3_sony.FelicaMobile)
         assert tag._product.startswith("FeliCa Mobile")
+
+class FelicaLiteTagSimulator(Type3TagSimulator):
+    def read_blocks(self, block_list):
+        data = bytearray()
+        for service, block, i in block_list:
+            try:
+                data += self.mem[service][block]
+            except (IndexError, TypeError):
+                return self.encode(0x06, self.idm, '', "\x01\xA2")
+        if len(block_list) > 1 and block_list[-1][1] == 0x81:
+            ck = str(self.mem[9][0x87][7::-1] + self.mem[9][0x87][15:7:-1])
+            rc = str(self.mem[9][0x80][7::-1] + self.mem[9][0x80][15:7:-1])
+            sk = nfc.tag.pyDes.triple_des(ck, 1, 8 * '\0').encrypt(rc)
+            mac = nfc.tag.tt3_sony.FelicaLite.generate_mac
+            data[-16:-8] = mac(data[:-16], sk, rc[:8])
+        return self.encode(0x06, self.idm, chr(len(block_list)) + data)
 
 class TestType3TagFelicaLite:
     sys = "88 B4"
@@ -754,14 +775,400 @@ class TestType3TagFelicaLite:
             "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
             "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
             "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "FF FF FF 01  07 00 00 00  00 00 00 00  00 00 00 00",
         ]]
         tag_memory = {0x000B: service_data, 0x0009: service_data}
-        self.clf = Type3TagSimulator(tag_memory, self.sys, self.idm, self.pmm)
+        self.clf = FelicaLiteTagSimulator(
+            tag_memory, self.sys, self.idm, self.pmm)
+        self.clf.sys.append(bytearray.fromhex("12FC"))
         self.tag = self.clf.connect(rdwr={'on-connect': None})
 
     def test_init(self):
-        assert self.tag._product.startswith("FeliCa Lite")
+        assert isinstance(self.tag, nfc.tag.tt3_sony.FelicaLite)
+        assert self.tag._product == "FeliCa Lite (RC-S965)"
+        assert self.tag._nbr == 4
+        assert self.tag._nbw == 1
+
+    def test_dump(self):
+        lines = self.tag.dump()
+        print "\n".join(lines)
+        assert len(lines) == 15
+
+    def test_read_ndef_without_authentication(self):
+        msg = nfc.ndef.Message(nfc.ndef.SmartPosterRecord("http://ab.com"))
+        assert self.tag.ndef is not None
+        assert self.tag.ndef.capacity == 5 * 16
+        assert self.tag.ndef.length == 16
+        assert self.tag.ndef.is_readable == True
+        assert self.tag.ndef.is_writeable == True
+        assert self.tag.ndef.message == msg
+
+    def test_read_ndef_after_authentication(self):
+        msg = nfc.ndef.Message(nfc.ndef.SmartPosterRecord("http://ab.com"))
+        assert self.tag.authenticate('') is True
+        assert self.tag.ndef is not None
+        assert self.tag.ndef.capacity == 5 * 16
+        assert self.tag.ndef.length == 16
+        assert self.tag.ndef.is_readable == True
+        assert self.tag.ndef.is_writeable == True
+        assert self.tag.ndef.message == msg
+
+    def test_write_ndef_without_authentication(self):
+        msg = nfc.ndef.Message(nfc.ndef.SmartPosterRecord("http://cd.org"))
+        self.tag.ndef.message = msg
+        assert self.clf.mem[9][1][10:16] == "cd.org"
+
+    def test_generate_mac_with_flip_key_false(self):
+        data = str(bytearray(range(32)))
+        key = str(bytearray(range(16)))
+        iv = str(bytearray(range(8)))
+        mac = nfc.tag.tt3_sony.FelicaLite.generate_mac(data, key, iv)
+        assert mac == str(bytearray.fromhex("0b1268d7a4ac6932"))
+
+    def test_generate_mac_with_flip_key_true(self):
+        data = str(bytearray(range(32)))
+        key = str(bytearray(range(16)))
+        iv = str(bytearray(range(8)))
+        mac = nfc.tag.tt3_sony.FelicaLite.generate_mac(data, key, iv, True)
+        assert mac == str(bytearray.fromhex("18cdd33c0fb25dd7"))
+
+    def test_authenticate_with_default_password(self):
+        assert self.tag.authenticate("") is True
+
+    def test_authenticate_with_wrong_password(self):
+        self.tag.authenticate("0123456789abcdef") is False
+
+    @raises(ValueError)
+    def test_authenticate_with_short_password(self):
+        self.tag.authenticate("abc")
+
+    @raises(RuntimeError)
+    def test_read_with_mac_before_authentication(self):
+        self.tag.read_with_mac(0)
+
+    def test_read_with_mac_fails_mac_verification(self):
+        assert self.tag.authenticate("") is True
+        self.clf.mem[9][0x80] = bytearray(16) # change rc
+        assert self.tag.read_with_mac(0) == None
+
+    @raises(ValueError)
+    def test_protect_with_insufficient_password(self):
+        self.tag.protect("abc")
+
+    @raises(ValueError)
+    def test_protect_with_negative_protect_from(self):
+        self.tag.protect("0123456789abcdef", protect_from=-1)
+
+    def test_protect_with_read_protect_set_true(self):
+        assert self.tag.protect("0123456789abcdef", read_protect=True) is False
+
+    def test_protect_when_system_block_is_protected(self):
+        self.clf.mem[9][0x88][2] = 0
+        tag = self.clf.connect(rdwr={'on-connect': None})
+        assert tag.protect("0123456789abcdef") is False
+
+    def test_protect_all_blocks_and_set_card_key(self):
+        assert self.tag.protect("0123456789abcdef") is True
+        assert self.clf.mem[9][0x87] == "76543210fedcba98"
+        assert self.clf.mem[9][0x88][0:3] == "\x00\x40\x00"
+        assert self.tag.ndef.is_writeable is False
+
+    def test_protect_all_blocks_and_set_default_key(self):
+        self.clf.mem[9][0x87] = bytearray("76543210fedcba98")
+        assert self.tag.protect("") is True
+        assert self.clf.mem[9][0x87] == 16 * "\0"
+        assert self.clf.mem[9][0x88][0:3] == "\x00\x40\x00"
+        assert self.tag.ndef.is_writeable is False
+
+    def test_protect_some_blocks_and_not_set_card_key(self):
+        self.clf.mem[9][0x87] = bytearray("76543210fedcba98")
+        assert self.tag.protect(protect_from=4) is True
+        assert self.clf.mem[9][0x87] == "76543210fedcba98"
+        assert self.clf.mem[9][0x88][0:3] == "\x0F\x40\x00"
+        assert self.tag.ndef.is_writeable is True
+
+    def test_protect_system_blocks_and_not_set_card_key(self):
+        self.clf.mem[9][0x87] = bytearray("76543210fedcba98")
+        assert self.tag.protect(protect_from=14) is True
+        assert self.clf.mem[9][0x87] == "76543210fedcba98"
+        assert self.clf.mem[9][0x88][0:3] == "\xFF\xFF\x00"
+        assert self.tag.ndef.is_writeable is True
+
+    def test_format_with_default_arguments(self):
+        assert self.tag.format() is True
+        attribute_data = "100401000d0000000000010000000023".decode("hex")
+        assert self.clf.mem[9][0] == attribute_data
+
+    def test_format_with_version_one_dot_zero(self):
+        assert self.tag.format(0x10) is True
+        attribute_data = "100401000d0000000000010000000023".decode("hex")
+        assert self.clf.mem[9][0] == attribute_data
+
+    def test_format_with_wipe_argument_zero(self):
+        assert self.tag.format(wipe=0) is True
+        attribute_data = "100401000d0000000000010000000023".decode("hex")
+        assert self.clf.mem[9][0] == attribute_data
+        for i in range(1, 14):
+            assert self.clf.mem[9][i] == bytearray(16)
+
+    @raises(AssertionError)
+    def test_format_with_wrong_version_argument_type(self):
+        self.tag.format(version="1.0")
+
+    @raises(AssertionError)
+    def test_format_with_wrong_wipe_argument_type(self):
+        self.tag.format(wipe="1")
+
+    def test_format_with_invalid_version_number(self):
+        assert self.tag.format(version=0xFF) == False
+
+    def test_format_with_tag_first_data_block_readonly(self):
+        self.clf.mem[9][0x88][0] = 0xFE
+        assert self.tag.format() is False
+
+    def test_format_with_some_blocks_readonly(self):
+        self.clf.mem[9][0x88][0] = 0x0F
+        assert self.tag.format() is True
+        attribute_data = "10040100030000000000010000000019".decode("hex")
+        assert self.clf.mem[9][0] == attribute_data
+
+    def test_format_with_tag_not_configurable_for_ndef(self):
+        self.clf.mem[9][0x88][3] = 0
+        self.clf.mem[9][0x88][2] = 0
+        assert self.tag.format() is False
+
+    def test_format_with_tag_not_configured_for_ndef(self):
+        self.clf.mem[9][0x88][3] = 0
+        assert self.tag.format() is True
+        assert self.clf.mem[9][0x88][3] == 1
+
+class FelicaLiteSTagSimulator(FelicaLiteTagSimulator):
+    def write_blocks(self, data, block_list):
+        if len(block_list) == 2 and block_list[-1][1] == 0x91:
+            ck = str(self.mem[9][0x87][7::-1] + self.mem[9][0x87][15:7:-1])
+            rc = str(self.mem[9][0x80][7::-1] + self.mem[9][0x80][15:7:-1])
+            sk = nfc.tag.pyDes.triple_des(ck, 1, 8 * '\0').encrypt(rc)
+            mac = nfc.tag.tt3_sony.FelicaLite.generate_mac
+            wcnt = "\0\0\0\0" + chr(block_list[0][1]) + "\0\x91\0"
+            maca = mac(wcnt + data[0:16], sk, rc[0:8], flip_key=True)
+            if data[16:24] != maca:
+                return self.encode(0x08, self.idm, '', '\x02\xB2')
+        for service, block, i in block_list:
+            try:
+                self.mem[service][block][:] = data[i*16:(i+1)*16]
+            except IndexError:
+                return self.encode(0x08, self.idm, '', "\x01\xA2")
+        return self.encode(0x08, self.idm, '')
+
+class TestType3TagFelicaLiteS:
+    sys = "88 B4"
+    idm = "01 02 03 04 05 06 07 08"
+    pmm = "00 F1 FF FF FF FF FF FF"
+    
+    def setup(self):
+        service_data = [bytearray.fromhex(hexstr) for hexstr in [
+            "10 01 01 00  05 00 00 00  00 00 00 00  00 10 00 27",
+            "d1 02 0b 53  70 d1 01 07  55 03 61 62  2e 63 6f 6d",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF",
+        ]] + 113 * [None] + [bytearray.fromhex(hexstr) for hexstr in [
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "FF FF FF 01  07 00 00 00  00 00 00 00  00 00 00 00",
+        ]] + 7 * [None] + [bytearray.fromhex(hexstr) for hexstr in [
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
+        ]]
+        tag_memory = {0x000B: service_data, 0x0009: service_data}
+        self.clf = FelicaLiteSTagSimulator(
+            tag_memory, self.sys, self.idm, self.pmm)
+        self.clf.sys.append(bytearray.fromhex("12FC"))
+        self.tag = self.clf.connect(rdwr={'on-connect': None})
+
+    def test_init_with_ic_code_f1(self):
+        assert isinstance(self.tag, nfc.tag.tt3_sony.FelicaLiteS)
+        assert self.tag._product == "FeliCa Lite-S (RC-S966)"
+        assert self.tag._nbr == 4
+        assert self.tag._nbw == 1
+
+    def test_init_with_ic_code_f2(self):
+        pmm = "00F2FFFF FFFFFFFF"
+        clf = Type3TagSimulator(self.clf.mem, self.sys, self.idm, pmm)
+        tag = clf.connect(rdwr={'on-connect': None})
+        assert isinstance(tag, nfc.tag.tt3_sony.FelicaLiteS)
+        assert tag._product == "FeliCa Link (RC-S730) Lite-S Mode"
+        assert tag._nbr == 4
+        assert tag._nbw == 1
+
+    def test_dump(self):
+        lines = self.tag.dump()
+        print "\n".join(lines)
+        assert len(lines) == 18
+
+    def test_read_ndef_without_authentication(self):
+        msg = nfc.ndef.Message(nfc.ndef.SmartPosterRecord("http://ab.com"))
+        assert self.tag.ndef is not None
+        assert self.tag.ndef.capacity == 5 * 16
+        assert self.tag.ndef.length == 16
+        assert self.tag.ndef.is_readable == True
+        assert self.tag.ndef.is_writeable == False
+        assert self.tag.ndef.message == msg
+
+    def test_read_ndef_after_authentication(self):
+        msg = nfc.ndef.Message(nfc.ndef.SmartPosterRecord("http://ab.com"))
+        assert self.tag.authenticate('') is True
+        assert self.tag.ndef is not None
+        assert self.tag.ndef.capacity == 5 * 16
+        assert self.tag.ndef.length == 16
+        assert self.tag.ndef.is_readable == True
+        assert self.tag.ndef.is_writeable == True
+        assert self.tag.ndef.message == msg
+
+    @raises(AttributeError)
+    def test_write_ndef_without_authentication(self):
+        msg = nfc.ndef.Message(nfc.ndef.SmartPosterRecord("http://cd.org"))
+        self.tag.ndef.message = msg
+        assert self.clf.mem[9][1][10:16] == "cd.org"
+
+    def test_write_ndef_after_authentication(self):
+        msg = nfc.ndef.Message(nfc.ndef.SmartPosterRecord("http://cd.org"))
+        assert self.clf.mem[9][0][10] == 0 # RWFlag
+        assert self.tag.authenticate('') is True
+        self.tag.ndef.message = msg
+        assert self.clf.mem[9][1][10:16] == "cd.org"
+        assert self.clf.mem[9][0][10] == 0 # RWFlag
+
+    def test_authenticate_with_default_password(self):
+        assert self.tag.authenticate("") is True
+
+    def test_authenticate_with_wrong_password(self):
+        self.tag.authenticate("0123456789abcdef") is False
+
+    @raises(RuntimeError)
+    def test_write_with_mac_before_authentication(self):
+        self.tag.write_with_mac(bytearray(16), 0)
+
+    @raises(nfc.tag.tt3.Type3TagCommandError)
+    def test_write_with_mac_fails_mac_verification(self):
+        assert self.tag.authenticate("") is True
+        self.clf.mem[9][0x80] = bytearray(16) # change rc
+        self.tag.write_with_mac(bytearray(16), 0)
+
+    @raises(ValueError)
+    def test_write_with_mac_with_insufficient_data(self):
+        self.tag.write_with_mac(bytearray(15), 0)
+
+    @raises(ValueError)
+    def test_write_with_mac_with_block_not_a_number(self):
+        self.tag.write_with_mac(bytearray(16), '0')
+
+    @raises(ValueError)
+    def test_protect_with_insufficient_password(self):
+        self.tag.protect("abc")
+
+    @raises(ValueError)
+    def test_protect_with_negative_protect_from(self):
+        self.tag.protect("0123456789abcdef", protect_from=-1)
+
+    def test_protect_when_key_change_is_not_possible(self):
+        self.clf.mem[9][0x88][2] = 0
+        tag = self.clf.connect(rdwr={'on-connect': None})
+        assert tag.protect("0123456789abcdef") is False
+
+    def test_protect_when_key_change_requires_authentication(self):
+        self.clf.mem[9][0x88][2] = 0
+        self.clf.mem[9][0x88][5] = 1
+        tag = self.clf.connect(rdwr={'on-connect': None})
+        assert tag.protect("0123456789abcdef") is False
+        assert tag.authenticate("") is True
+        assert tag.protect("0123456789abcdef") is True
+
+    def test_protect_all_blocks_with_read_protect_set_true(self):
+        assert self.tag.protect("0123456789abcdef", read_protect=True)
+        assert self.clf.mem[9][0x87] == "76543210fedcba98"
+        mc_block = "ffff00010701ff3fff3fff3f00000000".decode("hex")
+        assert self.clf.mem[9][0x88] == mc_block
+        assert self.clf.mem[9][0][10] == 0 # RWFlag
+
+    def test_protect_some_blocks_with_read_protect_set_true(self):
+        assert self.tag.protect("", protect_from=4, read_protect=True)
+        mc_block = "ffff00010701f03ff03ff03f00000000".decode("hex")
+        assert self.clf.mem[9][0x88] == mc_block
+        assert self.clf.mem[9][0][10] == 0 # RWFlag
+
+    def test_protect_all_blocks_and_set_card_key(self):
+        self.clf.mem[9][0][10] = 1 # RWFlag
+        self.clf.mem[9][0][15] += 1 # checksum
+        assert self.tag.protect("0123456789abcdef") is True
+        assert self.clf.mem[9][0x87] == "76543210fedcba98"
+        mc_block = "ffff000107010000ff3fff3f00000000".decode("hex")
+        assert self.clf.mem[9][0x88] == mc_block
+        assert self.clf.mem[9][0][10] == 0 # RWFlag
+
+    def test_protect_all_blocks_and_set_default_key(self):
+        self.clf.mem[9][0x87] = bytearray("76543210fedcba98")
+        assert self.tag.protect("") is True
+        assert self.clf.mem[9][0x87] == 16 * "\0"
+        mc_block = "ffff000107010000ff3fff3f00000000".decode("hex")
+        assert self.clf.mem[9][0x88] == mc_block
+        assert self.clf.mem[9][0][10] == 0 # RWFlag
+
+    def test_protect_some_blocks_and_not_set_card_key(self):
+        self.clf.mem[9][0x87] = bytearray("76543210fedcba98")
+        assert self.tag.protect(protect_from=4) is True
+        assert self.clf.mem[9][0x87] == "76543210fedcba98"
+        mc_block = "ffff000107010000f03ff03f00000000".decode("hex")
+        assert self.clf.mem[9][0x88] == mc_block
+        assert self.clf.mem[9][0][10] == 0 # RWFlag
+
+    def test_protect_system_blocks_and_not_set_card_key(self):
+        self.clf.mem[9][0x87] = bytearray("76543210fedcba98")
+        assert self.tag.protect(protect_from=14) is True
+        assert self.clf.mem[9][0x87] == "76543210fedcba98"
+        assert self.clf.mem[9][0x88][0:3] == "\xFF\xFF\x00"
+        mc_block = "ffff0001070100000000000000000000".decode("hex")
+        assert self.clf.mem[9][0x88] == mc_block
+        assert self.clf.mem[9][0][10] == 0 # RWFlag
+
+class TestType3TagFelicaPlug:
+    sys = "00 00"
+    idm = "01 02 03 04 05 06 07 08"
+    
+    def test_init_with_ic_code_e0(self):
+        pmm = "00E0FFFF FFFFFFFF"
+        clf = Type3TagSimulator(None, self.sys, self.idm, pmm)
+        tag = clf.connect(rdwr={'on-connect': None})
+        assert isinstance(tag, nfc.tag.tt3_sony.FelicaPlug)
+        assert tag._product == "FeliCa Plug (RC-S926)"
+        assert tag._nbr == 12
+        assert tag._nbw == 12
+
+    def test_init_with_ic_code_e1(self):
+        pmm = "00E1FFFF FFFFFFFF"
+        clf = Type3TagSimulator(None, self.sys, self.idm, pmm)
+        tag = clf.connect(rdwr={'on-connect': None})
+        assert isinstance(tag, nfc.tag.tt3_sony.FelicaPlug)
+        assert tag._product == "FeliCa Link (RC-S730) Plug Mode"
+        assert tag._nbr == 12
+        assert tag._nbw == 12
 
 ################################################################################
 #

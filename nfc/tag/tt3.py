@@ -46,6 +46,7 @@ class Type3TagCommandError(nfc.tag.TagCommandError):
         0x02B1: "authentication required to read (second block in list)",
         0x04B1: "authentication required to read (third block in list)",
         0x08B1: "authentication required to read (fourth block in list)",
+        0x02B2: "verification failure for write with mac operation",
     }
     
 class ServiceCode:
