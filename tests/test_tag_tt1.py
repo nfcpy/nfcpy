@@ -665,72 +665,135 @@ class TestTopaz512:
 ###############################################################################
 
 class TestMemoryReader:
-    def test_byte_assign(self):
-        clf = Type1TagSimulator(tt1_memory_layout_1[:])
-        tag = clf.connect(rdwr={'on-connect': None})
-        tag_memory = nfc.tag.tt1.Type1TagMemoryReader(tag)
+    def setup(self):
+        tag_memory = bytearray.fromhex(
+            "31 32 33 34  35 36 37 00  E1 10 1F 00  03 2A D1 01"
+            "26 55 01 61  62 63 64 65  66 67 68 69  6A 6B 6C 6D"
+            "6E 6F 70 71  72 73 74 75  76 77 78 79  7A 61 62 63"
+            "64 65 66 67  2E 63 6F 6D  FE 00 00 00  00 00 00 00"
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+            "00 00 00 00  00 00 00 00  55 55 AA AA  00 00 00 00"
+            "01 60 00 00  00 00 00 00  12 00 00 00  00 00 00 00"
+            # Segment 1
+            "34 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00"
+        )
+        self.clf = Type1TagSimulator(tag_memory)
+        self.tag = self.clf.connect(rdwr={'on-connect': None})
+
+    def test_byte_access_at_offset_0(self):
+        tag_memory = nfc.tag.tt1.Type1TagMemoryReader(self.tag)
+        assert tag_memory[0] == self.clf.memory[0]
+        
+    def test_byte_access_at_offset_120(self):
+        tag_memory = nfc.tag.tt1.Type1TagMemoryReader(self.tag)
+        assert tag_memory[120] == self.clf.memory[120]
+        
+    def test_byte_access_at_offset_128(self):
+        tag_memory = nfc.tag.tt1.Type1TagMemoryReader(self.tag)
+        assert tag_memory[128] == self.clf.memory[128]
+        
+    def test_byte_assign_at_offset_0(self):
+        self.clf.header = bytearray("\x11\x00")
+        tag_memory = nfc.tag.tt1.Type1TagMemoryReader(self.tag)
         tag_memory[0] = 0xFF
         tag_memory.synchronize()
-        assert clf.memory[0] == 0xFF
+        assert self.clf.memory[0] == 0xFF
+
+    def test_byte_assign_at_offset_120(self):
+        tag_memory = nfc.tag.tt1.Type1TagMemoryReader(self.tag)
+        tag_memory[120] = 0xFF
+        tag_memory.synchronize()
+        assert self.clf.memory[120] == 0xFF
+
+    def test_byte_assign_at_offset_128(self):
+        tag_memory = nfc.tag.tt1.Type1TagMemoryReader(self.tag)
+        tag_memory[128] = 0xFF
+        tag_memory.synchronize()
+        assert self.clf.memory[128] == 0xFF
 
     @raises(TypeError)
     def test_byte_delete(self):
-        clf = Type1TagSimulator(tt1_memory_layout_1[:])
-        tag = clf.connect(rdwr={'on-connect': None})
-        tag_memory = nfc.tag.tt1.Type1TagMemoryReader(tag)
+        tag_memory = nfc.tag.tt1.Type1TagMemoryReader(self.tag)
         del tag_memory[0]
     
-    def test_slice_assign_with_matching_length(self):
-        clf = Type1TagSimulator(tt1_memory_layout_1[:])
-        tag = clf.connect(rdwr={'on-connect': None})
-        tag_memory = nfc.tag.tt1.Type1TagMemoryReader(tag)
-        tag_memory[0:2] = "\x00\x11"
+    def test_slice_access_at_offset_0(self):
+        tag_memory = nfc.tag.tt1.Type1TagMemoryReader(self.tag)
+        assert tag_memory[0:1] == self.clf.memory[0:1]
+        
+    def test_slice_access_at_offset_120(self):
+        tag_memory = nfc.tag.tt1.Type1TagMemoryReader(self.tag)
+        assert tag_memory[120:121] == self.clf.memory[120:121]
+        
+    def test_slice_access_at_offset_128(self):
+        tag_memory = nfc.tag.tt1.Type1TagMemoryReader(self.tag)
+        assert tag_memory[128:129] == self.clf.memory[128:129]
+        
+    def test_slice_assign_at_offset_0(self):
+        self.clf.header = bytearray("\x11\x00")
+        tag_memory = nfc.tag.tt1.Type1TagMemoryReader(self.tag)
+        tag_memory[0:1] = "\xFF"
         tag_memory.synchronize()
-        assert clf.memory[0:2] == "\x00\x11"
+        assert self.clf.memory[0:1] == "\xFF"
+
+    def test_slice_assign_at_offset_120(self):
+        tag_memory = nfc.tag.tt1.Type1TagMemoryReader(self.tag)
+        tag_memory[120:121] = "\xFF"
+        tag_memory.synchronize()
+        assert self.clf.memory[120:121] == "\xFF"
+
+    def test_slice_assign_at_offset_128(self):
+        tag_memory = nfc.tag.tt1.Type1TagMemoryReader(self.tag)
+        tag_memory[128:129] = "\xFF"
+        tag_memory.synchronize()
+        assert self.clf.memory[128:129] == "\xFF"
 
     @raises(ValueError)
     def test_slice_assign_with_mismatch_length(self):
-        clf = Type1TagSimulator(tt1_memory_layout_1[:])
-        tag = clf.connect(rdwr={'on-connect': None})
-        tag_memory = nfc.tag.tt1.Type1TagMemoryReader(tag)
+        tag_memory = nfc.tag.tt1.Type1TagMemoryReader(self.tag)
         tag_memory[0:2] = "\x00\x11\x22"
 
     @raises(TypeError)
     def test_slice_delete(self):
-        clf = Type1TagSimulator(tt1_memory_layout_1[:])
-        tag = clf.connect(rdwr={'on-connect': None})
-        tag_memory = nfc.tag.tt1.Type1TagMemoryReader(tag)
+        tag_memory = nfc.tag.tt1.Type1TagMemoryReader(self.tag)
         del tag_memory[0:2]
 
-    def test_read_from_mute_tag(self):
-        clf = Type1TagSimulator(tt1_memory_layout_4[:])
-        tag = clf.connect(rdwr={'on-connect': None})
-        clf.tag_is_present = False
-        tag_memory = nfc.tag.tt1.Type1TagMemoryReader(tag)
-        try: tag_memory[0]
-        except IndexError: pass
-        clf.tag_is_present = True
+    @raises(IndexError)
+    def test_read_from_mute_tag_at_offset_0(self):
+        self.clf.tag_is_present = False
+        tag_memory = nfc.tag.tt1.Type1TagMemoryReader(self.tag)
         tag_memory[0]
-        clf.tag_is_present = False
-        try: tag_memory[120]
-        except IndexError: pass
-        clf.tag_is_present = True
+
+    @raises(IndexError)
+    def test_read_from_mute_tag_at_offset_120(self):
+        tag_memory = nfc.tag.tt1.Type1TagMemoryReader(self.tag)
+        tag_memory[0]
+        self.clf.tag_is_present = False
         tag_memory[120]
-        clf.tag_is_present = False
-        try: tag_memory[128]
-        except IndexError: pass
+
+    @raises(IndexError)
+    def test_read_from_mute_tag_at_offset_128(self):
+        tag_memory = nfc.tag.tt1.Type1TagMemoryReader(self.tag)
+        tag_memory[120]
+        self.clf.tag_is_present = False
+        tag_memory[128]
 
     def test_write_to_mute_tag(self):
-        clf = Type1TagSimulator(tt1_memory_layout_1[:])
-        tag = clf.connect(rdwr={'on-connect': None})
-        tag_memory = nfc.tag.tt1.Type1TagMemoryReader(tag)
+        tag_memory = nfc.tag.tt1.Type1TagMemoryReader(self.tag)
         tag_memory[0] = 0xA5
         tag_memory.synchronize()
-        assert tag_memory[0] == 0xA5
-        clf.tag_is_present = False
+        assert self.clf.memory[0] == 0xA5
+        self.clf.tag_is_present = False
         tag_memory[0] = 0x5A
         tag_memory.synchronize()
-        assert clf.memory[0] == 0xA5
+        assert self.clf.memory[0] == 0xA5
 
 ################################################################################
 #
