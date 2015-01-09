@@ -338,9 +338,8 @@ class Type1Tag(Tag):
         return False
 
     def _is_present(self):
-        try: data = self.transceive("\x78\x00\x00"+self.uid)
-        except nfc.clf.DigitalProtocolError: return False
-        else: return bool(data and len(data) == 6)
+        try: return self.read_byte(0) == self.uid[0]
+        except Type1TagCommandError: return False
 
     def read_id(self):
         """Returns the 2 byte Header ROM and 4 byte UID.
@@ -359,6 +358,8 @@ class Type1Tag(Tag):
     def read_byte(self, addr):
         """Read a single byte from static memory area (blocks 0-14).
         """
+        if addr < 0 or addr >= 128:
+            raise ValueError("byte address out of range")
         log.debug("read byte at address {0} ({0:02X}h)".format(addr))
         cmd = "\x01" + chr(addr) + "\x00" + self.uid
         return self.transceive(cmd)[-1]
@@ -387,6 +388,8 @@ class Type1Tag(Tag):
         target byte is zero'd first if *erase* is True.
 
         """
+        if addr < 0 or addr >= 128:
+            raise ValueError("byte address out of range")
         log.debug("write byte at address {0} ({0:02X}h)".format(addr))
         cmd = "\x53" if erase is True else "\x1A"
         cmd = cmd + chr(addr) + chr(data) + self.uid
@@ -402,8 +405,8 @@ class Type1Tag(Tag):
         cmd = cmd + chr(block) + data + self.uid
         rsp = self.transceive(cmd)
         if len(rsp) < 9:
-            raise Typ1TagCommandError(RESPONSE_ERROR)
-        if rsp[1:9] != data:
+            raise Type1TagCommandError(RESPONSE_ERROR)
+        if erase == True and rsp[1:9] != data:
             raise Type1TagCommandError(WRITE_ERROR)
 
     def transceive(self, data, timeout=0.1):
