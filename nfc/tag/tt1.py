@@ -302,10 +302,6 @@ class Type1Tag(Tag):
                     self.write_block(i, this_data)
             except Type1TagCommandError:
                 dump_same_data(same_data, last_data, this_data, i-1)
-                if stop is not None:
-                    this_data = last_data = [None, None, None, None]
-                    lines.append(lprint(data_line_fmt, this_data, i))
-                    dump_same_data(stop-i-1, this_data, this_data, stop-1)
                 break
             
             if this_data == last_data:
