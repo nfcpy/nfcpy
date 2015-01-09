@@ -49,7 +49,7 @@ class Topaz(tt1.Type1Tag):
         unless the wipe argument is set.
 
         """
-        return super(tt1.Type1Tag, self).format(version, wipe)
+        return super(Topaz, self).format(version, wipe)
 
     def _format(self, version, wipe):
         tag_memory = tt1.Type1TagMemoryReader(self)
@@ -76,7 +76,7 @@ class Topaz(tt1.Type1Tag):
         have any effect.
 
         """
-        return super(tt1.Type1Tag, self).protect(
+        return super(Topaz, self).protect(
             password, read_protect, protect_from)
     
     def _protect(self, password, read_protect, protect_from):
@@ -109,7 +109,7 @@ class Topaz512(tt1.Type1Tag):
         unless the wipe argument is set.
 
         """
-        return super(tt1.Type1Tag, self).format(version, wipe)
+        return super(Topaz512, self).format(version, wipe)
 
     def _format(self, version, wipe):
         tag_memory = tt1.Type1TagMemoryReader(self)
@@ -138,11 +138,11 @@ class Topaz512(tt1.Type1Tag):
         have any effect.
 
         """
-        return super(tt1.Type1Tag, self).protect(
+        return super(Topaz512, self).protect(
             password, read_protect, protect_from)
     
     def _protect(self, password, read_protect, protect_from):
-        if super(Topaz, self)._protect(password, read_protect, protect_from):
+        if super(Topaz512,self)._protect(password, read_protect, protect_from):
             self.write_byte(112, 0xFF, erase=False)
             self.write_byte(113, 0xFF, erase=False)
             self.write_byte(120, 0xFF, erase=False)
