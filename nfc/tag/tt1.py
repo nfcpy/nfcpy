@@ -358,8 +358,8 @@ class Type1Tag(Tag):
     def read_byte(self, addr):
         """Read a single byte from static memory area (blocks 0-14).
         """
-        if addr < 0 or addr >= 128:
-            raise ValueError("byte address out of range")
+        if addr < 0 or addr > 127:
+            raise ValueError("invalid byte address")
         log.debug("read byte at address {0} ({0:02X}h)".format(addr))
         cmd = "\x01" + chr(addr) + "\x00" + self.uid
         return self.transceive(cmd)[-1]
@@ -367,6 +367,8 @@ class Type1Tag(Tag):
     def read_block(self, block):
         """Read an 8-byte data block at address (block * 8).
         """
+        if block < 0 or block > 255:
+            raise ValueError("invalid block number")
         log.debug("read block {0}".format(block))
         cmd = "\x02" + chr(block) + 8 * chr(0) + self.uid
         return self.transceive(cmd)[1:9]
@@ -376,7 +378,7 @@ class Type1Tag(Tag):
         """
         log.debug("read segment {0}".format(segment))
         if segment < 0 or segment > 15:
-            raise ValueError("segment number must be 0 .. 15")
+            raise ValueError("invalid segment number")
         cmd = "\x10" + chr(segment<<4) + 8 * chr(0) + self.uid
         rsp = self.transceive(cmd)
         if len(rsp) < 129:
@@ -389,7 +391,7 @@ class Type1Tag(Tag):
 
         """
         if addr < 0 or addr >= 128:
-            raise ValueError("byte address out of range")
+            raise ValueError("invalid byte address")
         log.debug("write byte at address {0} ({0:02X}h)".format(addr))
         cmd = "\x53" if erase is True else "\x1A"
         cmd = cmd + chr(addr) + chr(data) + self.uid
@@ -400,6 +402,8 @@ class Type1Tag(Tag):
         bytes are zero'd first if *erase* is True.
 
         """
+        if block < 0 or block > 255:
+            raise ValueError("invalid block number")
         log.debug("write block {0}".format(block))
         cmd = "\x54" if erase is True else "\x1B"
         cmd = cmd + chr(block) + data + self.uid
