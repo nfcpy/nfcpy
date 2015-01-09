@@ -56,7 +56,6 @@ def read_tlv(memory, offset, skip_bytes):
     # this is returned as length -1. The tlv length field can be one
     # or three bytes, if the first byte is 255 then the next two byte
     # carry the length (big endian).
-    while (offset) in skip_bytes: offset += 1
     try: tlv_t, offset = (memory[offset], offset+1)
     except IndexError: return (None, None, None)
     if tlv_t in (0x00, 0xFE): return (tlv_t, -1, None)
@@ -155,6 +154,7 @@ class Type1Tag(Tag):
             offset = 12
             skip_bytes = set(range(104, 120 if tag_memory_size==120 else 128))
             while offset < tag_memory_size:
+                while (offset) in skip_bytes: offset += 1
                 tlv_t, tlv_l, tlv_v = read_tlv(tag_memory, offset, skip_bytes)
                 log.debug("tlv type {0} at address {1}".format(tlv_t, offset))
                 if tlv_t == 0x00:
