@@ -331,46 +331,19 @@ class Type2Tag(Tag):
         return super(Type2Tag, self).format(version, wipe)
 
     def _format(self, version, wipe):
-        tag_memory = Type2TagMemoryReader(self)
-        if tag_memory[12] != 0xE1:
-            log.debug("can't format a tag without ndef magic number")
-            return False
-        if tag_memory[13] >> 4 != 1:
-            log.debug("unknown ndef mapping major version number")
-            return False
-        if tag_memory[14] == 0:
-            log.debug("user data area size is zero, nothing to do")
-            return False
-        if tag_memory[15] != 0:
-            log.debug("tag is write or read protected, nothing to do")
-            return False
-
-        offset = 16
-        skip_bytes = set()
-        data_area_size = tag_memory[14] * 8
-        while offset < data_area_size + 16:
-            while (offset) in skip_bytes: offset += 1
-            tlv_t, tlv_l, tlv_v = read_tlv(tag_memory, offset, skip_bytes)
-            log.debug("tlv type {0} at offset {1}".format(tlv_t, offset))
-            if tlv_t == 0xFE: break
-            elif tlv_t == 0x01:
-                lock_bytes = get_lock_byte_range(tlv_v)
-                skip_bytes.update(range(*lock_bytes.indices(0x100000)))
-            elif tlv_t == 0x02:
-                rsvd_bytes = get_rsvd_byte_range(tlv_v)
-                skip_bytes.update(range(*rsvd_bytes.indices(0x100000)))
-            elif tlv_t == 0x03:
-                tag_memory[offset+1:offset+3] = [0x00, 0xFE]
-                if wipe is not None:
-                    for offset in xrange(offset + 3, data_area_size + 16):
-                        if offset not in skip_bytes:
-                            tag_memory[offset] = wipe & 0xFF
-                break
-            offset += tlv_l + 1 + (1 if tlv_l < 255 else 3)
-
-        # Synchronize to write all changes to the tag.
-        tag_memory.synchronize()
-        return True
+        if self.ndef and self.ndef.is_writeable:
+            memory = self.ndef._tag_memory
+            offset = self.ndef._ndef_tlv_offset
+            memory[offset+1:offset+3] = "\x00\xFE"
+            if wipe is not None:
+                memory_size = memory[14] * 8 + 16
+                skip_bytes = self.ndef._skip_bytes
+                for offset in xrange(offset + 3, memory_size):
+                    if offset not in skip_bytes:
+                        memory[offset] = wipe & 0xFF
+            memory.synchronize()
+            return True
+        return False
 
     def protect(self, password=None, read_protect=False, protect_from=0):
         """Protect the tag against write access, i.e. make it read-only.
