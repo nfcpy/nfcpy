@@ -367,27 +367,20 @@ class Type2Tag(Tag):
         if password is not None:
             log.debug("this tag can not be protected with password")
             return False
-        
-        tag_memory = Type2TagMemoryReader(self)
-        # Bail out if this is not an ndef tag
-        if tag_memory[12] != 0xE1:
-            log.debug("this tag is not formatted for ndef")
-            return False
 
-        # Bail out if the ndef mapping version is unknown
-        if tag_memory[13] >> 4 != 1:
-            log.debug("unknown ndef mapping major version")
+        if self.ndef is None:
+            log.debug("can not protect a non-ndef tag")
             return False
 
         # Set the ndef capability container write flag. We must
         # synchronize to have this written before lock bits are set.
-        if tag_memory[15] & 0x0F != 0x0F:
-            tag_memory[15] = 0x0F
-            tag_memory.synchronize()
+        tag_memory = self.ndef._tag_memory
+        tag_memory[15] |= 0x0F
+        tag_memory.synchronize()
         
         # Set the static lock bits.
-        if tag_memory[10:12] != "\xFF\xFF":
-            tag_memory[10:12] = [0xFF, 0xFF]
+        tag_memory[10] |= 0xFF
+        tag_memory[11] |= 0xFF
 
         # Search for all lock control tlv and store the first lock
         # byte address and the number of lock bits in lock_control.
@@ -397,16 +390,18 @@ class Type2Tag(Tag):
         while offset < data_area_size + 16:
             tlv_t, tlv_l, tlv_v = read_tlv(tag_memory, offset, set())
             log.debug("tlv type {0} at offset {1}".format(tlv_t, offset))
-            if tlv_t in (0x03, 0xFE, None): break
+            if tlv_t == 0:
+                pass
             elif tlv_t == 0x01:
                 log.debug("lock control tlv {0}".format(hexlify(tlv_v)))
                 page_addr = tlv_v[0] >> 4
                 byte_offs = tlv_v[0] & 0x0F
                 page_size = 2 ** (tlv_v[2] & 0x0F) # BytesPerPage
-                lock_size = 2 ** (tlv_v[2] >> 4) # BytesLockedPerLockBit
                 lock_byte_addr = page_addr * page_size + byte_offs
                 lock_bits_size = tlv_v[1] if tlv_v[1] > 0 else 256
                 lock_control.append((lock_byte_addr, lock_bits_size))
+            elif tlv_t in (0x03, 0xFE, None):
+                break
             offset += tlv_l + 1 + (1 if tlv_l < 255 else 3)
 
         # If the tag has a dynamic memory layout and we did not find
@@ -422,6 +417,8 @@ class Type2Tag(Tag):
         # zero and then set the lock bits to one.
         log.debug("processing lock byte list {0}".format(lock_control))
         for lock_byte_addr, lock_bits_size in lock_control:
+            log.debug("{0} lock bits at 0x{1:02x}".format(
+                lock_bits_size, lock_byte_addr))
             lock_byte_size = (lock_bits_size + 7) // 8
             for i in range(lock_byte_size):
                 tag_memory[lock_byte_addr+i] = 0
