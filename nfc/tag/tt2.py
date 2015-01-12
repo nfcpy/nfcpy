@@ -473,7 +473,7 @@ class Type2Tag(Tag):
 
         data = self.transceive("\x30"+chr(page%256), rlen=16, timeout=0.005)
 
-        if len(data) == 1 and data[0] == 0x00:
+        if len(data) == 1 and data[0] & 0xFA == 0x00:
             log.debug("received nak response")
             self.clf.sense([nfc.clf.TTA(uid=self.uid)])
             self.clf.set_communication_mode('', check_crc='OFF')
@@ -495,19 +495,17 @@ class Type2Tag(Tag):
         Command execution errors raise :exc:`Type2TagCommandError`.
 
         """
-        log.debug("write {0} to page {1}".format(hexlify(data), page))
-        assert(len(data) == 4)
+        if len(data) != 4:
+            raise ValueError("data must be a four byte string or array")
 
-        try:
-            rsp = self.transceive("\xA2" + chr(page % 256) + data)
-        except nfc.clf.TimeoutError:
-            raise Type2TagCommandError(TIMEOUT_ERROR)
+        log.debug("write {0} to page {1}".format(hexlify(data), page))
+        rsp = self.transceive("\xA2" + chr(page % 256) + data)
         
         if (len(rsp) == 1 and rsp[0] == 0x0A) or (len(rsp) == 0):
             # Case 1 is for readers who return the ack/nack.
             # Case 2 is for readers who process the response.
             return True
-        if len(rsp) == 1:
+        if len(rsp) == 1 and data[0] & 0xFA == 0x00:
             raise Type2TagCommandError(INVALID_PAGE_ERROR)
         raise Type2TagCommandError(INVALID_RESPONSE_ERROR)
 
@@ -534,8 +532,7 @@ class Type2Tag(Tag):
                     # command is passively ack'd, there's no response
                     self.transceive(chr(sector)+"\0\0\0", timeout=0.001)
                 except Type2TagCommandError as error:
-                    if int(error) == TIMEOUT_ERROR: pass # passive ack
-                    else: raise # re-raise for every other error
+                    assert int(error) == TIMEOUT_ERROR # passive ack
                 else:
                     log.debug("sector {0} does not exist".format(sector))
                     raise Type2TagCommandError(INVALID_SECTOR_ERROR)
@@ -572,7 +569,7 @@ class Type2Tag(Tag):
         try: data = bytearray(self.clf.exchange(data, timeout))
         except nfc.clf.TimeoutError:
             log.debug("timeout in transceive")
-            raise Type2TagCommandError(0)
+            raise Type2TagCommandError(TIMEOUT_ERROR)
             
         elapsed = time.time() - started
         log.debug("<< {0} ({1:f}s)".format(hexlify(data), elapsed))
