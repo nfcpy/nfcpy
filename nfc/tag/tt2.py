@@ -56,7 +56,6 @@ def read_tlv(memory, offset, skip_bytes):
     # this is returned as length -1. The tlv length field can be one
     # or three bytes, if the first byte is 255 then the next two byte
     # carry the length (big endian).
-    while (offset) in skip_bytes: offset += 1
     try: tlv_t, offset = (memory[offset], offset+1)
     except IndexError: return (None, None, None)
     if tlv_t in (0x00, 0xFE): return (tlv_t, -1, None)
@@ -146,6 +145,7 @@ class Type2Tag(Tag):
             skip_bytes = set()
             data_area_size = raw_capacity
             while offset < data_area_size + 16:
+                while (offset) in skip_bytes: offset += 1
                 tlv_t, tlv_l, tlv_v = read_tlv(tag_memory, offset, skip_bytes)
                 log.debug("tlv type {0} at offset {1}".format(tlv_t, offset))
                 if tlv_t == 0x00:
@@ -349,6 +349,7 @@ class Type2Tag(Tag):
         skip_bytes = set()
         data_area_size = tag_memory[14] * 8
         while offset < data_area_size + 16:
+            while (offset) in skip_bytes: offset += 1
             tlv_t, tlv_l, tlv_v = read_tlv(tag_memory, offset, skip_bytes)
             log.debug("tlv type {0} at offset {1}".format(tlv_t, offset))
             if tlv_t == 0xFE: break
@@ -423,7 +424,7 @@ class Type2Tag(Tag):
         while offset < data_area_size + 16:
             tlv_t, tlv_l, tlv_v = read_tlv(tag_memory, offset, set())
             log.debug("tlv type {0} at offset {1}".format(tlv_t, offset))
-            if tlv_t in (0x03, 0xFE): break
+            if tlv_t in (0x03, 0xFE, None): break
             elif tlv_t == 0x01:
                 log.debug("lock control tlv {0}".format(hexlify(tlv_v)))
                 page_addr = tlv_v[0] >> 4
