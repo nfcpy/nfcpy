@@ -619,6 +619,255 @@ class TestMifareUltralightC:
 
 ################################################################################
 #
+# TEST NTAG 203
+#
+################################################################################
+
+class NTAG203Simulator(Type2TagSimulator):
+    def unknown_command(self, data, timeout):
+        if data == "\x1A\x00": # AUTHENTICATE COMMAND
+            return bytearray("\x00")
+
+class TestNTAG203:
+    def setup(self):
+        tag_memory = bytearray.fromhex(
+            "04 51 7C A1  E1 ED 25 80  A9 48 00 00  E1 10 12 00" # 000-003
+            "01 03 A0 10  44 03 89 D1  01 85 55 01  6E 66 63 63" # 004-007
+            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 008-011
+            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 012-015
+            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 016-019
+            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 020-023
+            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 024-027
+            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 028-031
+            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 032-035
+            "63 63 63 63  63 63 63 63  63 57 4C 46  2E 63 6F 6D" # 036-039
+            "00 00 00 00  00 00 00 00"                           # 040-041
+        )
+        self.clf = NTAG203Simulator(tag_memory)
+        self.tag = self.clf.connect(rdwr={'on-connect': None})
+
+    def test_activation(self):
+        assert isinstance(self.tag, nfc.tag.tt2_nxp.NTAG203)
+        assert self.tag._product == "NXP NTAG203"
+
+    def test_dump_memory(self):
+        self.clf.memory[14] = 0xFF
+        lines = self.tag.dump()
+        assert len(lines) == 15
+        assert lines[-1] == ' 41: 00 00 00 00 (CNTR0-CNTR1)'
+        
+    def test_dump_memory_with_error(self):
+        del self.clf.memory[-8:]
+        lines = self.tag.dump()
+        assert len(lines) == 15
+        assert lines[-1] == ' 41: ?? ?? ?? ?? (CNTR0-CNTR1)'
+
+    def test_protect_without_password(self):
+        assert self.tag.protect() is True
+        assert self.clf.memory[10:12] == "\xFF\xFF"
+        assert self.clf.memory[160:168] == "\xFF\xFF" + 6 * "\x00"
+        assert self.tag.ndef.is_writeable is False
+
+################################################################################
+#
+# TEST NTAG 21x
+#
+################################################################################
+
+class NTAG21xSimulator(Type2TagSimulator):
+    def __init__(self, tag_memory, version):
+        super(NTAG21xSimulator, self).__init__(tag_memory)
+        self.version = bytearray(version)
+
+    def unknown_command(self, data, timeout):
+        if data == "\x60": # GET VERSION COMMAND
+            return self.version
+
+class _TestNTAG21x:
+    def setup(self):
+        tag_memory = bytearray.fromhex(
+            "04 51 7C A1  E1 ED 25 80  A9 48 00 00  E1 10 12 00" # 000-003
+            "01 03 A0 10  44 03 89 D1  01 85 55 01  6E 66 63 63" # 004-007
+            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 008-011
+            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 012-015
+            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 016-019
+            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 020-023
+            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 024-027
+            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 028-031
+            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 032-035
+            "63 63 63 63  63 63 63 63  63 57 4C 46  2E 63 6F 6D" # 036-039
+            "00 00 00 00  00 00 00 00"                           # 040-041
+        )
+        self.clf = NTAG21xSimulator(tag_memory)
+        self.tag = self.clf.connect(rdwr={'on-connect': None})
+
+    def test_activation(self):
+        assert isinstance(self.tag, nfc.tag.tt2_nxp.NTAG203)
+        assert self.tag._product == "NXP NTAG203"
+
+    def test_protect_without_password(self):
+        assert self.tag.protect() is True
+        assert self.clf.memory[10:12] == "\xFF\xFF"
+        assert self.clf.memory[160:168] == "\xFF\xFF" + 6 * "\x00"
+        assert self.tag.ndef.is_writeable is False
+
+################################################################################
+#
+# TEST NTAG 210
+#
+################################################################################
+
+class TestNTAG210:
+    def setup(self):
+        tag_memory = bytearray.fromhex(
+            "04 51 7C A1  E1 ED 25 80  A9 48 00 00  E1 10 06 00" # 000-003
+            "03 00 FE 00  00 00 00 00  00 00 00 00  00 00 00 00" # 004-007
+        ) + bytearray(20*4 - 32)
+        self.clf = NTAG21xSimulator(tag_memory, "\0\4\4\1\1\0\x0B\3")
+        self.tag = self.clf.connect(rdwr={'on-connect': None})
+
+    def test_activation(self):
+        assert isinstance(self.tag, nfc.tag.tt2_nxp.NTAG210)
+        assert self.tag._product == "NXP NTAG210"
+
+    def test_dump_memory(self):
+        self.clf.memory[14] = 0xFF
+        lines = self.tag.dump()
+        assert len(lines) == 12
+        assert lines[-1] == ' 19: 00 00 00 00 (PACK0-PACK1)'
+        
+    def test_dump_memory_with_error(self):
+        del self.clf.memory[-8:]
+        lines = self.tag.dump()
+        assert len(lines) == 12
+        assert lines[-1] == ' 19: ?? ?? ?? ?? (PACK0-PACK1)'
+
+################################################################################
+#
+# TEST NTAG 212
+#
+################################################################################
+
+class TestNTAG212:
+    def setup(self):
+        tag_memory = bytearray.fromhex(
+            "04 51 7C A1  E1 ED 25 80  A9 48 00 00  E1 10 10 00" # 000-003
+            "01 03 90 0A  34 03 00 FE  00 00 00 00  00 00 00 00" # 004-007
+        ) + bytearray(41*4 - 32)
+        self.clf = NTAG21xSimulator(tag_memory, "\0\4\4\1\1\0\x0E\3")
+        self.tag = self.clf.connect(rdwr={'on-connect': None})
+
+    def test_activation(self):
+        assert isinstance(self.tag, nfc.tag.tt2_nxp.NTAG212)
+        assert self.tag._product == "NXP NTAG212"
+
+    def test_dump_memory(self):
+        self.clf.memory[14] = 0xFF
+        lines = self.tag.dump()
+        assert len(lines) == 14
+        assert lines[-1] == ' 40: 00 00 00 00 (PACK0-PACK1)'
+        
+    def test_dump_memory_with_error(self):
+        del self.clf.memory[-16:]
+        lines = self.tag.dump()
+        assert len(lines) == 14
+        assert lines[-1] == ' 40: ?? ?? ?? ?? (PACK0-PACK1)'
+
+################################################################################
+#
+# TEST NTAG 213
+#
+################################################################################
+
+class TestNTAG213:
+    def setup(self):
+        tag_memory = bytearray.fromhex(
+            "04 51 7C A1  E1 ED 25 80  A9 48 00 00  E1 10 12 00" # 000-003
+            "01 03 A0 0C  34 03 00 FE  00 00 00 00  00 00 00 00" # 004-007
+        ) + bytearray(45*4 - 32)
+        self.clf = NTAG21xSimulator(tag_memory, "\0\4\4\2\1\0\x0F\3")
+        self.tag = self.clf.connect(rdwr={'on-connect': None})
+
+    def test_activation(self):
+        assert isinstance(self.tag, nfc.tag.tt2_nxp.NTAG213)
+        assert self.tag._product == "NXP NTAG213"
+
+    def test_dump_memory(self):
+        self.clf.memory[14] = 0xFF
+        lines = self.tag.dump()
+        assert len(lines) == 14
+        assert lines[-1] == ' 44: 00 00 00 00 (PACK0-PACK1)'
+        
+    def test_dump_memory_with_error(self):
+        del self.clf.memory[-16:]
+        lines = self.tag.dump()
+        assert len(lines) == 14
+        assert lines[-1] == ' 44: ?? ?? ?? ?? (PACK0-PACK1)'
+
+################################################################################
+#
+# TEST NTAG 215
+#
+################################################################################
+
+class TestNTAG215:
+    def setup(self):
+        tag_memory = bytearray.fromhex(
+            "04 51 7C A1  E1 ED 25 80  A9 48 00 00  E1 10 3E 00" # 000-003
+            "03 00 FE 00  00 00 00 00  00 00 00 00  00 00 00 00" # 004-007
+        ) + bytearray(135*4 - 32)
+        self.clf = NTAG21xSimulator(tag_memory, "\0\4\4\2\1\0\x11\3")
+        self.tag = self.clf.connect(rdwr={'on-connect': None})
+
+    def test_activation(self):
+        assert isinstance(self.tag, nfc.tag.tt2_nxp.NTAG215)
+        assert self.tag._product == "NXP NTAG215"
+
+    def test_dump_memory(self):
+        self.clf.memory[14] = 0xFF
+        lines = self.tag.dump()
+        assert len(lines) == 13
+        assert lines[-1] == '134: 00 00 00 00 (PACK0-PACK1)'
+        
+    def test_dump_memory_with_error(self):
+        del self.clf.memory[-16:]
+        lines = self.tag.dump()
+        assert len(lines) == 13
+        assert lines[-1] == '134: ?? ?? ?? ?? (PACK0-PACK1)'
+
+################################################################################
+#
+# TEST NTAG 216
+#
+################################################################################
+
+class TestNTAG216:
+    def setup(self):
+        tag_memory = bytearray.fromhex(
+            "04 51 7C A1  E1 ED 25 80  A9 48 00 00  E1 10 6D 00" # 000-003
+            "03 00 FE 00  00 00 00 00  00 00 00 00  00 00 00 00" # 004-007
+        ) + bytearray(231*4 - 32)
+        self.clf = NTAG21xSimulator(tag_memory, "\0\4\4\2\1\0\x13\3")
+        self.tag = self.clf.connect(rdwr={'on-connect': None})
+
+    def test_activation(self):
+        assert isinstance(self.tag, nfc.tag.tt2_nxp.NTAG216)
+        assert self.tag._product == "NXP NTAG216"
+
+    def test_dump_memory(self):
+        self.clf.memory[14] = 0xFF
+        lines = self.tag.dump()
+        assert len(lines) == 13
+        assert lines[-1] == '230: 00 00 00 00 (PACK0-PACK1)'
+        
+    def test_dump_memory_with_error(self):
+        del self.clf.memory[-16:]
+        lines = self.tag.dump()
+        assert len(lines) == 13
+        assert lines[-1] == '230: ?? ?? ?? ?? (PACK0-PACK1)'
+
+################################################################################
+#
 # NFC FORUM TEST DATA
 #
 ################################################################################
