@@ -209,8 +209,11 @@ class Type2Tag(Tag):
                 while offset + i in skip_bytes:
                     offset += 1
                 tag_memory[offset+i] = data[i]
-            if offset + i + 1 < tag_memory[14] * 8 + 16:
-                tag_memory[offset+i+1] = 0xFE
+            offset = offset + i + 1
+            while offset in skip_bytes:
+                offset += 1
+            if offset < tag_memory[14] * 8 + 16:
+                tag_memory[offset] = 0xFE
             tag_memory.synchronize()
             
             # Write the ndef message tlv length.
