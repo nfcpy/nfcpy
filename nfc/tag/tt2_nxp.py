@@ -156,7 +156,13 @@ class MifareUltralightC(tt2.Type2Tag):
             
             # set or unset read protection
             self.write(43, "\0\0\0\0" if read_protect else "\x01\0\0\0")
-            return True
+
+            # Reactivate the tag to have the key effective and
+            # authenticate with the same key
+            if self.clf.sense([nfc.clf.TTA(uid=self.uid)]):
+                self.clf.set_communication_mode('', check_crc='OFF')
+                return self.authenticate(key)
+            else: return False
         else:
             return super(MifareUltralightC, self)._protect(
                 password, read_protect, protect_from)
