@@ -112,9 +112,8 @@ class MifareUltralightC(tt2.Type2Tag):
 
         A Mifare Ultrlight C Tag can be provisioned with a custom
         password (or the default manufacturer key if the password is
-        an empty string or bytearray).  to later verify that data read
-        from the then write protected tag is genuine. Read protection
-        is not supported.
+        an empty string or bytearray). Read protection is not
+        supported.
         
         A non-empty *password* must provide at least 128 bit key
         material, in other words it must be a string or bytearray of
@@ -131,26 +130,26 @@ class MifareUltralightC(tt2.Type2Tag):
         assert protect_from >= 0
         if password is not None:
             if password == "":
-                # set the factory key
-                key = "IEMKAERB!NACUOYF"
+                key = "IEMKAERB!NACUOYF" # factory key
             else:
                 key = password[0:16]
-                assert len(key) == 16
+            if len(key) != 16:
+                raise ValueError("password must be at least 16 byte")
             log.debug("protect with key " + key.encode("hex"))
             # split the key and reverse
             key1, key2 = key[7::-1], key[15:7:-1]
-            # write directly because key is unreadable
             self.write(44, key1[0:4])
             self.write(45, key1[4:8])
             self.write(46, key2[0:4])
             self.write(47, key2[4:8])
             # protect from memory page
-            self[42*4] = min(protect_from, 255)
+            self.write(42, chr(max(3, min(protect_from, 0x30))) + "\0\0\0")
             # set or unset read protection
-            self[43*4] = 0x00 if read_protect else 0x01
-            self.synchronize()
+            self.write(43, "\0\0\0\0" if read_protect else "\x01\0\0\0")
             return True
-        return False
+        else:
+            return super(MifareUltralightC, self)._protect(
+                password, read_protect, protect_from)
 
     def authenticate(self, password):
         from pyDes import triple_des, CBC

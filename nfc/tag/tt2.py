@@ -369,7 +369,8 @@ class Type2Tag(Tag):
         ignored.
 
         """
-        return super(Type2Tag, self).protect(password)
+        return super(Type2Tag, self).protect(
+            password, read_protect, protect_from)
         
     def _protect(self, password, read_protect, protect_from):
         if password is not None:
@@ -484,7 +485,7 @@ class Type2Tag(Tag):
             # Case 1 is for readers who return the ack/nack.
             # Case 2 is for readers who process the response.
             return True
-        if len(rsp) == 1 and data[0] & 0xFA == 0x00:
+        if len(rsp) == 1 and rsp[0] != 0x0A:
             raise Type2TagCommandError(INVALID_PAGE_ERROR)
         raise Type2TagCommandError(INVALID_RESPONSE_ERROR)
 
