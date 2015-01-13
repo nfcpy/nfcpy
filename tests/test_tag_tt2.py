@@ -26,6 +26,7 @@ sys.path.insert(1, os.path.split(sys.path[0])[0])
 import nfc
 import nfc.ndef
 import nfc.tag.tt2
+import nfc.tag.tt2_nxp
 
 from binascii import hexlify
 from nose.tools import raises
@@ -75,8 +76,10 @@ class Type2TagSimulator(nfc.clf.ContactlessFrontend):
             else: return "\x00" # NAK
         elif data[0] == 0xA2: # WRITE COMMAND
             offset = self.sector * 1024 + data[1] * 4
-            self.memory[offset:offset+4] = data[2:6]
-            return bytearray([0x0A])
+            if offset + 4 <= len(self.memory):
+                self.memory[offset:offset+4] = data[2:6]
+                return bytearray([0x0A])
+            else: return bytearray([0xA0])
         elif data == "\xC2\xFF": # SECTOR_SELECT 1
             return bytearray([0x0A if len(self.memory) > 1024 else 0xA0])
         elif len(data) == 4 and timeout == 0.001: # SECTOR_SELECT 2
@@ -85,8 +88,13 @@ class Type2TagSimulator(nfc.clf.ContactlessFrontend):
                 raise nfc.clf.TimeoutError("sector select")
             else: return bytearray([0xA0])
         else:
-            raise nfc.clf.TimeoutError("simulated")
-        
+            response = self.unknown_command(data, timeout)
+            if response is not None: return response
+            else: raise nfc.clf.TimeoutError("unknown command")
+
+    def unknown_command(self, data, timeout):
+        pass
+
     def set_communication_mode(self, brm, **kwargs):
         pass
 
@@ -299,15 +307,15 @@ class TestTagProcedures:
         assert lines[6] == "  7: ?? ?? ?? ?? |....|"
 
     def test_is_present_if_present(self):
-        assert self.tag._is_present() is True
+        assert self.tag.is_present is True
 
     def test_is_present_if_gone(self):
         self.clf.tag_is_present = False
-        assert self.tag._is_present() is False
+        assert self.tag.is_present is False
 
     def test_is_present_if_error(self):
         self.clf.return_response = bytearray(18)
-        assert self.tag._is_present() is False
+        assert self.tag.is_present is False
 
     def test_format_wrong_ndef_magic(self):
         self.clf.memory[12] = 0
@@ -339,20 +347,22 @@ class TestTagProcedures:
 
     def test_protect_with_default_lock_bits(self):
         self.clf.memory += bytearray(32)
-        self.tag.protect()
+        assert self.tag.protect() is True
         assert self.clf.memory[   8:  16] == "79C8FFFFE110FE0F".decode("hex")
         assert self.clf.memory[  16:  24] == "0203820402000000".decode("hex")
         assert self.clf.memory[  24:  32] == "0303d00000FE0000".decode("hex")
         assert self.clf.memory[  32:2048] == 2016 * "\x00"
         assert self.clf.memory[2048:2082] == bytearray(31*"\xFF") + "\x00"
+        assert self.tag.ndef.is_writeable is False
 
     def test_protect_with_lock_tlv_lock_bits(self):
         self.clf.memory[16:21] = bytearray.fromhex("01 03 82 1F 62")
-        self.tag.protect()
+        assert self.tag.protect() is True
         assert self.clf.memory[ 8:16] == "79C8FFFFE110FE0F".decode("hex")
         assert self.clf.memory[16:24] == "0103821F62000000".decode("hex")
         assert self.clf.memory[24:32] == "0303d00000FE0000".decode("hex")
         assert self.clf.memory[32:40] == "0000FFFFFF7F0000".decode("hex")
+        assert self.tag.ndef.is_writeable is False
 
     def test_protect_with_password_argument(self):
         assert self.tag.protect("abcdefg") is False
@@ -457,6 +467,150 @@ class TestNdef:
         assert self.clf.memory[32:40] == "\x03\x2E\xD1\x01\x2A\x55\x01n"
         assert self.clf.memory[40:80] == "fc.co" + (31 * "m") + ".com"
         assert self.clf.memory[80:96] == bytearray(16)
+
+################################################################################
+#
+# TEST MIFARE ULTRALIGHT
+#
+################################################################################
+
+class MifareUltralightSimulator(Type2TagSimulator): pass
+
+class TestMifareUltralight:
+    def setup(self):
+        tag_memory = bytearray.fromhex(
+            "04 6F D5 36  11 12 7A 00  79 C8 00 00  E1 10 06 00" # 000-003
+            "03 0A D1 01  06 55 01 6E  2E 63 6F 6D  FE 00 00 00" # 004-007
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 008-011
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 012-015
+        )
+        self.clf = MifareUltralightSimulator(tag_memory)
+        self.tag = self.clf.connect(rdwr={'on-connect': None})
+
+    def test_activation(self):
+        assert isinstance(self.tag, nfc.tag.tt2_nxp.MifareUltralight)
+        assert self.tag._product == "Mifare Ultralight (MF01CU1)"
+
+    def test_dump_memory(self):
+        self.clf.memory[14] = 0xFF
+        lines = self.tag.dump()
+        assert len(lines) == 11
+        assert lines[-1] == ' 15: 00 00 00 00 |....|'
+        
+################################################################################
+#
+# TEST MIFARE ULTRALIGHT C
+#
+################################################################################
+
+class MifareUltralightCSimulator(Type2TagSimulator):
+    def unknown_command(self, data, timeout):
+        from nfc.tag.pyDes import triple_des, CBC
+        if data == "\x1A\x00": # AUTHENTICATE COMMAND
+            key = str(self.memory[176:192])
+            key = key[7::-1] + key[15:7:-1]
+            self.m1 = triple_des(key, CBC, 8*"\0").encrypt("\0\1\2\3\4\5\6\7")
+            return bytearray("\xAF" + self.m1)
+        if data[0] == 0xAF and len(data) == 17 and hasattr(self, "m1"):
+            key = str(self.memory[176:192])
+            key = key[7::-1] + key[15:7:-1]
+            m2 = str(data[1:17])
+            rndab = triple_des(key, CBC, self.m1).decrypt(m2)
+            rnda, rndb = rndab[0:8], rndab[15] + rndab[8:15]
+            if rndb == "\0\1\2\3\4\5\6\7":
+                m3 = triple_des(key, CBC, m2[8:16]).encrypt(rnda[1:8]+rnda[0])
+                return bytearray("\x00" + m3)
+            return bytearray([0x00]) # nak
+
+class TestMifareUltralightC:
+    def setup(self):
+        tag_memory = bytearray.fromhex(
+            "04 51 7C A1  E1 ED 25 80  A9 48 00 00  E1 10 12 00" # 000-003
+            "01 03 A0 10  44 03 89 D1  01 85 55 01  6E 66 63 63" # 004-007
+            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 008-011
+            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 012-015
+            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 016-019
+            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 020-023
+            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 024-027
+            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 028-031
+            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 032-035
+            "63 63 63 63  63 63 63 63  63 57 4C 46  2E 63 6F 6D" # 036-039
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 040-043
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # PASSWORD
+        )
+        self.clf = MifareUltralightCSimulator(tag_memory)
+        self.tag = self.clf.connect(rdwr={'on-connect': None})
+
+    def test_activation(self):
+        assert isinstance(self.tag, nfc.tag.tt2_nxp.MifareUltralightC)
+        assert self.tag._product == "Mifare Ultralight C (MF01CU2)"
+
+    def test_dump_memory(self):
+        self.clf.memory[14] = 0xFF
+        lines = self.tag.dump()
+        assert len(lines) == 17
+        assert lines[-1] == ' 43: 00 00 00 00 (AUTH1)'
+        
+    def test_dump_memory_with_error(self):
+        del self.clf.memory[-24:]
+        lines = self.tag.dump()
+        assert len(lines) == 17
+        assert lines[-1] == ' 43: ?? ?? ?? ?? (AUTH1)'
+
+    def test_protect_without_password(self):
+        assert self.tag.protect() is True
+        assert self.clf.memory[10:12] == "\xFF\xFF"
+        assert self.clf.memory[160:176] == "\xFF\xFF" + 14 * "\x00"
+        assert self.tag.ndef.is_writeable is False
+
+    @raises(ValueError)
+    def test_protect_with_invalid_password(self):
+        self.tag.protect("abc")
+
+    def test_protect_with_default_password(self):
+        self.tag.protect("")
+        assert self.clf.memory[168:172] == "\3\0\0\0"
+        assert self.clf.memory[172:176] == "\1\0\0\0"
+        assert self.clf.memory[176:192] == "BREAKMEIFYOUCAN!"
+
+    def test_protect_with_custom_password(self):
+        self.tag.protect("0123456789abcdef")
+        assert self.clf.memory[168:172] == "\3\0\0\0"
+        assert self.clf.memory[172:176] == "\1\0\0\0"
+        assert self.clf.memory[176:192] == "76543210fedcba98"
+
+    def test_protect_with_protect_from_page_5(self):
+        self.tag.protect("", protect_from=5)
+        assert self.clf.memory[168:172] == "\5\0\0\0"
+        assert self.clf.memory[172:176] == "\1\0\0\0"
+        assert self.clf.memory[176:192] == "BREAKMEIFYOUCAN!"
+
+    def test_protect_with_protect_from_page_100(self):
+        self.tag.protect("", protect_from=100)
+        assert self.clf.memory[168:172] == "\x30\0\0\0"
+        assert self.clf.memory[172:176] == "\1\0\0\0"
+        assert self.clf.memory[176:192] == "BREAKMEIFYOUCAN!"
+
+    def test_protect_with_read_protect_true(self):
+        self.tag.protect("", read_protect=True)
+        assert self.clf.memory[168:172] == "\3\0\0\0"
+        assert self.clf.memory[172:176] == "\0\0\0\0"
+        assert self.clf.memory[176:192] == "BREAKMEIFYOUCAN!"
+
+    def test_authenticate_with_default_password(self):
+        self.clf.memory[176:192] = "BREAKMEIFYOUCAN!"
+        assert self.tag.authenticate("") is True
+
+    def test_authenticate_with_custom_password(self):
+        self.tag.protect("0123456789abcdef")
+        assert self.tag.authenticate("0123456789abcdef") is True
+
+    def test_authenticate_with_custom_password(self):
+        assert self.tag.authenticate("0123456789abcdef") is False
+
+    @raises(ValueError)
+    def test_authenticate_with_invalid_password(self):
+        self.tag.authenticate("abc")
 
 ################################################################################
 #
