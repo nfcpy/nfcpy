@@ -223,7 +223,7 @@ class MifareUltralightC(tt2.Type2Tag):
         log.debug("received confirmation")
         log.debug("iv = " + str(iv).encode("hex"))
         log.debug("m3 = " + str(m3).encode("hex"))
-        
+
         return triple_des(key, CBC, iv).decrypt(m3) == ra[1:9] + ra[0]
         
 class MifareUltralightEV1(tt2.Type2Tag):

@@ -599,14 +599,19 @@ class TestMifareUltralightC:
 
     def test_authenticate_with_default_password(self):
         self.clf.memory[176:192] = "BREAKMEIFYOUCAN!"
+        assert self.tag.is_authenticated is False
         assert self.tag.authenticate("") is True
+        assert self.tag.is_authenticated is True
 
     def test_authenticate_with_custom_password(self):
-        self.tag.protect("0123456789abcdef")
+        self.clf.memory[176:192] = "76543210fedcba98"
+        assert self.tag.is_authenticated is False
         assert self.tag.authenticate("0123456789abcdef") is True
+        assert self.tag.is_authenticated is True
 
-    def test_authenticate_with_custom_password(self):
+    def test_authenticate_with_wrong_password(self):
         assert self.tag.authenticate("0123456789abcdef") is False
+        assert self.tag.is_authenticated is False
 
     @raises(ValueError)
     def test_authenticate_with_invalid_password(self):

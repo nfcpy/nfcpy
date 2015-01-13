@@ -221,7 +221,7 @@ class Tag(object):
     @property
     def is_authenticated(self):
         """True if the tag was successfully authenticated."""
-        return self._authenticated
+        return bool(self._authenticated)
         
     def dump(self):
         """The dump() method returns a list of strings describing the memory
@@ -330,9 +330,9 @@ class Tag(object):
         if hasattr(self, "_authenticate"):
             args = "password={0!r}".format(password)
             log.debug("authenticate({0})".format(args))
-            status = self._authenticate(password)
-            if status is True: self._ndef = None
-            return status
+            self._authenticated = self._authenticate(password)
+            if self._authenticated is True: self._ndef = None
+            return self._authenticated
         else:
             log.error("this tag can not be authenticated with nfcpy")
             return None
