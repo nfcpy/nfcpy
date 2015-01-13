@@ -122,28 +122,38 @@ class MifareUltralightC(tt2.Type2Tag):
         The memory unit for the value of *protect_from* is 16 byte,
         thus with ``protect_from=2`` bytes 0 to 31 are not protected.
 
+        .. warning:: If protect is called without a password, the
+            default Type 2 Tag protection method will set the lock
+            bits to readonly. This process is not reversible.
+
         """
         return super(MifareUltralightC, self).protect(
             password, read_protect, protect_from)
 
     def _protect(self, password, read_protect, protect_from):
         assert protect_from >= 0
+        
         if password is not None:
-            if password == "":
-                key = "IEMKAERB!NACUOYF" # factory key
-            else:
-                key = password[0:16]
+            # The first 16 password character bytes are taken as key
+            # unless the password is empty. If it's empty we use the
+            # factory default password.
+            key = password[0:16] if password != "" else "IEMKAERB!NACUOYF"
+            
             if len(key) != 16:
                 raise ValueError("password must be at least 16 byte")
+            
             log.debug("protect with key " + key.encode("hex"))
+            
             # split the key and reverse
             key1, key2 = key[7::-1], key[15:7:-1]
             self.write(44, key1[0:4])
             self.write(45, key1[4:8])
             self.write(46, key2[0:4])
             self.write(47, key2[4:8])
+            
             # protect from memory page
             self.write(42, chr(max(3, min(protect_from, 0x30))) + "\0\0\0")
+            
             # set or unset read protection
             self.write(43, "\0\0\0\0" if read_protect else "\x01\0\0\0")
             return True
@@ -152,13 +162,36 @@ class MifareUltralightC(tt2.Type2Tag):
                 password, read_protect, protect_from)
 
     def authenticate(self, password):
+        """Authenticate with a Mifare Ultralight C Tag.
+
+        :meth:`autenticate` executes the Mifare Ultralight C mutual
+        authentication protocol to verify that the *password* argument
+        matches the key that is stored in the card. A new card key can
+        be set with :meth:`protect`.
+
+        The *password* argument must be a string with either 0 or at
+        least 16 bytes. A zero length password string indicates that
+        the factory default card key be used. From a password with 16
+        or more bytes the first 16 byte are taken as card key,
+        remaining bytes are ignored. A password length between 1 and
+        15 generates a ValueError exception.
+
+        The authentication result is True if the password was
+        confirmed and False if not.
+
+        """
+        return super(MifareUltralightC, self).authenticate(password)
+        
+    def _authenticate(self, password):
         from pyDes import triple_des, CBC
-        if password == "":
-            # try with the factory key
-            key = "IEMKAERB!NACUOYF"
-        else:
-            key = password[0:16]
-            assert len(key) == 16
+
+        # The first 16 password character bytes are taken as key
+        # unless the password is empty. If it's empty we use the
+        # factory default password.
+        key = password[0:16] if password != "" else "IEMKAERB!NACUOYF"
+        
+        if len(key) != 16:
+            raise ValueError("password must be at least 16 byte")
         
         log.debug("authenticate with key " + str(key).encode("hex"))
         
@@ -182,8 +215,7 @@ class MifareUltralightC(tt2.Type2Tag):
         log.debug("m2 = " + str(m2).encode("hex"))
         try:
             rsp = self.transceive("\xAF" + m2, rlen=9)
-            if len(rsp) != 9: return False
-        except (nfc.clf.TimeoutError, nfc.clf.TransmissionError):
+        except tt2.Type2TagCommandError:
             return False
         
         m3 = str(rsp[1:9])
