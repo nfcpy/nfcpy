@@ -29,6 +29,7 @@ import nfc.tag.tt2
 
 from binascii import hexlify
 from nose.tools import raises
+from nose.plugins.attrib import attr
 from nose.plugins.skip import SkipTest
 
 import logging
@@ -52,6 +53,7 @@ class Type2TagSimulator(nfc.clf.ContactlessFrontend):
         self.dev = nfc.dev.Device()
         self.uid = self.memory[0:7]
         self.tag_is_present = True # to simulate tag removal
+        self.return_response = None
 
     def sense(self, targets):
         cfg = bytearray.fromhex("440000")
@@ -59,33 +61,406 @@ class Type2TagSimulator(nfc.clf.ContactlessFrontend):
 
     def exchange(self, data, timeout):
         data = bytearray(data)
-        if self.tag_is_present:
-            if data[0] == 0x30: # READ COMMAND
-                offset = self.sector * 1024 + data[1] * 4
-                if offset < len(self.memory):
-                    data = self.memory[offset:offset+16]
-                    data.extend(self.memory[0:(16-len(data))])
-                    return data + crca(data, len(data))
-                else: return "\x00" # NAK
-            if data[0] == 0xA2: # WRITE COMMAND
-                offset = self.sector * 1024 + data[1] * 4
-                self.memory[offset:offset+4] = data[2:6]
-                return bytearray([0x0A])
-            if data == "\xC2\xFF": # SECTOR_SELECT 1
-                return bytearray([0x0A if len(self.memory) > 1024 else 0xA0])
-            if len(data) == 4 and timeout == 0.001: # SECTOR_SELECT 2
-                if data[0] * 1024 < len(self.memory):
-                    self.sector = data[0]
-                else: return bytearray([0xA0])
-        raise nfc.clf.TimeoutError("simulated")
+        if self.tag_is_present is False:
+            raise nfc.clf.TimeoutError("mute tag")
+        if self.return_response is not None:
+            return self.return_response
+
+        if data[0] == 0x30: # READ COMMAND
+            offset = self.sector * 1024 + data[1] * 4
+            if offset < len(self.memory):
+                data = self.memory[offset:offset+16]
+                data.extend(self.memory[0:(16-len(data))])
+                return data + crca(data, len(data))
+            else: return "\x00" # NAK
+        elif data[0] == 0xA2: # WRITE COMMAND
+            offset = self.sector * 1024 + data[1] * 4
+            self.memory[offset:offset+4] = data[2:6]
+            return bytearray([0x0A])
+        elif data == "\xC2\xFF": # SECTOR_SELECT 1
+            return bytearray([0x0A if len(self.memory) > 1024 else 0xA0])
+        elif len(data) == 4 and timeout == 0.001: # SECTOR_SELECT 2
+            if data[0] * 1024 < len(self.memory):
+                self.sector = data[0]
+                raise nfc.clf.TimeoutError("sector select")
+            else: return bytearray([0xA0])
+        else:
+            raise nfc.clf.TimeoutError("simulated")
         
     def set_communication_mode(self, brm, **kwargs):
         pass
 
+###############################################################################
+#
+# TEST TYPE 2 TAG MEMORY READER
+#
+###############################################################################
+
+class TestMemoryReader:
+    def setup(self):
+        tag_memory = bytearray.fromhex(
+            "01 6F D5 36  11 12 7A 00  79 C8 00 00  00 00 00 00"
+        )
+        self.clf = Type2TagSimulator(tag_memory)
+        self.tag = self.clf.connect(rdwr={'on-connect': None})
+
+    def test_getitem_byte(self):
+        tag_memory = nfc.tag.tt2.Type2TagMemoryReader(self.tag)
+        assert tag_memory[0] == self.clf.memory[0]
+        assert tag_memory[1] == self.clf.memory[1]
+        
+    def test_getitem_slice(self):
+        tag_memory = nfc.tag.tt2.Type2TagMemoryReader(self.tag)
+        assert tag_memory[0:8] == self.clf.memory[0:8]
+        assert tag_memory[0:4] == self.clf.memory[0:4]
+        assert tag_memory[4:8] == self.clf.memory[4:8]
+        
+    def test_setitem_byte(self):
+        tag_memory = nfc.tag.tt2.Type2TagMemoryReader(self.tag)
+        tag_memory[0] = 0xFF
+        tag_memory.synchronize()
+        assert self.clf.memory[0] == 0xFF
+
+    def test_setitem_slice(self):
+        tag_memory = nfc.tag.tt2.Type2TagMemoryReader(self.tag)
+        tag_memory[0:2] = bytearray("\x11\x22")
+        tag_memory.synchronize()
+        assert self.clf.memory[0:2] == bytearray("\x11\x22")
+
+    @raises(ValueError)
+    def test_setitem_slice_is_shorter(self):
+        tag_memory = nfc.tag.tt2.Type2TagMemoryReader(self.tag)
+        tag_memory[0:3] = bytearray("\x11\x22")
+
+    @raises(ValueError)
+    def test_setitem_slice_is_longer(self):
+        tag_memory = nfc.tag.tt2.Type2TagMemoryReader(self.tag)
+        tag_memory[0:1] = bytearray("\x11\x22")
+
+    @raises(TypeError)
+    def test_delitem(self):
+        tag_memory = nfc.tag.tt2.Type2TagMemoryReader(self.tag)
+        assert tag_memory[0] == 0x01
+        del tag_memory[0]
+
+    @raises(IndexError)
+    def test_read_from_mute_tag(self):
+        tag_memory = nfc.tag.tt2.Type2TagMemoryReader(self.tag)
+        self.clf.tag_is_present = False
+        value = tag_memory[0]
+
+    def test_write_to_mute_tag(self):
+        tag_memory = nfc.tag.tt2.Type2TagMemoryReader(self.tag)
+        assert tag_memory[0] == 0x01
+        self.clf.tag_is_present = False
+        tag_memory[0] = 0x00
+        tag_memory.synchronize()
+        assert self.clf.memory[0] == 0x01
 
 ################################################################################
 #
-# EXTERNALLY DEFINED TEST DATA
+# TEST TYPE 2 TAG COMMANDS
+#
+################################################################################
+
+class TestTagCommands:
+    def setup(self):
+        tag_memory = bytearray.fromhex(
+            "01 6F D5 36  11 12 7A 00  79 C8 00 00  00 00 00 00"
+        ) + bytearray(2048 - 16)
+        self.clf = Type2TagSimulator(tag_memory)
+        self.tag = self.clf.connect(rdwr={'on-connect': None})
+
+    def test_read_with_args_keyword(self):
+        assert self.tag.read(page=0) == self.clf.memory[0:16]
+
+    def test_read_with_args_positional(self):
+        assert self.tag.read(0) == self.clf.memory[0:16]
+
+    def test_read_with_nak_response(self):
+        for nak in (0, 1, 4, 5):
+            yield self.check_read_with_nak_response, nak
+
+    @raises(nfc.tag.tt2.Type2TagCommandError)
+    def check_read_with_nak_response(self, nak):
+        self.clf.return_response = bytearray([nak])
+        try: self.tag.read(0)
+        except nfc.tag.tt2.Type2TagCommandError as error:
+            assert error.errno == nfc.tag.tt2.INVALID_PAGE_ERROR
+            raise
+
+    @raises(nfc.tag.tt2.Type2TagCommandError)
+    def test_read_with_invalid_response(self):
+        self.clf.return_response = bytearray(15)
+        try: self.tag.read(0)
+        except nfc.tag.tt2.Type2TagCommandError as error:
+            assert error.errno == nfc.tag.tt2.INVALID_RESPONSE_ERROR
+            raise
+
+    @raises(nfc.tag.tt2.Type2TagCommandError)
+    def test_read_with_checksum_error(self):
+        self.clf.return_response = bytearray(18)
+        try: self.tag.read(0)
+        except nfc.tag.tt2.Type2TagCommandError as error:
+            assert error.errno == nfc.tag.tt2.CHECKSUM_ERROR
+            raise
+
+    def test_write_with_args_keyword(self):
+        self.tag.write(page=0, data=bytearray(4))
+        assert self.clf.memory[0:4] == bytearray(4)
+
+    def test_write_with_args_positional(self):
+        self.tag.write(0, bytearray(4))
+        assert self.clf.memory[0:4] == bytearray(4)
+
+    @raises(ValueError)
+    def test_write_with_args_error(self):
+        self.tag.write(0, data=bytearray(3))
+
+    def test_write_with_nak_response(self):
+        for nak in (0, 1, 4, 5):
+            yield self.check_write_with_nak_response, nak
+
+    @raises(nfc.tag.tt2.Type2TagCommandError)
+    def check_write_with_nak_response(self, nak):
+        self.clf.return_response = bytearray([nak])
+        try: self.tag.write(0, bytearray(4))
+        except nfc.tag.tt2.Type2TagCommandError as error:
+            assert error.errno == nfc.tag.tt2.INVALID_PAGE_ERROR
+            raise
+
+    @raises(nfc.tag.tt2.Type2TagCommandError)
+    def test_write_with_invalid_response(self):
+        self.clf.return_response = bytearray(2)
+        try: self.tag.write(0, bytearray(4))
+        except nfc.tag.tt2.Type2TagCommandError as error:
+            assert error.errno == nfc.tag.tt2.INVALID_RESPONSE_ERROR
+            raise
+
+    @raises(nfc.tag.tt2.Type2TagCommandError)
+    def test_write_to_mute_tag(self):
+        self.clf.tag_is_present = False
+        try: self.tag.write(0, bytearray(4))
+        except nfc.tag.tt2.Type2TagCommandError as error:
+            assert error.errno == nfc.tag.tt2.TIMEOUT_ERROR
+            raise
+
+    def test_sector_select_same_sector(self):
+        assert self.tag.sector_select(0) == 0
+
+    def test_sector_select(self):
+        assert self.tag.sector_select(1) == 1
+
+    @raises(nfc.tag.tt2.Type2TagCommandError)
+    def test_sector_select_not_supported(self):
+        self.clf.return_response = bytearray([0x00])
+        try: self.tag.sector_select(1)
+        except nfc.tag.tt2.Type2TagCommandError as error:
+            assert error.errno == nfc.tag.tt2.INVALID_SECTOR_ERROR
+            raise
+
+    @raises(nfc.tag.tt2.Type2TagCommandError)
+    def test_sector_select_invalid_sector(self):
+        try: self.tag.sector_select(2)
+        except nfc.tag.tt2.Type2TagCommandError as error:
+            assert error.errno == nfc.tag.tt2.INVALID_SECTOR_ERROR
+            raise
+
+################################################################################
+#
+# TEST TYPE 2 TAG PROCEDURES
+#
+################################################################################
+
+class TestTagProcedures:
+    def setup(self):
+        tag_memory = bytearray.fromhex(
+            "01 6F D5 36  11 12 7A 00  79 C8 00 00  E1 10 FE 00"
+            "02 03 82 04  02 00 00 00  03 03 D0 00  00 FE 00 00"
+        ) + bytearray(2048 - 32)
+        self.clf = Type2TagSimulator(tag_memory)
+        self.tag = self.clf.connect(rdwr={'on-connect': None})
+
+    def test_dump_args_default(self):
+        lines = self.tag.dump()
+        assert len(lines) == 11
+        assert lines[-1] == "511: 00 00 00 00 |....|"
+
+    def test_dump_args_stop(self):
+        lines = self.tag._dump(4)
+        assert len(lines) == 4
+        assert lines[3] == "  3: e1 10 fe 00 (OTP0-OTP3)"
+
+    def test_dump_unreadable(self):
+        self.clf.return_response = bytearray([0x00])
+        lines = self.tag._dump(8)
+        assert len(lines) == 7
+        assert lines[3] == "  3: ?? ?? ?? ?? (OTP0-OTP3)"
+        assert lines[6] == "  7: ?? ?? ?? ?? |....|"
+
+    def test_is_present_if_present(self):
+        assert self.tag._is_present() is True
+
+    def test_is_present_if_gone(self):
+        self.clf.tag_is_present = False
+        assert self.tag._is_present() is False
+
+    def test_is_present_if_error(self):
+        self.clf.return_response = bytearray(18)
+        assert self.tag._is_present() is False
+
+    def test_format_wrong_ndef_magic(self):
+        self.clf.memory[12] = 0
+        assert self.tag.format() is False
+
+    def test_format_wrong_ndef_version(self):
+        self.clf.memory[13] = 0
+        assert self.tag.format() is False
+
+    def test_format_no_user_data_area(self):
+        self.clf.memory[14] = 0
+        assert self.tag.format() is False
+
+    def test_format_ndef_readonly(self):
+        self.clf.memory[15] = 0xFF
+        assert self.tag.format() is False
+
+    def test_format_args_default(self):
+        assert self.clf.memory[24:32] == "0303D00000FE0000".decode("hex")
+        assert self.tag.format() is True
+        assert self.clf.memory[24:32] == "0300FE0000FE0000".decode("hex")
+
+    def test_format_wipe_ndef_data(self):
+        assert self.clf.memory[24:32] == "0303D00000FE0000".decode("hex")
+        assert self.tag.format(wipe=1) is True
+        assert self.clf.memory[24:32] == "0300FE0101010101".decode("hex")
+        assert self.clf.memory[32:40] == "0101000000000101".decode("hex")
+        assert self.clf.memory[40:2048] == (2048-40) * "\x01"
+
+    def test_protect_with_default_lock_bits(self):
+        self.clf.memory += bytearray(32)
+        self.tag.protect()
+        assert self.clf.memory[   8:  16] == "79C8FFFFE110FE0F".decode("hex")
+        assert self.clf.memory[  16:  24] == "0203820402000000".decode("hex")
+        assert self.clf.memory[  24:  32] == "0303d00000FE0000".decode("hex")
+        assert self.clf.memory[  32:2048] == 2016 * "\x00"
+        assert self.clf.memory[2048:2082] == bytearray(31*"\xFF") + "\x00"
+
+    def test_protect_with_lock_tlv_lock_bits(self):
+        self.clf.memory[16:21] = bytearray.fromhex("01 03 82 1F 62")
+        self.tag.protect()
+        assert self.clf.memory[ 8:16] == "79C8FFFFE110FE0F".decode("hex")
+        assert self.clf.memory[16:24] == "0103821F62000000".decode("hex")
+        assert self.clf.memory[24:32] == "0303d00000FE0000".decode("hex")
+        assert self.clf.memory[32:40] == "0000FFFFFF7F0000".decode("hex")
+
+    def test_protect_with_password_argument(self):
+        assert self.tag.protect("abcdefg") is False
+
+    def test_protect_without_ndef_magic_byte(self):
+        self.clf.memory[12] = 0
+        assert self.tag.protect() is False
+
+###############################################################################
+#
+# TEST TYPE 1 TAG NDEF
+#
+###############################################################################
+
+class TestNdef:
+    def setup(self):
+        tag_memory = (bytearray.fromhex(
+            "04 6F D5 36  11 12 7A 00  79 C8 00 00  E1 10 FE 00" # 000-003
+            "00 00 00 01  03 50 10 24  FF 01 00 02  03 52 0E 04" # 004-007
+            "03 FF 07 CC  C1 01 00 00  07 C5 55 01  6E 66 63 2E" # 008-011
+            "63 6F 6D 6D  6D 6D 6D 6D  6D 6D 6D 6D  6D 6D 6D 6D" # 012-015
+            "6D 6D 6D 6D  6D 6D 6D 6D  6D 6D 6D 6D  6D 6D 6D 6D" # 016-019
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 020-023
+            "6D 6D 6D 6D  6D 6D 6D 6D  6D 6D 6D 6D  6D 6D 6D 6D" # 024-027
+            "6D 6D 6D 6D  6D 6D 6D 6D  6D 6D 6D 6D  6D 6D 6D 6D" # 028-031
+        ) + bytearray(1904 * "\x6D") + bytearray.fromhex(        # 012-509
+            "6D 6D 6D 6D  6D 6D 6D 6D  6D 6D 6D 6D  2E 63 6F 6D" # 508-511
+        ))
+        uri = "http://www.nfc.co{0}.com".format((2010-32) * "m")
+        self.ndef_message = nfc.ndef.Message(nfc.ndef.UriRecord(uri))
+        self.ndef_capacity = 2048 - 52
+        self.ndef_length = 2048 - 52
+
+        self.clf = Type2TagSimulator(tag_memory)
+        self.tag = self.clf.connect(rdwr={'on-connect': None})
+
+    def test_ndef_read(self):
+        assert self.tag.ndef is not None
+        assert self.tag.ndef.is_writeable == True
+        assert self.tag.ndef.is_readable == True
+        assert self.tag.ndef.capacity == self.ndef_capacity
+        assert self.tag.ndef.length == self.ndef_length
+        print self.tag.ndef.message.pretty()
+        assert self.tag.ndef.message == self.ndef_message
+
+    def test_ndef_read_no_ndef_magic_byte(self):
+        self.clf.memory[12] = 0
+        assert self.tag.ndef is None
+
+    def test_ndef_read_unknown_major_version(self):
+        self.clf.memory[13] = 0
+        assert self.tag.ndef is None
+
+    def test_ndef_read_unknown_minor_version(self):
+        self.clf.memory[13] = 0x1F
+        assert self.tag.ndef is not None
+
+    def test_ndef_read_all_data_set_to(self):
+        for value in (0, 1, 2, 4, 254, 255):
+            yield self.check_ndef_read_all_data_set_to, value
+
+    def check_ndef_read_all_data_set_to(self, value):
+        self.clf.memory[16:2048] = bytearray(2032*chr(value))
+        assert self.tag.ndef is None
+
+    def test_ndef_write_before_skip_bytes(self):
+        assert self.tag.ndef is not None
+        uri = "http://www.nfc.co{0}.com".format(1 * "m")
+        self.tag.ndef.message = nfc.ndef.Message(nfc.ndef.UriRecord(uri))
+        assert self.tag.ndef.capacity == self.ndef_capacity
+        assert self.tag.ndef.length == 16
+        assert self.clf.memory[34:51] == "\xD1\x01\x0C\x55\x01nfc.com.com\xFE"
+
+    def test_ndef_write_after_skip_bytes(self):
+        assert self.tag.ndef is not None
+        uri = "http://www.nfc.co{0}.com".format(33 * "m")
+        self.tag.ndef.message = nfc.ndef.Message(nfc.ndef.UriRecord(uri))
+        assert self.tag.ndef.capacity == self.ndef_capacity
+        assert self.tag.ndef.length == 48
+        assert self.clf.memory[32:40] == "\x03\x30\xD1\x01\x2C\x55\x01n"
+        assert self.clf.memory[40:80] == "fc.co" + (33 * "m") + ".c"
+        assert self.clf.memory[80:96] == bytearray(16)
+        assert self.clf.memory[96:99] == "om\xFE"
+
+    def test_ndef_write_long_ndef_message(self):
+        assert self.tag.ndef is not None
+        uri = "http://www.nfc.co{0}.com".format((33+208) * "m")
+        self.tag.ndef.message = nfc.ndef.Message(nfc.ndef.UriRecord(uri))
+        assert self.tag.ndef.capacity == self.ndef_capacity
+        assert self.tag.ndef.length == 48+208
+        assert self.clf.memory[32:40] == "\x03\xFF\x01\x00\xD1\x01\xFC\x55"
+        assert self.clf.memory[40:80] == "\x01nfc.co" + (33 * "m")
+        assert self.clf.memory[80:96] == bytearray(16)
+        assert self.clf.memory[96:309] == (208 * "m") + ".com\xFE"
+
+    def test_ndef_write_without_terminator(self):
+        self.clf.memory[14] = 0x0A
+        assert self.tag.ndef is not None
+        uri = "http://www.nfc.co{0}.com".format(31 * "m")
+        self.tag.ndef.message = nfc.ndef.Message(nfc.ndef.UriRecord(uri))
+        assert self.tag.ndef.length == 46
+        assert self.clf.memory[32:40] == "\x03\x2E\xD1\x01\x2A\x55\x01n"
+        assert self.clf.memory[40:80] == "fc.co" + (31 * "m") + ".com"
+        assert self.clf.memory[80:96] == bytearray(16)
+
+################################################################################
+#
+# NFC FORUM TEST DATA
 #
 ################################################################################
 
@@ -152,12 +527,13 @@ tt2_memory_layout_9 = (bytearray.fromhex(
 
 ################################################################################
 #
-# EXTERNALLY DEFINED TEST CASES
+# NFC FORUM TEST CASES
 #
 ################################################################################
 
+@attr("nfc-forum")
 def test_read_from_static_memory_with_version_one_dot_two():
-    # TC_T2T_NDA_BV_1
+    "TC_T2T_NDA_BV_1"
     msg = nfc.ndef.Message(nfc.ndef.UriRecord("http://www.n.com"))
     clf = Type2TagSimulator(tt2_memory_layout_4)
     tag = clf.connect(rdwr={'on-connect': None})
@@ -167,15 +543,17 @@ def test_read_from_static_memory_with_version_one_dot_two():
     assert tag.ndef.length == 10
     assert tag.ndef.message == msg
 
+@attr("nfc-forum")
 def test_read_from_static_memory_with_version_two_dot_zero():
-    # TC_T2T_NDA_BV_2
+    "TC_T2T_NDA_BV_2"
     msg = nfc.ndef.Message(nfc.ndef.Record())
     clf = Type2TagSimulator(tt2_memory_layout_5)
     tag = clf.connect(rdwr={'on-connect': None})
     assert tag.ndef is None
 
+@attr("nfc-forum")
 def test_read_from_readwrite_static_memory():
-    # TC_T2T_NDA_BV_3_0
+    "TC_T2T_NDA_BV_3_0"
     msg = nfc.ndef.Message(nfc.ndef.UriRecord("http://www.n.com"))
     clf = Type2TagSimulator(tt2_memory_layout_2)
     tag = clf.connect(rdwr={'on-connect': None})
@@ -185,8 +563,9 @@ def test_read_from_readwrite_static_memory():
     assert tag.ndef.length == 10
     assert tag.ndef.message == msg
 
+@attr("nfc-forum")
 def test_read_from_readwrite_dynamic_memory():
-    # TC_T2T_NDA_BV_3_1
+    "TC_T2T_NDA_BV_3_1"
     uri = "http://www.nfc.com{0}.com".format(2009 * "m")
     msg = nfc.ndef.Message(nfc.ndef.UriRecord(uri))
     clf = Type2TagSimulator(tt2_memory_layout_7)
@@ -197,8 +576,9 @@ def test_read_from_readwrite_dynamic_memory():
     assert tag.ndef.length == 2028
     assert tag.ndef.message == msg
 
+@attr("nfc-forum")
 def test_read_from_readwrite_dynamic_memory_with_lock_control_tlv():
-    # TC_T2T_NDA_BV_3_2
+    "TC_T2T_NDA_BV_3_2"
     uri = "http://www.nfc{0}WLF.com".format(122 * "c")
     msg = nfc.ndef.Message(nfc.ndef.UriRecord(uri))
     clf = Type2TagSimulator(tt2_memory_layout_9)
@@ -209,8 +589,9 @@ def test_read_from_readwrite_dynamic_memory_with_lock_control_tlv():
     assert tag.ndef.length == 137
     assert tag.ndef.message == msg
 
+@attr("nfc-forum")
 def test_write_to_initialized_static_memory():
-    # TC_T2T_NDA_BV_4_0
+    "TC_T2T_NDA_BV_4_0"
     uri = "http://www.n.com"
     msg = nfc.ndef.Message(nfc.ndef.UriRecord(uri))
     clf = Type2TagSimulator(tt2_memory_layout_1[:])
@@ -222,8 +603,9 @@ def test_write_to_initialized_static_memory():
     tag.ndef.message = msg
     assert clf.memory == tt2_memory_layout_2
 
+@attr("nfc-forum")
 def test_write_to_initialized_dynamic_memory():
-    # TC_T2T_NDA_BV_4_1
+    "TC_T2T_NDA_BV_4_1"
     uri = "http://www.nfc.com{0}.com".format(2009 * "m")
     msg = nfc.ndef.Message(nfc.ndef.UriRecord(uri))
     clf = Type2TagSimulator(tt2_memory_layout_6[:])
@@ -235,8 +617,9 @@ def test_write_to_initialized_dynamic_memory():
     tag.ndef.message = msg
     assert clf.memory == tt2_memory_layout_7
 
+@attr("nfc-forum")
 def test_write_to_initialized_dynamic_memory_with_lock_control():
-    # TC_T2T_NDA_BV_4_2
+    "TC_T2T_NDA_BV_4_2"
     uri = "http://www.nfc{0}WLF.com".format(122 * "c")
     msg = nfc.ndef.Message(nfc.ndef.UriRecord(uri))
     clf = Type2TagSimulator(tt2_memory_layout_8[:])
@@ -248,17 +631,19 @@ def test_write_to_initialized_dynamic_memory_with_lock_control():
     tag.ndef.message = msg
     assert clf.memory == tt2_memory_layout_9
 
+@attr("nfc-forum")
 @raises(AttributeError)
 def test_write_to_readonly_static_memory():
-    # TC_T2T_NDA_BV_5
+    "TC_T2T_NDA_BV_5"
     msg = nfc.ndef.Message(nfc.ndef.TextRecord("must fail to write"))
     clf = Type2TagSimulator(tt2_memory_layout_3)
     tag = clf.connect(rdwr={'on-connect': None})
     assert tag.ndef.is_writeable == False
     tag.ndef.message = msg
 
+@attr("nfc-forum")
 def test_transition_static_memory_to_readonly():
-    # TC_T2T_NDA_BV_6_0 (incomplete)
+    "TC_T2T_NDA_BV_6_0"
     clf = Type2TagSimulator(tt2_memory_layout_2[:])
     tag = clf.connect(rdwr={'on-connect': None})
     assert tag.ndef.is_readable == True
@@ -271,8 +656,9 @@ def test_transition_static_memory_to_readonly():
     assert clf.memory[11] == 0xFF
     assert tag.ndef.is_writeable == False
 
+@attr("nfc-forum")
 def test_transition_dynamic_memory_to_readonly():
-    # TC_T2T_NDA_BV_6_1 (incomplete)
+    "TC_T2T_NDA_BV_6_1"
     clf = Type2TagSimulator(tt2_memory_layout_7[:])
     tag = clf.connect(rdwr={'on-connect': None})
     assert tag.ndef.is_readable == True
@@ -286,8 +672,9 @@ def test_transition_dynamic_memory_to_readonly():
     assert clf.memory[2048:2048+32] == 31 * "\xFF" + "\x00"
     assert tag.ndef.is_writeable == False
 
+@attr("nfc-forum")
 def test_transition_dynamic_memory_with_lock_control_to_readonly():
-    # TC_T2T_NDA_BV_6_2 (incomplete)
+    "TC_T2T_NDA_BV_6_2"
     clf = Type2TagSimulator(tt2_memory_layout_9[:])
     tag = clf.connect(rdwr={'on-connect': None})
     assert tag.ndef.is_readable == True
@@ -301,580 +688,3 @@ def test_transition_dynamic_memory_with_lock_control_to_readonly():
     assert clf.memory[160] == 0xFF
     assert clf.memory[161] == 0xFF
     assert tag.ndef.is_writeable == False
-
-################################################################################
-#
-# ADDITIONAL NFCPY TEST DATA
-#
-################################################################################
-
-tt2_memory_layout_10_initialized = bytearray.fromhex(
-    "04 51 7C A1  E1 ED 25 80  A9 48 00 00  E1 10 12 00" # 000-003
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 004-007
-    "00 00 03 00  FE 00 00 00  00 00 00 00  00 00 00 00" # 008-011
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 012-015
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 016-019
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 020-023
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 024-027
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 028-031
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 032-035
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 036-039
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 040-043
-)
-tt2_memory_layout_10_readwrite = bytearray.fromhex(
-    "04 51 7C A1  E1 ED 25 80  A9 48 00 00  E1 10 12 00" # 000-003
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 004-007
-    "00 00 03 44  d1 02 3f 53  70 91 01 0a  55 03 6e 66" # 008-011
-    "63 70 79 2e  6f 72 67 51  01 2d 54 02  65 6e 50 79" # 012-015
-    "74 68 6f 6e  20 6d 6f 64  75 6c 65 20  66 6f 72 20" # 016-019
-    "6e 65 61 72  20 66 69 65  6c 64 20 63  6f 6d 6d 75" # 020-023
-    "6e 69 63 61  74 69 6f 6e  FE 00 00 00  00 00 00 00" # 024-027
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 028-031
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 032-035
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 036-039
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 040-043
-)
-tt2_memory_layout_10_readonly = bytearray.fromhex(
-    "04 51 7C A1  E1 ED 25 80  A9 48 FF FF  E1 10 12 0F" # 000-003
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 004-007
-    "00 00 03 44  d1 02 3f 53  70 91 01 0a  55 03 6e 66" # 008-011
-    "63 70 79 2e  6f 72 67 51  01 2d 54 02  65 6e 50 79" # 012-015
-    "74 68 6f 6e  20 6d 6f 64  75 6c 65 20  66 6f 72 20" # 016-019
-    "6e 65 61 72  20 66 69 65  6c 64 20 63  6f 6d 6d 75" # 020-023
-    "6e 69 63 61  74 69 6f 6e  FE 00 00 00  00 00 00 00" # 024-027
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 028-031
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 032-035
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 036-039
-    "FF 0F 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 040-043
-)
-tt2_memory_layout_11_initialized = bytearray.fromhex(
-    "04 51 7C A1  E1 ED 25 80  A9 48 00 00  E1 10 12 00" # 000-003
-    "00 00 00 00  00 00 00 00  00 00 00 02  03 50 10 04" # 004-007
-    "00 00 03 00  FE 00 00 00  00 00 00 00  00 00 00 00" # 008-011
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 012-015
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 016-019
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 020-023
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 024-027
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 028-031
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 032-035
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 036-039
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 040-043
-)
-tt2_memory_layout_11_readwrite = bytearray.fromhex(
-    "04 51 7C A1  E1 ED 25 80  A9 48 00 00  E1 10 12 00" # 000-003
-    "00 00 00 00  00 00 00 00  00 00 00 02  03 50 10 04" # 004-007
-    "00 00 03 44  d1 02 3f 53  70 91 01 0a  55 03 6e 66" # 008-011
-    "63 70 79 2e  6f 72 67 51  01 2d 54 02  65 6e 50 79" # 012-015
-    "74 68 6f 6e  20 6d 6f 64  75 6c 65 20  66 6f 72 20" # 016-019
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 020-023
-    "6e 65 61 72  20 66 69 65  6c 64 20 63  6f 6d 6d 75" # 024-027
-    "6e 69 63 61  74 69 6f 6e  FE 00 00 00  00 00 00 00" # 028-031
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 032-035
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 036-039
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 040-043
-)
-tt2_memory_layout_11_readonly = bytearray.fromhex(
-    "04 51 7C A1  E1 ED 25 80  A9 48 FF FF  E1 10 12 0F" # 000-003
-    "00 00 00 00  00 00 00 00  00 00 00 02  03 50 10 04" # 004-007
-    "00 00 03 44  d1 02 3f 53  70 91 01 0a  55 03 6e 66" # 008-011
-    "63 70 79 2e  6f 72 67 51  01 2d 54 02  65 6e 50 79" # 012-015
-    "74 68 6f 6e  20 6d 6f 64  75 6c 65 20  66 6f 72 20" # 016-019
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 020-023
-    "6e 65 61 72  20 66 69 65  6c 64 20 63  6f 6d 6d 75" # 024-027
-    "6e 69 63 61  74 69 6f 6e  FE 00 00 00  00 00 00 00" # 028-031
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 032-035
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 036-039
-    "FF 0F 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 040-043
-)
-tt2_memory_layout_12_initialized = bytearray.fromhex(
-    "04 51 7C A1  E1 ED 25 80  A9 48 00 00  E1 10 12 00" # 000-003
-    "00 00 00 01  03 50 10 24  00 00 00 02  03 52 0E 04" # 004-007
-    "00 00 03 00  FE 00 00 00  00 00 00 00  00 00 00 00" # 008-011
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 012-015
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 016-019
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 020-023
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 024-027
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 028-031
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 032-035
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 036-039
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 040-043
-)
-tt2_memory_layout_12_readwrite = bytearray.fromhex(
-    "04 51 7C A1  E1 ED 25 80  A9 48 00 00  E1 10 12 00" # 000-003
-    "00 00 00 01  03 50 10 24  00 00 00 02  03 52 0E 04" # 004-007
-    "00 00 03 44  d1 02 3f 53  70 91 01 0a  55 03 6e 66" # 008-011
-    "63 70 79 2e  6f 72 67 51  01 2d 54 02  65 6e 50 79" # 012-015
-    "74 68 6f 6e  20 6d 6f 64  75 6c 65 20  66 6f 72 20" # 016-019
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 020-023
-    "6e 65 61 72  20 66 69 65  6c 64 20 63  6f 6d 6d 75" # 024-027
-    "6e 69 63 61  74 69 6f 6e  FE 00 00 00  00 00 00 00" # 028-031
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 032-035
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 036-039
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 040-043
-)
-tt2_memory_layout_12_readonly = bytearray.fromhex(
-    "04 51 7C A1  E1 ED 25 80  A9 48 FF FF  E1 10 12 0F" # 000-003
-    "00 00 00 01  03 50 10 24  00 00 00 02  03 52 0E 04" # 004-007
-    "00 00 03 44  d1 02 3f 53  70 91 01 0a  55 03 6e 66" # 008-011
-    "63 70 79 2e  6f 72 67 51  01 2d 54 02  65 6e 50 79" # 012-015
-    "74 68 6f 6e  20 6d 6f 64  75 6c 65 20  66 6f 72 20" # 016-019
-    "FF FF 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 020-023
-    "6e 65 61 72  20 66 69 65  6c 64 20 63  6f 6d 6d 75" # 024-027
-    "6e 69 63 61  74 69 6f 6e  FE 00 00 00  00 00 00 00" # 028-031
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 032-035
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 036-039
-    "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 040-043
-)
-
-################################################################################
-#
-# ADDITIONAL NFCPY TEST CASES
-#
-################################################################################
-
-def test_read_from_readwrite_memory_with_null_tlv():
-    txt = "Python module for near field communication"
-    msg = nfc.ndef.Message(nfc.ndef.SmartPosterRecord("http://nfcpy.org", txt))
-    clf = Type2TagSimulator(tt2_memory_layout_10_readwrite)
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.ndef.is_writeable == True
-    assert tag.ndef.is_readable == True
-    assert tag.ndef.capacity == 124
-    assert tag.ndef.length == 68
-    assert tag.ndef.message == msg
-
-def test_read_from_readwrite_memory_until_terminator_tlv():
-    tag_memory = bytearray.fromhex(
-        "00 6F D5 36  11 12 7A 00  79 C8 00 00  E1 10 02 00" # 000-003
-        "00 00 00 00  00 00 00 FE  00 00 00 00  00 00 00 00" # 004-007
-    )
-    clf = Type2TagSimulator(tag_memory)
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.ndef is None
-
-def test_read_from_readwrite_memory_until_end_of_memory():
-    tag_memory = bytearray.fromhex(
-        "00 6F D5 36  11 12 7A 00  79 C8 00 00  E1 10 02 00" # 000-003
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 004-007
-    )
-    clf = Type2TagSimulator(tag_memory)
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.ndef is None
-
-def test_read_from_readwrite_memory_with_memory_control_tlv():
-    txt = "Python module for near field communication"
-    msg = nfc.ndef.Message(nfc.ndef.SmartPosterRecord("http://nfcpy.org", txt))
-    clf = Type2TagSimulator(tt2_memory_layout_11_readwrite)
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.ndef.is_writeable == True
-    assert tag.ndef.is_readable == True
-    assert tag.ndef.capacity == 108
-    assert tag.ndef.length == 68
-    assert tag.ndef.message == msg
-
-def test_read_from_readwrite_memory_with_memory_and_lock_control_tlv():
-    txt = "Python module for near field communication"
-    msg = nfc.ndef.Message(nfc.ndef.SmartPosterRecord("http://nfcpy.org", txt))
-    clf = Type2TagSimulator(tt2_memory_layout_12_readwrite)
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.ndef.is_writeable == True
-    assert tag.ndef.is_readable == True
-    assert tag.ndef.capacity == 108
-    assert tag.ndef.length == 68
-    assert tag.ndef.message == msg
-
-def test_write_to_initialized_memory_with_null_tlv():
-    txt = "Python module for near field communication"
-    msg = nfc.ndef.Message(nfc.ndef.SmartPosterRecord("http://nfcpy.org", txt))
-    clf = Type2TagSimulator(tt2_memory_layout_10_initialized[:])
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.ndef.is_writeable == True
-    assert tag.ndef.is_readable == True
-    assert tag.ndef.capacity == 124
-    assert tag.ndef.length == 0
-    tag.ndef.message = msg
-    assert clf.memory == tt2_memory_layout_10_readwrite
-
-def test_write_to_initialized_memory_with_memory_control_tlv():
-    txt = "Python module for near field communication"
-    msg = nfc.ndef.Message(nfc.ndef.SmartPosterRecord("http://nfcpy.org", txt))
-    clf = Type2TagSimulator(tt2_memory_layout_11_initialized[:])
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.ndef.is_writeable == True
-    assert tag.ndef.is_readable == True
-    assert tag.ndef.capacity == 108
-    assert tag.ndef.length == 0
-    tag.ndef.message = msg
-    assert clf.memory == tt2_memory_layout_11_readwrite
-
-def test_write_to_initialized_memory_with_memory_and_lock_control_tlv():
-    txt = "Python module for near field communication"
-    msg = nfc.ndef.Message(nfc.ndef.SmartPosterRecord("http://nfcpy.org", txt))
-    clf = Type2TagSimulator(tt2_memory_layout_12_initialized[:])
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.ndef.is_writeable == True
-    assert tag.ndef.is_readable == True
-    assert tag.ndef.capacity == 108
-    assert tag.ndef.length == 0
-    tag.ndef.message = msg
-    assert clf.memory == tt2_memory_layout_12_readwrite
-
-def test_lock_readwrite_memory_with_null_tlv():
-    clf = Type2TagSimulator(tt2_memory_layout_10_readwrite[:])
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.ndef.is_writeable == True
-    assert tag.ndef.is_readable == True
-    assert tag.ndef.capacity == 124
-    assert tag.ndef.length == 68
-    assert tag.protect() == True
-    assert clf.memory == tt2_memory_layout_10_readonly
-
-def test_lock_readwrite_memory_with_memory_control_tlv():
-    clf = Type2TagSimulator(tt2_memory_layout_11_readwrite[:])
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.ndef.is_writeable == True
-    assert tag.ndef.is_readable == True
-    assert tag.ndef.capacity == 108
-    assert tag.ndef.length == 68
-    assert tag.protect() == True
-    assert clf.memory == tt2_memory_layout_11_readonly
-
-def test_lock_readwrite_memory_with_memory_and_lock_control_tlv():
-    clf = Type2TagSimulator(tt2_memory_layout_12_readwrite[:])
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.ndef.is_writeable == True
-    assert tag.ndef.is_readable == True
-    assert tag.ndef.capacity == 108
-    assert tag.ndef.length == 68
-    assert tag.protect() == True
-    assert clf.memory == tt2_memory_layout_12_readonly
-
-def test_format_readwrite_memory_with_null_tlv():
-    clf = Type2TagSimulator(tt2_memory_layout_10_readwrite[:])
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.format(wipe=0) == True
-    assert clf.memory == tt2_memory_layout_10_initialized
-    assert tag.ndef.length == 0
-
-def test_format_readwrite_memory_with_memory_control_tlv():
-    clf = Type2TagSimulator(tt2_memory_layout_11_readwrite[:])
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.format(wipe=0) == True
-    assert clf.memory == tt2_memory_layout_11_initialized
-    assert tag.ndef.length == 0
-
-def test_format_readwrite_memory_with_memory_and_lock_control_tlv():
-    clf = Type2TagSimulator(tt2_memory_layout_12_readwrite[:])
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.format(wipe=0) == True
-    assert clf.memory == tt2_memory_layout_12_initialized
-    assert tag.ndef.length == 0
-
-def test_not_format_tag_that_has_no_ndef_magic_byte():
-    tag_memory = bytearray.fromhex(
-        "04 6F D5 36  11 12 7A 00  79 C8 00 00  00 00 00 00" # 000-003
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 004-007
-    )
-    clf = Type2TagSimulator(tag_memory[:])
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.format() == False
-
-def test_not_format_tag_that_has_unknown_mapping_version():
-    tag_memory = bytearray.fromhex(
-        "04 6F D5 36  11 12 7A 00  79 C8 00 00  E1 00 00 00" # 000-003
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 004-007
-    )
-    clf = Type2TagSimulator(tag_memory[:])
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.format() == False
-
-def test_not_format_tag_that_has_no_user_data_memory():
-    tag_memory = bytearray.fromhex(
-        "04 6F D5 36  11 12 7A 00  79 C8 00 00  E1 10 00 00" # 000-003
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 004-007
-    )
-    clf = Type2TagSimulator(tag_memory[:])
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.format() == False
-
-def test_not_format_tag_that_has_write_permission_disabled():
-    tag_memory = bytearray.fromhex(
-        "04 6F D5 36  11 12 7A 00  79 C8 00 00  E1 10 02 01" # 000-003
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 004-007
-    )
-    clf = Type2TagSimulator(tag_memory[:])
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.format() == False
-
-def test_protect_with_password():
-    tag_memory = bytearray.fromhex(
-        "04 6F D5 36  11 12 7A 00  79 C8 00 00  00 00 00 00" # 000-003
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 004-007
-    )
-    clf = Type2TagSimulator(tag_memory[:])
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.protect("password") == False
-
-def test_valid_arguments_format_wipe():
-    for wipe in (None, 0, 1, 255, 1000):
-        yield check_valid_arguments_format_wipe, None, wipe
-
-def check_valid_arguments_format_wipe(version, wipe):
-    tag_memory = bytearray.fromhex(
-        "04 6F D5 36  11 12 7A 00  79 C8 00 00  E1 10 02 00" # 000-003
-        "03 0A D1 01  06 55 01 6E  2E 63 6F 6D  FE 00 00 00" # 004-007
-    )
-    clf = Type2TagSimulator(tag_memory[:])
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.format(version, wipe) == True
-    assert clf.memory[16:19] == "\x03\x00\xFE"
-    if wipe is None: assert clf.memory[19:32] == tag_memory[19:32]
-    else: assert clf.memory[19:32] == 13 * chr(wipe & 0xFF)
-
-def test_invalid_arguments_format_wipe():
-    for wipe in ("a", 1.0, (), (1,)):
-        yield check_invalid_arguments_format_wipe, None, wipe
-
-@raises(TypeError)
-def check_invalid_arguments_format_wipe(version, wipe):
-    tag_memory = bytearray.fromhex(
-        "04 6F D5 36  11 12 7A 00  79 C8 00 00  E1 10 02 00" # 000-003
-        "03 0A D1 01  06 55 01 6E  2E 63 6F 6D  FE 00 00 00" # 004-007
-    )
-    clf = Type2TagSimulator(tag_memory[:])
-    tag = clf.connect(rdwr={'on-connect': None})
-    tag.format(version, wipe)
-
-ispchr = lambda x: x >= 32 and x <= 126
-oprint = lambda o: ' '.join(['??' if x < 0 else '%02x'%x for x in o])
-
-def test_dump_memory_with_stop_argument():
-    for stop in (None, 4, 8, 100, 256, 512):
-        yield check_dump_memory_with_stop_argument_smaller_than_memory, stop
-    for stop in (513, 514, 515, 516):
-        yield check_dump_memory_with_stop_argument_larger_than_memory, stop
-
-def check_dump_memory_with_stop_argument_smaller_than_memory(stop):
-    tag_memory = 4 * (bytearray(range(256)) + bytearray(range(255, -1, -1)))
-    assert stop <= len(tag_memory)//4
-    clf = Type2TagSimulator(tag_memory)
-    tag = clf.connect(rdwr={'on-connect': None})
-    lines = tag._dump(stop) if stop is not None else tag.dump()
-    assert len(lines) == len(tag_memory) // 4 if stop is None else stop
-    for page, line in enumerate(lines):
-        data = tag_memory[page*4:(page+1)*4]
-        assert line[0:16] == "{0:>3}: {1}".format(page, oprint(data))
-
-def check_dump_memory_with_stop_argument_larger_than_memory(stop):
-    tag_memory = 4 * (bytearray(range(256)) + bytearray(range(255, -1, -1)))
-    assert stop > len(tag_memory)//4
-    
-    clf = Type2TagSimulator(tag_memory)
-    tag = clf.connect(rdwr={'on-connect': None})
-    lines = tag._dump(stop)
-    assert len(lines) == min(stop, len(tag_memory)//4 + 3)
-    if stop - len(tag_memory)//4 <= 2:
-        data, lfmt = (4*[None], "{0:>3}: {1}")
-        for page in range(len(tag_memory)//4, stop):
-            assert lines[page][0:16] == lfmt.format(page, oprint(data))
-    else:
-        data, data_lfmt, same_lfmt = (4*[None], "{0:>3}: {1}", "{0:>3}  {1}")
-        line, page = (len(tag_memory)//4, len(tag_memory)//4)
-        assert lines[line][0:16] == data_lfmt.format(page, oprint(data))
-        line, page = (len(tag_memory)//4 + 1, "*")
-        assert lines[line][0:16] == same_lfmt.format(page, oprint(data))
-        line, page = (len(tag_memory)//4 + 2, stop - 1)
-        assert lines[line][0:16] == data_lfmt.format(page, oprint(data))
-
-def test_dump_memory_with_identical_pages_1():
-    tag_memory = bytearray.fromhex(
-        "04 6F D5 36  11 12 7A 00  79 C8 00 00  E1 10 02 00" # 000-003
-        "11 11 11 11  11 11 11 11  33 33 33 33  33 33 33 33" # 004-007
-    )
-    dump_lines = [
-        "  0: 04 6f d5 36 (UID0-UID2, BCC0)",
-        "  1: 11 12 7a 00 (UID3-UID6)",
-        "  2: 79 c8 00 00 (BCC1, INT, LOCK0-LOCK1)",
-        "  3: e1 10 02 00 (OTP0-OTP3)",
-        "  4: 11 11 11 11 |....|",
-        "  5: 11 11 11 11 |....|",
-        "  6: 33 33 33 33 |3333|",
-        "  7: 33 33 33 33 |3333|",
-    ]
-    clf = Type2TagSimulator(tag_memory)
-    tag = clf.connect(rdwr={'on-connect': None})
-    lines = tag._dump(8)
-    assert len(lines) == len(dump_lines)
-    for page, line in enumerate(lines):
-        assert line == dump_lines[page]
-
-def test_dump_memory_with_identical_pages_2():
-    tag_memory = bytearray.fromhex(
-        "04 6F D5 36  11 12 7A 00  79 C8 00 00  E1 10 02 00" # 000-003
-        "11 11 11 11  11 11 11 11  11 11 11 11  11 11 11 11" # 004-007
-    )
-    dump_lines = [
-        "  0: 04 6f d5 36 (UID0-UID2, BCC0)",
-        "  1: 11 12 7a 00 (UID3-UID6)",
-        "  2: 79 c8 00 00 (BCC1, INT, LOCK0-LOCK1)",
-        "  3: e1 10 02 00 (OTP0-OTP3)",
-        "  4: 11 11 11 11 |....|",
-        "  *  11 11 11 11 |....|",
-        "  7: 11 11 11 11 |....|",
-    ]
-    clf = Type2TagSimulator(tag_memory)
-    tag = clf.connect(rdwr={'on-connect': None})
-    lines = tag._dump(8)
-    assert len(lines) == len(dump_lines)
-    for page, line in enumerate(lines):
-        assert line == dump_lines[page]
-
-def test_dump_memory_with_identical_pages_3():
-    tag_memory = bytearray.fromhex(
-        "04 6F D5 36  11 12 7A 00  79 C8 00 00  E1 10 02 00" # 000-003
-        "11 11 11 11  11 11 11 11  11 11 11 11  33 33 33 33" # 004-007
-    )
-    dump_lines = [
-        "  0: 04 6f d5 36 (UID0-UID2, BCC0)",
-        "  1: 11 12 7a 00 (UID3-UID6)",
-        "  2: 79 c8 00 00 (BCC1, INT, LOCK0-LOCK1)",
-        "  3: e1 10 02 00 (OTP0-OTP3)",
-        "  4: 11 11 11 11 |....|",
-        "  *  11 11 11 11 |....|",
-        "  6: 11 11 11 11 |....|",
-        "  7: 33 33 33 33 |3333|",
-    ]
-    clf = Type2TagSimulator(tag_memory)
-    tag = clf.connect(rdwr={'on-connect': None})
-    lines = tag._dump(8)
-    print '\n'.join(lines)
-    assert len(lines) == len(dump_lines)
-    for page, line in enumerate(lines):
-        assert line == dump_lines[page]
-
-def test_read_from_static_memory_with_invalid_ndef_data():
-    tag_memory = tt2_memory_layout_2[:]
-    tag_memory[17] = 8 # shrink ndef message length
-    clf = Type2TagSimulator(tag_memory)
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.ndef is not None
-    assert tag.ndef.is_readable == True
-    assert tag.ndef.is_writeable == True
-    assert tag.ndef.capacity == 46
-    assert tag.ndef.length == 8
-    assert tag.ndef.message == nfc.ndef.Message(nfc.ndef.Record())
-
-def test_presence_check_discovers_gone_tag():
-    tag_memory = tt2_memory_layout_1
-    clf = Type2TagSimulator(tag_memory)
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.is_present == True
-    clf.tag_is_present = False
-    assert tag.is_present == False
-
-def test_missing_ndef_management_data():
-    tag_memory = bytearray.fromhex(
-        "04 6F D5 36  11 12 7A 00  79 C8 00 00  00 00 00 00" # 000-003
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 004-007
-    )
-    clf = Type2TagSimulator(tag_memory[:])
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.ndef is None
-
-@raises(nfc.tag.tt2.Type2TagCommandError)
-def test_sector_select_command_with_non_existing_sector_number():
-    clf = Type2TagSimulator(tt2_memory_layout_6)
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.sector_select(1) == 1
-    assert tag.sector_select(2) == 2
-    tag.sector_select(3)
-
-@raises(nfc.tag.tt2.Type2TagCommandError)
-def test_sector_select_command_with_static_memory_layout():
-    clf = Type2TagSimulator(tt2_memory_layout_1)
-    tag = clf.connect(rdwr={'on-connect': None})
-    tag.sector_select(1)
-
-@raises(nfc.tag.tt2.Type2TagCommandError)
-def test_read_response_with_wrong_crc():
-    class WrongCrcType2TagSimulator(Type2TagSimulator):
-        def exchange(self, data, timeout):
-            return bytearray(16) + '\xFF\xFF'
-    clf = WrongCrcType2TagSimulator(tt2_memory_layout_1)
-    tag = clf.connect(rdwr={'on-connect': None})
-    tag.read(1)
-
-def test_presence_check_returns_crc_error():
-    tag_memory = bytearray.fromhex(
-        "00 6F D5 36  11 12 7A 00  79 C8 00 00  00 00 00 00" # 000-003
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 004-007
-    )
-    class WrongCrcType2TagSimulator(Type2TagSimulator):
-        def exchange(self, data, timeout):
-            return bytearray(16) + '\xFF\xFF'
-    clf = WrongCrcType2TagSimulator(tag_memory)
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.is_present == False
-
-###############################################################################
-#
-# TEST TYPE 2 TAG MEMORY READER
-#
-###############################################################################
-
-def test_memory_reader_assign_byte():
-    clf = Type2TagSimulator(tt2_memory_layout_1[:])
-    tag = clf.connect(rdwr={'on-connect': None})
-    tag_memory = nfc.tag.tt2.Type2TagMemoryReader(tag)
-    tag_memory[0] = 0xFF
-    tag_memory.synchronize()
-    assert clf.memory[0] == 0xFF
-
-@raises(TypeError)
-def test_memory_reader_delete_byte():
-    clf = Type2TagSimulator(tt2_memory_layout_1[:])
-    tag = clf.connect(rdwr={'on-connect': None})
-    tag_memory = nfc.tag.tt2.Type2TagMemoryReader(tag)
-    assert tag_memory[0] == 0x04
-    del tag_memory[0]
-    
-def test_memory_reader_assign_slice_with_matching_length():
-    clf = Type2TagSimulator(tt2_memory_layout_1[:])
-    tag = clf.connect(rdwr={'on-connect': None})
-    tag_memory = nfc.tag.tt2.Type2TagMemoryReader(tag)
-    tag_memory[0:2] = "\x00\x11"
-    tag_memory.synchronize()
-    assert clf.memory[0:2] == "\x00\x11"
-
-@raises(ValueError)
-def test_memory_reader_assign_slice_with_mismatch_length():
-    clf = Type2TagSimulator(tt2_memory_layout_1[:])
-    tag = clf.connect(rdwr={'on-connect': None})
-    tag_memory = nfc.tag.tt2.Type2TagMemoryReader(tag)
-    tag_memory[0:2] = "\x00\x11\x22"
-
-@raises(TypeError)
-def test_memory_reader_delete_slice():
-    clf = Type2TagSimulator(tt2_memory_layout_1[:])
-    tag = clf.connect(rdwr={'on-connect': None})
-    tag_memory = nfc.tag.tt2.Type2TagMemoryReader(tag)
-    assert tag_memory[0:2] == "\x04\x6F"
-    del tag_memory[0:2]
-
-@raises(IndexError)
-def test_memory_reader_read_from_mute_tag():
-    clf = Type2TagSimulator(tt2_memory_layout_1[:])
-    tag = clf.connect(rdwr={'on-connect': None})
-    tag_memory = nfc.tag.tt2.Type2TagMemoryReader(tag)
-    clf.tag_is_present = False
-    tag_memory[0] == 0x04
-
-def test_memory_reader_write_to_mute_tag():
-    clf = Type2TagSimulator(tt2_memory_layout_1[:])
-    tag = clf.connect(rdwr={'on-connect': None})
-    tag_memory = nfc.tag.tt2.Type2TagMemoryReader(tag)
-    assert tag_memory[0] == 0x04
-    clf.tag_is_present = False
-    tag_memory[0] = 0
-    tag_memory.synchronize()
-    assert clf.memory[0] == 0x04
