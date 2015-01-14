@@ -121,20 +121,25 @@ class Type2Tag(Tag):
             super(Type2Tag.NDEF, self).__init__(tag)
             self._ndef_tlv_offset = 0
 
-        def _read_ndef_data(self):
-            log.debug("read ndef data")
-            tag_memory = Type2TagMemoryReader(self._tag)
-            
+        def _read_capability_data(self, tag_memory):
             if tag_memory[12] != 0xE1:
                 log.debug("ndef management data is not present")
-                return None
+                return False
 
             if tag_memory[13] >> 4 != 1:
                 log.debug("unsupported ndef mapping major version")
-                return None
+                return False
 
             self._readable = bool(tag_memory[15] >> 4 == 0)
             self._writeable = bool(tag_memory[15] & 0xF == 0)
+            return True
+
+        def _read_ndef_data(self):
+            log.debug("read ndef data")
+            tag_memory = Type2TagMemoryReader(self._tag)
+
+            if self._read_capability_data(tag_memory) == False:
+                return None
 
             raw_capacity = tag_memory[14] * 8
             log.debug("raw capacity is {0} byte".format(raw_capacity))
