@@ -561,6 +561,7 @@ class TestMifareUltralightC:
         assert self.tag.protect() is True
         assert self.clf.memory[10:12] == "\xFF\xFF"
         assert self.clf.memory[160:176] == "\xFF\xFF" + 14 * "\x00"
+        assert self.clf.memory[15] == 0x0F
         assert self.tag.ndef.is_writeable is False
 
     @raises(ValueError)
@@ -572,30 +573,45 @@ class TestMifareUltralightC:
         assert self.clf.memory[168:172] == "\3\0\0\0"
         assert self.clf.memory[172:176] == "\1\0\0\0"
         assert self.clf.memory[176:192] == "BREAKMEIFYOUCAN!"
+        assert self.clf.memory[15] == 0x0F
+        assert self.tag.is_authenticated
+        assert self.tag.ndef.is_writeable
 
     def test_protect_with_custom_password(self):
         self.tag.protect("0123456789abcdef")
         assert self.clf.memory[168:172] == "\3\0\0\0"
         assert self.clf.memory[172:176] == "\1\0\0\0"
         assert self.clf.memory[176:192] == "76543210fedcba98"
+        assert self.clf.memory[15] == 0x0F
+        assert self.tag.is_authenticated
+        assert self.tag.ndef.is_writeable
 
     def test_protect_with_protect_from_page_5(self):
         self.tag.protect("", protect_from=5)
         assert self.clf.memory[168:172] == "\5\0\0\0"
         assert self.clf.memory[172:176] == "\1\0\0\0"
         assert self.clf.memory[176:192] == "BREAKMEIFYOUCAN!"
+        assert self.clf.memory[15] == 0x00
+        assert self.tag.is_authenticated
+        assert self.tag.ndef.is_writeable
 
     def test_protect_with_protect_from_page_100(self):
         self.tag.protect("", protect_from=100)
         assert self.clf.memory[168:172] == "\x30\0\0\0"
         assert self.clf.memory[172:176] == "\1\0\0\0"
         assert self.clf.memory[176:192] == "BREAKMEIFYOUCAN!"
+        assert self.clf.memory[15] == 0x00
+        assert self.tag.is_authenticated
+        assert self.tag.ndef.is_writeable
 
     def test_protect_with_read_protect_true(self):
         self.tag.protect("", read_protect=True)
         assert self.clf.memory[168:172] == "\3\0\0\0"
         assert self.clf.memory[172:176] == "\0\0\0\0"
         assert self.clf.memory[176:192] == "BREAKMEIFYOUCAN!"
+        assert self.clf.memory[15] == 0xFF
+        assert self.tag.is_authenticated
+        assert self.tag.ndef.is_writeable
 
     def test_authenticate_with_default_password(self):
         self.clf.memory[176:192] = "BREAKMEIFYOUCAN!"
@@ -682,6 +698,8 @@ class NTAG21xSimulator(Type2TagSimulator):
     def unknown_command(self, data, timeout):
         if data == "\x60": # GET VERSION COMMAND
             return self.version
+        if data == "\x3C\x00": # READ SIG COMMAND
+            return bytearray(32)
 
 class _TestNTAG21x:
     def setup(self):
@@ -698,12 +716,11 @@ class _TestNTAG21x:
             "63 63 63 63  63 63 63 63  63 57 4C 46  2E 63 6F 6D" # 036-039
             "00 00 00 00  00 00 00 00"                           # 040-041
         )
-        self.clf = NTAG21xSimulator(tag_memory)
+        self.clf = NTAG21xSimulator(tag_memory, "\0\4\4\1\1\0\x0B\3")
         self.tag = self.clf.connect(rdwr={'on-connect': None})
 
     def test_activation(self):
-        assert isinstance(self.tag, nfc.tag.tt2_nxp.NTAG203)
-        assert self.tag._product == "NXP NTAG203"
+        assert isinstance(self.tag, nfc.tag.tt2_nxp.NTAG21x)
 
     def test_protect_without_password(self):
         assert self.tag.protect() is True
