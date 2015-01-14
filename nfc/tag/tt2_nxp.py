@@ -88,6 +88,20 @@ class MifareUltralightC(tt2.Type2Tag):
     NDEF message data, and can be password protected.
 
     """
+    class NDEF(tt2.Type2Tag.NDEF):
+        def _read_capability_data(self, tag_memory):
+            base_class = super(MifareUltralightC.NDEF, self)
+            is_ndef = base_class._read_capability_data(tag_memory)
+            is_unlocked = tag_memory[10:12] == "\0\0"
+            is_protected = tag_memory[42*4] <= 3
+            is_authenticated = self._tag.is_authenticated
+
+            if is_ndef and is_unlocked and is_protected and is_authenticated:
+                self._readable = True
+                self._writeable = True
+
+            return is_ndef
+
     def __init__(self, clf, target):
         super(MifareUltralightC, self).__init__(clf, target)
         self._product = "Mifare Ultralight C (MF01CU2)"
@@ -118,9 +132,27 @@ class MifareUltralightC(tt2.Type2Tag):
         A non-empty *password* must provide at least 128 bit key
         material, in other words it must be a string or bytearray of
         length 16 or more.
-        
-        The memory unit for the value of *protect_from* is 16 byte,
-        thus with ``protect_from=2`` bytes 0 to 31 are not protected.
+
+        If *password* is not None, the first protected memory page can
+        be specified with the *protect_from* integer argument. A
+        memory page is 4 byte and the total number of pages is 48. A
+        *protect_from* argument of 48 effectively disables memory
+        protection. A *protect_from* argument of 3 protects all user
+        data pages including the bitwise one-time-programmable page
+        3. Any value less than 3 or more than 48 is accepted but to
+        the same effect as if 3 or 48 were specified. If effective
+        protection starts at page 3 and the tag is formatted for NDEF,
+        the :meth:`protect` method does also modify the NDEF
+        read/write capability byte.
+
+        If *password* is not None and *read_protect* is True then the
+        tag memory content will also be protected against read access,
+        i.e. successful authentication will be required to read
+        protected pages.
+
+        The :meth:`protect` method verifies a password change by
+        authenticating with the new *password* after all modifications
+        were made and returns the result of :meth:`authenticate`.
 
         .. warning:: If protect is called without a password, the
             default Type 2 Tag protection method will set the lock
@@ -131,8 +163,6 @@ class MifareUltralightC(tt2.Type2Tag):
             password, read_protect, protect_from)
 
     def _protect(self, password, read_protect, protect_from):
-        assert protect_from >= 0
-        
         if password is not None:
             # The first 16 password character bytes are taken as key
             # unless the password is empty. If it's empty we use the
@@ -154,9 +184,17 @@ class MifareUltralightC(tt2.Type2Tag):
             # protect from memory page
             self.write(42, chr(max(3, min(protect_from, 0x30))) + "\0\0\0")
             
-            # set or unset read protection
+            # set read protection flag
             self.write(43, "\0\0\0\0" if read_protect else "\x01\0\0\0")
 
+            # Set NDEF read/write permissions if protection starts at
+            # page 3 and the tag is formatted for NDEF.
+            if protect_from <= 3:
+                ndef_cc = self.read(3)[0:4]
+                if ndef_cc[0] == 0xE1 and ndef_cc[1] & 0xF0 == 0x10:
+                    ndef_cc[3] |= (0xFF if read_protect else 0x0F)
+                    self.write(3, ndef_cc)
+            
             # Reactivate the tag to have the key effective and
             # authenticate with the same key
             if self.clf.sense([nfc.clf.TTA(uid=self.uid)]):
