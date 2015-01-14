@@ -393,8 +393,8 @@ class Type2Tag(Tag):
         tag_memory.synchronize()
         
         # Set the static lock bits.
-        tag_memory[10] |= 0xFF
-        tag_memory[11] |= 0xFF
+        tag_memory[10] = 0xFF
+        tag_memory[11] = 0xFF
 
         # Search for all lock control tlv and store the first lock
         # byte address and the number of lock bits in lock_control.
