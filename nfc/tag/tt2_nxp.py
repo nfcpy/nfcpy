@@ -310,10 +310,27 @@ class NTAG203(tt2.Type2Tag):
         return s
     
 class NTAG21x(tt2.Type2Tag):
+    """Base class for the NTAG21x family (210/212/213/215/216). The
+    methods and attributes documented here are supported for all
+    NTAG21x products.
+
+    """
     @property
     def signature(self):
-        log.debug("tag signature")
-        return self.transceive("\x3C\x00", rlen=32)
+        """The 32-byte ECC tag signature programmed at chip production. The
+        signature is provided as a string and can only be read.
+
+        The signature attribute is always loaded from the tag when it
+        is accessed, i.e. it is not cached. If communication with the
+        tag fails for some reason the signature attribute is set to a
+        32-byte string of all zeros.
+
+        """
+        log.debug("read tag signature")
+        try:
+            return str(self.transceive("\x3C\x00", rlen=32))
+        except tt2.Type2TagCommandError:
+            return 32 * "\0"
 
     def authenticate(self, password):
         if password == "":

@@ -699,9 +699,9 @@ class NTAG21xSimulator(Type2TagSimulator):
         if data == "\x60": # GET VERSION COMMAND
             return self.version
         if data == "\x3C\x00": # READ SIG COMMAND
-            return bytearray(32)
+            return bytearray(32 * "\1")
 
-class _TestNTAG21x:
+class TestNTAG21x:
     def setup(self):
         tag_memory = bytearray.fromhex(
             "04 51 7C A1  E1 ED 25 80  A9 48 00 00  E1 10 12 00" # 000-003
@@ -721,8 +721,21 @@ class _TestNTAG21x:
 
     def test_activation(self):
         assert isinstance(self.tag, nfc.tag.tt2_nxp.NTAG21x)
+        assert isinstance(self.tag, nfc.tag.tt2_nxp.NTAG210)
 
-    def test_protect_without_password(self):
+    def test_signature_attribute_get(self):
+        assert type(self.tag.signature) is str
+        assert self.tag.signature == 32 * "\1"
+
+    @raises(AttributeError)
+    def test_signature_attribute_set(self):
+        self.tag.signature = 32 * "\1"
+
+    def test_signature_read_from_mute_tag(self):
+        self.clf.tag_is_present = False
+        assert self.tag.signature == 32 * "\0"
+
+    def _test_protect_without_password(self):
         assert self.tag.protect() is True
         assert self.clf.memory[10:12] == "\xFF\xFF"
         assert self.clf.memory[160:168] == "\xFF\xFF" + 6 * "\x00"
