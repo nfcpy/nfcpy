@@ -24,6 +24,7 @@ import logging
 log = logging.getLogger(__name__)
 
 import os
+from binascii import hexlify
 
 import nfc.tag
 from . import tt2
@@ -164,15 +165,14 @@ class MifareUltralightC(tt2.Type2Tag):
 
     def _protect(self, password, read_protect, protect_from):
         if password is not None:
+            if password and len(password) < 16:
+                raise ValueError("password must be at least 16 byte")
+            
             # The first 16 password character bytes are taken as key
             # unless the password is empty. If it's empty we use the
             # factory default password.
             key = password[0:16] if password != "" else "IEMKAERB!NACUOYF"
-            
-            if len(key) != 16:
-                raise ValueError("password must be at least 16 byte")
-            
-            log.debug("protect with key " + key.encode("hex"))
+            log.debug("protect with key " + hexlify(key))
             
             # split the key and reverse
             key1, key2 = key[7::-1], key[15:7:-1]
@@ -333,18 +333,43 @@ class NTAG21x(tt2.Type2Tag):
             return 32 * "\0"
 
     def authenticate(self, password):
-        if password == "":
-            # try with the factory key
-            key = bytearray.fromhex("FF FF FF FF 00 00")
-        else:
-            key = bytearray(password[0:6])
-            assert len(key) == 6
+        """Authenticate with password to access protected memory.
+
+        An NTAG21x implements a simple password protection scheme. The
+        reader proofs possession of a share secret by sending a 4-byte
+        password and the tag proofs possession of a shared secret by
+        returning a 2-byte password acknowledge. Because password and
+        password acknowledge are transmitted in plain text special
+        considerations should be given to under which conditions
+        authentication is performed. If, for example, an attacker is
+        able to mount a relay attack both secret values are easily
+        lost.
+
+        The *password* argument must be a string of length zero or at
+        least 6 byte characters. If the *password* length is zero,
+        authentication is performed with factory default values. If
+        the *password* contains at least 6 bytes, the first 4 byte are
+        send to the tag as the password secret and the following 2
+        byte are compared against the password acknowledge that is
+        received from the tag.
         
-        log.debug("authenticate with key " + str(key).encode("hex"))
+        The authentication result is True if the password was
+        confirmed and False if not.
+
+        """
+        return super(NTAG21x, self).authenticate(password)
+        
+    def _authenticate(self, password):
+        if password and len(password) < 6:
+            raise ValueError("password must be at least 6 byte")
+        
+        key = password[0:6] if password != "" else "\xFF\xFF\xFF\xFF\x00\x00"
+        log.debug("authenticate with key " + hexlify(key))
+        
         try:
-            rsp = self.transceive("\x1b" + key[0:4], rlen=2)
+            rsp = self.transceive(bytearray("\x1B") + key[0:4], rlen=2)
             return rsp == key[4:6]
-        except nfc.clf.TimeoutError:
+        except tt2.Type2TagCommandError:
             return False
 
     def protect(self, password=None, read_protect=False, protect_from=0):

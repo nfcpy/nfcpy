@@ -696,25 +696,24 @@ class NTAG21xSimulator(Type2TagSimulator):
         self.version = bytearray(version)
 
     def unknown_command(self, data, timeout):
-        if data == "\x60": # GET VERSION COMMAND
+        if data == "\x60": # GET_VERSION COMMAND
             return self.version
-        if data == "\x3C\x00": # READ SIG COMMAND
+        if data == "\x3C\x00": # READ_SIG COMMAND
             return bytearray(32 * "\1")
+        if data[0] == 0x1B: # PWD_AUTH COMMAND
+            pwd = data[1:5]
+            if pwd == self.memory[-8:-4]:
+                return self.memory[-4:-2]
+            else: return bytearray([0x00])
 
 class TestNTAG21x:
     def setup(self):
         tag_memory = bytearray.fromhex(
-            "04 51 7C A1  E1 ED 25 80  A9 48 00 00  E1 10 12 00" # 000-003
-            "01 03 A0 10  44 03 89 D1  01 85 55 01  6E 66 63 63" # 004-007
-            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 008-011
-            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 012-015
-            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 016-019
-            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 020-023
-            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 024-027
-            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 028-031
-            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 032-035
-            "63 63 63 63  63 63 63 63  63 57 4C 46  2E 63 6F 6D" # 036-039
-            "00 00 00 00  00 00 00 00"                           # 040-041
+            "04 51 7C A1  E1 ED 25 80  A9 48 00 00  E1 10 06 00" # 000-003
+            "03 00 FE 00  00 00 00 00  00 00 00 00  00 00 00 00" # 004-007
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 008-011
+            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 012-015
+            "00 00 00 00  00 00 00 00  FF FF FF FF  00 00 00 00" # 016-019
         )
         self.clf = NTAG21xSimulator(tag_memory, "\0\4\4\1\1\0\x0B\3")
         self.tag = self.clf.connect(rdwr={'on-connect': None})
@@ -734,6 +733,29 @@ class TestNTAG21x:
     def test_signature_read_from_mute_tag(self):
         self.clf.tag_is_present = False
         assert self.tag.signature == 32 * "\0"
+
+    def test_authenticate_with_default_password(self):
+        assert self.tag.is_authenticated is False
+        assert self.tag.authenticate("") is True
+        assert self.tag.is_authenticated is True
+
+    def test_authenticate_with_custom_password(self):
+        self.clf.memory[-8:-2] = "012345"
+        assert self.tag.is_authenticated is False
+        assert self.tag.authenticate("0123456789abcdef") is True
+        assert self.tag.is_authenticated is True
+
+    def test_authenticate_with_wrong_password(self):
+        assert self.tag.authenticate("0123456789abcdef") is False
+        assert self.tag.is_authenticated is False
+
+    @raises(ValueError)
+    def test_authenticate_with_invalid_password(self):
+        self.tag.authenticate("abc")
+
+    def test_authenticate_with_command_error(self):
+        self.clf.tag_is_present = False
+        assert self.tag.authenticate("") is False
 
     def _test_protect_without_password(self):
         assert self.tag.protect() is True
