@@ -409,46 +409,6 @@ class NTAG21x(tt2.Type2Tag):
         except tt2.Type2TagCommandError:
             return 32 * "\0"
 
-    def authenticate(self, password):
-        """Authenticate with password to access protected memory.
-
-        An NTAG21x implements a simple password protection scheme. The
-        reader proofs possession of a share secret by sending a 4-byte
-        password and the tag proofs possession of a shared secret by
-        returning a 2-byte password acknowledge. Because password and
-        password acknowledge are transmitted in plain text special
-        considerations should be given to under which conditions
-        authentication is performed. If, for example, an attacker is
-        able to mount a relay attack both secret values are easily
-        lost.
-
-        The *password* argument must be a string of length zero or at
-        least 6 byte characters. If the *password* length is zero,
-        authentication is performed with factory default values. If
-        the *password* contains at least 6 bytes, the first 4 byte are
-        send to the tag as the password secret and the following 2
-        byte are compared against the password acknowledge that is
-        received from the tag.
-        
-        The authentication result is True if the password was
-        confirmed and False if not.
-
-        """
-        return super(NTAG21x, self).authenticate(password)
-        
-    def _authenticate(self, password):
-        if password and len(password) < 6:
-            raise ValueError("password must be at least 6 byte long")
-        
-        key = password[0:6] if password != "" else "\xFF\xFF\xFF\xFF\0\0"
-        log.debug("authenticate with key " + hexlify(key))
-        
-        try:
-            rsp = self.transceive(bytearray("\x1B") + key[0:4], rlen=2)
-            return rsp == key[4:6]
-        except tt2.Type2TagCommandError:
-            return False
-
     def protect(self, password=None, read_protect=False, protect_from=0):
         """Set password protection or permanent lock bits.
 
@@ -539,6 +499,46 @@ class NTAG21x(tt2.Type2Tag):
             self.clf.set_communication_mode('', check_crc='OFF')
             return self.authenticate(key)
         else:
+            return False
+
+    def authenticate(self, password):
+        """Authenticate with password to access protected memory.
+
+        An NTAG21x implements a simple password protection scheme. The
+        reader proofs possession of a share secret by sending a 4-byte
+        password and the tag proofs possession of a shared secret by
+        returning a 2-byte password acknowledge. Because password and
+        password acknowledge are transmitted in plain text special
+        considerations should be given to under which conditions
+        authentication is performed. If, for example, an attacker is
+        able to mount a relay attack both secret values are easily
+        lost.
+
+        The *password* argument must be a string of length zero or at
+        least 6 byte characters. If the *password* length is zero,
+        authentication is performed with factory default values. If
+        the *password* contains at least 6 bytes, the first 4 byte are
+        send to the tag as the password secret and the following 2
+        byte are compared against the password acknowledge that is
+        received from the tag.
+        
+        The authentication result is True if the password was
+        confirmed and False if not.
+
+        """
+        return super(NTAG21x, self).authenticate(password)
+        
+    def _authenticate(self, password):
+        if password and len(password) < 6:
+            raise ValueError("password must be at least 6 byte long")
+        
+        key = password[0:6] if password != "" else "\xFF\xFF\xFF\xFF\0\0"
+        log.debug("authenticate with key " + hexlify(key))
+        
+        try:
+            rsp = self.transceive(bytearray("\x1B") + key[0:4], rlen=2)
+            return rsp == key[4:6]
+        except tt2.Type2TagCommandError:
             return False
 
     def _dump(self, stop, footer):
