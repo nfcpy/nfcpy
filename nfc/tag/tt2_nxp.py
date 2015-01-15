@@ -92,10 +92,13 @@ class MifareUltralightC(tt2.Type2Tag):
     class NDEF(tt2.Type2Tag.NDEF):
         def _read_capability_data(self, tag_memory):
             base_class = super(MifareUltralightC.NDEF, self)
-            is_ndef = base_class._read_capability_data(tag_memory)
-            is_unlocked = tag_memory[10:12] == "\0\0"
-            is_protected = tag_memory[42*4] <= 3
-            is_authenticated = self._tag.is_authenticated
+            try:
+                is_ndef = base_class._read_capability_data(tag_memory)
+                is_unlocked = tag_memory[10:12] == "\0\0"
+                is_protected = tag_memory[42*4] <= 3
+                is_authenticated = self._tag.is_authenticated
+            except IndexError:
+                return False
 
             if is_ndef and is_unlocked and is_protected and is_authenticated:
                 self._readable = True
@@ -160,50 +163,66 @@ class MifareUltralightC(tt2.Type2Tag):
             bits to readonly. This process is not reversible.
 
         """
-        return super(MifareUltralightC, self).protect(
-            password, read_protect, protect_from)
+        args = (password, read_protect, protect_from)
+        return super(MifareUltralightC, self).protect(*args)
 
     def _protect(self, password, read_protect, protect_from):
-        if password is not None:
-            if password and len(password) < 16:
-                raise ValueError("password must be at least 16 byte")
-            
-            # The first 16 password character bytes are taken as key
-            # unless the password is empty. If it's empty we use the
-            # factory default password.
-            key = password[0:16] if password != "" else "IEMKAERB!NACUOYF"
-            log.debug("protect with key " + hexlify(key))
-            
-            # split the key and reverse
-            key1, key2 = key[7::-1], key[15:7:-1]
-            self.write(44, key1[0:4])
-            self.write(45, key1[4:8])
-            self.write(46, key2[0:4])
-            self.write(47, key2[4:8])
-            
-            # protect from memory page
-            self.write(42, chr(max(3, min(protect_from, 0x30))) + "\0\0\0")
-            
-            # set read protection flag
-            self.write(43, "\0\0\0\0" if read_protect else "\x01\0\0\0")
-
-            # Set NDEF read/write permissions if protection starts at
-            # page 3 and the tag is formatted for NDEF.
-            if protect_from <= 3:
-                ndef_cc = self.read(3)[0:4]
-                if ndef_cc[0] == 0xE1 and ndef_cc[1] & 0xF0 == 0x10:
-                    ndef_cc[3] |= (0xFF if read_protect else 0x0F)
-                    self.write(3, ndef_cc)
-            
-            # Reactivate the tag to have the key effective and
-            # authenticate with the same key
-            if self.clf.sense([nfc.clf.TTA(uid=self.uid)]):
-                self.clf.set_communication_mode('', check_crc='OFF')
-                return self.authenticate(key)
-            else: return False
+        if password is None:
+            return self._protect_with_lockbits()
         else:
-            return super(MifareUltralightC, self)._protect(
-                password, read_protect, protect_from)
+            args = (password, read_protect, protect_from)
+            return self._protect_with_password(*args)
+
+    def _protect_with_lockbits(self):
+        try:
+            ndef_cc = self.read(3)[0:4]
+            if ndef_cc[0] == 0xE1 and ndef_cc[1] >> 4 == 1:
+                ndef_cc[3] = 0x0F
+                self.write(3, ndef_cc)
+            self.write(2, "\x00\x00\xFF\xFF")
+            self.write(40, "\xFF\x00\x00\x00")
+            return True
+        except tt2.Type2TagCommandError:
+            return False
+
+    def _protect_with_password(self, password, read_protect, protect_from):
+        if password and len(password) < 16:
+            raise ValueError("password must be at least 16 byte")
+
+        # The first 16 password character bytes are taken as key
+        # unless the password is empty. If it's empty we use the
+        # factory default password.
+        key = password[0:16] if password != "" else "IEMKAERB!NACUOYF"
+        log.debug("protect with key " + hexlify(key))
+
+        # split the key and reverse
+        key1, key2 = key[7::-1], key[15:7:-1]
+        self.write(44, key1[0:4])
+        self.write(45, key1[4:8])
+        self.write(46, key2[0:4])
+        self.write(47, key2[4:8])
+
+        # protect from memory page
+        self.write(42, chr(max(3, min(protect_from, 0x30))) + "\0\0\0")
+
+        # set read protection flag
+        self.write(43, "\0\0\0\0" if read_protect else "\x01\0\0\0")
+
+        # Set NDEF read/write permissions if protection starts at
+        # page 3 and the tag is formatted for NDEF.
+        if protect_from <= 3:
+            ndef_cc = self.read(3)[0:4]
+            if ndef_cc[0] == 0xE1 and ndef_cc[1] & 0xF0 == 0x10:
+                ndef_cc[3] |= (0xFF if read_protect else 0x0F)
+                self.write(3, ndef_cc)
+
+        # Reactivate the tag to have the key effective and
+        # authenticate with the same key
+        if self.clf.sense([nfc.clf.TTA(uid=self.uid)]):
+            self.clf.set_communication_mode('', check_crc='OFF')
+            return self.authenticate(key)
+        else:
+            return False
 
     def authenticate(self, password):
         """Authenticate with a Mifare Ultralight C Tag.
@@ -290,6 +309,12 @@ class MifareUltralightEV1(tt2.Type2Tag):
         return self.transceive("\x3C\x00", rlen=32)
 
 class NTAG203(tt2.Type2Tag):
+    """The NTAG203 is a plain memory Tag with 144 bytes user data memory
+    plus a 16-bit one-way counter. It does not have any security
+    features beyond the standard lock bit mechanism that permanently
+    disables write access.
+
+    """
     def __init__(self, clf, target):
         super(NTAG203, self).__init__(clf, target)
         self._product = "NXP NTAG203"
@@ -309,12 +334,64 @@ class NTAG203(tt2.Type2Tag):
 
         return s
     
+    def protect(self, password=None, read_protect=False, protect_from=0):
+        """Set lock bits to disable future memory modifications.
+
+        If *password* is None, all memory pages except the 16-bit
+        counter in page 41 are protected by setting the relevant lock
+        bits (note that lock bits can not be reset). If valid NDEF
+        management data is found in page 4, protect() also sets the
+        NDEF write flag to read-only.
+
+        The NTAG203 can not be password protected. If a *password*
+        argument is provided, the protect() method always returns
+        False.
+
+        """
+        return super(NTAG203, self).protect(
+            password, read_protect, protect_from)
+
+    def _protect(self, password, read_protect, protect_from):
+        if password is None:
+            try:
+                ndef_cc = self.read(3)[0:4]
+                if ndef_cc[0] == 0xE1 and ndef_cc[1] >> 4 == 1:
+                    ndef_cc[3] = 0x0F
+                    self.write(3, ndef_cc)
+                self.write(2, "\x00\x00\xFF\xFF")
+                self.write(40, "\xFF\x01\x00\x00")
+                return True
+            except tt2.Type2TagCommandError: pass
+        return False
+
 class NTAG21x(tt2.Type2Tag):
     """Base class for the NTAG21x family (210/212/213/215/216). The
     methods and attributes documented here are supported for all
     NTAG21x products.
 
+    All NTAG21x products support a simple password protection scheme
+    that can be configured to restrict write as well as read access to
+    memory starting from a selected page address. A factory programmed
+    ECC signature allows to verify the tag unique identifier.
+
     """
+    class NDEF(tt2.Type2Tag.NDEF):
+        def _read_capability_data(self, tag_memory):
+            base_class = super(NTAG21x.NDEF, self)
+            try:
+                is_ndef = base_class._read_capability_data(tag_memory)
+                is_unlocked = tag_memory[10:12] == "\0\0"
+                is_protected = tag_memory[self._tag._cfgpage*4+3] <= 3
+                is_authenticated = self._tag.is_authenticated
+            except IndexError:
+                return None
+
+            if is_ndef and is_unlocked and is_protected and is_authenticated:
+                self._readable = True
+                self._writeable = True
+
+            return is_ndef
+
     @property
     def signature(self):
         """The 32-byte ECC tag signature programmed at chip production. The
@@ -361,9 +438,9 @@ class NTAG21x(tt2.Type2Tag):
         
     def _authenticate(self, password):
         if password and len(password) < 6:
-            raise ValueError("password must be at least 6 byte")
+            raise ValueError("password must be at least 6 byte long")
         
-        key = password[0:6] if password != "" else "\xFF\xFF\xFF\xFF\x00\x00"
+        key = password[0:6] if password != "" else "\xFF\xFF\xFF\xFF\0\0"
         log.debug("authenticate with key " + hexlify(key))
         
         try:
@@ -373,29 +450,96 @@ class NTAG21x(tt2.Type2Tag):
             return False
 
     def protect(self, password=None, read_protect=False, protect_from=0):
-        assert protect_from >= 0
-        log.debug("protect tag")
-        if password is not None:
-            if password == "":
-                # try with the factory key
-                key = bytearray.fromhex("FF FF FF FF 00 00")
-            else:
-                key = bytearray(password[0:6])
-                assert len(key) == 6
-        
-            log.debug("protect with key " + str(key).encode("hex"))
+        """Set password protection or permanent lock bits.
 
-            cfgaddr = self._usermem.stop + (0, 4)[self._usermem.stop > 64]
-            # write PWD and PACK
-            for i in range(6):
-                self[cfgaddr+8+i] = key[i]
-            # start protection from page
-            self[cfgaddr+3] = min(protect_from, 255)
-            # set/clear protection bit
-            self[cfgaddr+4] = (self[cfgaddr+4] & 0x7F) | (read_protect << 7)
-            self.synchronize()
+        If the *password* argument is None, all memory pages will be
+        protected by setting the relevant lock bits (note that lock
+        bits can not be reset). If valid NDEF management data is
+        found, protect() also sets the NDEF write flag to read-only.
+
+        All Tags of the NTAG21x family can alternatively be protected
+        by password. If a *password* argument is provided, the
+        protect() method writes the first 4 byte of the *password*
+        string into the Tag's password (PWD) memory bytes and the
+        following 2 byte of the *password* string into the password
+        acknowledge (PACK) memory bytes. Factory default values are
+        used if the *password* argument is an empty string. Lock bits
+        are not set for password protection.
+
+        The *read_protect* and *protect_from* arguments are only
+        evaluated if *password* is not None. If *read_protect* is
+        True, the memory protection bit (PROT) is set to require
+        password verification also for reading of protected memory
+        pages. The value of *protect_from* determines the first
+        password protected memory page (one page is 4 byte) with the
+        exception that the smallest set value is page 3 even if
+        *protect_from* is smaller.
+        
+        """
+        args = (password, read_protect, protect_from)
+        return super(NTAG21x, self).protect(*args)
+
+    def _protect(self, password, read_protect, protect_from):
+        if password is None:
+            return self._protect_with_lockbits()
+        else:
+            args = (password, read_protect, protect_from)
+            return self._protect_with_password(*args)
+
+    def _protect_with_lockbits(self):
+        try:
+            ndef_cc = self.read(3)[0:4]
+            if ndef_cc[0] == 0xE1 and ndef_cc[1] >> 4 == 1:
+                ndef_cc[3] = 0x0F
+                self.write(3, ndef_cc)
+            self.write(2, "\x00\x00\xFF\xFF")
+            if self._cfgpage > 16:
+                self.write(self._cfgpage - 1, "\xFF\xFF\xFF\x00")
+            cfgdata = self.read(self._cfgpage)
+            cfgdata[4] |= 0x40 # set CFGLCK bit
+            self.write(self._cfgpage + 1, cfgdata[4:8])
             return True
-        return False
+        except tt2.Type2TagCommandError:
+            return False
+
+    def _protect_with_password(self, password, read_protect, protect_from):
+        if password and len(password) < 6:
+            raise ValueError("password must be at least 6 byte long")
+
+        key = password[0:6] if password != "" else "\xFF\xFF\xFF\xFF\0\0"
+        log.debug("protect with key " + hexlify(key))
+
+        # read CFG0, CFG1, PWD and PACK
+        cfg = self.read(self._cfgpage)
+
+        # set password and acknowledge
+        cfg[8:14] = key
+
+        # start protection from page
+        cfg[3] = max(3, min(protect_from, 255))
+
+        # set read protection bit
+        cfg[4] = cfg[4] | 0x80 if read_protect else cfg[4] & 0x7F
+
+        # write configuration to tag
+        for i in range(4):
+            self.write(self._cfgpage + i, cfg[i*4:(i+1)*4])
+
+        # Set NDEF read/write permissions if protection starts at
+        # page 3 and the tag is formatted for NDEF.
+        if protect_from <= 3:
+            ndef_cc = self.read(3)[0:4]
+            if ndef_cc[0] == 0xE1 and ndef_cc[1] & 0xF0 == 0x10:
+                ndef_cc[3] |= (0xFF if read_protect else 0x0F)
+                self.write(3, ndef_cc)
+
+        # Reactivate the tag to have the key effective and
+        # authenticate with the same key
+        if self.clf.sense([nfc.clf.TTA(uid=self.uid)]):
+            self.clf.set_communication_mode('', check_crc='OFF')
+            return self.authenticate(key)
+        else:
+            return False
 
     def _dump(self, stop, footer):
         oprint = lambda o: ' '.join(['??' if x < 0 else '%02x'%x for x in o])
@@ -409,9 +553,14 @@ class NTAG21x(tt2.Type2Tag):
         return s
 
 class NTAG210(NTAG21x):
+    """The NTAG210 provides 48 bytes user data memory, password
+    protection, originality signature and a UID mirror function.
+
+    """
     def __init__(self, clf, target):
         super(NTAG210, self).__init__(clf, target)
         self._product = "NXP NTAG210"
+        self._cfgpage = 16
         
     def dump(self):
         footer = dict(zip(range(16, 20),
@@ -420,9 +569,14 @@ class NTAG210(NTAG21x):
         return super(NTAG210, self)._dump(16, footer)
 
 class NTAG212(NTAG21x):
+    """The NTAG212 provides 128 bytes user data memory, password
+    protection, originality signature and a UID mirror function.
+    
+    """
     def __init__(self, clf, target):
         super(NTAG212, self).__init__(clf, target)
         self._product = "NXP NTAG212"
+        self._cfgpage = 37
         
     def dump(self):
         text = ("LOCK2-LOCK4", "MIRROR_BYTE, RFU, MIRROR_PAGE, AUTH0",
@@ -431,10 +585,16 @@ class NTAG212(NTAG21x):
         return super(NTAG212, self)._dump(36, footer)
 
 class NTAG213(NTAG21x):
+    """The NTAG213 provides 144 bytes user data memory, password
+    protection, originality signature, a tag read counter and a mirror
+    function for the tag unique identifier and the read counter.
+
+    """
     def __init__(self, clf, target):
         super(NTAG213, self).__init__(clf, target)
         self._product = "NXP NTAG213"
-        
+        self._cfgpage = 41
+
     def dump(self):
         text = ("LOCK2-LOCK4", "MIRROR, RFU, MIRROR_PAGE, AUTH0",
                 "ACCESS", "PWD0-PWD3", "PACK0-PACK1")
@@ -442,9 +602,15 @@ class NTAG213(NTAG21x):
         return super(NTAG213, self)._dump(40, footer)
 
 class NTAG215(NTAG21x):
+    """The NTAG215 provides 504 bytes user data memory, password
+    protection, originality signature, a tag read counter and a mirror
+    function for the tag unique identifier and the read counter.
+
+    """
     def __init__(self, clf, target):
         super(NTAG215, self).__init__(clf, target)
         self._product = "NXP NTAG215"
+        self._cfgpage = 131
         
     def dump(self):
         text = ("LOCK2-LOCK4", "MIRROR, RFU, MIRROR_PAGE, AUTH0",
@@ -453,9 +619,15 @@ class NTAG215(NTAG21x):
         return super(NTAG215, self)._dump(130, footer)
 
 class NTAG216(NTAG21x):
+    """The NTAG216 provides 888 bytes user data memory, password
+    protection, originality signature, a tag read counter and a mirror
+    function for the tag unique identifier and the read counter.
+
+    """
     def __init__(self, clf, target):
         super(NTAG216, self).__init__(clf, target)
         self._product = "NXP NTAG216"
+        self._cfgpage = 227
 
     def dump(self):
         text = ("LOCK2-LOCK4", "MIRROR, RFU, MIRROR_PAGE, AUTH0",

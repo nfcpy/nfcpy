@@ -557,10 +557,16 @@ class TestMifareUltralightC:
         assert len(lines) == 17
         assert lines[-1] == ' 43: ?? ?? ?? ?? (AUTH1)'
 
+    def test_read_ndef_with_unreadable_page(self):
+        del self.clf.memory[160:]
+        assert self.tag.ndef is None
+        del self.clf.memory[15:]
+        assert self.tag.ndef is None
+
     def test_protect_without_password(self):
         assert self.tag.protect() is True
         assert self.clf.memory[10:12] == "\xFF\xFF"
-        assert self.clf.memory[160:176] == "\xFF\xFF" + 14 * "\x00"
+        assert self.clf.memory[160:176] == "\xFF\x00" + 14 * "\x00"
         assert self.clf.memory[15] == 0x0F
         assert self.tag.ndef.is_writeable is False
 
@@ -569,7 +575,7 @@ class TestMifareUltralightC:
         self.tag.protect("abc")
 
     def test_protect_with_default_password(self):
-        self.tag.protect("")
+        assert self.tag.protect("") is True
         assert self.clf.memory[168:172] == "\3\0\0\0"
         assert self.clf.memory[172:176] == "\1\0\0\0"
         assert self.clf.memory[176:192] == "BREAKMEIFYOUCAN!"
@@ -578,7 +584,7 @@ class TestMifareUltralightC:
         assert self.tag.ndef.is_writeable
 
     def test_protect_with_custom_password(self):
-        self.tag.protect("0123456789abcdef")
+        assert self.tag.protect("0123456789abcdef") is True
         assert self.clf.memory[168:172] == "\3\0\0\0"
         assert self.clf.memory[172:176] == "\1\0\0\0"
         assert self.clf.memory[176:192] == "76543210fedcba98"
@@ -587,7 +593,7 @@ class TestMifareUltralightC:
         assert self.tag.ndef.is_writeable
 
     def test_protect_with_protect_from_page_5(self):
-        self.tag.protect("", protect_from=5)
+        assert self.tag.protect("", protect_from=5) is True
         assert self.clf.memory[168:172] == "\5\0\0\0"
         assert self.clf.memory[172:176] == "\1\0\0\0"
         assert self.clf.memory[176:192] == "BREAKMEIFYOUCAN!"
@@ -596,7 +602,7 @@ class TestMifareUltralightC:
         assert self.tag.ndef.is_writeable
 
     def test_protect_with_protect_from_page_100(self):
-        self.tag.protect("", protect_from=100)
+        assert self.tag.protect("", protect_from=100) is True
         assert self.clf.memory[168:172] == "\x30\0\0\0"
         assert self.clf.memory[172:176] == "\1\0\0\0"
         assert self.clf.memory[176:192] == "BREAKMEIFYOUCAN!"
@@ -605,7 +611,7 @@ class TestMifareUltralightC:
         assert self.tag.ndef.is_writeable
 
     def test_protect_with_read_protect_true(self):
-        self.tag.protect("", read_protect=True)
+        assert self.tag.protect("", read_protect=True) is True
         assert self.clf.memory[168:172] == "\3\0\0\0"
         assert self.clf.memory[172:176] == "\0\0\0\0"
         assert self.clf.memory[176:192] == "BREAKMEIFYOUCAN!"
@@ -648,17 +654,8 @@ class TestNTAG203:
     def setup(self):
         tag_memory = bytearray.fromhex(
             "04 51 7C A1  E1 ED 25 80  A9 48 00 00  E1 10 12 00" # 000-003
-            "01 03 A0 10  44 03 89 D1  01 85 55 01  6E 66 63 63" # 004-007
-            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 008-011
-            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 012-015
-            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 016-019
-            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 020-023
-            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 024-027
-            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 028-031
-            "63 63 63 63  63 63 63 63  63 63 63 63  63 63 63 63" # 032-035
-            "63 63 63 63  63 63 63 63  63 57 4C 46  2E 63 6F 6D" # 036-039
-            "00 00 00 00  00 00 00 00"                           # 040-041
-        )
+            "01 03 A0 10  44 03 00 FE  00 00 00 00  00 00 00 00" # 004-007
+        ) + bytearray(168 - 32)
         self.clf = NTAG203Simulator(tag_memory)
         self.tag = self.clf.connect(rdwr={'on-connect': None})
 
@@ -669,20 +666,34 @@ class TestNTAG203:
     def test_dump_memory(self):
         self.clf.memory[14] = 0xFF
         lines = self.tag.dump()
-        assert len(lines) == 15
+        assert len(lines) == 11
         assert lines[-1] == ' 41: 00 00 00 00 (CNTR0-CNTR1)'
         
     def test_dump_memory_with_error(self):
         del self.clf.memory[-8:]
         lines = self.tag.dump()
-        assert len(lines) == 15
+        assert len(lines) == 11
         assert lines[-1] == ' 41: ?? ?? ?? ?? (CNTR0-CNTR1)'
 
     def test_protect_without_password(self):
         assert self.tag.protect() is True
         assert self.clf.memory[10:12] == "\xFF\xFF"
-        assert self.clf.memory[160:168] == "\xFF\xFF" + 6 * "\x00"
+        assert self.clf.memory[160:164] == "\xFF\x01\x00\x00"
         assert self.tag.ndef.is_writeable is False
+
+    def test_protect_unformatted_tag(self):
+        self.clf.memory[12:16] = "\1\2\3\4"
+        assert self.tag.protect() is True
+        assert self.clf.memory[12:16] == "\1\2\3\4"
+        assert self.clf.memory[10:12] == "\xFF\xFF"
+        assert self.clf.memory[160:164] == "\xFF\x01\x00\x00"
+
+    def test_protect_with_password(self):
+        assert self.tag.protect("123456") is False
+
+    def test_protect_with_read_error(self):
+        self.clf.tag_is_present = False
+        assert self.tag.protect() is False
 
 ################################################################################
 #
@@ -733,6 +744,61 @@ class TestNTAG21x:
     def test_signature_read_from_mute_tag(self):
         self.clf.tag_is_present = False
         assert self.tag.signature == 32 * "\0"
+
+    @raises(ValueError)
+    def test_protect_with_invalid_password(self):
+        self.tag.protect("abc")
+
+    def test_protect_with_default_password(self):
+        self.clf.memory[-16:] = bytearray(16)
+        assert self.tag.protect("") is True
+        assert self.clf.memory[-16:-12] == "\x00\x00\x00\x03"
+        assert self.clf.memory[-12: -8] == "\x00\x00\x00\x00"
+        assert self.clf.memory[ -8: -4] == "\xFF\xFF\xFF\xFF"
+        assert self.clf.memory[ -4:   ] == "\x00\x00\x00\x00"
+        assert self.clf.memory[15] == 0x0F
+        assert self.tag.is_authenticated
+        assert self.tag.ndef.is_writeable
+
+    def test_protect_with_custom_password(self):
+        assert self.tag.protect("123456") is True
+        assert self.clf.memory[-16:-12] == "\x00\x00\x00\x03"
+        assert self.clf.memory[-12: -8] == "\x00\x00\x00\x00"
+        assert self.clf.memory[ -8: -4] == "\x31\x32\x33\x34"
+        assert self.clf.memory[ -4:   ] == "\x35\x36\x00\x00"
+        assert self.clf.memory[15] == 0x0F
+        assert self.tag.is_authenticated
+        assert self.tag.ndef.is_writeable
+
+    def test_protect_with_protect_from_page_5(self):
+        assert self.tag.protect("123456", protect_from=5) is True
+        assert self.clf.memory[-16:-12] == "\x00\x00\x00\x05"
+        assert self.clf.memory[-12: -8] == "\x00\x00\x00\x00"
+        assert self.clf.memory[ -8: -4] == "\x31\x32\x33\x34"
+        assert self.clf.memory[ -4:   ] == "\x35\x36\x00\x00"
+        assert self.clf.memory[15] == 0x00
+        assert self.tag.is_authenticated
+        assert self.tag.ndef.is_writeable
+
+    def test_protect_with_protect_from_page_256(self):
+        assert self.tag.protect("123456", protect_from=256) is True
+        assert self.clf.memory[-16:-12] == "\x00\x00\x00\xFF"
+        assert self.clf.memory[-12: -8] == "\x00\x00\x00\x00"
+        assert self.clf.memory[ -8: -4] == "\x31\x32\x33\x34"
+        assert self.clf.memory[ -4:   ] == "\x35\x36\x00\x00"
+        assert self.clf.memory[15] == 0x00
+        assert self.tag.is_authenticated
+        assert self.tag.ndef.is_writeable
+
+    def test_protect_with_read_protect_true(self):
+        assert self.tag.protect("123456", read_protect=True) is True
+        assert self.clf.memory[-16:-12] == "\x00\x00\x00\x03"
+        assert self.clf.memory[-12: -8] == "\x80\x00\x00\x00"
+        assert self.clf.memory[ -8: -4] == "\x31\x32\x33\x34"
+        assert self.clf.memory[ -4:   ] == "\x35\x36\x00\x00"
+        assert self.clf.memory[15] == 0xFF
+        assert self.tag.is_authenticated
+        assert self.tag.ndef.is_writeable
 
     def test_authenticate_with_default_password(self):
         assert self.tag.is_authenticated is False
@@ -794,6 +860,13 @@ class TestNTAG210:
         assert len(lines) == 12
         assert lines[-1] == ' 19: ?? ?? ?? ?? (PACK0-PACK1)'
 
+    def test_protect_without_password(self):
+        assert self.tag.protect() is True
+        assert self.clf.memory[10:12] == "\xFF\xFF"
+        assert self.clf.memory[15] == 0x0F
+        assert self.tag.ndef.is_writeable is False
+        assert self.clf.memory[17*4] == 0x40
+
 ################################################################################
 #
 # TEST NTAG 212
@@ -824,6 +897,14 @@ class TestNTAG212:
         lines = self.tag.dump()
         assert len(lines) == 14
         assert lines[-1] == ' 40: ?? ?? ?? ?? (PACK0-PACK1)'
+
+    def test_protect_without_password(self):
+        assert self.tag.protect() is True
+        assert self.clf.memory[10:12] == "\xFF\xFF"
+        assert self.clf.memory[144:148] == "\xFF\xFF\xFF\x00"
+        assert self.clf.memory[15] == 0x0F
+        assert self.tag.ndef.is_writeable is False
+        assert self.clf.memory[38*4] == 0x40
 
 ################################################################################
 #
@@ -856,6 +937,14 @@ class TestNTAG213:
         assert len(lines) == 14
         assert lines[-1] == ' 44: ?? ?? ?? ?? (PACK0-PACK1)'
 
+    def test_protect_without_password(self):
+        assert self.tag.protect() is True
+        assert self.clf.memory[10:12] == "\xFF\xFF"
+        assert self.clf.memory[160:164] == "\xFF\xFF\xFF\x00"
+        assert self.clf.memory[15] == 0x0F
+        assert self.tag.ndef.is_writeable is False
+        assert self.clf.memory[42*4] == 0x40
+
 ################################################################################
 #
 # TEST NTAG 215
@@ -887,6 +976,15 @@ class TestNTAG215:
         assert len(lines) == 13
         assert lines[-1] == '134: ?? ?? ?? ?? (PACK0-PACK1)'
 
+    def test_protect_without_password(self):
+        assert self.tag.protect() is True
+        assert self.clf.memory[10:12] == "\xFF\xFF"
+        print '\n'.join(self.tag.dump())
+        assert self.clf.memory[520:524] == "\xFF\xFF\xFF\x00"
+        assert self.clf.memory[15] == 0x0F
+        assert self.tag.ndef.is_writeable is False
+        assert self.clf.memory[132*4] == 0x40
+
 ################################################################################
 #
 # TEST NTAG 216
@@ -917,6 +1015,15 @@ class TestNTAG216:
         lines = self.tag.dump()
         assert len(lines) == 13
         assert lines[-1] == '230: ?? ?? ?? ?? (PACK0-PACK1)'
+
+    def test_protect_without_password(self):
+        assert self.tag.protect() is True
+        assert self.clf.memory[10:12] == "\xFF\xFF"
+        print '\n'.join(self.tag.dump())
+        assert self.clf.memory[904:908] == "\xFF\xFF\xFF\x00"
+        assert self.clf.memory[15] == 0x0F
+        assert self.tag.ndef.is_writeable is False
+        assert self.clf.memory[228*4] == 0x40
 
 ################################################################################
 #
