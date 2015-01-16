@@ -49,20 +49,25 @@ def activate(clf, target):
         log.debug("check if version command is available")
         version = clf.exchange('\x60', timeout=0.01)
         log.debug("version = " + ' '.join(["%02X" % x for x in version]))
-        if version[0:3] == "\x00\x04\x03" and version[4] == 0x01:
-            return MifareUltralightEV1(clf, target, version)
-        elif version.startswith("\x00\x04\x04\x01\x01\x00\x0B\x03"):
+        if version == "\x00\x04\x03\x01\x01\x00\x0B\x03":
+            return MifareUltralightEV1(clf, target, "MF0UL11", 16)
+        if version == "\x00\x04\x03\x02\x01\x00\x0B\x03":
+            return MifareUltralightEV1(clf, target, "MF0ULH11", 16)
+        if version == "\x00\x04\x03\x01\x01\x00\x0E\x03":
+            return MifareUltralightEV1(clf, target, "MF0UL21", 37)
+        if version == "\x00\x04\x03\x02\x01\x00\x0E\x03":
+            return MifareUltralightEV1(clf, target, "MF0ULH21", 37)
+        if version == "\x00\x04\x04\x01\x01\x00\x0B\x03":
             return NTAG210(clf, target)
-        elif version.startswith("\x00\x04\x04\x01\x01\x00\x0E\x03"):
+        if version == "\x00\x04\x04\x01\x01\x00\x0E\x03":
             return NTAG212(clf, target)
-        elif version.startswith("\x00\x04\x04\x02\x01\x00\x0F\x03"):
+        if version == "\x00\x04\x04\x02\x01\x00\x0F\x03":
             return NTAG213(clf, target)
-        elif version.startswith("\x00\x04\x04\x02\x01\x00\x11\x03"):
+        if version == "\x00\x04\x04\x02\x01\x00\x11\x03":
             return NTAG215(clf, target)
-        elif version.startswith("\x00\x04\x04\x02\x01\x00\x13\x03"):
+        if version == "\x00\x04\x04\x02\x01\x00\x13\x03":
             return NTAG216(clf, target)
-        else:
-            log.debug("no match for this version number")
+        log.debug("no match for this version number")
     except nfc.clf.TimeoutError:
         log.debug("nope, version command is not supported")
 
@@ -180,7 +185,7 @@ class MifareUltralightC(tt2.Type2Tag):
                 ndef_cc[3] = 0x0F
                 self.write(3, ndef_cc)
             self.write(2, "\x00\x00\xFF\xFF")
-            self.write(40, "\xFF\x00\x00\x00")
+            self.write(40, "\xFF\xFF\x00\x00")
             return True
         except tt2.Type2TagCommandError:
             return False
@@ -289,25 +294,6 @@ class MifareUltralightC(tt2.Type2Tag):
 
         return triple_des(key, CBC, iv).decrypt(m3) == ra[1:9] + ra[0]
         
-class MifareUltralightEV1(tt2.Type2Tag):
-    def __init__(self, clf, target):
-        super(MifareUltralightEV1, self).__init__(clf, target)
-        self._product = "Mifare Ultralight EV1"
-        version_map = {
-            "\x00\x04\x03\x01\x01\x00\x0B\x03": "MF0UL11",
-            "\x00\x04\x03\x02\x01\x00\x0B\x03": "MF0ULH11",
-            "\x00\x04\x03\x01\x01\x00\x0E\x03": "MF0UL21",
-            "\x00\x04\x03\x02\x01\x00\x0E\x03": "MF0ULH21",
-        }
-        try:
-            self._product += " ({0})".format(version_map[version])
-        except KeyError: pass
-
-    @property
-    def signature(self):
-        log.debug("tag signature")
-        return self.transceive("\x3C\x00", rlen=32)
-
 class NTAG203(tt2.Type2Tag):
     """The NTAG203 is a plain memory Tag with 144 bytes user data memory
     plus a 16-bit one-way counter. It does not have any security
@@ -456,8 +442,9 @@ class NTAG21x(tt2.Type2Tag):
             if self._cfgpage > 16:
                 self.write(self._cfgpage - 1, "\xFF\xFF\xFF\x00")
             cfgdata = self.read(self._cfgpage)
-            cfgdata[4] |= 0x40 # set CFGLCK bit
-            self.write(self._cfgpage + 1, cfgdata[4:8])
+            if cfgdata[4] & 0x40 == 0:
+                cfgdata[4] |= 0x40 # set CFGLCK bit
+                self.write(self._cfgpage + 1, cfgdata[4:8])
             return True
         except tt2.Type2TagCommandError:
             return False
@@ -634,3 +621,32 @@ class NTAG216(NTAG21x):
                 "ACCESS", "PWD0-PWD3", "PACK0-PACK1")
         footer = dict(zip(range(226, 226+len(text)), text))
         return super(NTAG216, self)._dump(226, footer)
+
+class MifareUltralightEV1(NTAG21x):
+    """Mifare Ultralight EV1
+    
+    """
+    def __init__(self, clf, target, product, cfgpage):
+        super(MifareUltralightEV1, self).__init__(clf, target)
+        self._product = "Mifare Ultralight EV1 ({0})".format(product)
+        self._cfgpage = cfgpage
+
+    def dump(self):
+        if self._cfgpage == 16:
+            return self._dump_ul11()
+        if self._cfgpage == 37:
+            return self._dump_ul21()
+
+    def _dump_ul11(self):
+        text = ("MOD, RFU, RFU, AUTH0", "ACCESS, VCTID, RFU, RFU",
+                "PWD0, PWD1, PWD2, PWD3", "PACK0, PACK1, RFU, RFU")
+        footer = dict(zip(range(16, 16+len(text)), text))
+        return super(MifareUltralightEV1, self)._dump(16, footer)
+
+    def _dump_ul21(self):
+        text = ("LOCK2, LOCK3, LOCK4, RFU",
+                "MOD, RFU, RFU, AUTH0", "ACCESS, VCTID, RFU, RFU",
+                "PWD0, PWD1, PWD2, PWD3", "PACK0, PACK1, RFU, RFU")
+        footer = dict(zip(range(36, 36+len(text)), text))
+        return super(MifareUltralightEV1, self)._dump(36, footer)
+

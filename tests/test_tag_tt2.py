@@ -476,7 +476,7 @@ class TestNdef:
 
 class MifareUltralightSimulator(Type2TagSimulator): pass
 
-class TestMifareUltralight:
+class TestUltralight:
     def setup(self):
         tag_memory = bytearray.fromhex(
             "04 6F D5 36  11 12 7A 00  79 C8 00 00  E1 10 06 00" # 000-003
@@ -522,7 +522,7 @@ class MifareUltralightCSimulator(Type2TagSimulator):
                 return bytearray("\x00" + m3)
             return bytearray([0x00]) # nak
 
-class TestMifareUltralightC:
+class TestUltralightC:
     def setup(self):
         tag_memory = bytearray.fromhex(
             "04 51 7C A1  E1 ED 25 80  A9 48 00 00  E1 10 12 00" # 000-003
@@ -563,12 +563,24 @@ class TestMifareUltralightC:
         del self.clf.memory[15:]
         assert self.tag.ndef is None
 
-    def test_protect_without_password(self):
+    def test_protect_with_lockbits(self):
         assert self.tag.protect() is True
         assert self.clf.memory[10:12] == "\xFF\xFF"
-        assert self.clf.memory[160:176] == "\xFF\x00" + 14 * "\x00"
+        assert self.clf.memory[160:176] == "\xFF\xFF" + 14 * "\x00"
         assert self.clf.memory[15] == 0x0F
         assert self.tag.ndef.is_writeable is False
+
+    def test_protect_with_lockbits_no_ndef_capabilities(self):
+        self.clf.memory[12:16] = "\1\2\3\4"
+        assert self.tag.protect() is True
+        assert self.clf.memory[10:12] == "\xFF\xFF"
+        assert self.clf.memory[160:176] == "\xFF\xFF" + 14 * "\x00"
+        assert self.clf.memory[15] == 0x04
+
+    def test_protect_with_lockbits_but_read_error(self):
+        del self.clf.memory[12:]
+        assert self.tag.protect() is False
+        assert self.clf.memory[10:12] == "\x00\x00"
 
     @raises(ValueError)
     def test_protect_with_invalid_password(self):
@@ -708,7 +720,7 @@ class NTAG21xSimulator(Type2TagSimulator):
 
     def unknown_command(self, data, timeout):
         if data == "\x60": # GET_VERSION COMMAND
-            return self.version
+            return bytearray(self.version)
         if data == "\x3C\x00": # READ_SIG COMMAND
             return bytearray(32 * "\1")
         if data[0] == 0x1B: # PWD_AUTH COMMAND
@@ -744,6 +756,28 @@ class TestNTAG21x:
     def test_signature_read_from_mute_tag(self):
         self.clf.tag_is_present = False
         assert self.tag.signature == 32 * "\0"
+
+    def test_protect_with_lockbits(self):
+        assert self.tag.protect() is True
+        assert self.clf.memory[10:12] == "\xFF\xFF"
+        assert self.clf.memory[15] == 0x0F
+        assert self.tag.ndef.is_writeable is False
+        assert self.clf.memory[-12] == 0x40
+
+    def test_protect_with_lockbits_no_ndef_capabilties(self):
+        self.clf.memory[12:16] = "\0\0\0\0"
+        assert self.tag.protect() is True
+        assert self.clf.memory[10:12] == "\xFF\xFF"
+        assert self.clf.memory[15] == 0x00
+        assert self.clf.memory[-12] == 0x40
+
+    def test_protect_with_lockbits_but_config_is_locked(self):
+        self.clf.memory[-12] = 0x40
+        assert self.tag.protect() is True
+
+    def test_protect_with_lockbits_but_unreadable_config(self):
+        del self.clf.memory[-16:]
+        assert self.tag.protect() is False
 
     @raises(ValueError)
     def test_protect_with_invalid_password(self):
@@ -823,12 +857,6 @@ class TestNTAG21x:
         self.clf.tag_is_present = False
         assert self.tag.authenticate("") is False
 
-    def _test_protect_without_password(self):
-        assert self.tag.protect() is True
-        assert self.clf.memory[10:12] == "\xFF\xFF"
-        assert self.clf.memory[160:168] == "\xFF\xFF" + 6 * "\x00"
-        assert self.tag.ndef.is_writeable is False
-
 ################################################################################
 #
 # TEST NTAG 210
@@ -847,6 +875,7 @@ class TestNTAG210:
     def test_activation(self):
         assert isinstance(self.tag, nfc.tag.tt2_nxp.NTAG210)
         assert self.tag._product == "NXP NTAG210"
+        assert self.tag._cfgpage == 16
 
     def test_dump_memory(self):
         self.clf.memory[14] = 0xFF
@@ -860,7 +889,7 @@ class TestNTAG210:
         assert len(lines) == 12
         assert lines[-1] == ' 19: ?? ?? ?? ?? (PACK0-PACK1)'
 
-    def test_protect_without_password(self):
+    def test_protect_with_lockbits(self):
         assert self.tag.protect() is True
         assert self.clf.memory[10:12] == "\xFF\xFF"
         assert self.clf.memory[15] == 0x0F
@@ -881,6 +910,7 @@ class TestNTAG212:
         ) + bytearray(41*4 - 32)
         self.clf = NTAG21xSimulator(tag_memory, "\0\4\4\1\1\0\x0E\3")
         self.tag = self.clf.connect(rdwr={'on-connect': None})
+        assert self.tag._cfgpage == 37
 
     def test_activation(self):
         assert isinstance(self.tag, nfc.tag.tt2_nxp.NTAG212)
@@ -898,7 +928,7 @@ class TestNTAG212:
         assert len(lines) == 14
         assert lines[-1] == ' 40: ?? ?? ?? ?? (PACK0-PACK1)'
 
-    def test_protect_without_password(self):
+    def test_protect_with_lockbits(self):
         assert self.tag.protect() is True
         assert self.clf.memory[10:12] == "\xFF\xFF"
         assert self.clf.memory[144:148] == "\xFF\xFF\xFF\x00"
@@ -920,6 +950,7 @@ class TestNTAG213:
         ) + bytearray(45*4 - 32)
         self.clf = NTAG21xSimulator(tag_memory, "\0\4\4\2\1\0\x0F\3")
         self.tag = self.clf.connect(rdwr={'on-connect': None})
+        assert self.tag._cfgpage == 41
 
     def test_activation(self):
         assert isinstance(self.tag, nfc.tag.tt2_nxp.NTAG213)
@@ -937,7 +968,7 @@ class TestNTAG213:
         assert len(lines) == 14
         assert lines[-1] == ' 44: ?? ?? ?? ?? (PACK0-PACK1)'
 
-    def test_protect_without_password(self):
+    def test_protect_with_lockbits(self):
         assert self.tag.protect() is True
         assert self.clf.memory[10:12] == "\xFF\xFF"
         assert self.clf.memory[160:164] == "\xFF\xFF\xFF\x00"
@@ -959,6 +990,7 @@ class TestNTAG215:
         ) + bytearray(135*4 - 32)
         self.clf = NTAG21xSimulator(tag_memory, "\0\4\4\2\1\0\x11\3")
         self.tag = self.clf.connect(rdwr={'on-connect': None})
+        assert self.tag._cfgpage == 131
 
     def test_activation(self):
         assert isinstance(self.tag, nfc.tag.tt2_nxp.NTAG215)
@@ -976,10 +1008,9 @@ class TestNTAG215:
         assert len(lines) == 13
         assert lines[-1] == '134: ?? ?? ?? ?? (PACK0-PACK1)'
 
-    def test_protect_without_password(self):
+    def test_protect_with_lockbits(self):
         assert self.tag.protect() is True
         assert self.clf.memory[10:12] == "\xFF\xFF"
-        print '\n'.join(self.tag.dump())
         assert self.clf.memory[520:524] == "\xFF\xFF\xFF\x00"
         assert self.clf.memory[15] == 0x0F
         assert self.tag.ndef.is_writeable is False
@@ -999,6 +1030,7 @@ class TestNTAG216:
         ) + bytearray(231*4 - 32)
         self.clf = NTAG21xSimulator(tag_memory, "\0\4\4\2\1\0\x13\3")
         self.tag = self.clf.connect(rdwr={'on-connect': None})
+        assert self.tag._cfgpage == 227
 
     def test_activation(self):
         assert isinstance(self.tag, nfc.tag.tt2_nxp.NTAG216)
@@ -1016,14 +1048,98 @@ class TestNTAG216:
         assert len(lines) == 13
         assert lines[-1] == '230: ?? ?? ?? ?? (PACK0-PACK1)'
 
-    def test_protect_without_password(self):
+    def test_protect_with_lockbits(self):
         assert self.tag.protect() is True
         assert self.clf.memory[10:12] == "\xFF\xFF"
-        print '\n'.join(self.tag.dump())
         assert self.clf.memory[904:908] == "\xFF\xFF\xFF\x00"
         assert self.clf.memory[15] == 0x0F
         assert self.tag.ndef.is_writeable is False
         assert self.clf.memory[228*4] == 0x40
+
+################################################################################
+#
+# TEST MIFARE ULTRALIGHT EV1
+#
+################################################################################
+
+class TestUltralightEV1UL11:
+    def setup(self):
+        tag_memory = bytearray.fromhex(
+            "04 51 7C A1  E1 ED 25 80  A9 48 00 00  E1 10 06 00" # 000-003
+            "03 00 FE 00  00 00 00 00  00 00 00 00  00 00 00 00" # 004-007
+        ) + bytearray(20*4 - 32)
+        self.clf = NTAG21xSimulator(tag_memory, "\0\4\3\1\1\0\x0B\3")
+        self.tag = self.clf.connect(rdwr={'on-connect': None})
+
+    def test_activation(self):
+        assert isinstance(self.tag, nfc.tag.tt2_nxp.MifareUltralightEV1)
+        assert self.tag._product == "Mifare Ultralight EV1 (MF0UL11)"
+        assert self.tag._cfgpage == 16
+
+    def test_activation_ulh11(self):
+        self.clf.version = bytearray("\0\4\3\2\1\0\x0B\3")
+        tag = self.clf.connect(rdwr={'on-connect': None})
+        assert isinstance(tag, nfc.tag.tt2_nxp.MifareUltralightEV1)
+        assert tag._product == "Mifare Ultralight EV1 (MF0ULH11)"
+        assert tag._cfgpage == 16
+
+    def test_dump_memory(self):
+        lines = self.tag.dump()
+        assert len(lines) == 12
+        assert lines[-1] == " 19: 00 00 00 00 (PACK0, PACK1, RFU, RFU)"
+
+    def test_dump_memory_with_error(self):
+        del self.clf.memory[-16:]
+        lines = self.tag.dump()
+        assert len(lines) == 12
+        assert lines[-1] == " 19: ?? ?? ?? ?? (PACK0, PACK1, RFU, RFU)"
+
+    def test_protect_with_lockbits(self):
+        assert self.tag.protect() is True
+        assert self.clf.memory[10:12] == "\xFF\xFF"
+        assert self.clf.memory[15] == 0x0F
+        assert self.clf.memory[68] == 0x40
+        assert self.tag.ndef.is_writeable is False
+
+class TestUltralightEV1UL21:
+    def setup(self):
+        tag_memory = bytearray.fromhex(
+            "04 51 7C A1  E1 ED 25 80  A9 48 00 00  E1 10 10 00" # 000-003
+            "03 00 FE 00  00 00 00 00  00 00 00 00  00 00 00 00" # 004-007
+        ) + bytearray(41*4 - 32)
+        self.clf = NTAG21xSimulator(tag_memory, "\0\4\3\1\1\0\x0E\3")
+        self.tag = self.clf.connect(rdwr={'on-connect': None})
+
+    def test_activation(self):
+        assert isinstance(self.tag, nfc.tag.tt2_nxp.MifareUltralightEV1)
+        assert self.tag._product == "Mifare Ultralight EV1 (MF0UL21)"
+        assert self.tag._cfgpage == 37
+
+    def test_activation_ulh21(self):
+        self.clf.version = bytearray("\0\4\3\2\1\0\x0E\3")
+        tag = self.clf.connect(rdwr={'on-connect': None})
+        assert isinstance(tag, nfc.tag.tt2_nxp.MifareUltralightEV1)
+        assert tag._product == "Mifare Ultralight EV1 (MF0ULH21)"
+        assert tag._cfgpage == 37
+
+    def test_dump_memory(self):
+        lines = self.tag.dump()
+        assert len(lines) == 13
+        assert lines[-1] == " 40: 00 00 00 00 (PACK0, PACK1, RFU, RFU)"
+
+    def test_dump_memory_with_error(self):
+        del self.clf.memory[-16:]
+        lines = self.tag.dump()
+        assert len(lines) == 13
+        assert lines[-1] == " 40: ?? ?? ?? ?? (PACK0, PACK1, RFU, RFU)"
+
+    def test_protect_with_lockbits(self):
+        assert self.tag.protect() is True
+        assert self.clf.memory[10:12] == "\xFF\xFF"
+        assert self.clf.memory[144:148] == "\xFF\xFF\xFF\x00"
+        assert self.clf.memory[15] == 0x0F
+        assert self.clf.memory[152] == 0x40
+        assert self.tag.ndef.is_writeable is False
 
 ################################################################################
 #
