@@ -55,6 +55,8 @@ class Type2TagSimulator(nfc.clf.ContactlessFrontend):
         self.uid = self.memory[0:7]
         self.tag_is_present = True # to simulate tag removal
         self.return_response = None
+        self.command_counter = 0
+        self.crc_error_after = 0
 
     def sense(self, targets):
         cfg = bytearray.fromhex("440000")
@@ -62,8 +64,11 @@ class Type2TagSimulator(nfc.clf.ContactlessFrontend):
 
     def exchange(self, data, timeout):
         data = bytearray(data)
+        self.command_counter += 1
         if self.tag_is_present is False:
             raise nfc.clf.TimeoutError("mute tag")
+        if self.crc_error_after == self.command_counter:
+            raise nfc.clf.TransmissionError("crc error")
         if self.return_response is not None:
             return self.return_response
 
@@ -1141,6 +1146,34 @@ class TestUltralightEV1UL21:
         assert self.clf.memory[152] == 0x40
         assert self.tag.ndef.is_writeable is False
 
+class TestActivation:
+    def test_activation_with_digital_error_for_authenticate(self):
+        tag_memory = bytearray.fromhex(
+            "04 51 7C A1  E1 ED 25 80  A9 48 00 00  00 00 00 00"
+        )
+        clf = NTAG21xSimulator(tag_memory, "\0\4\3\1\1\0\x0B\3")
+        clf.crc_error_after = 1
+        tag = clf.connect(rdwr={'on-connect': None})
+        assert type(tag) == nfc.tag.tt2.Type2Tag
+
+    def test_activation_with_digital_error_for_get_version(self):
+        tag_memory = bytearray.fromhex(
+            "04 51 7C A1  E1 ED 25 80  A9 48 00 00  00 00 00 00"
+        )
+        clf = NTAG21xSimulator(tag_memory, "\0\4\3\1\1\0\x0B\3")
+        clf.crc_error_after = 2
+        tag = clf.connect(rdwr={'on-connect': None})
+        assert type(tag) == nfc.tag.tt2.Type2Tag
+        
+    def test_activation_with_unknown_version_for_get_version(self):
+        tag_memory = bytearray.fromhex(
+            "04 51 7C A1  E1 ED 25 80  A9 48 00 00  00 00 00 00"
+        )
+        clf = NTAG21xSimulator(tag_memory, "\0\4\3\1\1\0\x0B\3")
+        clf.return_response = bytearray(8)
+        tag = clf.connect(rdwr={'on-connect': None})
+        assert type(tag) == nfc.tag.tt2.Type2Tag
+        
 ################################################################################
 #
 # NFC FORUM TEST DATA

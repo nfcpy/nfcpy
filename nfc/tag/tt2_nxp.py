@@ -41,13 +41,25 @@ def activate(clf, target):
             return NTAG203(clf, target)
     except nfc.clf.TimeoutError:
         log.debug("nope, authenticate command is not supported")
-
-    clf.sense([nfc.clf.TTA(uid=target.uid)])
-    clf.set_communication_mode('', check_crc='OFF')
-
+        clf.sense([nfc.clf.TTA(uid=target.uid)])
+    except nfc.clf.DigitalProtocolError as error:
+        log.debug(repr(error))
+        return None
+    
     try:
         log.debug("check if version command is available")
         version = clf.exchange('\x60', timeout=0.01)
+        clf.set_communication_mode('', check_crc='OFF')
+    except nfc.clf.TimeoutError:
+        log.debug("nope, version command is not supported")
+        clf.sense([nfc.clf.TTA(uid=target.uid)])
+        clf.set_communication_mode('', check_crc='OFF')
+        version = None
+    except nfc.clf.DigitalProtocolError as error:
+        log.debug(repr(error))
+        return None
+    
+    if version is not None:
         log.debug("version = " + ' '.join(["%02X" % x for x in version]))
         if version == "\x00\x04\x03\x01\x01\x00\x0B\x03":
             return MifareUltralightEV1(clf, target, "MF0UL11", 16)
@@ -68,13 +80,9 @@ def activate(clf, target):
         if version == "\x00\x04\x04\x02\x01\x00\x13\x03":
             return NTAG216(clf, target)
         log.debug("no match for this version number")
-    except nfc.clf.TimeoutError:
-        log.debug("nope, version command is not supported")
-
-    clf.sense([nfc.clf.TTA(uid=target.uid)])
-    clf.set_communication_mode('', check_crc='OFF')
-
-    return MifareUltralight(clf, target)
+        return None
+    else:
+        return MifareUltralight(clf, target)
 
 class MifareUltralight(tt2.Type2Tag):
     """Mifare Ultralight is a simple type 2 tag with no specific
