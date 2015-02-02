@@ -68,6 +68,11 @@ class Tag(object):
             raise NotImplementedError(msg)
 
         @property
+        def tag(self):
+            """A readonly reference to the underlying tag object."""
+            return self._tag
+
+        @property
         def length(self):
             """Length of the current NDEF message in bytes."""
             return len(self._data) if self._data else 0
