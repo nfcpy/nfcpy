@@ -30,12 +30,10 @@ import time
 import nfc.tag
 import nfc.clf
 
-TIMEOUT_ERROR, CHECKSUM_ERROR, RSP_LENGTH_ERROR, RSP_CODE_ERROR, \
-    TAG_IDM_ERROR, DATA_SIZE_ERROR = range(6)
+RSP_LENGTH_ERROR, RSP_CODE_ERROR, TAG_IDM_ERROR, DATA_SIZE_ERROR = range(1, 5)
         
 class Type3TagCommandError(nfc.tag.TagCommandError):
     errno_str = {
-        CHECKSUM_ERROR: "crc validation failed",
         RSP_LENGTH_ERROR: "invalid response length",
         RSP_CODE_ERROR: "invalid response code",
         TAG_IDM_ERROR: "answer from wrong tag",
@@ -184,10 +182,10 @@ class Type3Tag(nfc.tag.Tag):
             self._tag.write_to_ndef_service(attribute_data, 0)
 
         def _read_ndef_data(self):
-            if self._tag.sys != 0x12FC:
-                try: self._tag.idm, self._tag.pmm = self._tag.polling(0x12FC)
+            if self.tag.sys != 0x12FC:
+                try: self.tag.idm, self.tag.pmm = self._tag.polling(0x12FC)
                 except Type3TagCommandError: return None
-                else: self._tag.sys = 0x12FC
+                else: self.tag.sys = 0x12FC
 
             attributes = self._read_attribute_data()
             if attributes is None:
@@ -202,7 +200,9 @@ class Type3Tag(nfc.tag.Tag):
             
             for i in range(1, last_block_number, attributes['nbr']):
                 last_block = min(i + attributes['nbr'], last_block_number)
-                data += self._tag.read_from_ndef_service(*range(i, last_block))
+                block_list = range(i, last_block)
+                try: data += self.tag.read_from_ndef_service(*block_list)
+                except Type3TagCommandError: return None
 
             data = data[0:attributes['ln']]
             log.info("got {0} byte ndef data {1}{2}".format(
@@ -637,11 +637,20 @@ class Type3Tag(nfc.tag.Tag):
             cmd[0], cmd[1], hexlify(cmd[2:10]), hexlify(cmd[10:]), timeout))
 
         started = time.time()
-        try:
-            rsp = self.clf.exchange(cmd, timeout)
-        except nfc.clf.TimeoutError:
-            log.debug("timed out, the tag has not answered")
-            raise Type3TagCommandError(TIMEOUT_ERROR)
+        for retry in range(3):
+            try:
+                rsp = self.clf.exchange(cmd, timeout)
+                break
+            except nfc.clf.DigitalProtocolError as error:
+                reason = error.__class__.__name__
+                log.debug("%s after %d retries" % (reason, retry))
+        else:
+            if type(error) is nfc.clf.TimeoutError:
+                raise Type3TagCommandError(nfc.tag.TIMEOUT_ERROR)
+            if type(error) is nfc.clf.TransmissionError:
+                raise Type3TagCommandError(nfc.tag.RECEIVE_ERROR)
+            if type(error) is nfc.clf.ProtocolError:
+                raise Type3TagCommandError(nfc.tag.PROTOCOL_ERROR)
             
         if rsp[0] != len(rsp):
             log.debug("incorrect response length {0:02x}".format(rsp[0]))

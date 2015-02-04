@@ -32,8 +32,8 @@ import time
 from nfc.tag import Tag, TagCommandError
 import nfc.clf
 
-TIMEOUT_ERROR, CHECKSUM_ERROR, RESPONSE_ERROR, WRITE_ERROR, \
-    BLOCK_ERROR, SECTOR_ERROR = range(6)
+CHECKSUM_ERROR, RESPONSE_ERROR, WRITE_ERROR, \
+    BLOCK_ERROR, SECTOR_ERROR = range(1, 6)
 
 class Type1TagCommandError(TagCommandError):
     """Type 1 Tag specific exceptions. Sets 
@@ -130,25 +130,29 @@ class Type1Tag(Tag):
             # Otherwise, set state variables and return the ndef
             # message data as a bytearray (may be zero length).
             log.debug("read ndef data")
-            tag_memory = Type1TagMemoryReader(self._tag)
+            tag_memory = Type1TagMemoryReader(self.tag)
 
-            if tag_memory._header_rom[0] >> 4 != 1:
-                log.debug("proprietary type 1 tag memory structure")
+            try:
+                if tag_memory._header_rom[0] >> 4 != 1:
+                    log.debug("proprietary type 1 tag memory structure")
+                    return None
+
+                if tag_memory[8] != 0xE1:
+                    log.debug("ndef management data is not present")
+                    return None
+
+                if tag_memory[9] >> 4 != 1:
+                    log.debug("unsupported ndef mapping version")
+                    return None
+
+                self._readable = bool(tag_memory[11] >> 4 == 0)
+                self._writeable = bool(tag_memory[11] & 0xF == 0)
+
+                tag_memory_size = (tag_memory[10] + 1) * 8
+                log.debug("tag memory size is %d byte" % tag_memory_size)
+            except IndexError:
+                log.debug("header rom and static memory were unreadable")
                 return None
-
-            if tag_memory[8] != 0xE1:
-                log.debug("ndef management data is not present")
-                return None
-
-            if tag_memory[9] >> 4 != 1:
-                log.debug("unsupported ndef mapping version")
-                return None
-
-            self._readable = bool(tag_memory[11] >> 4 == 0)
-            self._writeable = bool(tag_memory[11] & 0xF == 0)
-            
-            tag_memory_size = (tag_memory[10] + 1) * 8
-            log.debug("tag memory size is {0} byte".format(tag_memory_size))
 
             ndef = None
             offset = 12
@@ -410,14 +414,24 @@ class Type1Tag(Tag):
             raise Type1TagCommandError(WRITE_ERROR)
 
     def transceive(self, data, timeout=0.1):
-        started = time.time()
         log.debug(">> {0} ({1:f}s)".format(hexlify(data), timeout))
 
-        try:
-            data = self.clf.exchange(data, timeout)
-        except nfc.clf.TimeoutError:
-            raise Type1TagCommandError(TIMEOUT_ERROR)
-        
+        started = time.time()
+        for retry in range(3):
+            try:
+                data = self.clf.exchange(data, timeout)
+                break
+            except nfc.clf.DigitalProtocolError as error:
+                reason = error.__class__.__name__
+                log.debug("%s after %d retries" % (reason, retry))
+        else:
+            if type(error) is nfc.clf.TimeoutError:
+                raise Type1TagCommandError(nfc.tag.TIMEOUT_ERROR)
+            if type(error) is nfc.clf.TransmissionError:
+                raise Type1TagCommandError(nfc.tag.RECEIVE_ERROR)
+            if type(error) is nfc.clf.ProtocolError:
+                raise Type1TagCommandError(nfc.tag.PROTOCOL_ERROR)
+            
         elapsed = time.time() - started
         log.debug("<< {0} ({1:f}s)".format(hexlify(data), elapsed))
         return data
@@ -428,7 +442,8 @@ class Type1TagMemoryReader(object):
         self._data_from_tag = bytearray()
         self._data_in_cache = bytearray()
         self._tag = tag
-        # init self._header_rom
+        self._header_rom = bytearray(0)
+        # read header_rom and static memory
         self._read_from_tag(1)
 
     def __len__(self):

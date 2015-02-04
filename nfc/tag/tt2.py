@@ -122,23 +122,25 @@ class Type2Tag(Tag):
             self._ndef_tlv_offset = 0
 
         def _read_capability_data(self, tag_memory):
-            if tag_memory[12] != 0xE1:
-                log.debug("ndef management data is not present")
+            try:
+                if tag_memory[12] != 0xE1:
+                    log.debug("ndef management data is not present")
+                    return False
+                if tag_memory[13] >> 4 != 1:
+                    log.debug("unsupported ndef mapping major version")
+                    return False
+                self._readable = bool(tag_memory[15] >> 4 == 0)
+                self._writeable = bool(tag_memory[15] & 0xF == 0)
+                return True
+            except IndexError:
+                log.debug("first four memory pages were unreadable")
                 return False
-
-            if tag_memory[13] >> 4 != 1:
-                log.debug("unsupported ndef mapping major version")
-                return False
-
-            self._readable = bool(tag_memory[15] >> 4 == 0)
-            self._writeable = bool(tag_memory[15] & 0xF == 0)
-            return True
 
         def _read_ndef_data(self):
             log.debug("read ndef data")
-            tag_memory = Type2TagMemoryReader(self._tag)
+            tag_memory = Type2TagMemoryReader(self.tag)
 
-            if self._read_capability_data(tag_memory) == False:
+            if not self._read_capability_data(tag_memory):
                 return None
 
             raw_capacity = tag_memory[14] * 8
@@ -548,13 +550,23 @@ class Type2Tag(Tag):
         Command execution errors raise :exc:`Type2TagCommandError`.
 
         """
-        started = time.time()
         log.debug(">> {0} ({1:f}s)".format(hexlify(data), timeout))
         
-        try: data = bytearray(self.clf.exchange(data, timeout))
-        except nfc.clf.TimeoutError:
-            log.debug("timeout in transceive")
-            raise Type2TagCommandError(TIMEOUT_ERROR)
+        started = time.time()
+        for retry in range(3):
+            try:
+                data = self.clf.exchange(data, timeout)
+                break
+            except nfc.clf.DigitalProtocolError as error:
+                reason = error.__class__.__name__
+                log.debug("%s after %d retries" % (reason, retry))
+        else:
+            if type(error) is nfc.clf.TimeoutError:
+                raise Type2TagCommandError(nfc.tag.TIMEOUT_ERROR)
+            if type(error) is nfc.clf.TransmissionError:
+                raise Type2TagCommandError(nfc.tag.RECEIVE_ERROR)
+            if type(error) is nfc.clf.ProtocolError:
+                raise Type2TagCommandError(nfc.tag.PROTOCOL_ERROR)
             
         elapsed = time.time() - started
         log.debug("<< {0} ({1:f}s)".format(hexlify(data), elapsed))

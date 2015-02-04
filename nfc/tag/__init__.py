@@ -343,6 +343,8 @@ class Tag(object):
             return None
 
 TIMEOUT_ERROR = 0
+RECEIVE_ERROR = -1
+PROTOCOL_ERROR = -2
 
 class TagCommandError(Exception):
     """The base class for exceptions that are raised when a tag command
@@ -362,7 +364,9 @@ class TagCommandError(Exception):
 
     """
     errno_str = {
-        TIMEOUT_ERROR: "timeout, the tag has not answered",
+        TIMEOUT_ERROR: "unrecoverable timeout error",
+        RECEIVE_ERROR: "unrecoverable transmission error",
+        PROTOCOL_ERROR: "unrecoverable protocol error",
     }
     
     def __init__(self, errno):

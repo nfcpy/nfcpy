@@ -105,19 +105,14 @@ class MifareUltralightC(tt2.Type2Tag):
     class NDEF(tt2.Type2Tag.NDEF):
         def _read_capability_data(self, tag_memory):
             base_class = super(MifareUltralightC.NDEF, self)
-            try:
-                is_ndef = base_class._read_capability_data(tag_memory)
-                is_unlocked = tag_memory[10:12] == "\0\0"
-                is_protected = tag_memory[42*4] <= 3
-                is_authenticated = self._tag.is_authenticated
-            except IndexError:
-                return False
-
-            if is_ndef and is_unlocked and is_protected and is_authenticated:
-                self._readable = True
-                self._writeable = True
-
-            return is_ndef
+            if base_class._read_capability_data(tag_memory):
+                if self.tag.is_authenticated:
+                    if not self._readable and tag_memory[15] >> 4 == 8:
+                        self._readable = True
+                    if not self._writeable and tag_memory[15] & 0xF == 8:
+                        self._writeable = bool(tag_memory[10:12] == "\0\0")
+                return True
+            return False
 
     def __init__(self, clf, target):
         super(MifareUltralightC, self).__init__(clf, target)
@@ -221,12 +216,13 @@ class MifareUltralightC(tt2.Type2Tag):
         # set read protection flag
         self.write(43, "\0\0\0\0" if read_protect else "\x01\0\0\0")
 
-        # Set NDEF read/write permissions if protection starts at
-        # page 3 and the tag is formatted for NDEF.
+        # Set NDEF read/write permissions if protection starts at page
+        # 3 and the tag is formatted for NDEF. We set the read/write
+        # permission flags to 8, thus indicating proprietary access.
         if protect_from <= 3:
             ndef_cc = self.read(3)[0:4]
             if ndef_cc[0] == 0xE1 and ndef_cc[1] & 0xF0 == 0x10:
-                ndef_cc[3] |= (0xFF if read_protect else 0x0F)
+                ndef_cc[3] |= (0x88 if read_protect else 0x08)
                 self.write(3, ndef_cc)
 
         # Reactivate the tag to have the key effective and
@@ -371,20 +367,14 @@ class NTAG21x(tt2.Type2Tag):
     """
     class NDEF(tt2.Type2Tag.NDEF):
         def _read_capability_data(self, tag_memory):
-            base_class = super(NTAG21x.NDEF, self)
-            try:
-                is_ndef = base_class._read_capability_data(tag_memory)
-                is_unlocked = tag_memory[10:12] == "\0\0"
-                is_protected = tag_memory[self._tag._cfgpage*4+3] <= 3
-                is_authenticated = self._tag.is_authenticated
-            except IndexError:
-                return None
-
-            if is_ndef and is_unlocked and is_protected and is_authenticated:
-                self._readable = True
-                self._writeable = True
-
-            return is_ndef
+            if super(NTAG21x.NDEF, self)._read_capability_data(tag_memory):
+                if self.tag.is_authenticated:
+                    if not self._readable and tag_memory[15] >> 4 == 8:
+                        self._readable = True
+                    if not self._writeable and tag_memory[15] & 0xF == 8:
+                        self._writeable = bool(tag_memory[10:12] == "\0\0")
+                return True
+            return False
 
     @property
     def signature(self):
@@ -480,12 +470,13 @@ class NTAG21x(tt2.Type2Tag):
         for i in range(4):
             self.write(self._cfgpage + i, cfg[i*4:(i+1)*4])
 
-        # Set NDEF read/write permissions if protection starts at
-        # page 3 and the tag is formatted for NDEF.
+        # Set NDEF read/write permissions if protection starts at page
+        # 3 and the tag is formatted for NDEF. We set the read/write
+        # permission flags to 8, thus indicating proprietary access.
         if protect_from <= 3:
             ndef_cc = self.read(3)[0:4]
             if ndef_cc[0] == 0xE1 and ndef_cc[1] & 0xF0 == 0x10:
-                ndef_cc[3] |= (0xFF if read_protect else 0x0F)
+                ndef_cc[3] |= (0x88 if read_protect else 0x08)
                 self.write(3, ndef_cc)
 
         # Reactivate the tag to have the key effective and
