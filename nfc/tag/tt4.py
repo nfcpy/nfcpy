@@ -23,184 +23,66 @@
 import logging
 log = logging.getLogger(__name__)
 
+from struct import pack, unpack
+from binascii import hexlify
+import time
+
 import nfc.tag
 import nfc.clf
-import nfc.ndef
 
-ndef_app_file_v1 = bytearray("\xD2\x76\x00\x00\x85\x01\x00")
-ndef_app_file_v2 = bytearray("\xD2\x76\x00\x00\x85\x01\x01")
-capability_container = bytearray("\xE1\x03")
+ndef_aid_v1 = bytearray.fromhex("D2760000850100")
+ndef_aid_v2 = bytearray.fromhex("D2760000850101")
 
-class Type4TagError(BaseException):
-    errmsg = {
-        (0x6A, 0x80): "Incorrect parameters in the data field",
-        (0x6A, 0x81): "Function not supported",
-        (0x6A, 0x82): "File not found",
-        (0x6A, 0x83): "Record not found",
-        (0x6A, 0x84): "Not enough memory space in the file",
-        (0x6A, 0x85): "Lc inconsistent with TLV structure",
-        (0x6A, 0x86): "Incorrect parameters P1-P2",
-        (0x6A, 0x87): "Lc inconsistent with P1-P2",
-        (0x6A, 0x88): "Referenced data not found",
+TIMEOUT_ERROR, CHECKSUM_ERROR, RSP_LENGTH_ERROR, RSP_CODE_ERROR, \
+    TAG_IDM_ERROR, DATA_SIZE_ERROR = range(6)
+        
+class Type4TagCommandError(nfc.tag.TagCommandError):
+    """Type 4 Tag exception class. Beyond the generic error values from
+    :attr:`~nfc.tag.TagCommandError` this class covers ISO 7816-4
+    response APDU error codes.
+    
+    """
+    errno_str = {
+        # ISO/IEC 7816-4 (2005) APDU errors (SW1/SW2)
+        0x6700: "wrong lenght (general error)",
+        0x6900: "command not allowed (general error)",
+        0x6981: "command incompatible with file structure",
+        0x6982: "security status not satisfied",
+        0x6A00: "wrong parameters p1/p2 (general error)",
+        0x6A80: "incorrect parameters in command data field",
+        0x6A81: "function not supported",
+        0x6A82: "file or application not found",
+        0x6A83: "record not found",
+        0x6A84: "not enough memory space in the file",
+        0x6A85: "command length inconsistent with TLV structure",
+        0x6A86: "incorrect parameters p1/p2",
+        0x6A87: "command length inconsistent with p1/p2",
+        0x6A88: "referenced data or reference data not found",
+        0x6A89: "file already exists",
+        0x6A8A: "file name already exists",
         }
-    def __str__(self):
-        msg = Type4TagError.errmsg.get(tuple(self.args[0]), "")
-        return "{sw[0]:02X} {sw[1]:02X} {m}".format(sw=self.args[0], m=msg)
 
-class NDEF(object):
-    def __init__(self, tag):
-        self.tag = tag
-        self.data = ''
-        for name, le in ((ndef_app_file_v2, 0), (ndef_app_file_v1, None)):
-            try: tag.select_file(4, 0, name, le)
-            except Type4TagError: pass
-            else: break
-        else:
-            raise Exception("ndef application file not found")
-            
-        try: tag.select_file(0, 0, capability_container)
-        except Type4TagError:
-            raise Exception("capability container not found")
+    @staticmethod
+    def from_status(status):
+        return Type4TagCommandError(unpack(">H", str(status))[0])
 
-        self._cc = tag.read_binary(offset=0, count=15)
-        log.debug("CC = {0} ({1} bytes)".format(
-                str(self._cc).encode("hex"), len(self._cc)))
+class IsoDepInitiator(object):
+    def __init__(self, clf, miu, fwt):
+        self.clf = clf # contactless frontend instance
+        self.miu = miu # maximum information unit in octets
+        self.fwt = fwt # frame waiting time in seconds
+        self.pni = 0
 
-        if self._cc[0] == 0 and self._cc[1] < 15:
-            raise Exception("capability container length below 15")
-        if not self._cc[2]>>4 in (1, 2):
-            raise Exception("unsupported version " + self.version)
-        if not self._cc[7] == 4 and self._cc[8] == 6:
-            raise Exception("no ndef file control tlv")
+    def exchange(self, command, timeout=None):
+        if timeout is None:
+            timeout = self.fwt + 0.01
 
-        self._vmajor = self._cc[2] >> 4
-        self._vminor = self._cc[2] & 0x0F
-        self._max_le = self._cc[3] * 256 + self._cc[4]
-        self._max_lc = self._cc[5] * 256 + self._cc[6]
-        self._ndef_file_size = self._cc[11] * 256 + self._cc[12]
-        ndef_file_id = self._cc[9:11]
+        if command is None:
+            # do a presence check with R(NAK)
+            data = bytearray([0xB2|self.pni])
+            self.clf.exchange(data, timeout)
+            return
 
-        log.debug("Capabilities: Ver={0}.{1}, MLe={2}, MLc={3}".format(
-                self._vmajor, self._vminor, self._max_le, self._max_lc))
-        
-        if self._max_le > 255:
-            log.warning("MLe > 255 conflicts with READ_BINARY Le encoding")
-            self._max_le = 255
-        
-        if self._max_lc > 255:
-            log.warning("MLc > 255 conflicts with READ_BINARY Le encoding")
-            self._max_lc = 255
-        
-        p2 = 0 if self._vmajor == 1 else 12
-        try: tag.select_file(0, p2, ndef_file_id)
-        except Type4TagError:
-            raise Exception("ndef file not found")
-
-        self.changed # force initial read
-
-    @property
-    def version(self):
-        """The version of the NDEF mapping."""
-        return "%d.%d" % (self._vmajor, self._vminor)
-
-    @property
-    def capacity(self):
-        """The maximum number of user bytes on the NDEF tag."""
-        return self._ndef_file_size - 2
-
-    @property
-    def readable(self):
-        """Is True if data can be read from the NDEF tag."""
-        return self._cc[13] == 0
-
-    @property
-    def writeable(self):
-        """Is True if data can be written to the NDEF tag."""
-        return self._cc[14] == 0
-
-    @property
-    def length(self):
-        """NDEF message data length."""
-        return len(self.data)
-        
-    @property
-    def changed(self):
-        """True if the message has changed since last read."""
-        if self.readable:
-            old_data = self.data[:]
-            data = self.tag.read_binary(0, self._max_le)
-            size = data[0] * 256 + data[1] + 2
-            tail = max(0, size - len(data))
-            while len(data) < size:
-                count = min(self._max_lc, size - len(data))
-                data += self.tag.read_binary(len(data), count)
-            self.data = str(data[2:size])
-            return self.data != old_data
-        return False
-
-    @property
-    def message(self):
-        """An NDEF message object (an empty record message if tag is empty)."""
-        try: return nfc.ndef.Message(str(self.data))
-        except nfc.ndef.parser_error: pass
-        return nfc.ndef.Message(nfc.ndef.Record())
-
-    @message.setter
-    def message(self, msg):
-        if not self.writeable:
-            raise nfc.tag.AccessError
-        data = bytearray([0, 0]) + bytearray(str(msg))
-        if len(data) > 2 + self.capacity:
-            raise nfc.tag.CapacityError
-        for offset in range(0, len(data), self._max_lc):
-            part = slice(offset, offset + min(self._max_lc, len(data)-offset))
-            self.tag.update_binary(offset, data[part])
-        ndef_size = [(len(data) - 2) / 256, (len(data) - 2) % 256]
-        self.tag.update_binary(0, bytearray(ndef_size))
-
-class Type4Tag(nfc.tag.Tag):
-    TYPE = "Type4Tag"
-
-    def __init__(self, clf, target):
-        super(Type4Tag, self).__init__(clf)
-        self.atq = target.cfg[0] << 8 | target.cfg[1]
-        self.sak = target.cfg[2]
-        self.uid = target.uid
-        self.ats = target.ats
-        if self.ats is None:
-            self.ats = self.clf.exchange('\xE0\x80', timeout=0.03)
-        try: self.miu = (16,24,32,40,48,64,86,128,256)[self.ats[1] & 0x0F]
-        except IndexError:
-            log.warning("FSCI with RFU value in Type 4A Answer To Select")
-            self.miu = 32
-        fwi = (self.ats[3] >> 4) if (self.ats[3] >> 4 != 15) else 4
-        self.fwt = 4096 / 13.56E6 * pow(2, fwi)
-        if self.clf.capabilities.get('ISO-DEP') is not True:
-            self.pni = 0
-
-    def __str__(self):
-        hx = lambda x: str(x) if x is None else str(x).encode("hex").upper()
-        s = " ATQ={tag.atq:04x} SAK={tag.sak:02x} ATS={ats}"
-        return nfc.tag.Tag.__str__(self) + s.format(
-            tag=self, ats=hx(self.ats))
-
-    def _read_ndef(self):
-        try:
-            return NDEF(self)
-        except Exception as error:
-            log.error("while reading ndef: {0!r}".format(error))
-
-    def _is_present(self):
-        try: data = self.transceive("\x00\xB0\x00\x00\x02")
-        except nfc.clf.DigitalProtocolError: return False
-        else: return bool(data and len(data) == 4 and data[-2:] == "\x90\x00")
-
-    def transceive(self, command, timeout=None):
-        if timeout is None: timeout = self.fwt + 0.01
-        
-        if self.clf.capabilities.get('ISO-DEP') is True:
-            return self.clf.exchange(command, timeout)
-        
         for offset in range(0, len(command), self.miu):
             more = len(command) - offset > self.miu
             pfb = (0x02 if not more else 0x12) | self.pni
@@ -236,39 +118,260 @@ class Type4Tag(nfc.tag.Tag):
             self.pni = (self.pni + 1) % 2
             
         return response
+
+class Type4Tag(nfc.tag.Tag):
+    """Implementation of the NFC Forum Type 4 Tag operation specification.
+
+    The NFC Forum Type 4 Tag is based on ISO/IEC 14443 DEP protocol
+    for Type A and B modulation and uses ISO/IEC 7816-4 command and
+    response APDUs.
+
+    """
+    TYPE = "Type4Tag"
+
+    class NDEF(nfc.tag.Tag.NDEF):
+        # Type 4 Tag specific implementation of the NDEF access type
+        # class that is returned by the Tag.ndef attribute.
+
+        def _select_aid(self, aid):
+            try:
+                self.tag.send_apdu(0, 0xA4, 0x04, 0x00, aid)
+                return True
+            except Type4TagCommandError:
+                return False
                 
-    def select_file(self, p1, p2, data, expected_response_length=None):
-        """Select a file or directory with parameters defined in
-        ISO/IEC 7816-4"""
+        def _select_fid(self, fid):
+            for p2 in (0x0C, 0x00):
+                try:
+                    self.tag.send_apdu(0, 0xA4, 0x00, p2, fid)
+                    return True
+                except Type4TagCommandError:
+                    pass
+            return False
+
+        def _read_binary(self, offset, max_data):
+            p1, p2 = pack(">H", offset)
+            max_data = min(max_data, self._max_le)
+            try:
+                return self.tag.send_apdu(0, 0xB0, p1, p2, mrl=max_data)
+            except Type4TagCommandError:
+                log.debug("read_binary command error")
+
+        def _update_binary(self, offset, data):
+            p1, p2 = pack(">H", offset)
+            max_data = min(len(data), self._max_lc)
+            try:
+                self.tag.send_apdu(0, 0xD6, p1, p2, data[0:max_data])
+                return max_data
+            except Type4TagCommandError:
+                log.debug("update_binary command error")
+
+        def _discover_ndef(self):
+            self._max_lc = 1
+            self._max_le = 15
+            
+            log.debug("select ndef application")
+            if not (self._select_aid(ndef_aid_v2) or
+                    self._select_aid(ndef_aid_v1)):
+                log.debug("no ndef application file")
+                return False
+
+            log.debug("select ndef capability file")
+            if not self._select_fid("\xE1\x03"):
+                log.warning("no ndef capability file")
+                return False
+
+            log.debug("read ndef capability file")
+            cclen = self._read_binary(0, 2)
+            if not (cclen and len(cclen) == 2):
+                log.debug("error reading capability length")
+                return False
+
+            cclen = unpack(">H", cclen)[0]
+            capabilities = self._read_binary(2, min(cclen-2, 15))
+            
+            if capabilities is None or len(capabilities) < 13:
+                log.warning("insufficient capability data")
+                return False
+
+            capabilities += (15-len(capabilities)) * "\0" # for unpack
+            ver, mle, mlc, tag, val = unpack(">BHHB9p", capabilities)
+            
+            if ver >> 4 not in (1, 2, 3):
+                log.debug("unsupported major ndef version")
+                return False
+
+            if not (tag, len(val)) in ((4, 6), (6, 8)):
+                log.error("invalid ndef control tlv")
+                return False
+
+            ndef_control_tlv_format = ">2sHBB" if tag == 4 else ">2sIBB"
+            ndef_file, mfs, rf, wf = unpack(ndef_control_tlv_format, val)
+
+            self._max_le = mle
+            self._max_lc = mlc
+            self._capacity = mfs - tag + 2
+            self._readable = bool(rf == 0)
+            self._writeable = bool(wf == 0)
+            self._nlen_size = tag - 2
+            self._ndef_file = ndef_file
+            
+            return True
+            
+        def _read_ndef_data(self):
+            log.debug("read ndef data")
+            
+            if not hasattr(self, "_ndef_file") and not self._discover_ndef():
+                log.debug("no ndef application")
+                return None
+
+            log.debug("select ndef data file")
+            if not self._select_fid(self._ndef_file):
+                log.warning("ndef file select error")
+                return None
+
+            log.debug("read ndef data file")
+            lfmt = ">I" if self._nlen_size == 4 else ">H"
+            nlen = self._read_binary(0, self._nlen_size)
+            nlen = unpack(lfmt, nlen)[0]
+
+            data = bytearray()
+            while len(data) < nlen:
+                offset = self._nlen_size + len(data)
+                data += self._read_binary(offset, nlen-len(data))
+                if not self._nlen_size + len(data) > offset: break
+            else:
+                return data
+
+        def _write_ndef_data(self, data):
+            log.debug("write ndef data")
+
+            lfmt = ">I" if self._nlen_size == 4 else ">H"
+            nlen = bytearray(pack(lfmt, len(data)))
+            if len(nlen) + len(data) <= self._max_lc:
+                data = bytearray(nlen) + data
+                nlen = None
+            else:
+                data = bytearray(len(nlen)) + data
+
+            offset = 0
+            while offset < len(data):
+                sent = self._update_binary(offset, buffer(data, offset))
+                if sent is None: return False
+                offset += sent
+            else:
+                if nlen: self._update_binary(0, nlen)
+                return True
+            
+    def __init__(self, clf, target):
+        super(Type4Tag, self).__init__(clf)
+        self.atq = target.cfg[0] << 8 | target.cfg[1]
+        self.sak = target.cfg[2]
+        self.uid = target.uid
+        self.ats = target.ats
+        if self.ats is None:
+            self.ats = self.clf.exchange('\xE0\x80', timeout=0.03)
+        try:
+            miu = (16,24,32,40,48,64,86,128,256)[self.ats[1] & 0x0F]
+        except IndexError:
+            log.warning("FSCI with RFU value in Type 4A Answer To Select")
+            miu = 32
+        fwi = (self.ats[3] >> 4) if (self.ats[3] >> 4 != 15) else 4
+        fwt = 4096 / 13.56E6 * pow(2, fwi)
+        self.dep = IsoDepInitiator(clf, miu, fwt)
+        self._extended_length_support = False
+
+    def __str__(self):
+        hx = lambda x: str(x) if x is None else hexlify(x).upper()
+        s = " ATQ={tag.atq:04x} SAK={tag.sak:02x} ATS={ats}"
+        return nfc.tag.Tag.__str__(self) \
+            + s.format(tag=self, ats=hx(self.ats))
+
+    def _is_present(self):
+        try:
+            self.dep.exchange(None)
+            return True
+        except nfc.clf.DigitalProtocolError:
+            return False
+
+    def dump(self):
+        return []
+
+    def transceive(self, data, timeout=None):
+        """Transmit arbitrary data and receive the response.
+
+        This is a low level method to send arbitrary data to the
+        tag. While it should almost always be better to use
+        :meth:`send_apdu` this is the only way to force a specific
+        timeout value (which is otherwise derived from the Tag's
+        answer to select). The *timeout* value is expected as a float
+        specifying seconds to wait.
+
+        """
+        log.debug(">> {0} {1}".format(hexlify(data[:4]), hexlify(data[4:])))
+        try:
+            data = self.dep.exchange(data, timeout)
+        except nfc.clf.DigitalProtocolError:
+            raise Type4TagCommandError(1)
+        log.debug("<< {0}".format(hexlify(data) if data else "None"))
+        return data
+
+    def send_apdu(self, cla, ins, p1, p2, data=None, mrl=0, check_status=True):
+        """Send an ISO/IEC 7816-4 APDU to the Type 4 Tag.
+
+        The 4 byte APDU header (class, instruction, parameter 1 and 2)
+        is constructed from the first four parameters (cla, ins, p1,
+        p2) without interpretation. The byte string *data* argument
+        represents the APDU command data field. It is encoded as a
+        short or extended length field followed by the *data*
+        bytes. The length field is not transmitted if *data* is None
+        or an empty string. The maximum acceptable number of response
+        data bytes is given with the max-response-length *mrl*
+        argument. The value of *mrl* is transmitted as the 7816-4 APDU
+        Le field after appropriate conversion.
         
-        log.debug("select file")
-        cmd = bytearray([0x00, 0xA4, p1, p2])
-        if not data is None:
-            cmd += bytearray([len(data)]) + bytearray(data)
-        if not expected_response_length is None:
-            cmd += bytearray([expected_response_length])
-        rsp = self.transceive(cmd)
-        if rsp[-2:] != "\x90\x00":
-            raise Type4TagError(rsp[-2:])
+        By default, the response is returned as a byte array not
+        including the status word, a :exc:`Type4TagCommandError`
+        exception is raised for any status word other than
+        9000h. Response status verification can be disabled with
+        *check_status* set to False, the byte array will then include
+        the response status word at the last two positions.
+        
+        Transmission errors always raise a :exc:`Type4TagCommandError`
+        exception.
 
-    def read_binary(self, offset, count):
-        """Read *count* bytes from selected file starting at *offset*"""
-        log.debug("read binary {0} to {1}".format(offset, offset+count))
-        cmd = bytearray([0x00, 0xB0, offset/256, offset%256, count])
-        rsp = self.transceive(cmd)
-        if rsp[-2:] != "\x90\x00":
-            raise Type4TagError(rsp[-2:])
-        return rsp[0:-2]
+        """
+        apdu = bytearray([cla, ins, p1, p2])
+        
+        if not self._extended_length_support:
+            if data and len(data) > 255:
+                raise ValueError("unsupported command data length")
+            if mrl and mrl > 256:
+                raise ValueError("unsupported max response length")
+            if data:
+                apdu += chr(len(data)) + data
+            if mrl > 0:
+                apdu += chr(0) if mrl == 256 else chr(mrl)
+        else:
+            if data and len(data) > 65535:
+                raise ValueError("invalid command data length")
+            if le and le > 65536:
+                raise ValueError("invalid max response length")
+            if data:
+                apdu += pack(">xH", len(data)) + data
+            if mrl > 0:
+                le = 0 if mrl == 65536 else mrl
+                apdu += pack(">H", le) if data else pack(">xH", le)
 
-    def update_binary(self, offset, data):
-        """Write *data* bytes to selected file starting at *offset*"""
-        log.debug("write binary {0} to {1}".format(offset, offset+len(data)))
-        cmd = bytearray([0x00, 0xD6, offset/256, offset%256, len(data)])
-        cmd = cmd + bytearray(data)
-        rsp = self.transceive(cmd)
-        if rsp[-2:] != "\x90\x00":
-            raise Type4TagError(rsp[-2:])
+        apdu = self.transceive(apdu)
+            
+        if not apdu or len(apdu) < 2:
+            raise Type4TagCommandError(RSP_LENGTH_ERROR)
+
+        if check_status and apdu[-2:] != "\x90\x00":
+            raise Type4TagCommandError.from_status(apdu[-2:])
+
+        return apdu[:-2] if check_status else apdu
 
 def activate(clf, target):
     return Type4Tag(clf, target)
-
