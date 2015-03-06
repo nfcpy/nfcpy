@@ -26,7 +26,7 @@ log = logging.getLogger(__name__)
 import os
 from binascii import hexlify
 
-import nfc.tag
+import nfc.clf
 from . import tt2
 
 def activate(clf, target):

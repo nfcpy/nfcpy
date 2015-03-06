@@ -25,9 +25,13 @@
 import logging
 log = logging.getLogger(__name__)
 
-from struct import pack, unpack
+import sys, time
 from binascii import hexlify
-import time
+if sys.hexversion >= 0x020704F0:
+    from struct import pack, unpack
+else: # for Debian Wheezy (and thus Raspbian)
+    from struct import pack, unpack as _unpack
+    unpack = lambda fmt, string: _unpack(fmt, buffer(string))
 
 from nfc.tag import Tag, TagCommandError
 import nfc.clf

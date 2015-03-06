@@ -24,8 +24,6 @@ import logging
 log = logging.getLogger(__name__)
 
 import os
-from struct import pack, unpack
-
 from . import tt1
 
 class Topaz(tt1.Type1Tag):

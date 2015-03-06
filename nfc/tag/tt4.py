@@ -23,9 +23,13 @@
 import logging
 log = logging.getLogger(__name__)
 
-from struct import pack, unpack
+import sys, time
 from binascii import hexlify
-import time
+if sys.hexversion >= 0x020704F0:
+    from struct import pack, unpack
+else: # for Debian Wheezy (and thus Raspbian)
+    from struct import pack, unpack as _unpack
+    unpack = lambda fmt, string: _unpack(fmt, buffer(string))
 
 import nfc.tag
 import nfc.clf
@@ -61,7 +65,7 @@ class Type4TagCommandError(nfc.tag.TagCommandError):
 
     @staticmethod
     def from_status(status):
-        return Type4TagCommandError(unpack(">H", str(status))[0])
+        return Type4TagCommandError(unpack(">H", status)[0])
 
 class IsoDepInitiator(object):
     def __init__(self, clf, miu, fwt):

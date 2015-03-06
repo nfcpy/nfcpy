@@ -23,9 +23,13 @@
 import logging
 log = logging.getLogger(__name__)
 
-from struct import pack, unpack
+import sys, time
 from binascii import hexlify
-import time
+if sys.hexversion >= 0x020704F0:
+    from struct import pack, unpack
+else: # for Debian Wheezy (and thus Raspbian)
+    from struct import pack, unpack as _unpack
+    unpack = lambda fmt, string: _unpack(fmt, buffer(string))
 
 import nfc.tag
 import nfc.clf
@@ -101,7 +105,7 @@ class ServiceCode:
     @classmethod
     def unpack(cls, s):
         """Unpack and return a ServiceCode from a byte string."""
-        v = unpack("<H", str(s[0:2]))[0]
+        v = unpack("<H", s[0:2])[0]
         return cls(v >> 6, v & 0x3f)
 
 class BlockCode:

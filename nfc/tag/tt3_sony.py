@@ -23,10 +23,14 @@
 import logging
 log = logging.getLogger(__name__)
 
-import os
-from struct import pack, unpack
+import sys, os
 from binascii import hexlify
 from pyDes import triple_des, CBC
+if sys.hexversion >= 0x020704F0:
+    from struct import pack, unpack
+else: # for Debian Wheezy (and thus Raspbian)
+    from struct import pack, unpack as _unpack
+    unpack = lambda fmt, string: _unpack(fmt, buffer(string))
 
 import nfc.tag
 from . import tt3
