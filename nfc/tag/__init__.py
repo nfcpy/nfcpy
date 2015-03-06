@@ -354,10 +354,13 @@ class TagCommandError(Exception):
     The :attr:`errno` attribute holds a reason code for why the
     command has failed. Error numbers greater than zero indicate a tag
     type specific error from one of the exception classes derived from
-    :exc:`TagCommandError` (per tag type module). Error number ``0``
-    indicates a timeout error. Error numbers less than zero indicate
-    other general errors, no such errors are currently defined.
-
+    :exc:`TagCommandError` (per tag type module). Error numbers below
+    and including zero indicate general errors::
+    
+        nfc.tag.TIMEOUT_ERROR  => unrecoverable timeout error
+        nfc.tag.RECEIVE_ERROR  => unrecoverable transmission error
+        nfc.tag.PROTOCOL_ERROR => unrecoverable protocol error
+    
     The :exc:`TagCommandError` exception populates the *message*
     attribute of the general exception class with the appropriate
     error description.
