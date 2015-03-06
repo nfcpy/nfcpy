@@ -357,7 +357,7 @@ class TestType3Tag:
     def test_polling_for_system_fefe(self):
         try: self.tag.polling(0xFEFE)
         except nfc.tag.tt3.Type3TagCommandError as error:
-            assert error.errno == nfc.tag.tt3.TIMEOUT_ERROR; raise
+            assert error.errno == nfc.tag.TIMEOUT_ERROR; raise
         
     def test_polling_with_request_system_code(self):
         rsp = self.tag.polling(0xFFFF, request_code=1)
@@ -517,7 +517,7 @@ class TestType3Tag:
     def test_send_cmd_recv_rsp_with_timeout_error(self):
         try: self.tag.send_cmd_recv_rsp(0xF0, bytearray(), timeout=0.1)
         except nfc.tag.tt3.Type3TagCommandError as error:
-            assert error.errno == nfc.tag.tt3.TIMEOUT_ERROR; raise
+            assert error.errno == nfc.tag.TIMEOUT_ERROR; raise
         
     @raises(nfc.tag.tt3.Type3TagCommandError)
     def test_send_cmd_recv_rsp_with_rsp_length_error(self):
