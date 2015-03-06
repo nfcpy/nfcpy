@@ -33,9 +33,6 @@ import nfc.clf
 ndef_aid_v1 = bytearray.fromhex("D2760000850100")
 ndef_aid_v2 = bytearray.fromhex("D2760000850101")
 
-TIMEOUT_ERROR, CHECKSUM_ERROR, RSP_LENGTH_ERROR, RSP_CODE_ERROR, \
-    TAG_IDM_ERROR, DATA_SIZE_ERROR = range(6)
-        
 class Type4TagCommandError(nfc.tag.TagCommandError):
     """Type 4 Tag exception class. Beyond the generic error values from
     :attr:`~nfc.tag.TagCommandError` this class covers ISO 7816-4
@@ -78,7 +75,7 @@ class IsoDepInitiator(object):
             timeout = self.fwt + 0.01
 
         if command is None:
-            # do a presence check with R(NAK)
+            # presence check with R(NAK)
             data = bytearray([0xB2|self.pni])
             self.clf.exchange(data, timeout)
             return
@@ -305,14 +302,20 @@ class Type4Tag(nfc.tag.Tag):
         :meth:`send_apdu` this is the only way to force a specific
         timeout value (which is otherwise derived from the Tag's
         answer to select). The *timeout* value is expected as a float
-        specifying seconds to wait.
+        specifying the seconds to wait.
 
         """
-        log.debug(">> {0} {1}".format(hexlify(data[:4]), hexlify(data[4:])))
+        log.debug(">> {0}".format(hexlify(data)))
+        
         try:
             data = self.dep.exchange(data, timeout)
-        except nfc.clf.DigitalProtocolError:
-            raise Type4TagCommandError(1)
+        except nfc.clf.TimeoutError:
+            raise Type4TagCommandError(nfc.tag.TIMEOUT_ERROR)
+        except nfc.clf.ProtocolError:
+            raise Type4TagCommandError(nfc.tag.PROTOCOL_ERROR)
+        except nfc.clf.TransmissionError:
+            raise Type4TagCommandError(nfc.tag.RECEIVE_ERROR)
+
         log.debug("<< {0}".format(hexlify(data) if data else "None"))
         return data
 
@@ -366,7 +369,7 @@ class Type4Tag(nfc.tag.Tag):
         apdu = self.transceive(apdu)
             
         if not apdu or len(apdu) < 2:
-            raise Type4TagCommandError(RSP_LENGTH_ERROR)
+            raise Type4TagCommandError(nfc.tag.PROTOCOL_ERROR)
 
         if check_status and apdu[-2:] != "\x90\x00":
             raise Type4TagCommandError.from_status(apdu[-2:])
