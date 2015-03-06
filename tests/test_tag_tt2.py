@@ -78,7 +78,7 @@ class Type2TagSimulator(nfc.clf.ContactlessFrontend):
                 data = self.memory[offset:offset+16]
                 data.extend(self.memory[0:(16-len(data))])
                 return data + crca(data, len(data))
-            else: return "\x00" # NAK
+            else: return bytearray([0x00]) # NAK
         elif data[0] == 0xA2: # WRITE COMMAND
             offset = self.sector * 1024 + data[1] * 4
             if offset + 4 <= len(self.memory):
@@ -563,7 +563,7 @@ class TestUltralightC:
         assert lines[-1] == ' 43: ?? ?? ?? ?? (AUTH1)'
 
     def test_read_ndef_with_unreadable_page(self):
-        del self.clf.memory[160:]
+        del self.clf.memory[80:]
         assert self.tag.ndef is None
         del self.clf.memory[15:]
         assert self.tag.ndef is None
@@ -596,7 +596,7 @@ class TestUltralightC:
         assert self.clf.memory[168:172] == "\3\0\0\0"
         assert self.clf.memory[172:176] == "\1\0\0\0"
         assert self.clf.memory[176:192] == "BREAKMEIFYOUCAN!"
-        assert self.clf.memory[15] == 0x0F
+        assert self.clf.memory[15] == 0x08
         assert self.tag.is_authenticated
         assert self.tag.ndef.is_writeable
 
@@ -605,7 +605,7 @@ class TestUltralightC:
         assert self.clf.memory[168:172] == "\3\0\0\0"
         assert self.clf.memory[172:176] == "\1\0\0\0"
         assert self.clf.memory[176:192] == "76543210fedcba98"
-        assert self.clf.memory[15] == 0x0F
+        assert self.clf.memory[15] == 0x08
         assert self.tag.is_authenticated
         assert self.tag.ndef.is_writeable
 
@@ -632,7 +632,7 @@ class TestUltralightC:
         assert self.clf.memory[168:172] == "\3\0\0\0"
         assert self.clf.memory[172:176] == "\0\0\0\0"
         assert self.clf.memory[176:192] == "BREAKMEIFYOUCAN!"
-        assert self.clf.memory[15] == 0xFF
+        assert self.clf.memory[15] == 0x88
         assert self.tag.is_authenticated
         assert self.tag.ndef.is_writeable
 
@@ -769,7 +769,7 @@ class TestNTAG21x:
         assert self.tag.ndef.is_writeable is False
         assert self.clf.memory[-12] == 0x40
 
-    def test_protect_with_lockbits_no_ndef_capabilties(self):
+    def test_protect_with_lockbits_no_ndef_capabilities(self):
         self.clf.memory[12:16] = "\0\0\0\0"
         assert self.tag.protect() is True
         assert self.clf.memory[10:12] == "\xFF\xFF"
@@ -795,7 +795,7 @@ class TestNTAG21x:
         assert self.clf.memory[-12: -8] == "\x00\x00\x00\x00"
         assert self.clf.memory[ -8: -4] == "\xFF\xFF\xFF\xFF"
         assert self.clf.memory[ -4:   ] == "\x00\x00\x00\x00"
-        assert self.clf.memory[15] == 0x0F
+        assert self.clf.memory[15] == 0x08
         assert self.tag.is_authenticated
         assert self.tag.ndef.is_writeable
 
@@ -805,7 +805,7 @@ class TestNTAG21x:
         assert self.clf.memory[-12: -8] == "\x00\x00\x00\x00"
         assert self.clf.memory[ -8: -4] == "\x31\x32\x33\x34"
         assert self.clf.memory[ -4:   ] == "\x35\x36\x00\x00"
-        assert self.clf.memory[15] == 0x0F
+        assert self.clf.memory[15] == 0x08
         assert self.tag.is_authenticated
         assert self.tag.ndef.is_writeable
 
@@ -835,7 +835,7 @@ class TestNTAG21x:
         assert self.clf.memory[-12: -8] == "\x80\x00\x00\x00"
         assert self.clf.memory[ -8: -4] == "\x31\x32\x33\x34"
         assert self.clf.memory[ -4:   ] == "\x35\x36\x00\x00"
-        assert self.clf.memory[15] == 0xFF
+        assert self.clf.memory[15] == 0x88
         assert self.tag.is_authenticated
         assert self.tag.ndef.is_writeable
 
