@@ -263,6 +263,28 @@ class Type4Tag(nfc.tag.Tag):
             else:
                 if nlen: self._update_binary(0, nlen)
                 return True
+
+        def _wipe_ndef_data(self, wipe=None):
+            lfmt = ">I" if self._nlen_size == 4 else ">H"
+            nlen = bytearray(pack(lfmt, 0))
+            self._update_binary(0, nlen)
+            if wipe is not None:
+                offset = self._nlen_size
+                data = self._capacity * chr(wipe % 256)
+                while offset < len(data):
+                    sent = self._update_binary(offset, buffer(data, offset))
+                    if sent: offset += sent
+                    else: return False
+            return True
+            
+        def _dump_ndef_data(self):
+            import itertools
+            lines = []
+            for offset in itertools.count(0, 16):
+                line = self._read_binary(offset, 16)
+                if line: lines.append(line)
+                if line is None or len(line) < 16: break
+            return lines
             
     def __init__(self, clf, target):
         super(Type4Tag, self).__init__(clf)
@@ -296,7 +318,48 @@ class Type4Tag(nfc.tag.Tag):
             return False
 
     def dump(self):
+        """Returns tag data as a list of formatted strings.
+
+        The :meth:`dump` method provides useful output only for NDEF
+        formatted Type 4 Tags. Each line that is returned contains a
+        hexdump of 16 octets from the NDEF data file.
+
+        """
+        return self._dump()
+
+    def _dump(self):
+        ispchr = lambda x: x >= 32 and x <= 126
+        oprint = lambda o: ' '.join(['%02x' % x for x in o])
+        cprint = lambda o: ''.join([chr(x) if ispchr(x) else '.' for x in o])
+        lprint = lambda fmt, d, i: fmt.format(i, oprint(d), cprint(d))
+        lfmt = "0x{0:04x}: {1} |{2}|"
+
+        if self.ndef and self.ndef.is_readable:
+            lines = self.ndef._dump_ndef_data()
+            return [lprint(lfmt, d, i<<4) for i,d in enumerate(lines)]
+
         return []
+
+    def format(self, version=None, wipe=None):
+        """Erase the NDEF message on a Type 4 Tag.
+
+        The :meth:`format` method writes the length of the NDEF
+        message on a Type 4 Tag to zero, thus the tag will appear to
+        be empty. If the *wipe* argument is set to some integer then
+        :meth:`format` will also overwrite all user data with that
+        integer (mod 256).
+
+        Despite it's name, the :meth:`format` method can not format a
+        blank tag to make it NDEF compatible; this requires
+        proprietary information from the manufacturer.
+
+        """
+        return super(Type4Tag, self).format(version, wipe)
+
+    def _format(self, version, wipe):
+        if self.ndef and self.ndef.is_writeable:
+            return self.ndef._wipe_ndef_data(wipe)
+        return False
 
     def transceive(self, data, timeout=None):
         """Transmit arbitrary data and receive the response.
