@@ -134,7 +134,7 @@ the type name itself.
 The type and name of the first record, by convention, provide the
 processing context and identification not only for the first record
 but for the whole NDEF message. The :attr:`nfc.ndef.Message.type` and
-:attr:`nfc.ndef.Message.name` attributes map to the type and anme
+:attr:`nfc.ndef.Message.name` attributes map to the type and name
 attributes of the first record in the message.
 
 >>> message = nfc.ndef.Message(b'\xD1\x01\x0ET\x02enHello World')
