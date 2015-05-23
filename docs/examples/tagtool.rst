@@ -10,14 +10,23 @@ also be used to format for NDEF use. ::
 
 .. contents::
    :local:
+   :depth: 2
 
 Options
 =======
+
+.. program:: tagtool.py
 
 .. include:: cli-general-options.txt
 .. include:: cli-reader-options.txt
 .. include:: cli-debug-options.txt
 .. include:: cli-device-options.txt
+
+.. option:: -p PASSWORD
+
+   Use PASSWORD to authentication with a tag that supports password
+   protection. This would be the same password as used in
+   :option:`tagtool.py protect -p` to set a password.
 
 Commands
 ========
@@ -77,10 +86,10 @@ format
 ------
 
 The **format** command writes NDEF capability information for an empty
-NDEF memory area on NFC Forum compliant tags. The tag type must be
-specified. ::
+NDEF memory area on NFC Forum compliant tags. A tag type may be
+specified to give further options. ::
 
-  $ tagtool.py [options] format [-h] [options] {tt1,tt3} ...
+  $ tagtool.py [options] format [-h] [options] {tt1,tt2,tt3,tt4} ...
 
 .. option:: --version x.y
 
@@ -111,6 +120,34 @@ Tag. ::
 
 .. program:: tagtool.py format tt1
 
+.. option:: --magic BYTE
+
+   The value to use as the NDEF magic byte. This option can be used to
+   set an invalid magic byte.
+
+.. option:: --ver x.y
+
+   The version number to write into the NDEF mapping version byte. The
+   difference to :option:`tagtool.py format --version` is that here
+   the version number does not need to be valid.
+
+.. option:: --tms BYTE
+
+   Value to write into the tag memory size byte.
+
+.. option:: --rwa BYTE
+
+   Value to write into the read/write access byte.
+
+format tt2
+^^^^^^^^^^
+
+The **format tt2** command formats the NDEF partition on a Type 2
+Tag. ::
+
+  $ tagtool.py [options] format tt2 [-h]
+
+.. program:: tagtool.py format tt2
 
 format tt3
 ^^^^^^^^^^
@@ -181,6 +218,16 @@ create a correct format. ::
    integer in decimal or hexadecimal notation. If not specified, the
    checksum is computed to be correct.
 
+format tt4
+^^^^^^^^^^
+
+The **format tt4** command formats the NDEF partition on a Type 4
+Tag. ::
+
+  $ tagtool.py [options] format tt4 [-h]
+
+.. program:: tagtool.py format tt4
+
 protect
 -------
 
@@ -206,7 +253,12 @@ tags. ::
    password string is used as a key to compute an HMAC-SHA256 with the
    tag identifier (UID or IDm) as the message. The final password is
    the leftmost number of octets as needed for the tag product, 6
-   octets for an NTAG 21x and 16 octets for a FeliCa Lite-S.
+   octets for an NTAG 21x and 16 octets for a FeliCa Lite-S. A
+   password protected tag can then be unlocked with
+   :option:`tagtool.py -p`. ::
+
+      $ tagtool.py protect -p "my secret password"
+      $ tagtool.py -p "my secret password" protect -p "new secret"
 
 .. option:: --from BLOCK
 
@@ -222,8 +274,9 @@ tags. ::
    This option can only be used with password based protection. The
    result is that the tag will become unreadable without a password,
    i.e. the content is completely hidden. Further reads must then use
-   the password option before the command, that is ``tagtool.py -p
-   PASSWORD <command>``.
+   the password option before the command. ::
+
+     $ tagtool.py -p "secret password" show
 
 emulate
 -------

@@ -37,15 +37,16 @@ from . import tt3
 
 def activate(clf, target):
     # http://www.sony.net/Products/felica/business/tech-support/list.html
-    if target.pmm[1] in FelicaLite.IC_CODE_MAP.keys():
+    ic_code = target.sens_res[10]
+    if ic_code in FelicaLite.IC_CODE_MAP.keys():
         return FelicaLite(clf, target)
-    if target.pmm[1] in FelicaLiteS.IC_CODE_MAP.keys():
+    if ic_code in FelicaLiteS.IC_CODE_MAP.keys():
         return FelicaLiteS(clf, target)
-    if target.pmm[1] in FelicaStandard.IC_CODE_MAP.keys():
+    if ic_code in FelicaStandard.IC_CODE_MAP.keys():
         return FelicaStandard(clf, target)
-    if target.pmm[1] in FelicaMobile.IC_CODE_MAP.keys():
+    if ic_code in FelicaMobile.IC_CODE_MAP.keys():
         return FelicaMobile(clf, target)
-    if target.pmm[1] in FelicaPlug.IC_CODE_MAP.keys():
+    if ic_code in FelicaPlug.IC_CODE_MAP.keys():
         return FelicaPlug(clf, target)
     return None
 
@@ -75,8 +76,8 @@ class FelicaStandard(tt3.Type3Tag):
     def __init__(self, clf, target):
         super(FelicaStandard, self).__init__(clf, target)
         self._product = "FeliCa Standard ({0})".format(
-            self.IC_CODE_MAP[target.pmm[1]][0])
-        self._nbr, self._nbw = self.IC_CODE_MAP[target.pmm[1]][1:3]
+            self.IC_CODE_MAP[self.pmm[1]][0])
+        self._nbr, self._nbw = self.IC_CODE_MAP[self.pmm[1]][1:3]
 
     def _is_present(self):
         # Perform a presence check. Modern FeliCa cards implement the
@@ -409,7 +410,7 @@ class FelicaLite(tt3.Type3Tag):
 
     def __init__(self, clf, target):
         super(FelicaLite, self).__init__(clf, target)
-        self._product = self.IC_CODE_MAP[target.pmm[1]]
+        self._product = self.IC_CODE_MAP[self.pmm[1]]
         self._nbr = 4; self._nbw = 1
         self._sk = self._iv = None
         self.read_from_ndef_service = self.read_without_mac
@@ -766,7 +767,7 @@ class FelicaLiteS(FelicaLite):
 
     def __init__(self, clf, target):
         super(FelicaLiteS, self).__init__(clf, target)
-        self._product = self.IC_CODE_MAP[target.pmm[1]]
+        self._product = self.IC_CODE_MAP[self.pmm[1]]
 
     def dump(self):
         oprint = lambda o: ' '.join(['%02x' % x for x in o])
@@ -966,6 +967,6 @@ class FelicaPlug(tt3.Type3Tag):
     def __init__(self, clf, target):
         super(FelicaPlug, self).__init__(clf, target)
         self._nbr, self._nbw = (12, 12)
-        self._product = self.IC_CODE_MAP[target.pmm[1]]
+        self._product = self.IC_CODE_MAP[self.pmm[1]]
             
 

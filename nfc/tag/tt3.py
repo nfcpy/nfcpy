@@ -237,11 +237,14 @@ class Type3Tag(nfc.tag.Tag):
             return True
 
     def __init__(self, clf, target):
-        super(Type3Tag, self).__init__(clf)
-        self.idm = target.idm
-        self.pmm = target.pmm
-        self.sys = unpack(">H", target.sys)[0]
+        super(Type3Tag, self).__init__(clf, target)
+        self.idm = target.sens_res[1:9]
+        self.pmm = target.sens_res[9:17]
+        self.sys = 0xFFFF
+        if len(target.sens_res) > 17:
+            self.sys = unpack(">H", target.sens_res[17:19])[0]
         self._nbr, self._nbw = (1, 1)
+        self._nfcid = bytearray(self.idm)
 
     def __str__(self):
         """x.__str__() <==> str(x)"""
@@ -645,7 +648,7 @@ class Type3Tag(nfc.tag.Tag):
             try:
                 rsp = self.clf.exchange(cmd, timeout)
                 break
-            except nfc.clf.DigitalProtocolError as error:
+            except nfc.clf.DigitalError as error:
                 reason = error.__class__.__name__
                 log.debug("%s after %d retries" % (reason, retry))
         else:
@@ -836,7 +839,8 @@ class Type3TagEmulation(object):
         return '\x01' + self.sys
 
 def activate(clf, target):
-    import nfc.tag.tt3_sony
-    tag = nfc.tag.tt3_sony.activate(clf, target)
-    return tag if tag else Type3Tag(clf, target)
+    if not target.sens_res[1:3] == "\x01\xFE":
+        import nfc.tag.tt3_sony
+        tag = nfc.tag.tt3_sony.activate(clf, target)
+        return tag if tag else Type3Tag(clf, target)
 

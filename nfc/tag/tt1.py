@@ -232,8 +232,8 @@ class Type1Tag(Tag):
     # Type1Tag methods and attributes
     #
     def __init__(self, clf, target):
-        super(Type1Tag, self).__init__(clf)
-        self.uid = target.uid
+        super(Type1Tag, self).__init__(clf, target)
+        self._nfcid = self.uid = target.rid_res[2:6]
 
     def dump(self):
         """Returns the tag memory blocks as a list of formatted strings.
@@ -425,7 +425,7 @@ class Type1Tag(Tag):
             try:
                 data = self.clf.exchange(data, timeout)
                 break
-            except nfc.clf.DigitalProtocolError as error:
+            except nfc.clf.DigitalError as error:
                 reason = error.__class__.__name__
                 log.debug("%s after %d retries" % (reason, retry))
         else:

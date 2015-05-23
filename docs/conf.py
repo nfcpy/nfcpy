@@ -16,7 +16,8 @@ sys.path.insert(0, os.path.abspath('../'))
 import nfc
 
 # -- General configuration -----------------------------------------------------
-extensions = ['sphinx.ext.autodoc']
+extensions = ['sphinx.ext.autodoc', 'sphinx.ext.intersphinx']
+intersphinx_mapping = {'python':('http://docs.python.org/2.7', None)}
 templates_path = ['_templates']
 source_suffix = '.rst'
 master_doc = 'index'

@@ -118,8 +118,7 @@ class Device(pn532.Device):
         return None
 
 def init(transport):
-    chipset = Chipset(transport)
-    device = Device(chipset)
+    device = Device(Chipset(transport))
     device._vendor_name = transport.manufacturer_name
     device._device_name = transport.product_name
     return device

@@ -30,6 +30,7 @@ import os
 import time
 import errno
 import struct
+from binascii import hexlify
 
 import nfc.dev
 import nfc.clf
@@ -156,7 +157,7 @@ class Chipset():
                     return rsp[2:]
         else: log.debug("transport closed in send_command")
                 
-    @trace
+    #@trace
     def in_set_rf(self, comm_type):
         in_comm_type = {"212F": (1, 1, 15, 1), "424F": (1, 2, 15, 2),
                         "106A": (2, 3, 15, 3), "212A": (0, 4,  0, 4),
@@ -168,13 +169,13 @@ class Chipset():
         if data and data[0] != 0:
             raise StatusError(data[0])
         
-    @trace
+    #@trace
     def in_set_protocol(self, data):
         data = self.send_command(0x02, bytearray(data), 100)
         if data and data[0] != 0:
             raise StatusError(data[0])
         
-    @trace
+    #@trace
     def in_comm_rf(self, data, timeout):
         to = struct.pack("<H", timeout*10) if timeout <= 6553 else '\xFF\xFF'
         data = self.send_command(0x04, to + str(data), timeout+500)
@@ -182,7 +183,7 @@ class Chipset():
             raise CommunicationError(data[0:4])
         return data[5:] if data else None
         
-    @trace
+    #@trace
     def switch_rf(self, switch):
         switch = ("off", "on").index(switch)
         data = self.send_command(0x06, [switch], 100)
@@ -286,8 +287,11 @@ class Device(nfc.dev.Device):
                     break
             elif type(tg) == nfc.clf.TTB:
                 target = self.sense_ttb()
-                if target:
-                    pass
+                if (target and
+                    (tg.afi is None or target.afi.startswith(tg.afi)) and
+                    (tg.cfg is None or target.cfg.startswith(tg.cfg)) and
+                    (tg.uid is None or target.uid.startswith(tg.uid))):
+                    break
             elif type(tg) == nfc.clf.TTF:
                 br, sc, rc = tg.br, tg.sys, 0
                 if sc is None: sc, rc = bytearray('\xFF\xFF'), 1
@@ -390,7 +394,27 @@ class Device(nfc.dev.Device):
             "\x0A\x01" "\x0B\x01" "\x0C\x01" "\x0E\x04" "\x0F\x00"
             "\x10\x00" "\x11\x00" "\x12\x00" "\x13\x06")
 
-        rsp = self.chipset.in_comm_rf("\x05\x00\x00", 30)
+        cmd = "\x05\x00\x10"
+        log.debug(">> SENSB_CMD " + hexlify(cmd).upper())
+        rsp = self.chipset.in_comm_rf(cmd, 30)
+        if not (rsp and len(rsp) >= 12 and rsp[0] == 0x50):
+            log.warning("invalid response for sensb_cmd")
+            return
+
+        nfcid, adata, pinfo = rsp[1:5], rsp[5:9], rsp[9:]
+        log.debug("<< SENSB_RES " + hexlify(rsp).upper())
+        if pinfo[1] & 0b00001000 == True:
+            log.warning("SENSB_RES: b4 of protocol type is 1b")
+            return
+        if pinfo[1] & 0b00000001 == False:
+            log.warning("SENSB_RES: not configured for ISO-DEP")
+            return
+        attrib_req = '\x1D' + nfcid + '\x00\x08\x01\x00'
+        attrib_cmd = bytearray('\x1D' + nfcid + "\0\0\0\0")
+        attrib_cmd[7] = pinfo[1] & 0x07
+        #attrib_res = self.clf.exchange(attrib_req, timeout=0.03)
+            
+        return nfc.clf.TTB(br=106, uid=rsp[1:5], afi=rsp[5:9], cfg=rsp[9:])
 
     def sense_ttf(self, br, sc, rc):
         target = None

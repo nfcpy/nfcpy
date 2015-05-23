@@ -1,19 +1,9 @@
 nfc
 ===
 
-.. automodule:: nfc
-
 nfc.ContactlessFrontend
 -----------------------
 
-.. autoclass:: nfc.ContactlessFrontend
-   :members:
+.. class:: nfc.ContactlessFrontend
 
-
-.. autoclass:: nfc.clf.TTA
-
-.. autoclass:: nfc.clf.TTB
-
-.. autoclass:: nfc.clf.TTF
-
-.. autoclass:: nfc.clf.DEP
+   Shorthand for :class:`nfc.clf.ContactlessFrontend`.

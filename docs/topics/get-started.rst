@@ -74,28 +74,36 @@ installation succeeded and the reader is working head over to the
 Touch a compatible tag (NFC Forum Type 1-4) and the NDEF data should
 be printed. See :doc:`../examples/tagtool` for other options.
 
-.. note:: Things may not immediately work on Linux for two reasons:
-   The reader might be claimed by the Linux NFC subsystem available
-   since Linux 3.1 and root privileges may be required to access the
-   device. To prevent a reader being used by the NFC kernel driver add
-   a blacklist entry in ``'/etc/modprobe.d/'``, for example the following
-   line works for the PN533 based SCL3711: ::
+.. note:: Things may not immediately work with contactless USB readers
+   on Linux. The first problem is that the readers are by default only
+   accessible by the root user and will not be found when nfcpy is run
+   from an unpriviledged user account. A second problem can be that a
+   kernel driver of the Linux NFC subsystem has been activated for the
+   device and this prevents nfcpy from accessing it. And the same
+   problem exists if the pcscd daemon is installed.
 
-     $ echo "blacklist pn533" | sudo tee -a /etc/modprobe.d/blacklist-nfc.conf
+   Since nfcpy version 0.10 the example programs are able to report
+   the issues and hint the necessary actions. However, this will only
+   be the case when program is called with a fully qualified --device
+   argument. Thus a typical call sequence might be: ::
 
-   Root permissions are usually needed for the USB readers and ``sudo
-   python`` is an easy fix, however not quite convinient and
-   potentially dangerous. A better solution is to add a udev rule and
-   make the reader accessible to a normal user, like the following
-   rules would allow members of the *plugdev* group to access an
-   SCL-3711 or RC-S380 if stored in
-   ``'/etc/udev/rules.d/nfcdev.rules'``. ::
+     $ examples/tagtool.py --device usb
+     [main] no contactless reader found on usb
+     [main] no contactless reader available
+     $ lsusb
+     Bus 003 Device 007: ID 054c:02e1 Sony Corp. FeliCa S330 [PaSoRi]
+     $ examples/tagtool.py --device usb:054c:02e1
+     [main] access denied for device with path usb:054c:02e1
+     [main] first match for path usb:054c:02e1 is usb:003:014
+     [main] usb:003:014 is owned by root but you are stephen
+     [main] members of the root group may use usb:003:014
+     [main] you may want to add a udev rule to access this device
+     [main] sudo sh -c 'echo SUBSYSTEM==\"usb\", ACTION==\"add\", ATTRS{idVendor}==\"054c\", ATTRS{idProduct}==\"02e1\", GROUP=\"plugdev\" >> /etc/udev/rules.d/nfcdev.rules'
 
-     SUBSYSTEM=="usb", ACTION=="add", ATTRS{idVendor}=="04e6", \
-       ATTRS{idProduct}=="5591", GROUP="plugdev" # SCM SCL-3711
-     SUBSYSTEM=="usb", ACTION=="add", ATTRS{idVendor}=="054c", \
-       ATTRS{idProduct}=="06c1", GROUP="plugdev" # Sony RC-S380
-
+   The last line shown above provides a command line to copy into the
+   terminal which will add a udev rule to allow members of the
+   'plugdev' group to access the reader. The device must then be
+   briefly unplugged to get the rule effective.
 
 Open a reader
 =============

@@ -33,31 +33,28 @@ def activate(clf, target):
     try:
         log.debug("check if authenticate command is available")
         rsp = clf.exchange('\x1A\x00', timeout=0.01)
-        clf.sense([nfc.clf.TTA(uid=target.uid)])
-        clf.set_communication_mode('', check_crc='OFF')
+        if not clf.sense(target) == target: return None
         if rsp.startswith("\xAF"):
             return MifareUltralightC(clf, target)
         if rsp == "\x00":
             return NTAG203(clf, target)
     except nfc.clf.TimeoutError:
         log.debug("nope, authenticate command is not supported")
-        clf.sense([nfc.clf.TTA(uid=target.uid)])
-    except nfc.clf.DigitalProtocolError as error:
+        if not clf.sense(target) == target: return None
+    except nfc.clf.DigitalError as error:
         log.debug(repr(error))
-        return None
+        return
     
     try:
         log.debug("check if version command is available")
         version = clf.exchange('\x60', timeout=0.01)
-        clf.set_communication_mode('', check_crc='OFF')
     except nfc.clf.TimeoutError:
         log.debug("nope, version command is not supported")
-        clf.sense([nfc.clf.TTA(uid=target.uid)])
-        clf.set_communication_mode('', check_crc='OFF')
+        if not clf.sense(target) == target: return None
         version = None
-    except nfc.clf.DigitalProtocolError as error:
+    except nfc.clf.DigitalError as error:
         log.debug(repr(error))
-        return None
+        return
     
     if version is not None:
         log.debug("version = " + ' '.join(["%02X" % x for x in version]))
@@ -80,7 +77,7 @@ def activate(clf, target):
         if version == "\x00\x04\x04\x02\x01\x00\x13\x03":
             return NTAG216(clf, target)
         log.debug("no match for this version number")
-        return None
+        return
     else:
         return MifareUltralight(clf, target)
 
@@ -227,8 +224,7 @@ class MifareUltralightC(tt2.Type2Tag):
 
         # Reactivate the tag to have the key effective and
         # authenticate with the same key
-        if self.clf.sense([nfc.clf.TTA(uid=self.uid)]):
-            self.clf.set_communication_mode('', check_crc='OFF')
+        if self.clf.sense(self.target) == self.target:
             return self.authenticate(key)
         else:
             return False
@@ -481,8 +477,7 @@ class NTAG21x(tt2.Type2Tag):
 
         # Reactivate the tag to have the key effective and
         # authenticate with the same key
-        if self.clf.sense([nfc.clf.TTA(uid=self.uid)]):
-            self.clf.set_communication_mode('', check_crc='OFF')
+        if self.clf.sense(self.target) == self.target:
             return self.authenticate(key)
         else:
             return False

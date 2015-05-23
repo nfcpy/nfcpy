@@ -20,11 +20,10 @@ Supported Hardware
 
 Notes:
 
-* All readers are tested to work with Ubuntu Linux. Less frequently
-  some are tested to work on Windows (usually the SCL3711 and
-  RC-S3xx). User feedback indicates that the readers seem to work on
-  Mac. Readers with serial communication protocol have not yet been
-  tested on Windows.
+* USB readers are regularly tested to work with the latest Ubuntu
+  Linux (the development platform). From time to time they are tested
+  to work on Windows and Raspbian (using a Raspberry Pi 2 Model
+  B). User feedback indicates that most seem to work on Mac OS X.
 
 * The Sony RC-S380 is the only reader for which *nfcpy* currently
   supports tag emulation, more specifically Type 3 Tag emulation.
@@ -51,20 +50,19 @@ Implementation Status
 ====================================  =========================
 Specification                         Status
 ====================================  =========================
-TS NFC Digital Protocol 1.0           except Type B
-TS NFC Activity 1.0                   except Type B
-TS Type 1 Tag Operation 1.1           implemented
-TS Type 2 Tag Operation 1.1           implemented
-TS Type 3 Tag Operation 1.1           implemented
-TS Type 4 Tag Operation 1.0           implemented
-TS Type 4 Tag Operation 2.0           implemented
+TS NFC Digital Protocol 1.1           except Type B
+TS NFC Activity 1.1                   except Type B
+TS Type 1 Tag Operation 1.2           implemented
+TS Type 2 Tag Operation 1.2           implemented
+TS Type 3 Tag Operation 1.2           implemented
+TS Type 4 Tag Operation 3.0           implemented
 TS NFC Data Exchange Format 1.0       except chunking
 TS NFC Record Type Definition 1.0     implemented
 TS Text Record Type 1.0               implemented
 TS URI Record Type 1.0                implemented
 TS Smart Poster Record Type 1.0       implemented
-TS Signature Record Type 1.0          not implemented
-TS Logical Link Control Protocol 1.1  implemented
+TS Signature Record Type              not implemented
+TS Logical Link Control Protocol 1.2  implemented
 TS Simple NDEF Exchange Protocol 1.0  implemented
 TS Connection Handover 1.2            implemented
 TS Personal Health Communication 1.0  implemented

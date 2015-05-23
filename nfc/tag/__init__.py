@@ -181,8 +181,8 @@ class Tag(object):
             self._write_ndef_data(data)
             self._data = data
 
-    def __init__(self, clf):
-        self._clf = clf
+    def __init__(self, clf, target):
+        self._clf, self._target = (clf, target)
         self._ndef = None
         self._authenticated = False
 
@@ -197,6 +197,10 @@ class Tag(object):
         return self._clf
         
     @property
+    def target(self):
+        return self._target
+        
+    @property
     def type(self):
         return self.TYPE
 
@@ -207,7 +211,7 @@ class Tag(object):
     @property
     def identifier(self):
         """The unique tag identifier."""
-        return str(self.uid if hasattr(self, "uid") else self.idm)
+        return str(self._nfcid)
 
     @property
     def ndef(self):
@@ -390,19 +394,19 @@ class TagCommandError(Exception):
 def activate(clf, target):
     import nfc.clf
     try:
+        log.debug("trying to activate {0}".format(target))
         if type(target) is nfc.clf.TTA:
-            if target.cfg[0] & 0x1F == 0 and target.cfg[1] & 0x0F == 0x0C:
+            if target.sens_res[1] & 0x0F == 0x0C:
                 return activate_tt1(clf, target)
-            if len(target.cfg) == 3:
-                if target.cfg[2] & 0x64 == 0x00:
-                    return activate_tt2(clf, target)
-                if target.cfg[2] & 0x24 == 0x20:
-                    return activate_tt4(clf, target)
+            elif target.sel_res[0] >> 5 & 3 == 0:
+                return activate_tt2(clf, target)
+            elif target.sel_res[0] >> 5 & 1 == 1:
+                return activate_tt4(clf, target)
         elif type(target) is nfc.clf.TTB:
             return activate_tt4(clf, target)
         elif type(target) is nfc.clf.TTF:
             return activate_tt3(clf, target)
-    except nfc.clf.DigitalProtocolError:
+    except nfc.clf.DigitalError:
         return None
 
 def activate_tt1(clf, target):

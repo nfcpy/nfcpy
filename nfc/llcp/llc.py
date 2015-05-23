@@ -231,7 +231,7 @@ class LogicalLinkController(object):
             miu=self.cfg.get('send-miu'), lto=self.cfg.get('recv-lto'))
         return "LLC: {local} {remote}".format(local=local, remote=remote)
 
-    def activate(self, mac):
+    def activate(self, mac, **options):
         assert type(mac) in (nfc.dep.Initiator, nfc.dep.Target)
         self.mac = None
         
@@ -239,13 +239,14 @@ class LogicalLinkController(object):
         lto = self.cfg['send-lto']
         wks = 1+sum(sorted([1<<sap for sap in self.snl.values() if sap < 15]))
         pax = ParameterExchange(version=(1,1), miu=miu, lto=lto, wks=wks)
-        
+
         if type(mac) == nfc.dep.Initiator:
-            gb = mac.activate(gbi='Ffm'+pax.to_string()[2:])
+            gb = mac.activate(gbi='Ffm'+pax.to_string()[2:], **options)
             self.run = self.run_as_initiator
             role = "Initiator"
+
         if type(mac) == nfc.dep.Target:
-            gb = mac.activate(gbt='Ffm'+pax.to_string()[2:], wt=9)
+            gb = mac.activate(gbt='Ffm'+pax.to_string()[2:], **options)
             self.run = self.run_as_target
             role = "Target"
 
@@ -257,6 +258,10 @@ class LogicalLinkController(object):
             info.append("  Link Timeout: {0} ms".format(pax.lto))
             info.append("  Max Inf Unit: {0} octet".format(pax.miu))
             info.append("  Service List: {0:016b}".format(pax.wks))
+
+            if type(mac) == nfc.dep.Target and mac.rwt >= pax.lto * 1E3:
+                msg = "local NFC-DEP RWT {0:.3f} contradicts LTO {1:.3f} sec"
+                log.warning(msg.format(mac.rwt, pax.lto*1E3))
 
             pax = ProtocolDataUnit.from_string("\x00\x40" + str(gb[3:]))
             info.append("Remote LLCP Settings")
@@ -276,8 +281,8 @@ class LogicalLinkController(object):
             if type(mac) == nfc.dep.Initiator and mac.rwt is not None:
                 max_rwt = 4096/13.56E6 * 2**10
                 if mac.rwt > max_rwt:
-                    log.warning("NFC-DEP RWT {0:.3f} exceeds max {1:.3f} sec"
-                                .format(mac.rwt, max_rwt))
+                    msg = "remote NFC-DEP RWT {0:.3f} exceeds max {1:.3f} sec"
+                    log.warning(msg.format(mac.rwt, max_rwt))
 
             self.mac = mac
 
@@ -305,8 +310,8 @@ class LogicalLinkController(object):
         try:
             data = self.mac.exchange(data, timeout)
             if data is None: return None
-        except nfc.clf.DigitalProtocolError as error:
-            log.debug("{0!r}".format(error))
+        except nfc.clf.DigitalError as error:
+            log.warning("{0!r}".format(error))
             return None
 
         pdu = ProtocolDataUnit.from_string(data)
@@ -316,8 +321,10 @@ class LogicalLinkController(object):
 
     def run_as_initiator(self, terminate=lambda: False):
         recv_timeout = 1E-3 * (self.cfg['recv-lto'] + 10)
-        symm = 0
+        msg = "starting initiator run loop with a timeout of {0:.3f} sec"
+        log.debug(msg.format(recv_timeout))
 
+        symm = 0
         try:
             pdu = self.collect(delay=0.01)
             while not terminate():
@@ -346,8 +353,10 @@ class LogicalLinkController(object):
 
     def run_as_target(self, terminate=lambda: False):
         recv_timeout = 1E-3 * (self.cfg['recv-lto'] + 10)
-        symm = 0
+        msg = "starting target run loop with a timeout of {0:.3f} sec"
+        log.debug(msg.format(recv_timeout))
         
+        symm = 0
         try:
             pdu = None
             while not terminate():

@@ -34,21 +34,19 @@ else: # for Debian Wheezy (and thus Raspbian)
 from nfc.tag import Tag, TagCommandError
 import nfc.clf
 
-TIMEOUT_ERROR, CHECKSUM_ERROR, INVALID_SECTOR_ERROR, \
-    INVALID_PAGE_ERROR, INVALID_RESPONSE_ERROR = range(5)
+TIMEOUT_ERROR, INVALID_SECTOR_ERROR, \
+    INVALID_PAGE_ERROR, INVALID_RESPONSE_ERROR = range(4)
 
 class Type2TagCommandError(TagCommandError):
     """Type 2 Tag specific exceptions. Sets 
     :attr:`~nfc.tag.TagCommandError.errno` to one of:
     
-    | 1 - CHECKSUM_ERROR 
-    | 2 - INVALID_SECTOR_ERROR 
-    | 3 - INVALID_PAGE_ERROR
-    | 4 - INVALID_RESPONSE_ERROR
+    | 1 - INVALID_SECTOR_ERROR 
+    | 2 - INVALID_PAGE_ERROR
+    | 3 - INVALID_RESPONSE_ERROR
 
     """
     errno_str = {
-        CHECKSUM_ERROR: "crc validation failed",
         INVALID_SECTOR_ERROR: "invalid sector number",
         INVALID_PAGE_ERROR: "invalid page number",
         INVALID_RESPONSE_ERROR: "invalid response data",
@@ -240,16 +238,9 @@ class Type2Tag(Tag):
     # Type2Tag methods and attributes
     #
     def __init__(self, clf, target):
-        super(Type2Tag, self).__init__(clf)
-        self.atq = target.cfg[0] << 8 | target.cfg[1]
-        self.sak = target.cfg[2]
-        self.uid = target.uid
+        super(Type2Tag, self).__init__(clf, target)
+        self._nfcid = bytearray(target.sdd_res)
         self._current_sector = 0
-
-    def __str__(self):
-        """x.__str__() <==> str(x)"""
-        s = " ATQ={tag.atq:04x} SAK={tag.sak:02x}"
-        return nfc.tag.Tag.__str__(self) + s.format(tag=self)
 
     def dump(self):
         """Returns the tag memory pages as a list of formatted strings.
@@ -317,7 +308,7 @@ class Type2Tag(Tag):
         # Verify that the tag is still present. This is implemented as
         # reading page 0-3 (from whatever sector is currently active).
         try:
-            data = self.transceive("\x30\x00", rlen=16)
+            data = self.transceive("\x30\x00")
         except Type2TagCommandError as error:
             if error.errno != TIMEOUT_ERROR:
                 log.warning("unexpected error in presence check: %s" % error)
@@ -462,12 +453,12 @@ class Type2Tag(Tag):
         """
         log.debug("read pages {0} to {1}".format(page, page+3))
 
-        data = self.transceive("\x30"+chr(page%256), rlen=16, timeout=0.005)
+        data = self.transceive("\x30"+chr(page%256), timeout=0.005)
 
         if len(data) == 1 and data[0] & 0xFA == 0x00:
             log.debug("received nak response")
-            self.clf.sense([nfc.clf.TTA(uid=self.uid)])
-            self.clf.set_communication_mode('', check_crc='OFF')
+            if not self.clf.sense(self.target) == self.target:
+                raise Type2TagCommandError(nfc.tag.RECEIVE_ERROR)
             raise Type2TagCommandError(INVALID_PAGE_ERROR)
 
         if len(data) != 16:
@@ -492,13 +483,15 @@ class Type2Tag(Tag):
         log.debug("write {0} to page {1}".format(hexlify(data), page))
         rsp = self.transceive("\xA2" + chr(page % 256) + data)
         
-        if (len(rsp) == 1 and rsp[0] == 0x0A) or (len(rsp) == 0):
-            # Case 1 is for readers who return the ack/nack.
-            # Case 2 is for readers who process the response.
-            return True
-        if len(rsp) == 1 and rsp[0] != 0x0A:
+        if len(rsp) != 1:
+            log.debug("invalid response " + hexlify(data))
+            raise Type2TagCommandError(INVALID_RESPONSE_ERROR)
+
+        if rsp[0] != 0x0A: # NAK
+            log.debug("invalid page, received nak")
             raise Type2TagCommandError(INVALID_PAGE_ERROR)
-        raise Type2TagCommandError(INVALID_RESPONSE_ERROR)
+
+        return True
 
     def sector_select(self, sector):
         """Send a SECTOR_SELECT command to switch the 1K address sector.
@@ -520,7 +513,7 @@ class Type2Tag(Tag):
             rsp = self.transceive("\xC2\xFF")
             if len(rsp) == 1 and rsp[0] == 0x0A:
                 try:
-                    # command is passively ack'd, there's no response
+                    # command is passively ack'd, i.e. there's no response
                     self.transceive(chr(sector)+"\0\0\0", timeout=0.001)
                 except Type2TagCommandError as error:
                     assert int(error) == TIMEOUT_ERROR # passive ack
@@ -535,7 +528,7 @@ class Type2Tag(Tag):
             self._current_sector = sector
         return self._current_sector
 
-    def transceive(self, data, timeout=0.1, rlen=None):
+    def transceive(self, data, timeout=0.1):
         """Send a Type 2 Tag command and receive the response.
         
         :meth:`transceive` is a type 2 tag specific wrapper around the
@@ -545,11 +538,6 @@ class Type2Tag(Tag):
         seconds pass without a response, the operation is aborted and
         :exc:`~nfc.tag.TagCommandError` raised with the TIMEOUT_ERROR
         error code.
-
-        If the expected response length is provided with *rlen* and
-        the data received is longer by the amount of CRC bytes (2
-        bytes), then a CRC check is performed and the response data
-        returned without the CRC bytes.
 
         Command execution errors raise :exc:`Type2TagCommandError`.
 
@@ -561,7 +549,7 @@ class Type2Tag(Tag):
             try:
                 data = self.clf.exchange(data, timeout)
                 break
-            except nfc.clf.DigitalProtocolError as error:
+            except nfc.clf.DigitalError as error:
                 reason = error.__class__.__name__
                 log.debug("%s after %d retries" % (reason, retry))
         else:
@@ -574,25 +562,8 @@ class Type2Tag(Tag):
             
         elapsed = time.time() - started
         log.debug("<< {0} ({1:f}s)".format(hexlify(data), elapsed))
-
-        if rlen is not None and len(data) == rlen + 2:
-            if self.crca(data, rlen) != data[rlen:rlen+2]:
-                log.debug("checksum error in received data")
-                raise Type2TagCommandError(CHECKSUM_ERROR)
-            return data[0:rlen]
-        else:
-            return data
+        return data
         
-    @staticmethod
-    def crca(data, size):
-        reg = 0x6363
-        for octet in data[:size]:
-            for pos in range(8):
-                bit = (reg ^ ((octet >> pos) & 1)) & 1
-                reg = reg >> 1
-                if bit: reg = reg ^ 0x8408
-        return bytearray([reg & 0xff, reg >> 8])
-
 class Type2TagMemoryReader(object):
     """The memory reader provides a convenient way to read and write
     :class:`Type2Tag` memory. Once instantiated with a proper type
@@ -666,10 +637,12 @@ class Type2TagMemoryReader(object):
         self._write_to_tag(stop=len(self))
 
 def activate(clf, target):
-    clf.set_communication_mode('', check_crc='OFF')
-    if target.uid[0] == 0x04: # NXP
+    if target.sdd_res[0] == 0x04: # NXP
         import nfc.tag.tt2_nxp
         tag = nfc.tag.tt2_nxp.activate(clf, target)
         if tag is not None: return tag
+        # the tag may have disappeared
+        if not clf.sense(target) == target:
+            return None
     return Type2Tag(clf, target)
     

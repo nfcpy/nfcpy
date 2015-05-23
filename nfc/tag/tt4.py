@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2012-2014 Stephen Tiedemann <stephen.tiedemann@gmail.com>
+# Copyright 2012-2015 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -24,6 +24,7 @@ import logging
 log = logging.getLogger(__name__)
 
 import sys, time
+import itertools
 from binascii import hexlify
 if sys.hexversion >= 0x020704F0:
     from struct import pack, unpack
@@ -68,15 +69,18 @@ class Type4TagCommandError(nfc.tag.TagCommandError):
         return Type4TagCommandError(unpack(">H", status)[0])
 
 class IsoDepInitiator(object):
-    def __init__(self, clf, miu, fwt):
+    def __init__(self, clf, fsc, fwt):
         self.clf = clf # contactless frontend instance
-        self.miu = miu # maximum information unit in octets
-        self.fwt = fwt # frame waiting time in seconds
         self.pni = 0
+        self.miu = fsc-1
+        self.fwt = fwt
+        self.delta_fwt = 49152 / 13.56E6
+        self.n_retry_ack = min(int(1/self.fwt), 5)
+        self.n_retry_nak = self.n_retry_ack
 
     def exchange(self, command, timeout=None):
         if timeout is None:
-            timeout = self.fwt + 0.01
+            timeout = self.fwt + self.delta_fwt
 
         if command is None:
             # presence check with R(NAK)
@@ -86,35 +90,92 @@ class IsoDepInitiator(object):
 
         for offset in range(0, len(command), self.miu):
             more = len(command) - offset > self.miu
-            pfb = (0x02 if not more else 0x12) | self.pni
-            data = chr(pfb) + command[offset:offset+self.miu]
-            data = self.clf.exchange(data, timeout)
+            pfb = chr((0x02, 0x12)[more] | self.pni)
+            data = pfb + command[offset:offset+self.miu]
+            
+            for i in itertools.count(start=1):
+                try:
+                    data = self.clf.exchange(data, timeout)
+                    if data is not None and len(data) == 0:
+                        raise nfc.clf.TransmissionError
+                    if data[0] == 0xA2 | (~self.pni & 1):
+                        log.debug("ISO-DEP retransmit after ack")
+                        data = pfb + command[offset:offset+self.miu]
+                        continue
+                    break
+                except nfc.clf.TransmissionError:
+                    if i <= self.n_retry_nak:
+                        log.warning("ISO-DEP transmission error, retry #%d"%i)
+                        data = bytearray([0xB2|self.pni])
+                    else:
+                        log.error("ISO-DEP unrecoverable transmission error")
+                        raise Type4TagCommandError(nfc.tag.RECEIVE_ERROR)
+                except nfc.clf.TimeoutError:
+                    if i <= self.n_retry_nak:
+                        log.warning("ISO-DEP timeout error, retry #%d" % i)
+                        data = bytearray([0xB2|self.pni])
+                    else:
+                        log.error("ISO-DEP unrecoverable timeout error")
+                        raise Type4TagCommandError(nfc.tag.TIMEOUT_ERROR)
+                except nfc.clf.ProtocolError:
+                    log.error("ISO-DEP unrecoverable protocol error")
+                    raise Type4TagCommandError(nfc.tag.PROTOCOL_ERROR)
+
+            if not data:
+                log.error("ISO-DEP unrecoverable protocol error")
+                raise Type4TagCommandError(nfc.tag.PROTOCOL_ERROR)
+                
             while data[0] & 0b11111110 == 0b11110010: # WTX
                 log.debug("ISO-DEP waiting time extension")
-                data = self.clf.exchange(data, timeout)
+                data = self.clf.exchange(data, (data[1]&0x3F) * self.fwt)
             if data[0] & 0x01 != self.pni:
-                log.error("ISO-DEP protocol error: block number")
-                raise IOError("ISO-DEP protocol error: block number")
+                log.warning("ISO-DEP protocol error: block number")
+                raise Type4TagCommandError(nfc.tag.PROTOCOL_ERROR)
             if more:
                 if data[0] & 0b11111110 == 0b10100010: # ACK
                     self.pni = (self.pni + 1) % 2
                 else:
                     log.error("ISO-DEP protocol error: expected ack")
-                    raise IOError("ISO-DEP protocol error: expected ack")
+                    raise Type4TagCommandError(nfc.tag.PROTOCOL_ERROR)
             else:
-                if data[0] & 0b11101110 == 0b00000010: # INF
+                if data[0] & 0b11101110 == 0x02: # INF
                     self.pni = (self.pni + 1) % 2
                     response = data[1:]
                 else:
                     log.error("ISO-DEP protocol error: expected inf")
-                    raise IOError("ISO-DEP protocol error: expected inf")
+                    raise Type4TagCommandError(nfc.tag.PROTOCOL_ERROR)
 
         while bool(data[0] & 0b00010000):
-            data = chr(0b10100010 | self.pni) # ack
-            data = self.clf.exchange(data, timeout)
+            data = chr(0xA2|self.pni) # ack
+            
+            for i in itertools.count(start=1):
+                try:
+                    data = self.clf.exchange(data, timeout)
+                    if data is not None and len(data) == 0:
+                        raise nfc.clf.TransmissionError
+                    break
+                except nfc.clf.TransmissionError:
+                    if i <= self.n_retry_ack:
+                        log.warning("ISO-DEP transmission error, retry #%d"%i)
+                        data = bytearray([0xA2|self.pni])
+                    else:
+                        log.error("ISO-DEP unrecoverable transmission error")
+                        raise Type4TagCommandError(nfc.tag.RECEIVE_ERROR)
+                except nfc.clf.TimeoutError:
+                    if i <= self.n_retry_ack:
+                        log.warning("ISO-DEP timeout error, retry #%d" % i)
+                        data = bytearray([0xA2|self.pni])
+                    else:
+                        log.error("ISO-DEP unrecoverable timeout error")
+                        raise Type4TagCommandError(nfc.tag.TIMEOUT_ERROR)
+                except nfc.clf.ProtocolError:
+                    log.error("ISO-DEP unrecoverable protocol error")
+                    raise Type4TagCommandError(nfc.tag.PROTOCOL_ERROR)
+                
             if data[0] & 0x01 != self.pni:
                 log.error("ISO-DEP protocol error: block number")
-                raise IOError("ISO-DEP protocol error: block number")
+                raise Type4TagCommandError(nfc.tag.PROTOCOL_ERROR)
+
             response = response + data[1:]
             self.pni = (self.pni + 1) % 2
             
@@ -134,21 +195,23 @@ class Type4Tag(nfc.tag.Tag):
         # Type 4 Tag specific implementation of the NDEF access type
         # class that is returned by the Tag.ndef attribute.
 
-        def _select_aid(self, aid):
+        def _select_ndef_application(self):
+            for self._aid in (ndef_aid_v2, ndef_aid_v1):
+                try:
+                    self.tag.send_apdu(0, 0xA4, 0x04, 0x00, self._aid)
+                    log.debug("selected " + hexlify(self._aid))
+                    return True
+                except Type4TagCommandError as error:
+                    if error.errno <= 0: break
+
+        def _select_fid(self, fid):
+            p2 = 0x00 if self._aid == ndef_aid_v1 else 0x0C
             try:
-                self.tag.send_apdu(0, 0xA4, 0x04, 0x00, aid)
+                self.tag.send_apdu(0, 0xA4, 0x00, p2, fid)
+                log.debug("selected " + hexlify(fid))
                 return True
             except Type4TagCommandError:
-                return False
-                
-        def _select_fid(self, fid):
-            for p2 in (0x0C, 0x00):
-                try:
-                    self.tag.send_apdu(0, 0xA4, 0x00, p2, fid)
-                    return True
-                except Type4TagCommandError:
-                    pass
-            return False
+                log.debug("failed to select " + hexlify(fid))
 
         def _read_binary(self, offset, max_data):
             p1, p2 = pack(">H", offset)
@@ -172,8 +235,7 @@ class Type4Tag(nfc.tag.Tag):
             self._max_le = 15
             
             log.debug("select ndef application")
-            if not (self._select_aid(ndef_aid_v2) or
-                    self._select_aid(ndef_aid_v1)):
+            if not self._select_ndef_application():
                 log.debug("no ndef application file")
                 return False
 
@@ -197,6 +259,10 @@ class Type4Tag(nfc.tag.Tag):
 
             capabilities += (15-len(capabilities)) * "\0" # for unpack
             ver, mle, mlc, tag, val = unpack(">BHHB9p", capabilities)
+            log.debug("ndef mapping version {0}.{1}".format(ver>>4, ver&15))
+            log.debug("max apdu response length {0}".format(mle))
+            log.debug("max apdu command length {0}".format(mlc))
+            log.debug("ndef file control tlv tag {0}".format(tag))
             
             if ver >> 4 not in (1, 2, 3):
                 log.debug("unsupported major ndef version")
@@ -208,6 +274,10 @@ class Type4Tag(nfc.tag.Tag):
 
             ndef_control_tlv_format = ">2sHBB" if tag == 4 else ">2sIBB"
             ndef_file, mfs, rf, wf = unpack(ndef_control_tlv_format, val)
+            log.debug("ndef file identifier {0}".format(hexlify(ndef_file)))
+            log.debug("ndef file size limit {0}".format(mfs))
+            log.debug("ndef file read flag is {0}".format(rf))
+            log.debug("ndef file write flag is {0}".format(wf))
 
             self._max_le = mle
             self._max_lc = mlc
@@ -234,15 +304,18 @@ class Type4Tag(nfc.tag.Tag):
             log.debug("read ndef data file")
             lfmt = ">I" if self._nlen_size == 4 else ">H"
             nlen = self._read_binary(0, self._nlen_size)
-            nlen = unpack(lfmt, nlen)[0]
+            if nlen is not None and len(nlen) == self._nlen_size:
+                nlen = unpack(lfmt, nlen)[0]
+            else: return None
+            log.debug("ndef data length is {0}".format(nlen))
 
             data = bytearray()
             while len(data) < nlen:
                 offset = self._nlen_size + len(data)
-                data += self._read_binary(offset, nlen-len(data))
-                if not self._nlen_size + len(data) > offset: break
-            else:
-                return data
+                part = self._read_binary(offset, nlen-len(data))
+                if not part: return None
+                data += part
+            return data
 
         def _write_ndef_data(self, data):
             log.debug("write ndef data")
@@ -278,7 +351,6 @@ class Type4Tag(nfc.tag.Tag):
             return True
             
         def _dump_ndef_data(self):
-            import itertools
             lines = []
             for offset in itertools.count(0, 16):
                 line = self._read_binary(offset, 16)
@@ -286,35 +358,11 @@ class Type4Tag(nfc.tag.Tag):
                 if line is None or len(line) < 16: break
             return lines
             
-    def __init__(self, clf, target):
-        super(Type4Tag, self).__init__(clf)
-        self.atq = target.cfg[0] << 8 | target.cfg[1]
-        self.sak = target.cfg[2]
-        self.uid = target.uid
-        self.ats = target.ats
-        if self.ats is None:
-            self.ats = self.clf.exchange('\xE0\x80', timeout=0.03)
-        try:
-            miu = (16,24,32,40,48,64,86,128,256)[self.ats[1] & 0x0F]
-        except IndexError:
-            log.warning("FSCI with RFU value in Type 4A Answer To Select")
-            miu = 32
-        fwi = (self.ats[3] >> 4) if (self.ats[3] >> 4 != 15) else 4
-        fwt = 4096 / 13.56E6 * pow(2, fwi)
-        self.dep = IsoDepInitiator(clf, miu, fwt)
-        self._extended_length_support = False
-
-    def __str__(self):
-        hx = lambda x: str(x) if x is None else hexlify(x).upper()
-        s = " ATQ={tag.atq:04x} SAK={tag.sak:02x} ATS={ats}"
-        return nfc.tag.Tag.__str__(self) \
-            + s.format(tag=self, ats=hx(self.ats))
-
     def _is_present(self):
         try:
-            self.dep.exchange(None)
+            self._dep.exchange(None)
             return True
-        except nfc.clf.DigitalProtocolError:
+        except nfc.clf.DigitalError:
             return False
 
     def dump(self):
@@ -373,16 +421,7 @@ class Type4Tag(nfc.tag.Tag):
 
         """
         log.debug(">> {0}".format(hexlify(data)))
-        
-        try:
-            data = self.dep.exchange(data, timeout)
-        except nfc.clf.TimeoutError:
-            raise Type4TagCommandError(nfc.tag.TIMEOUT_ERROR)
-        except nfc.clf.ProtocolError:
-            raise Type4TagCommandError(nfc.tag.PROTOCOL_ERROR)
-        except nfc.clf.TransmissionError:
-            raise Type4TagCommandError(nfc.tag.RECEIVE_ERROR)
-
+        data = self._dep.exchange(data, timeout)
         log.debug("<< {0}".format(hexlify(data) if data else "None"))
         return data
 
@@ -443,5 +482,79 @@ class Type4Tag(nfc.tag.Tag):
 
         return apdu[:-2] if check_status else apdu
 
+    def __str__(self):
+        hx = lambda x: str(x) if x is None else hexlify(x).upper()
+        s = " MIU={tag._dep.miu} FWT={tag._dep.fwt:f}"
+        return nfc.tag.Tag.__str__(self) + s.format(tag=self)
+    
+class Type4ATag(Type4Tag):
+    def __init__(self, clf, target):
+        super(Type4ATag, self).__init__(clf, target)
+        self._nfcid = bytearray(target.sdd_res)
+
+        log.debug("send RATS command to activate the Type 4A Tag")
+        if self.clf.max_recv_data_size < 256:
+            log.warning("{0} does not support fsd 256".format(self.clf))
+            rats_cmd = bytearray.fromhex("E0 70")
+        else:
+            rats_cmd = bytearray.fromhex("E0 80")
+        rats_res = self.clf.exchange(rats_cmd, timeout=0.03)
+        log.debug("rcvd RATS response: {0}".format(hexlify(rats_res)))
+        
+        fsci, fwti = rats_res[1] & 0x0F, rats_res[3] >> 4
+        if fsci > 8:
+            log.warning("FSCI with RFU value in RATS_RES"); fsci = 8
+        if fwti > 14:
+            log.warning("FWI with RFU value in RATS_RES"); fwti = 4
+        
+        fsc = (16, 24, 32, 40, 48, 64, 96, 128, 256)[fsci]
+        fwt = 4096 / 13.56E6 * (2**fwti)
+
+        if fsc > self.clf.max_send_data_size:
+            log.warning("{0} does not support fsc {1}".format(self.clf, fsc))
+            fsc = self.clf.max_send_data_size
+
+        log.debug("max command frame size is {0:d} byte".format(fsc))
+        log.debug("max frame waiting time is {0:f}".format(fwt))
+
+        self._dep = IsoDepInitiator(clf, fsc, fwt)
+        self._extended_length_support = False
+
+class Type4BTag(Type4Tag):
+    def __init__(self, clf, target):
+        super(Type4BTag, self).__init__(clf, target)
+        self._nfcid = bytearray(target.sens_res[1:5])
+
+        log.debug("send ATTRIB command to activate the Type 4B Tag")
+        if self.clf.max_recv_data_size < 256:
+            log.warning("{0} does not support fsd 256".format(self.clf))
+            attrib_cmd = '\x1D' + self._nfcid + '\x00\x07\x01\x00'
+        else:
+            attrib_cmd = '\x1D' + self._nfcid + '\x00\x08\x01\x00'
+        attrib_res = self.clf.exchange(attrib_cmd, timeout=0.03)
+        log.debug("rcvd ATTRIB response {0}".format(hexlify(attrib_res)))
+
+        fsci, fwti = target.sens_res[10] >> 4, target.sens_res[11] >> 4
+        if fsci > 8:
+            log.warning("FSCI with RFU value in SENSB_RES"); fsci = 8
+        if fwti > 14:
+            log.warning("FWI with RFU value in SENSB_RES"); fwti = 4
+
+        fsc = (16, 24, 32, 40, 48, 64, 96, 128, 256)[fsci]
+        fwt = 4096 / 13.56E6 * (2**fwti)
+        
+        if fsc > self.clf.max_send_data_size:
+            log.warning("{0} does not support fsc {1}".format(self.clf, fsc))
+            fsc = self.clf.max_send_data_size
+
+        log.debug("max command frame size is {0:d} byte".format(fsc))
+        log.debug("max frame waiting time is {0:f}".format(fwt))
+
+        self._dep = IsoDepInitiator(clf, fsc, fwt)
+        self._extended_length_support = False
+
 def activate(clf, target):
-    return Type4Tag(clf, target)
+    if type(target) is nfc.clf.TTA:
+        return Type4ATag(clf, target)
+    if type(target) is nfc.clf.TTB:
+        return Type4BTag(clf, target)

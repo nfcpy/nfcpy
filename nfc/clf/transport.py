@@ -25,12 +25,7 @@
 import logging
 log = logging.getLogger(__name__)
 
-import importlib
-import errno
-import time
-import sys
-import os
-import re
+import os, sys, re, errno, importlib
 
 class TTY(object):
     TYPE = "TTY"
@@ -81,28 +76,38 @@ class TTY(object):
     def __init__(self, port):
         self.open(port)
 
-    def open(self, port):
-        self.tty = self.serial.Serial(port, baudrate=115200, timeout=0.05)
+    def open(self, port, baudrate=115200):
+        self.tty = self.serial.Serial(port, baudrate, timeout=0.05)
+
+    @property
+    def baudrate(self):
+        return self.tty.baudrate if self.tty else 0
+
+    @baudrate.setter
+    def baudrate(self, value):
+        if self.tty:
+            self.tty.baudrate = value
 
     def read(self, timeout):
         if self.tty is not None:
-            self.tty.timeout = max(timeout / 1000.0, 0.05)
+            self.tty.timeout = max(timeout/1E3, 0.05)
             frame = bytearray(self.tty.read(6))
             if frame is None or len(frame) == 0:
                 raise IOError(errno.ETIMEDOUT, os.strerror(errno.ETIMEDOUT))
             if frame.startswith("\x00\x00\xff\x00\xff\x00"):
+                log.log(logging.DEBUG-1, "<<< %s", str(frame).encode("hex"))
                 return frame
             LEN = frame[3]
             if LEN == 0xFF:
                 frame += self.tty.read(3)
                 LEN = frame[5]<<8 | frame[6]
             frame += self.tty.read(LEN + 1)
-            log.debug("<<< " + str(frame).encode("hex"))
+            log.log(logging.DEBUG-1, "<<< %s", str(frame).encode("hex"))
             return frame
 
     def write(self, frame):
         if self.tty is not None:
-            log.debug(">>> " + str(frame).encode("hex"))
+            log.log(logging.DEBUG-1, ">>> %s", str(frame).encode("hex"))
             self.tty.flushInput()
             try:
                 self.tty.write(str(frame))
@@ -238,8 +243,7 @@ class USB(object):
         try:
             self.usb_dev.claimInterface(0)
         except self.usb.USBError:
-            log.debug("device probably used by another process")
-            raise IOError("unusable device")
+            raise IOError(errno.EBUSY, os.strerror(errno.EBUSY))
         interface = dev.configurations[0].interfaces[0]
         endpoints = interface[0].endpoints
         bulk_inp = lambda ep: (\
@@ -274,7 +278,7 @@ class USB(object):
             # implicitely claim interface
             self.usb_out.write('')
         except self.usb_core.USBError:
-            raise IOError(errno.EACCES, os.strerror(errno.EACCES))
+            raise IOError(errno.EBUSY, os.strerror(errno.EBUSY))
         self.manufacturer_name_id = self.usb_dev.iManufacturer
         self.product_name_id = self.usb_dev.iProduct
         
@@ -291,7 +295,7 @@ class USB(object):
                     raise IOError(errno.EIO, os.strerror(errno.EIO))
             else:
                 frame = bytearray(frame)
-                log.debug("<<< " + str(frame).encode("hex"))
+                log.log(logging.DEBUG-1, "<<< %s", str(frame).encode("hex"))
                 return frame
     
     def _PYUSB1_read(self, timeout):
@@ -304,12 +308,12 @@ class USB(object):
                 raise error
             else:
                 frame = bytearray(frame)
-                log.debug("<<< " + str(frame).encode("hex"))
+                log.log(logging.DEBUG-1, "<<< %s", str(frame).encode("hex"))
                 return frame
 
     def _PYUSB0_write(self, frame):
         if self.usb_out is not None:
-            log.debug(">>> " + str(frame).encode("hex"))
+            log.log(logging.DEBUG-1, ">>> %s", str(frame).encode("hex"))
             try:
                 self.usb_dev.bulkWrite(self.usb_out, frame)
                 if len(frame) % 64 == 0: # must end bulk transfer
@@ -324,7 +328,7 @@ class USB(object):
         
     def _PYUSB1_write(self, frame):
         if self.usb_out is not None:
-            log.debug(">>> " + str(frame).encode("hex"))
+            log.log(logging.DEBUG-1, ">>> %s", str(frame).encode("hex"))
             try:
                 self.usb_out.write(frame)
                 if len(frame) % self.usb_out.wMaxPacketSize == 0:

@@ -150,7 +150,7 @@ class Topaz512(tt1.Type1Tag):
             return False
 
 def activate(clf, target):
-    hrom = clf.exchange("\x78\x00\x00\x00\x00\x00\x00", timeout=0.01)[0:2]
+    hrom = target.rid_res[0:2]
     if hrom == "\x11\x48":
         return Topaz(clf, target)
     if hrom == "\x12\x4C":
