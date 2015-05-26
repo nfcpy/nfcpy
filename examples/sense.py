@@ -94,7 +94,7 @@ if __name__ == '__main__':
         "targets", nargs="*", metavar="target",
         help="bitrate/type string to sense")
     parser.add_argument(
-        "--dep", metavar="target",
+        "--dep", metavar="params",
         help="target for passive communication mode")
     parser.add_argument(
         "-i", dest="iterations", metavar="number", type=int, default=1,

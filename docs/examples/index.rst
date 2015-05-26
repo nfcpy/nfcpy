@@ -10,9 +10,14 @@ Example Programs
 :doc:`beam`
    Exchange NDEF data with a smartphone.
 
+:doc:`sense`
+   Find and activate contactless targets.
+
 .. toctree::
    :hidden:
 
    tagtool
    ndeftool
    beam
+   sense
+   
