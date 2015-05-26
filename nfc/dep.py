@@ -99,37 +99,42 @@ class Initiator(DataExchangeProtocol):
         ppi = (self.lri << 4) | (bool(self.gbi) << 1) | int(bool(self.nad))
         did = 0 if self.did is None else self.did
         atr_req = ATR_REQ(urandom(10), did, 0, 0, ppi, self.gbi).encode()
+        psl_req = PSL_REQ(did, (0, 9, 18)[self.brs], self.lri).encode()
 
-        br = (106, 212, 424)[self.brs]
+        targets = []
+        if self.acm == True and self.brs > 0:
+            bitrate = (106, 212, 424)[self.brs]
+            targets.append(nfc.clf.DEP(bitrate, atr_req=atr_req))
+            targets.append(nfc.clf.DEP(106, atr_req=atr_req, psl_req=psl_req))
+        if self.acm == True and self.brs == 0:
+            targets.append(nfc.clf.DEP(106, atr_req=atr_req))
 
-        if self.acm == True:
-            # Active mode if no earlier sense() returned a passive target.
-            tg = nfc.clf.DEP(br, atr_req=atr_req)
-            target = self.clf.sense(tg, iterations=2, interval=0.1)
-        else: target = None
+        targets.extend([nfc.clf.TTF(424), nfc.clf.TTA(106)])
 
-        if target is None:
-            tg = (nfc.clf.TTF if br>106 else nfc.clf.TTA)(br)
-            target = self.clf.sense(tg, iterations=2, interval=0.1)
-            if target is None: return None
+        target = self.clf.sense(*targets, iterations=2, interval=0.1)
+        if target is None: return None
 
-            if type(target) is nfc.clf.TTA:
-                if target.sel_res and target.sel_res[0] & 0x40 == 0x40:
-                    nfcid3 = target.sdd_res + urandom(4) + '\x00\x00'
-                else: return None
+        if type(target) is nfc.clf.TTA:
+            if not (target.sel_res and target.sel_res[0] & 0x40 == 0x40):
+                log.debug("Type A Target does not support DEP")
+                return None
 
-            if type(target) is nfc.clf.TTF:
-                if target.sens_res[1:3] == "\x01\xFE":
-                    nfcid3 = target.sens_res[1:9] + '\x00\x00'
-                else: return None
+        if type(target) is nfc.clf.TTF:
+            if not target.sens_res[1:3] == "\x01\xFE":
+                log.debug("Type F Target does not support DEP")
+                return None
 
-            atr_req = ATR_REQ(nfcid3, did, 0, 0, ppi, self.gbi).encode()
-            target = self.clf.sense(nfc.clf.DEP(br, atr_req=atr_req))
-            if target is None: return None
+        if type(target) in (nfc.clf.TTA, nfc.clf.TTF):
+            psl = psl_req if self.brs > 0 else None
+            passive_dep_target = nfc.clf.DEP(target.bitrate)
+            passive_dep_target.atr_req = atr_req
+            if target.bitrate < (106 << self.brs):
+                passive_dep_target.psl_req = psl_req
+            target = self.clf.sense(passive_dep_target)
 
         if not (target and target.atr_res and len(target.atr_res) >= 17):
             log.info("target activation failed")
-            return
+            return None
 
         log.info("running p2p communication in {0}".format(target.brty))
 
