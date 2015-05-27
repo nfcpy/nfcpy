@@ -103,14 +103,22 @@ class Initiator(DataExchangeProtocol):
 
         targets = []
         if self.acm == True and self.brs > 0:
-            bitrate = (106, 212, 424)[self.brs]
-            targets.append(nfc.clf.DEP(bitrate, atr_req=atr_req))
+            # add 212 or 424 active communication mode
+            targets.append(nfc.clf.DEP((212, 424)[self.brs], atr_req=atr_req))
+            # add 106 active communication mode with bitrate change
             targets.append(nfc.clf.DEP(106, atr_req=atr_req, psl_req=psl_req))
         if self.acm == True and self.brs == 0:
+            # only 106 kbps active communication mode is requested
             targets.append(nfc.clf.DEP(106, atr_req=atr_req))
 
-        targets.extend([nfc.clf.TTF(424), nfc.clf.TTA(106)])
+        if self.brs > 0:
+            # add sense for 212F or 424F passive communication mode
+            targets.append(nfc.clf.TTF(106 << self.brs))
 
+        # always sense for 106A passive communication mode
+        targets.append(nfc.clf.TTA(106))
+
+        self.clf.sense() # make sure to forget a captured target
         target = self.clf.sense(*targets, iterations=2, interval=0.1)
         if target is None: return None
 
@@ -125,7 +133,6 @@ class Initiator(DataExchangeProtocol):
                 return None
 
         if type(target) in (nfc.clf.TTA, nfc.clf.TTF):
-            psl = psl_req if self.brs > 0 else None
             passive_dep_target = nfc.clf.DEP(target.bitrate)
             passive_dep_target.atr_req = atr_req
             if target.bitrate < (106 << self.brs):
