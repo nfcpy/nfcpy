@@ -133,6 +133,7 @@ class Initiator(DataExchangeProtocol):
                 return None
 
         if type(target) in (nfc.clf.TTA, nfc.clf.TTF):
+            self.acm = False
             passive_dep_target = nfc.clf.DEP(target.bitrate)
             passive_dep_target.atr_req = atr_req
             if target.bitrate < (106 << self.brs):
@@ -383,23 +384,18 @@ class Target(DataExchangeProtocol):
         ba = lambda s: bytearray.fromhex(s)
         sensa_res=ba("0101"); sdd_res=ba("08") + urandom(3); sel_res=ba("40")
         sensf_res=ba("0101FE") + urandom(6) + ba("00000000 00000000 FFFF")
-        tta = {'sens_res':sensa_res, 'sdd_res':sdd_res, 'sel_res':sel_res}
-        ttf = {'sens_res':sensf_res}
 
         pp = (self.lrt << 4) | (bool(self.gbt) << 1) | int(bool(self.nad))
         atr_res = ATR_RES(sensf_res[0:8]+"\0\0", 0, 0, 0, wt, pp, self.gbt)
         atr_res = atr_res.encode()
         
-        targets = list()
-        targets.append(nfc.clf.TTA(106, atr_res=atr_res, **tta))
-        targets.append(nfc.clf.TTF(212, atr_res=atr_res, **ttf))
-        targets.append(nfc.clf.TTF(424, atr_res=atr_res, **ttf))
-        if self.acm is True:
-            targets.append(nfc.clf.DEP(106, atr_res=atr_res))
-            targets.append(nfc.clf.DEP(212, atr_res=atr_res))
-            targets.append(nfc.clf.DEP(424, atr_res=atr_res))
-        
-        target = self.clf.listen(timeout, *targets)
+        tta = nfc.clf.TTA(sens_res=sensa_res, sdd_res=sdd_res, sel_res=sel_res)
+        ttf = nfc.clf.TTF(sens_res=sensf_res)
+        tta.atr_res = ttf.atr_res = atr_res
+        target = nfc.clf.DEP(tta=tta, ttf=ttf)
+        if self.acm: target.atr_res = atr_res
+
+        target = self.clf.listen(target, timeout)
         if target and target.atr_req and target.cmd:
             log.debug("activated as " + str(target))
         
@@ -409,7 +405,7 @@ class Target(DataExchangeProtocol):
             self.gbi = atr_req.gb
             self.cmd = target.cmd
             self.brm = target.brty
-            self.acm = target.sens_res == None
+            self.acm = not (target.tta or target.ttf)
 
             log.info("running as " + str(self))
             return self.gbi

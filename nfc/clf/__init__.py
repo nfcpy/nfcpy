@@ -638,6 +638,7 @@ class ContactlessFrontend(object):
                  TTF: self.device.sense_ttf, DEP: self._sense_dep}
 
         with self.lock:
+            self.listen_target = None
             if not (len(targets) and type(targets[0]) is DEP):
                 self.device.mute() # deactivate the rf field
                 self.sensed_target = None
@@ -776,20 +777,22 @@ class ContactlessFrontend(object):
 
         with self.lock:
             info = "listen {0:.3f} seconds for {1}"
+            self.listen_target = self.sensed_target = None
             if type(target) is TTA:
                 log.debug(info.format(timeout, target.brty))
-                return self.device.listen_tta(target, timeout)
+                self.listen_target = self.device.listen_tta(target, timeout)
             elif type(target) is TTB:
                 log.debug(info.format(timeout, target.brty))
-                return self.device.listen_ttb(target, timeout)
+                self.listen_target = self.device.listen_ttb(target, timeout)
             elif type(target) is TTF:
                 log.debug(info.format(timeout, target.brty))
-                return self.device.listen_ttf(target, timeout)
+                self.listen_target = self.device.listen_ttf(target, timeout)
             elif type(target) is DEP:
                 log.debug(info.format(timeout, "DEP"))
-                return self.device.listen_dep(target, timeout)
+                self.listen_target = self.device.listen_dep(target, timeout)
             else:
                 raise TypeError("target is not a recognized technology type")
+            return self.listen_target
 
     def exchange(self, send_data, timeout):
         """Exchange data with an activated target (*send_data* is a command
@@ -812,6 +815,9 @@ class ContactlessFrontend(object):
             if self.sensed_target:
                 exchange = self.device.send_cmd_recv_rsp
                 target = self.sensed_target
+            elif self.listen_target:
+                exchange = self.device.send_rsp_recv_cmd
+                target = self.listen_target
             else:
                 log.error("no active target for data exchange")
                 return None

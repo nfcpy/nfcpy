@@ -185,6 +185,15 @@ class Device(object):
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
         raise NotImplementedError("sense_dep() is not implemented by "+cname)
 
+    def send_cmd_recv_rsp(self, target, data, timeout):
+        """A device driver must implement this method to exchange *data* as
+        initiator with a remote target device.
+
+        """
+        cname = self.__class__.__module__ + '.' + self.__class__.__name__
+        fname = "send_cmd_recv_rsp"
+        raise NotImplementedError(fname+"() is not implemented by "+cname)
+
     def listen_tta(self, target, timeout):
         """A device driver must implement this method to listen as a Type A
         Target. The :exc:`~exceptions.NotImplementedError` exception is
@@ -221,13 +230,14 @@ class Device(object):
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
         raise NotImplementedError("listen_dep() is not implemented by "+cname)
 
-    def exchange(self, data, timeout):
-        """A device driver must implement this method for exchange of *data*
-        with a remote device.
+    def send_rsp_recv_cmd(self, target, data, timeout):
+        """A device driver must implement this method to exchange *data* as
+        target with a remote initiator device.
 
         """
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError("exchange() is not implemented by "+cname)
+        fname = "send_rsp_recv_cmd"
+        raise NotImplementedError(fname+"() is not implemented by "+cname)
 
     @staticmethod
     def add_crc_a(data):

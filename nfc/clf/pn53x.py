@@ -464,7 +464,6 @@ class Device(device.Device):
 
     """
     def __init__(self, chipset, logger):
-        self.local_target = None
         self.chipset = chipset
         self.log = logger
         
@@ -500,7 +499,6 @@ class Device(device.Device):
 
     def mute(self):
         self.chipset.rf_configuration(0x01, chr(0b00000010))
-        self.local_target = None
 
     def _sense_tta(self, target):
         if target.brty not in self.supported_bitrate_type_list:
@@ -637,12 +635,6 @@ class Device(device.Device):
     @property
     def max_recv_data_size(self):
         return self.chipset.host_command_frame_max_size - 3
-
-    def exchange(self, target, data, timeout):
-        if self.remote_target:
-            return self._send_cmd_recv_rsp(data, timeout)
-        if self.local_target:
-            return self._send_rsp_recv_cmd(data, timeout)
 
     def send_cmd_recv_rsp(self, target, data, timeout):
         timeout_microsec = int(timeout * 1E6)
@@ -836,7 +828,7 @@ class Device(device.Device):
         target.bitrate = (106, 212, 424)[dri]
         return data
 
-    def _send_rsp_recv_cmd(self, data, timeout):
+    def send_rsp_recv_cmd(self, target, data, timeout):
         try:
             if data: self.chipset.tg_response_to_initiator(data)
             return self.chipset.tg_get_initiator_command(timeout)
