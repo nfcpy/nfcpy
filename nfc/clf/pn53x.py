@@ -590,7 +590,7 @@ class Device(device.Device):
             data = start_byte + chr(len(target.atr_req)+1) + target.atr_req
             try:
                 data = self.chipset.in_communicate_thru(data, timeout=0.1)
-                atr_res = data[1:]
+                atr_res = data[1:] if br > 106 else data[2:]
             except Chipset.Error as error:
                 self.log.error(error)
                 return None
