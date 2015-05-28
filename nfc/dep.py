@@ -104,7 +104,7 @@ class Initiator(DataExchangeProtocol):
         targets = []
         if self.acm == True and self.brs > 0:
             # add 212 or 424 active communication mode
-            targets.append(nfc.clf.DEP((212, 424)[self.brs], atr_req=atr_req))
+            targets.append(nfc.clf.DEP((212,424)[self.brs-1], atr_req=atr_req))
             # add 106 active communication mode with bitrate change
             targets.append(nfc.clf.DEP(106, atr_req=atr_req, psl_req=psl_req))
         if self.acm == True and self.brs == 0:
@@ -144,14 +144,14 @@ class Initiator(DataExchangeProtocol):
             log.info("target activation failed")
             return None
 
-        log.info("running p2p communication in {0}".format(target.brty))
-
         atr_res = ATR_RES.decode(target.atr_res)
         self.rwt = 4096/13.56E6 * 2**(atr_res.wt if atr_res.wt < 15 else 14)
-        self.miu = atr_res.lr - 3
+        self.miu = atr_res.lr-3 - int(self.did != None) - int(self.nad != None)
         self.gbt = atr_res.gb
         self.pni = 0
         self.brm = target.brty
+
+        log.info("running as " + str(self))
         return self.gbt
 
     def deactivate(self, release=True):
