@@ -500,7 +500,7 @@ class Device(device.Device):
     def mute(self):
         self.chipset.rf_configuration(0x01, chr(0b00000010))
 
-    def _sense_tta(self, target):
+    def sense_tta(self, target):
         if target.brty not in self.supported_bitrate_type_list:
             message = "unsupported bitrate/type {0}".format(target.brty)
             self.log.warning(message)
@@ -549,7 +549,7 @@ class Device(device.Device):
             except Chipset.Error:
                 pass
 
-    def _sense_ttb(self, target, brty, did=None):
+    def sense_ttb(self, target, brty, did=None):
         afi = target.sens_req[0:1] if target.sens_req else "\x00"
         rsp = self.chipset.in_list_passive_target(1, brty, afi)
         if rsp and rsp[10] & 0b00001001 == 0b00000001:
@@ -568,7 +568,7 @@ class Device(device.Device):
             except (Chipset.Error, IOError) as error:
                 self.log.debug(error)
 
-    def _sense_ttf(self, target):
+    def sense_ttf(self, target):
         if not self.chipset.read_register("CIU_TxControl") & 0b00000011:
             # Some FeliCa cards need more time from power up to
             # polling. If the field was not already activated, do this
@@ -581,7 +581,7 @@ class Device(device.Device):
         if rsp is not None:
             return nfc.clf.TTF(target.bitrate, sens_res=rsp[1:])
     
-    def _sense_dep(self, target, passive_target):
+    def sense_dep(self, target, passive_target):
         if passive_target:
             (mode, br) = ("passive", passive_target.bitrate)
             start_byte = "" if br > 106 else "\xF0"
@@ -675,7 +675,7 @@ class Device(device.Device):
             raise nfc.clf.TransmissionError("crc_a check error")
         return data[:-2] if len(data) > 2 else data
 
-    def _listen_tta(self, target, timeout):
+    def listen_tta(self, target, timeout):
         if target.bitrate != 106:
             raise ValueError("bitrate can only be 106 kbps")
         for attr in (("sens_res", 2), ("sdd_res", 4), ("sel_res", 1)):
@@ -705,7 +705,7 @@ class Device(device.Device):
                 target.cmd = bytearray(self.chipset.read_register(*fifo_read))
                 return target
 
-    def _listen_ttf(self, target, timeout):
+    def listen_ttf(self, target, timeout):
         if target.bitrate not in (212, 424):
             raise ValueError("bitrate can only be 212 or 424 kbps")
         if target.sens_res is None:
@@ -735,7 +735,7 @@ class Device(device.Device):
                 target.cmd = bytearray(self.chipset.read_register(*fifo_read))
                 return target
 
-    def _listen_dep(self, target, timeout):
+    def listen_dep(self, target, timeout):
         ttap = target.tta.sens_res+target.tta.sdd_res[1:]+target.tta.sel_res
         ttfp = target.ttf.sens_res[1:]
         mode = 0b00000010 if target.atr_res else 0b00000011

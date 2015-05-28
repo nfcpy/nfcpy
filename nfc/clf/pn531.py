@@ -188,7 +188,7 @@ class Device(pn53x.Device):
         (normally when the tag is moved away).
 
         """
-        target = self._sense_tta(target)
+        target = super(Device, self).sense_tta(target)
         if target and target.sdd_res and len(target.sdd_res) > 4:
             # Remove the cascade tag(s) from SDD_RES, only the PN531
             # has them included and we've set the policy that cascade
@@ -212,7 +212,7 @@ class Device(pn53x.Device):
         ``06FFFF0000`` if no ``target.sens_req`` is supplied.
 
         """
-        return self._sense_ttf(target)
+        return super(Device, self).sense_ttf(target)
 
     def sense_dep(self, target, passive_target=None):
         """Search for a DEP Target in active or passive communication mode.
@@ -222,7 +222,7 @@ class Device(pn53x.Device):
         must be previously discovered Type A or Type F Target.
 
         """
-        return self._sense_dep(target, passive_target)
+        return super(Device, self).sense_dep(target, passive_target)
         
     def old_sense_dep(self, target):
         br = target.bitrate
@@ -282,7 +282,7 @@ class Device(pn53x.Device):
         active communication mode.
 
         """
-        return self._listen_dep(target, timeout)
+        return super(Device, self).listen_dep(target, timeout)
 
     def _init_as_target(self, mode, tta_params, ttf_params, timeout):
         # Set the WaitForSelected bit in CIU_FelNFC2 register if only

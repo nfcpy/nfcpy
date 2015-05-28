@@ -204,7 +204,7 @@ class Device(pn53x.Device):
         Tag, Type 2 Tag, and Type 4A Tag) at 106 kbps.
 
         """
-        return self._sense_tta(target)
+        return super(Device, self).sense_tta(target)
 
     def sense_ttb(self, target):
         """Search for a Type B Target.
@@ -217,7 +217,7 @@ class Device(pn53x.Device):
         activation (which nfcpy does in the tag activation code).
 
         """
-        return self._sense_ttb(target, brty=3, did='\x01')
+        return super(Device, self).sense_ttb(target, brty=3, did='\x01')
     
     def sense_ttf(self, target):
         """Search for a Type F Target.
@@ -227,7 +227,7 @@ class Device(pn53x.Device):
         ``06FFFF0000`` if no ``target.sens_req`` is supplied.
 
         """
-        return self._sense_ttf(target)
+        return super(Device, self).sense_ttf(target)
 
     def sense_dep(self, target, passive_target=None):
         """Search for a DEP Target in active or passive communication mode.
@@ -237,7 +237,7 @@ class Device(pn53x.Device):
         must be previously discovered Type A or Type F Target.
 
         """
-        return self._sense_dep(target, passive_target)
+        return super(Device, self).sense_dep(target, passive_target)
         
     def old_sense_dep(self, target):
         br = target.bitrate
@@ -348,7 +348,7 @@ class Device(pn53x.Device):
         active communication mode.
 
         """
-        return self._listen_dep(target, timeout)
+        return super(Device, self).listen_dep(target, timeout)
 
     def _init_as_target(self, mode, tta_params, ttf_params, timeout):
         nfcid3t = ttf_params[0:8] + "\x00\x00"

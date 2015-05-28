@@ -193,7 +193,7 @@ class Device(pn53x.Device):
         Tag, Type 2 Tag, and Type 4A Tag) at 106 kbps.
 
         """
-        return self._sense_tta(target)
+        return super(Device, self).sense_tta(target)
 
     def sense_ttb(self, target):
         """Activate the RF field and probe for a Type B Target.
@@ -207,7 +207,7 @@ class Device(pn53x.Device):
 
         """
         brty = {"106B": 3, "212B": 6, "424B": 7, "828B": 8}[target.brty]
-        return self._sense_ttb(target, brty)
+        return super(Device, self).sense_ttb(target, brty)
     
     def sense_ttf(self, target):
         """Activate the RF field and probe for a Type F Target.
@@ -217,18 +217,25 @@ class Device(pn53x.Device):
         ``06FFFF0000`` if no ``target.sens_req`` is supplied.
 
         """
-        return self._sense_ttf(target)
+        return super(Device, self).sense_ttf(target)
 
     def sense_dep(self, target, passive_target=None):
         """Search for a DEP Target in active or passive communication mode.
 
         Active communication mode is used if *passive_target* is
         None. To use passive communication mode the *passive_target*
-        must be previously discovered Type A or Type F Target.
+        must be a previously discovered Type A or Type F Target.
 
         """
-        return self._sense_dep(target, passive_target)
-        
+        return super(Device, self).sense_dep(target, passive_target)
+
+    def send_cmd_recv_rsp(self, target, data, timeout):
+        """Send command *data* to the remote *target* and return the response
+        data if received within *timeout* seconds.
+
+        """
+        return super(Device, self).send_cmd_recv_rsp(target, data, timeout)
+
     def old_sense_dep(self, target):
         self.chipset.rf_configuration(0x02, "\x0B\x0B\x0A")
         return self._sense_dep(target)
@@ -334,7 +341,7 @@ class Device(pn53x.Device):
         format, i.e. contain a 4 byte UID starting with ``80h``.
 
         """
-        return self._listen_dep(target, timeout)
+        return super(Device, self).listen_tta(target, timeout)
 
     def listen_ttb(self, target, timeout):
         """Listen as Type B Target is not supported."""
@@ -351,7 +358,7 @@ class Device(pn53x.Device):
         this is not enforced.
 
         """
-        return self._listen_dep(target, timeout)
+        return super(Device, self).listen_ttf(target, timeout)
 
     def listen_dep(self, target, timeout):
         """Listen *timeout* seconds to become initialized as a DEP Target.
@@ -360,7 +367,15 @@ class Device(pn53x.Device):
         active communication mode.
 
         """
-        return self._listen_dep(target, timeout)
+        return super(Device, self).listen_dep(target, timeout)
+
+    def send_rsp_recv_cmd(self, target, data, timeout):
+        """While operating as *target* send response *data* to the remote
+        device and return new command data if received within
+        *timeout* seconds.
+
+        """
+        return super(Device, self).send_rsp_recv_cmd(target, data, timeout)
 
     def _init_as_target(self, mode, tta_params, ttf_params, timeout):
         nfcid3t = ttf_params[0:8] + "\x00\x00"

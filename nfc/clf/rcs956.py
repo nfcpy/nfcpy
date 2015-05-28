@@ -215,7 +215,7 @@ class Device(pn53x.Device):
         will be discarded.
 
         """
-        target = self._sense_tta(target)
+        target = super(Device, self).sense_tta(target)
         if target and target.rid_res:
             # This is a TT1 tag. Unfortunately we can only read it if
             # it is a static memory tag. The RCS956 has implemented
@@ -238,7 +238,7 @@ class Device(pn53x.Device):
         activation (which nfcpy does in the tag activation code).
 
         """
-        return self._sense_ttb(target, brty=3, did='\x01')
+        return super(Device, self).sense_ttb(target, brty=3, did='\x01')
     
     def sense_ttf(self, target):
         """Activate the RF field and probe for a Type F Target.
@@ -248,7 +248,7 @@ class Device(pn53x.Device):
         ``06FFFF0000`` if no ``target.sens_req`` is supplied.
 
         """
-        return self._sense_ttf(target)
+        return super(Device, self).sense_ttf(target)
 
     def sense_dep(self, target):
         """Activate the RF field and probe for a DEP Target.
@@ -256,7 +256,7 @@ class Device(pn53x.Device):
         """
         # Set timeout for PSL_RES and ATR_RES
         self.chipset.rf_configuration(0x02, "\x0B\x0B\x0A")
-        return self._sense_dep(target)
+        return super(Device, self).sense_dep(target)
 
     def old_sense_dep(self, target):
         br = target.bitrate
@@ -346,7 +346,7 @@ class Device(pn53x.Device):
         self.chipset.set_parameters(0b00001000)
 
         # Now we can use the generic pn53x implementation
-        return self._listen_dep(target, timeout)
+        return super(Device, self).listen_dep(target, timeout)
 
     def _init_as_target(self, mode, tta_params, ttf_params, timeout):
         nfcid3t = ttf_params[0:8] + "\x00\x00"
