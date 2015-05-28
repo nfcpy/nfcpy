@@ -255,9 +255,6 @@ class TagTool(CommandLineInterface):
             formatter_class=argparse.RawDescriptionHelpFormatter,
             description="")
         parser.add_argument(
-            "-v", "--verbose", action="store_true",
-            help="show more information")
-        parser.add_argument(
             "-p", dest="authenticate", metavar="PASSWORD",
             help="unlock with password if supported")
         subparsers = parser.add_subparsers(

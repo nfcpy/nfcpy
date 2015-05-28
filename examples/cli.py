@@ -139,22 +139,21 @@ class CommandLineInterface(object):
         
         self.options = argument_parser.parse_args()
 
-        lvl = logging.ERROR if self.options.quiet else logging.DEBUG
-        lvl = logging.INFO if self.options.logfile else lvl
+        lvl = logging.ERROR if self.options.quiet else logging.INFO
+        if self.options.debug and not self.options.logfile:
+            lvl = logging.DEBUG - (1 if self.options.verbose else 0)
+        
         fmt = '[%(name)s] %(message)s'
-        if self.options.reltime:
-            fmt = '%(relativeCreated)d ms ' + fmt
-        if self.options.abstime:
-            fmt = '%(asctime)s ' + fmt
+        if self.options.reltime: fmt = '%(relativeCreated)d ms ' + fmt
+        if self.options.abstime: fmt = '%(asctime)s ' + fmt
         
         ch = ColorStreamHandler()
-        ch.setFormatter(logging.Formatter(fmt))
         ch.setLevel(lvl)
-        
+        ch.setFormatter(logging.Formatter(fmt))
         logging.getLogger().addHandler(ch)
 
         if self.options.logfile:
-            fmt = '%(asctime)s %(levelname)-5s [%(name)s] %(message)s'
+            fmt = '%(asctime)s [%(name)s] %(message)s'
             fh = logging.FileHandler(self.options.logfile, "w")
             fh.setFormatter(logging.Formatter(fmt))
             fh.setLevel(logging.DEBUG - (1 if self.options.verbose else 0))
@@ -164,7 +163,7 @@ class CommandLineInterface(object):
         logging.getLogger('main').setLevel(logging.INFO)
         for module in self.options.debug:
             log.info("enable debug output for '{0}'".format(module))
-            logging.getLogger(module).setLevel(logging.DEBUG)
+            logging.getLogger(module).setLevel(1)
         
         log.debug(self.options)
         
@@ -177,12 +176,15 @@ class CommandLineInterface(object):
         group = argument_parser.add_argument_group(
             title="Debug Options")
         group.add_argument(
-            "-q", "--quiet", action="store_true",
-            help="do not print anything except errors")
-        group.add_argument(
             "-d", metavar="MODULE", dest="debug", action="append",
             default=list(),
             help="enable debug log for MODULE (main, nfc.clf, ...)")
+        group.add_argument(
+            "-v", "--verbose", action="store_true",
+            help="show more information")
+        group.add_argument(
+            "-q", "--quiet", action="store_true",
+            help="show less information")
         group.add_argument(
             "-f", dest="logfile", metavar="LOGFILE",
             help="write debug logs to LOGFILE (with date and time)")
