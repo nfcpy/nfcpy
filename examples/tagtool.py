@@ -93,9 +93,7 @@ def parse_uint24(string):
 # command parsers
 #
 def add_show_parser(parser):
-    parser.add_argument(
-        "-v", "--verbose", action="store_true",
-        help="show more tag information")
+    pass
 
 def add_dump_parser(parser):
     parser.add_argument(
