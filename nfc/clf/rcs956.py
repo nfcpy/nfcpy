@@ -250,43 +250,17 @@ class Device(pn53x.Device):
         """
         return super(Device, self).sense_ttf(target)
 
-    def sense_dep(self, target):
-        """Activate the RF field and probe for a DEP Target.
+    def sense_dep(self, target, passive_target=None):
+        """Search for a DEP Target in active or passive communication mode.
+
+        Active communication mode is used if *passive_target* is
+        None. To use passive communication mode the *passive_target*
+        must be a previously discovered Type A or Type F Target.
 
         """
         # Set timeout for PSL_RES and ATR_RES
         self.chipset.rf_configuration(0x02, "\x0B\x0B\x0A")
-        return super(Device, self).sense_dep(target)
-
-    def old_sense_dep(self, target):
-        br = target.bitrate
-        if self.remote_target is not None:
-            data = chr(len(target.atr_req)+1) + target.atr_req
-            data = '\xF0' + data if br == 106 else data
-            try:
-                data = self.exchange(data, timeout=1.238)
-            except nfc.clf.DigitalError:
-                self.mute()
-            else:
-                log.info("running in {0} kbps passive mode".format(br))
-                target.atr_res = data[2:] if br == 106 else data[1:]
-                if br == 106 and target.atr_res[16] & 0x30 == 0x30:
-                    # PN533 can only send 253 byte payload in 106A
-                    target.atr_res[16] = (target.atr_res[16] & 0xCF) | 0x20
-                if target.bitrate != self.remote_target.bitrate:
-                    log.warning("parameter selection not supported")
-                    target.bitrate = self.remote_target.bitrate
-                return target
-        else:
-            gi, nfcid3 = (target.atr_req[16:], target.atr_req[2:12])
-            try:
-                rsp = self.chipset.in_jump_for_dep('active', br, '', nfcid3, gi)
-            except Chipset.Error as error:
-                self.mute()
-            else:
-                log.info("running in {0} kbps active mode".format(br))
-                target.atr_res = '\xD5\x01' + rsp
-                return target
+        return super(Device, self).sense_dep(target, passive_target)
 
     def listen_tta(self, target, timeout):
         """Listen as Type A Target is not supported."""

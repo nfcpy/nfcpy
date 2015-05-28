@@ -239,37 +239,6 @@ class Device(pn53x.Device):
         """
         return super(Device, self).sense_dep(target, passive_target)
         
-    def old_sense_dep(self, target):
-        br = target.bitrate
-
-        if self.remote_target is not None:
-            data = chr(len(target.atr_req)+1) + target.atr_req
-            data = '\xF0' + data if br == 106 else data
-            try:
-                data = self.exchange(data, timeout=1.238)
-            except nfc.clf.DigitalError:
-                self.mute()
-            else:
-                log.info("running in {0} kbps passive mode".format(br))
-                target.atr_res = data[2:] if br == 106 else data[1:]
-                if br == 106 and target.atr_res[16] & 0x30 == 0x30:
-                    # PN533 can only send 253 byte payload in 106A
-                    target.atr_res[16] = (target.atr_res[16] & 0xCF) | 0x20
-                if target.bitrate != self.target.bitrate:
-                    log.warning("parameter selection not supported")
-                    target.bitrate = self.target.bitrate
-                return target
-        else:
-            gi, nfcid3 = (target.atr_req[16:], target.atr_req[2:12])
-            try:
-                rsp = self.chipset.in_jump_for_dep('active', br, '', nfcid3, gi)
-            except Chipset.Error as error:
-                self.mute()
-            else:
-                log.info("running in {0} kbps active mode".format(br))
-                target.atr_res = '\xD5\x01' + rsp
-                return target
-
     def _tt1_send_cmd_recv_rsp(self, data, timeout):
         # Special handling for Tag Type 1 (Jewel/Topaz) card commands.
         
