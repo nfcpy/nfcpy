@@ -164,7 +164,6 @@ class Chipset(object):
           error was received.
 
         """
-        # Send a chip command and return the response.
         assert len(cmd_data) <= self.host_command_frame_max_size - 2
         self.log.log(logging.DEBUG-1, self.CMD[cmd_code]+" "+hexlify(cmd_data))
         
