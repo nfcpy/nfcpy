@@ -584,11 +584,13 @@ class Device(device.Device):
     def sense_dep(self, target, passive_target):
         if passive_target:
             (mode, br) = ("passive", passive_target.bitrate)
-            start_byte = "" if br > 106 else "\xF0"
-            data = start_byte + chr(len(target.atr_req)+1) + target.atr_req
+            if passive_target.bitrate == 106:
+                # set the detect-sync bit for 106 kbps
+                self.chipset.write_register("CIU_Mode", 0b01111011)
+            data = chr(len(target.atr_req)+1) + target.atr_req
             try:
                 data = self.chipset.in_communicate_thru(data, timeout=0.1)
-                atr_res = data[1:] if br > 106 else data[2:]
+                atr_res = data[1:]
             except Chipset.Error as error:
                 self.log.error(error)
                 return None
@@ -605,9 +607,8 @@ class Device(device.Device):
 
         if target.psl_req and len(target.psl_req) == 5:
             self.log.debug("started DEP in {0} kbps {1} mode".format(br, mode))
-            start_byte = start_byte if mode == "passive" else ""
             try:
-                data = start_byte + chr(len(target.psl_req)+1) + target.psl_req
+                data = chr(len(target.psl_req)+1) + target.psl_req
                 data = self.chipset.in_communicate_thru(data, timeout=0.1)
                 psl_res = data[1:]
             except Chipset.Error as error:
@@ -616,14 +617,18 @@ class Device(device.Device):
             
             dsi = target.psl_req[3] >> 3 & 0b111 
             dri = target.psl_req[3] & 0b111
-            if passive_target:
-                tx = 0b10000000 | (dsi << 4) | ((0b00,0b10)[dsi>0])
-                rx = 0b10000000 | (dri << 4) | ((0b00,0b10)[dri>0])
-            else:
-                tx = 0b10000001 | (dsi << 4)
-                rx = 0b10000001 | (dri << 4)
-            self.chipset.write_register(("CIU_TxMode", tx), ("CIU_RxMode", rx))
+            assert dsi == dri, "send/recv bitrate can not be different"
             br = 106 << dsi
+            if passive_target:
+                tx_mode = 0b10000000 | (dsi << 4) | ((0b00,0b10)[dsi>0])
+                rx_mode = 0b10000000 | (dri << 4) | ((0b00,0b10)[dri>0])
+            else:
+                tx_mode = 0b10000001 | (dsi << 4)
+                rx_mode = 0b10000001 | (dri << 4)
+            regs = [("CIU_TxMode", tx_mode), ("CIU_RxMode", rx_mode)]
+            # set the detect-sync bit for 106 kbps
+            regs.append(("CIU_Mode", 0b01111011 if br==106 else 0b00111011))
+            self.chipset.write_register(*regs)
 
         self.log.debug("running DEP in {0} kbps {1} mode".format(br, mode))
         return nfc.clf.DEP(br, atr_res=atr_res)
@@ -647,10 +652,14 @@ class Device(device.Device):
         try:
             if type(target) is nfc.clf.TTA:
                 if target.rid_res is not None: # TT1
-                    return self._tt1_send_cmd_recv_rsp(data, timeout + 0.1)
+                    return self._tt1_send_cmd_recv_rsp(data, timeout+0.1)
                 if target.sel_res[0] & 0x60 == 0x00: # TT2
-                    return self._tt2_send_cmd_recv_rsp(data, timeout + 0.1)
-            return self.chipset.in_communicate_thru(data, timeout + 0.1)
+                    return self._tt2_send_cmd_recv_rsp(data, timeout+0.1)
+            if type(target) is nfc.clf.DEP and target.bitrate == 106:
+                # The 106A start byte is handled by the PN512.
+                data = self.chipset.in_communicate_thru(data[1:], timeout+0.1)
+                return "\xF0" + data
+            return self.chipset.in_communicate_thru(data, timeout+0.1)
         except Chipset.Error as error:
             self.log.debug(error)
             if error.errno == 1: raise nfc.clf.TimeoutError
