@@ -64,36 +64,36 @@ methods are not thread-safe and do not check arguments.
 .. automodule:: nfc.clf.device
    :members:
 
-PN53x family
-~~~~~~~~~~~~
+PN53x
+~~~~~
 
 .. automodule:: nfc.clf.pn53x
    :show-inheritance:
    :members:
 
-NXP PN531
-~~~~~~~~~
+PN531
+~~~~~
 
 .. automodule:: nfc.clf.pn531
    :show-inheritance:
    :members:
 
-NXP PN532
-~~~~~~~~~
+PN532
+~~~~~
 
 .. automodule:: nfc.clf.pn532
    :show-inheritance:
    :members:
 
-NXP PN533
-~~~~~~~~~
+PN533
+~~~~~
 
 .. automodule:: nfc.clf.pn533
    :show-inheritance:
    :members:
 
-Sony RC-S956
-~~~~~~~~~~~~
+RCS956
+~~~~~~
 
 .. automodule:: nfc.clf.rcs956
    :show-inheritance:
