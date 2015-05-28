@@ -221,45 +221,29 @@ class Device(pn53x.Device):
         None. To use passive communication mode the *passive_target*
         must be previously discovered Type A or Type F Target.
 
+        Because the PN531 does not implement the extended frame syntax
+        for host controller communication it can not support the
+        maximum payload size of 254 byte. The driver handles this by
+        modifying the length-reduction values in ATR and PSL.
+
         """
-        return super(Device, self).sense_dep(target, passive_target)
+        if target.atr_req[15] & 0x30 == 0x30:
+            log.warning("must reduce the max payload size in atr_req")
+            target.atr_req[15] = (target.atr_req[15] & 0xCF) | 0x20
+
+        if target.psl_req and target.psl_req[4] & 0x03 == 0x03:
+            log.warning("must reduce the max payload size in psl_req")
+            target.psl_req[4] = (target.psl_req[4] & 0xFC) | 0x02
+
+        target = super(Device, self).sense_dep(target, passive_target)
+        if target is None: return
         
-    def old_sense_dep(self, target):
-        br = target.bitrate
-
-        if self.remote_target is not None:
-            print target
-            if target.atr_req[15] & 0x30 == 0x30:
-                # PN531 can not handle the maximum payload
-                target.atr_req[15] = (target.atr_req[15] & 0xCF) | 0x20
-            data = chr(len(target.atr_req)+1) + target.atr_req
-            data = '\xF0' + data if br == 106 else data
-            try:
-                data = self.exchange(data, timeout=1.238)
-            except nfc.clf.DigitalError:
-                self.mute()
-            else:
-                log.info("running in {0} kbps passive mode".format(br))
-                target.atr_res = data[2:] if br == 106 else data[1:]
-                if target.atr_res[16] & 0x30 == 0x30:
-                    # PN531 can not handle the maximum payload
-                    target.atr_res[16] = (target.atr_res[16] & 0xCF) | 0x20
-                if target.bitrate != self.remote_target.bitrate:
-                    log.warning("parameter selection not supported")
-                    target.bitrate = self.remote_target.bitrate
-                return target
-        else:
-            gi, nfcid3 = (target.atr_req[16:], target.atr_req[2:12])
-            try:
-                args = ('active', br, '', nfcid3, gi)
-                rsp = self.chipset.in_jump_for_dep(*args)
-            except Chipset.Error as error:
-                self.mute()
-            else:
-                log.info("running in {0} kbps active mode".format(br))
-                target.atr_res = '\xD5\x01' + rsp
-                return target
-
+        if target.atr_res[16] & 0x30 == 0x30:
+            log.warning("must reduce the max payload size in atr_res")
+            target.atr_res[16] = (target.atr_res[16] & 0xCF) | 0x20
+            
+        return target
+        
     def listen_tta(self, target, timeout):
         """Listen as Type A Target is not supported."""
         info = "{device} does not support listen as Type A Target"
