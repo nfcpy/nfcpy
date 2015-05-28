@@ -183,18 +183,21 @@ class ContactlessFrontend(object):
         **Reader/Writer Options**
 
         'targets': sequence
+        
           A list of target specifications with each target of either
           type :class:`~nfc.clf.TTA`, :class:`~nfc.clf.TTB`, or
           :class:`~nfc.clf.TTF`. A default set is choosen if 'targets'
           is not provided.
           
         'on-startup': function
+        
           A function that will be called with the list of targets
           (from 'targets') to search for. Must return a list of
           targets or :const:`None`. Only the targets returned are
           finally considered.
           
         'on-connect': function
+        
           A function object that will be called with an activated
           :class:`~nfc.tag.Tag` object.
         
@@ -211,6 +214,7 @@ class ContactlessFrontend(object):
         **Peer To Peer Options**
 
         'on-startup': function
+        
           A function that is called before an attempt is made to
           establish peer to peer communication. The function receives
           the initialized :class:`~nfc.llcp.llc.LogicalLinkController`
@@ -222,6 +226,7 @@ class ContactlessFrontend(object):
           considered.
           
         'on-connect': function
+        
           A function that is be called when peer to peer communication
           was established. The function receives the connected
           :class:`~nfc.llcp.llc.LogicalLinkController` instance as
@@ -234,22 +239,26 @@ class ContactlessFrontend(object):
           callback.
           
         'role': string
+        
           Defines which role the local LLC shall take for the data
           exchange protocol activation. Possible values are
           'initiator' and 'target'.  The default is to alternate
           between both roles until communication is established.
           
         'miu': integer
+        
           Defines the maximum information unit size that will be
           supported and announced to the remote LLC. The default value
           is 128.
           
         'lto': integer
+        
           Defines the link timeout value (in milliseconds) that will
           be announced to the remote LLC. The default value is 100
           milliseconds.
           
         'agf': boolean
+        
           Defines if the local LLC performs PDU aggregation and may
           thus send Aggregated Frame (AGF) PDUs to the remote LLC. The
           dafault is to use aggregation.
@@ -271,27 +280,32 @@ class ContactlessFrontend(object):
         **Card Emulation Options**
 
         'targets': sequence
+        
           A list of target specifications with each target of either
           type :class:`~nfc.clf.TTA`, :class:`~nfc.clf.TTB`, or
           :class:`~nfc.clf.TTF`. The list of targets is processed
           sequentially. Defaults to an empty list.
           
         'on-startup': function
+        
           A function that will be called with the list of targets
           (from 'targets') to emulate. Must return a list of one
           target choosen or :const:`None`.
           
         'on-connect': function
+        
           A function that will be called with an activated
           :class:`~nfc.tag.TagEmulation` instance as first parameter and
           the first command received as the second parameter.
 
-        'on-release': function A function that will be called when the
-          activated tag has been released by it's Initiator, basically
-          that is when the tag has been removed from the Initiator's
-          RF field.
+        'on-release': function
+
+          A function that will be called when the activated tag has
+          been released by it's Initiator, basically that is when the
+          tag has been removed from the Initiator's RF field.
 
         'timeout': integer
+        
           The timeout in seconds to wait for for each target to become
           initialized. The default value is 1 second.
 
