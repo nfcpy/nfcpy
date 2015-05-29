@@ -153,10 +153,9 @@ class Chipset(pn53x.Chipset):
         return self.command(0x8c, data, timeout)
 
 class Device(pn53x.Device):
-    """Device driver for PN531 based contactless frontends."""
+    """Device driver for PN531 based contactless frontends.
 
-    supported_bitrate_type_list = ("106A", "212F", "424F")
-
+    """
     def __init__(self, transport):
         chipset = Chipset(transport, logger=log)
         super(Device, self).__init__(chipset, logger=log)

@@ -142,11 +142,9 @@ class Chipset(pn53x.Chipset):
         return self.command(0x8c, data, timeout)
 
 class Device(pn53x.Device):
-    """Device driver for PN533 based contactless frontends."""
-    
-    supported_bitrate_type_list = (
-        "106A", "106B", "212F", "424F", "212B", "424B", "848B")
-    
+    """Device driver for PN533 based contactless frontends.
+
+    """
     def __init__(self, transport):
         chipset = Chipset(transport, logger=log)
         super(Device, self).__init__(chipset, logger=log)
@@ -198,23 +196,20 @@ class Device(pn53x.Device):
     def sense_ttb(self, target):
         """Activate the RF field and probe for a Type B Target.
 
-        The PN532 can discover Type B Targets (Type 4B Tag) at 106
-        kbps. For a Type 4B Tag the firmware automatically sends an
-        ATTRIB command that configures the use of DID and 64 byte
-        maximum frame size. The driver reverts this configuration with
-        a DESELECT and WUPB command to return the target prepared for
-        activation (which nfcpy does in the tag activation code).
+        The PN533 can discover Type B Targets (Type 4B Tag) at 106,
+        212, 424, and 848 kbps. The PN533 automatically sends an
+        ATTRIB command that configures a 64 byte maximum frame
+        size. The driver reverts this configuration with a DESELECT
+        and WUPB command to return the target prepared for activation.
 
         """
-        brty = {"106B": 3, "212B": 6, "424B": 7, "828B": 8}[target.brty]
-        return super(Device, self).sense_ttb(target, brty)
+        return super(Device, self).sense_ttb(target)
     
     def sense_ttf(self, target):
         """Activate the RF field and probe for a Type F Target.
 
         The PN533 can discover Type F Targets (Type 3 Tag) at 212 and
-        424 kbps. The driver uses the default polling command
-        ``06FFFF0000`` if no ``target.sens_req`` is supplied.
+        424 kbps.
 
         """
         return super(Device, self).sense_ttf(target)

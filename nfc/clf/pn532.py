@@ -153,10 +153,9 @@ class Chipset(pn53x.Chipset):
         return self.command(0x8c, data, timeout)
 
 class Device(pn53x.Device):
-    """Device driver for PN532 based contactless frontends."""
+    """Device driver for PN532 based contactless frontends.
 
-    supported_bitrate_type_list = ("106A", "106B", "212F", "424F")
-    
+    """
     def __init__(self, chipset, logger):
         super(Device, self).__init__(chipset, logger)
         
@@ -218,7 +217,7 @@ class Device(pn53x.Device):
         activation (which nfcpy does in the tag activation code).
 
         """
-        return super(Device, self).sense_ttb(target, brty=3, did='\x01')
+        return super(Device, self).sense_ttb(target, did='\x01')
     
     def sense_ttf(self, target):
         """Search for a Type F Target.

@@ -154,13 +154,9 @@ class Chipset(pn53x.Chipset):
         return self.command(0x8c, data, timeout)
 
 class Device(pn53x.Device):
-    """Device driver for Sony RC-S956 based contactless devices."""
-    
-    supported_bitrate_type_list = ("106A", "106B", "212F", "424F")
-    sense_default_target_list = (nfc.clf.TTA(106),
-                                 nfc.clf.TTB(106),
-                                 nfc.clf.TTF(212))
-    
+    """Device driver for Sony RC-S956 based contactless devices.
+
+    """
     def __init__(self, transport):
         # Write ack to see if we can talk to the device. This raises
         # IOError(EACCES) if it's claimed by some other process.
@@ -238,7 +234,7 @@ class Device(pn53x.Device):
         activation (which nfcpy does in the tag activation code).
 
         """
-        return super(Device, self).sense_ttb(target, brty=3, did='\x01')
+        return super(Device, self).sense_ttb(target, did='\x01')
     
     def sense_ttf(self, target):
         """Activate the RF field and probe for a Type F Target.

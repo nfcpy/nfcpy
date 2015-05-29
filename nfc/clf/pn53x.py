@@ -500,10 +500,10 @@ class Device(device.Device):
         self.chipset.rf_configuration(0x01, chr(0b00000010))
 
     def sense_tta(self, target):
-        if target.brty not in self.supported_bitrate_type_list:
-            message = "unsupported bitrate/type {0}".format(target.brty)
-            self.log.warning(message)
-            raise ValueError(message)
+        brty = {"106A": 0}.get(target.brty)
+        if brty not in self.chipset.in_list_passive_target_brty_range:
+            message = "unsupported bitrate {0}".format(target.brty)
+            self.log.warning(message); raise ValueError(message)
 
         if not target.sdd_req:
             uid = bytearray()
@@ -548,7 +548,12 @@ class Device(device.Device):
             except Chipset.Error:
                 pass
 
-    def sense_ttb(self, target, brty, did=None):
+    def sense_ttb(self, target, did=None):
+        brty = {"106B": 3, "212B": 6, "424B": 7, "848B": 8}.get(target.brty)
+        if brty not in self.chipset.in_list_passive_target_brty_range:
+            message = "unsupported bitrate {0}".format(target.brty)
+            self.log.warning(message); raise ValueError(message)
+
         afi = target.sens_req[0:1] if target.sens_req else "\x00"
         rsp = self.chipset.in_list_passive_target(1, brty, afi)
         if rsp and rsp[10] & 0b00001001 == 0b00000001:
@@ -568,6 +573,11 @@ class Device(device.Device):
                 self.log.debug(error)
 
     def sense_ttf(self, target):
+        brty = {"212F": 1, "424F": 2}.get(target.brty)
+        if brty not in self.chipset.in_list_passive_target_brty_range:
+            message = "unsupported bitrate {0}".format(target.brty)
+            self.log.warning(message); raise ValueError(message)
+
         if not self.chipset.read_register("CIU_TxControl") & 0b00000011:
             # Some FeliCa cards need more time from power up to
             # polling. If the field was not already activated, do this
