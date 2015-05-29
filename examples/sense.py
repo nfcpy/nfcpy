@@ -63,16 +63,17 @@ def main(args):
                 clf.sense() # forget a captured target, if any
                 target = clf.sense(*targets, iterations=args.iterations,
                                    interval=args.interval)
-                if (target and args.dep and (
+                if (target and args.dep is not None and (
                         (target.brty == "106A" and target.sel_res and
-                         target.sel_res & 0b01000000) or
+                         target.sel_res[0] & 0b01000000) or
                         (target.brty in ("212F", "424F") and
                          target.sens_res.startswith("\x01\xFE")))):
                     target = DEP(target.bitrate)
                     for attr in args.dep.lstrip("(").rstrip(")").split(","):
-                        name, value = map(str.strip, attr.split('='))
-                        value = bytearray.fromhex(value)
-                        setattr(target, name, value)
+                        if attr.strip():
+                            name, value = map(str.strip, attr.split('='))
+                            value = bytearray.fromhex(value)
+                            setattr(target, name, value)
                     target = clf.sense(target)
                 print("{0} {1}".format(time.strftime("%X"), target))
                 if not args.repeat: break
