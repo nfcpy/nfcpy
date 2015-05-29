@@ -56,46 +56,65 @@ Exceptions
 Device Drivers
 --------------
 
-This section documents the device drivers that are supported by
+This section documents the contactless devices that are supported by
 nfcpy. The device drivers are used by :class:`ContactlessFrontend` to
-provide the preferred interface for application code. Device driver
-methods are not thread-safe and do not check arguments.
+provide the preferred interface for application code.
 
-.. automodule:: nfc.clf.device
-   :members:
+.. note:: Device driver methods are not thread-safe and do not check
+   input arguments that are verified by the ContaclessFrontend. The
+   documentation of device driver classes and methods is not for
+   applications but merely to note the various functionality
+   support. Direct access to device drivers is not intended.
 
-PN53x
-~~~~~
-
-.. automodule:: nfc.clf.pn53x
-   :show-inheritance:
-   :members:
-
-PN531
+pn531
 ~~~~~
 
 .. automodule:: nfc.clf.pn531
    :show-inheritance:
    :members:
 
-PN532
+pn532
 ~~~~~
 
 .. automodule:: nfc.clf.pn532
    :show-inheritance:
    :members:
 
-PN533
+pn533
 ~~~~~
 
 .. automodule:: nfc.clf.pn533
    :show-inheritance:
    :members:
 
-RCS956
+rcs956
 ~~~~~~
 
 .. automodule:: nfc.clf.rcs956
+   :show-inheritance:
+   :members:
+
+acr122
+~~~~~~
+
+.. automodule:: nfc.clf.acr122
+   :show-inheritance:
+   :members:
+
+Driver Base Classes
+-------------------
+
+device
+~~~~~~
+
+.. automodule:: nfc.clf.device
+   :show-inheritance:
+   :members:
+
+pn53x
+~~~~~
+
+.. automodule:: nfc.clf.pn53x
    :show-inheritance:
    :members:
 
