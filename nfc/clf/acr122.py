@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2011-2014 Stephen Tiedemann <stephen.tiedemann@gmail.com>
+# Copyright 2011-2015 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -19,9 +19,23 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-#
-# Driver for the Arygon ACR122U contactless reader
-#
+"""Device driver for the Arygon ACR122U contactless reader.
+
+The Arygon ACR122U is a PC/SC compliant contactless reader that
+connects via USB and uses the USB CCID profile. It is normally
+intented to be used with a PC/SC stack but this driver interfaces
+directly with the inbuilt PN532 chipset by tunneling commands through
+the PC/SC Escape command. The driver is limited in functionality
+because the embedded microprocessor (that implements the PC/SC stack)
+also operates the PN532; it does not allow all commands to pass as
+desired and reacts on chip responses with its own interpretation of
+state.
+
+.. note:: The ACR122U can not be reliably operated by nfcpy and there
+   is good chance that the device must frequently be hard reset. It is
+   not recommended to use it with nfcpy in critical projects.
+
+"""
 import logging
 log = logging.getLogger(__name__)
 
@@ -29,10 +43,95 @@ import os
 import time
 import errno
 import struct
+from binascii import hexlify
 
-import pn532
+from . import pn532
+
+def init(transport):
+    """Initialize the driver for ACR122U.
+
+    """
+    device = Device(Chipset(transport))
+    device._vendor_name = transport.manufacturer_name
+    device._device_name = transport.product_name.split()[0]
+    return device
+
+class Device(pn532.Device):
+    """Device driver class for the ACR122U."""
+    
+    def __init__(self, chipset):
+        super(Device, self).__init__(chipset, logger=log)
+
+    def sense_tta(self, target):
+        """Activate the RF field and probe for a Type A Target at 106
+        kbps. Other bitrates are not supported. Type 1 Tags are not
+        supported because the device does not allow to send the
+        correct RID command (even though the PN532 does).
+
+        """
+        return super(Device, self).sense_tta(target)
+
+    def sense_ttb(self, target):
+        """Activate the RF field and probe for a Type B Target.
+
+        The RC-S956 can discover Type B Targets (Type 4B Tag) at 106
+        kbps. For a Type 4B Tag the firmware automatically sends an
+        ATTRIB command that configures the use of DID and 64 byte
+        maximum frame size. The driver reverts this configuration with
+        a DESELECT and WUPB command to return the target prepared for
+        activation (which nfcpy does in the tag activation code).
+
+        """
+        return super(Device, self).sense_ttb(target)
+    
+    def sense_ttf(self, target):
+        """Activate the RF field and probe for a Type F Target. Bitrates 212
+        and 424 kpbs are supported.
+
+        """
+        return super(Device, self).sense_ttf(target)
+
+    def sense_dep(self, target, passive_target=None):
+        """Search for a DEP Target. Both passive and passive communication
+        mode are supported.
+
+        """
+        return super(Device, self).sense_dep(target, passive_target)
+        
+    def listen_tta(self, target, timeout):
+        """Listen as Type A Target is not supported."""
+        info = "{device} does not support listen as Type A Target"
+        raise NotImplementedError(info.format(device=self))
+
+    def listen_ttb(self, target, timeout):
+        """Listen as Type B Target is not supported."""
+        info = "{device} does not support listen as Type B Target"
+        raise NotImplementedError(info.format(device=self))
+
+    def listen_ttf(self, target, timeout):
+        """Listen as Type F Target is not supported."""
+        info = "{device} does not support listen as Type F Target"
+        raise NotImplementedError(info.format(device=self))
+
+    def listen_dep(self, target, timeout):
+        """Listen as DEP Target is not supported."""
+        info = "{device} does not support listen as DEP Target"
+        raise NotImplementedError(info.format(device=self))
 
 class Chipset(pn532.Chipset):
+    """Specialized chipset class for the ACR122U driver.
+
+    """
+    # Maximum size of a host command frame to the contactless chip.
+    host_command_frame_max_size = 254
+    
+    # Supported BrTy (baud rate / modulation type) values for the
+    # InListPassiveTarget command. Corresponds to 106 kbps Type A, 212
+    # kbps Type F, 424 kbps Type F, and 106 kbps Type B. The value for
+    # 106 kbps Innovision Jewel Tag (although supported by PN532) is
+    # removed because the RID command can not be send.
+    in_list_passive_target_brty_range = (0, 1, 2, 3)
+    
     def __init__(self, transport):
         self.transport = transport
         
@@ -61,17 +160,22 @@ class Chipset(pn532.Chipset):
         log.debug("Configure Buzzer and LED")
         self.ccid_xfr_block(bytearray.fromhex("FF00400E0400000000"))
         
-        super(Chipset, self).__init__(transport)
+        super(Chipset, self).__init__(transport, logger=log)
         
     def close(self):
         self.ccid_xfr_block(bytearray.fromhex("FF00400C0400000000"))
         self.transport.close()
         self.transport = None
 
-    def ccid_xfr_block(self, data, timeout=100):
+    def ccid_xfr_block(self, data, timeout=0.1):
+        """Encapsulate host command *data* into an PC/SC Escape command to
+        send to the device and extract the chip response if received
+        within *timeout* seconds.
+
+        """
         frame = struct.pack("<BI5B", 0x6F, len(data), 0, 0, 0, 0, 0) + data
         self.transport.write(bytearray(frame))
-        frame = self.transport.read(timeout)
+        frame = self.transport.read(int(timeout * 1000))
         if not frame or len(frame) < 10:
             log.error("insufficient data for decoding ccid response")
             raise IOError(errno.EIO, os.strerror(errno.EIO))
@@ -83,12 +187,12 @@ class Chipset(pn532.Chipset):
             raise IOError(errno.EIO, os.strerror(errno.EIO))
         return frame[10:]
         
-    def command(self, cmd_code, cmd_data=None, timeout=100):
-        """Send a chip command and return the chip response."""
-        cmd_name = "PN53x "+self.CMD.get(cmd_code, "0x{0:02X}".format(cmd_code))
-        log.debug("{0} called with timeout {1} ms".format(cmd_name, timeout))
+    def command(self, cmd_code, cmd_data, timeout):
+        """Send a host command and return the chip response.
+
+        """
+        log.log(logging.DEBUG-1, self.CMD[cmd_code]+" "+hexlify(cmd_data))
         
-        if cmd_data is None: cmd_data = ""
         frame = bytearray([0xD4, cmd_code]) + bytearray(cmd_data)
         frame = bytearray([0xFF, 0x00, 0x00, 0x00, len(frame)]) + frame
 
@@ -104,21 +208,3 @@ class Chipset(pn532.Chipset):
             raise IOError(errno.EIO, os.strerror(errno.EIO))
         return frame[2:-2]
         
-class Device(pn532.Device):
-    def __init__(self, bus):
-        super(Device, self).__init__(bus)
-
-    def close(self):
-        self.chipset.close()
-
-    def listen_dep(self, target, timeout):
-        # ACR122 would listen for about 5 seconds -> unusable
-        log.warning("listen mode is disabled for this device")
-        time.sleep(timeout)
-        return None
-
-def init(transport):
-    device = Device(Chipset(transport))
-    device._vendor_name = transport.manufacturer_name
-    device._device_name = transport.product_name
-    return device

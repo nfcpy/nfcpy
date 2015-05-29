@@ -157,23 +157,23 @@ class Device(pn53x.Device):
 
     supported_bitrate_type_list = ("106A", "106B", "212F", "424F")
     
-    def __init__(self, transport):
-        chipset = Chipset(transport, logger=log)
-        super(Device, self).__init__(chipset, logger=log)
+    def __init__(self, chipset, logger):
+        super(Device, self).__init__(chipset, logger)
         
         ic, ver, rev, support = self.chipset.get_firmware_version()
         self._chipset_name = "PN5{0:02x}v{1}.{2}".format(ic, ver, rev)
-        log.debug("chipset is a {0}".format(self._chipset_name))
+        self.log.debug("chipset is a {0}".format(self._chipset_name))
 
-        if self.chipset.read_register(0x6103) & 0b00101111 == 0b00000100:
+        if (self.chipset.transport.TYPE == "TTY" and
+            self.chipset.read_register(0x6103) & 0b00101111 == 0b00000100):
             # The Multi Interface (MIF) register says we're using HSU.
-            log.debug("connected via high speed uart at {0} baud"
-                      .format(self.chipset.transport.baudrate))
+            self.log.debug("connected via high speed uart at {0} baud"
+                           .format(self.chipset.transport.baudrate))
             self.chipset.set_serial_baudrate(921600)
             time.sleep(0.001)
             self.chipset.transport.baudrate = 921600
-            log.debug("changed high speed uart speed to {0} baud"
-                      .format(self.chipset.transport.baudrate))
+            self.log.debug("changed high speed uart speed to {0} baud"
+                           .format(self.chipset.transport.baudrate))
 
         self.chipset.sam_configuration("normal")
         self.chipset.set_parameters(0b00000000)
@@ -184,13 +184,14 @@ class Device(pn53x.Device):
         # The default value of CIU_ModGsP does not work with the Texas
         # Instruments RF430CL330H Type B NFC Interface Transponder. It
         # works when setting ModGsP to 0x10.
-        log.debug("write analog settings for type B")
+        self.log.debug("write analog settings for type B")
         self.chipset.rf_configuration(0x0C, "\xFF\x10\x85") # ModGsP
         
         self.mute()
 
     def close(self):
-        if self.chipset.read_register(0x6103) & 0b00101111 == 0b00000100:
+        if (self.chipset.transport.TYPE == "TTY" and
+            self.chipset.read_register(0x6103) & 0b00101111 == 0b00000100):
             # The Multi Interface (MIF) register says we're using HSU.
             self.chipset.set_serial_baudrate(115200)
             time.sleep(0.001)
@@ -325,8 +326,12 @@ class Device(pn53x.Device):
         return self.chipset.tg_init_as_target(*args)
 
 def init(transport):
+    """Initialize a PN532 based local device.
+
+    """
     if transport.TYPE == "TTY":
         # wakeup from power down and delay to operational state
         transport.write(bytearray([0x55, 0x00, 0x00, 0x00, 0x00]))
 
-    return Device(transport)
+    chipset = Chipset(transport, logger=log)
+    return Device(chipset, logger=log)
