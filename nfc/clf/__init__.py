@@ -869,7 +869,7 @@ class ContactlessFrontend(object):
 
     def __str__(self):
         if self.device is not None:
-            s = "{dev.vendor} {dev.product} on {dev.path}"
+            s = "{dev.vendor_name} {dev.product_name} on {dev.path}"
             return s.format(dev=self.device)
         else: return self.__repr__()
 
