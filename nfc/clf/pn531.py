@@ -156,13 +156,13 @@ class Device(pn53x.Device):
     """Device driver for PN531 based contactless frontends.
 
     """
-    def __init__(self, transport):
-        chipset = Chipset(transport, logger=log)
-        super(Device, self).__init__(chipset, logger=log)
+    def __init__(self, chipset, logger):
+        assert isinstance(chipset, Chipset)
+        super(Device, self).__init__(chipset, logger)
         
         ver, rev = self.chipset.get_firmware_version()
         self._chipset_name = "PN531v{0}.{1}".format(ver, rev)
-        log.debug("chipset is a {0}".format(self._chipset_name))
+        self.log.debug("chipset is a {0}".format(self._chipset_name))
 
         self.chipset.sam_configuration("normal")
         self.chipset.set_parameters(0b00000000)
@@ -227,18 +227,18 @@ class Device(pn53x.Device):
 
         """
         if target.atr_req[15] & 0x30 == 0x30:
-            log.warning("must reduce the max payload size in atr_req")
+            self.log.warning("must reduce the max payload size in atr_req")
             target.atr_req[15] = (target.atr_req[15] & 0xCF) | 0x20
 
         if target.psl_req and target.psl_req[4] & 0x03 == 0x03:
-            log.warning("must reduce the max payload size in psl_req")
+            self.log.warning("must reduce the max payload size in psl_req")
             target.psl_req[4] = (target.psl_req[4] & 0xFC) | 0x02
 
         target = super(Device, self).sense_dep(target, passive_target)
         if target is None: return
         
         if target.atr_res[16] & 0x30 == 0x30:
-            log.warning("must reduce the max payload size in atr_res")
+            self.log.warning("must reduce the max payload size in atr_res")
             target.atr_res[16] = (target.atr_res[16] & 0xCF) | 0x20
             
         return target
@@ -278,7 +278,8 @@ class Device(pn53x.Device):
         return self.chipset.tg_init_tama_target(*args)
 
 def init(transport):
-    device = Device(transport)
+    chipset = Chipset(transport, logger=log)
+    device = Device(chipset, logger=log)
     device._vendor_name = transport.manufacturer_name
     device._device_name = transport.product_name
     return device

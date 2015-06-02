@@ -145,13 +145,13 @@ class Device(pn53x.Device):
     """Device driver for PN533 based contactless frontends.
 
     """
-    def __init__(self, transport):
-        chipset = Chipset(transport, logger=log)
-        super(Device, self).__init__(chipset, logger=log)
+    def __init__(self, chipset, logger):
+        assert isinstance(chipset, Chipset)
+        super(Device, self).__init__(chipset, logger)
         
         ic, ver, rev, support = self.chipset.get_firmware_version()
         self._chipset_name = "PN5{0:02x}v{1}.{2}".format(ic, ver, rev)
-        log.debug("chipset is a {0}".format(self._chipset_name))
+        self.log.debug("chipset is a {0}".format(self._chipset_name))
         
         self.mute()
         self.chipset.rf_configuration(0x02, "\x00\x0B\x0A")
@@ -164,17 +164,17 @@ class Device(pn53x.Device):
             # like they are not the same if there is no eeprom
             # attached, least CIU_RFCfg register for 106A is different
             # and prevents active mode initialization as target.
-            log.debug("no eeprom attached")
-            log.debug("write analog settings for type A")
+            self.log.debug("no eeprom attached")
+            self.log.debug("write analog settings for type A")
             data = bytearray.fromhex("5A F4 3F 11 4D 85 61 6F 26 62 87")
             self.chipset.rf_configuration(0x0A, data)
-            #log.debug("write rf settings for TTF 212/424")
+            #self.log.debug("write rf settings for TTF 212/424")
             #data = bytearray.fromhex("6A FF 3F 11 41 85 61 6F")
             #self.chipset.rf_configuration(0x0B, data)
-            #log.debug("write rf settings for TTB 106")
+            #self.log.debug("write rf settings for TTB 106")
             #data = bytearray.fromhex("FF 17 85") # ModGsP set differently
             #self.chipset.rf_configuration(0x0C, data)
-            #log.debug("write rf settings for TTA 212/424/848")
+            #self.log.debug("write rf settings for TTA 212/424/848")
             #data = bytearray.fromhex("85 15 8A 85 0A B2 85 04 DA")
             #self.chipset.rf_configuration(0x0D, data)
 
@@ -349,7 +349,8 @@ def init(transport):
     # someone else has already claimed the USB device.
     transport.write(Chipset.ACK)
     
-    device = Device(transport)
+    chipset = Chipset(transport, logger=log)
+    device = Device(chipset, logger=log)
     
     # PN533 bug: usb manufacturer and product strings disappear
     # from usb configuration after first use in p2p mode. Thus

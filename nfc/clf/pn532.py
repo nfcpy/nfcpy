@@ -157,6 +157,7 @@ class Device(pn53x.Device):
 
     """
     def __init__(self, chipset, logger):
+        assert isinstance(chipset, Chipset)
         super(Device, self).__init__(chipset, logger)
         
         ic, ver, rev, support = self.chipset.get_firmware_version()

@@ -157,21 +157,17 @@ class Device(pn53x.Device):
     """Device driver for Sony RC-S956 based contactless devices.
 
     """
-    def __init__(self, transport):
-        # Write ack to see if we can talk to the device. This raises
-        # IOError(EACCES) if it's claimed by some other process.
-        transport.write(Chipset.ACK)
-
+    def __init__(self, chipset, logger):
+        assert isinstance(chipset, Chipset)
         # Reset the RCS956 state machine to Mode 0. We may have left
-        # it in some other mode when an error occured before.
-        chipset = Chipset(transport, logger=log)
+        # it in some other mode when an error has occured.
         chipset.reset_mode()
     
-        super(Device, self).__init__(chipset, log)
+        super(Device, self).__init__(chipset, logger)
 
         ic, ver, rev, support = self.chipset.get_firmware_version()
         self._chipset_name = "RCS956v{0:x}.{1:x}".format(ver, rev)
-        log.debug("chipset is a {0}".format(self._chipset_name))
+        self.log.debug("chipset is a {0}".format(self._chipset_name))
 
         self.mute()
         # Set timeout for PSL_RES, ATR_RES, InDataExchange/InCommunicateThru
@@ -179,7 +175,7 @@ class Device(pn53x.Device):
         self.chipset.rf_configuration(0x04, "\x00")
         self.chipset.rf_configuration(0x05, "\x00\x00\x01")
         
-        log.debug("write rf settings for TTA 106")
+        self.log.debug("write rf settings for TTA 106")
         data = bytearray.fromhex("5A F4 3F 11 4D 85 61 6F 26 62 87")
         self.chipset.rf_configuration(0x0A, data)
             
@@ -219,7 +215,7 @@ class Device(pn53x.Device):
             # programming the CIU does not work.
             if target.rid_res[0] >> 4 == 1 and target.rid_res[0] & 15 != 1:
                 msg = "The {device} can not read this Type 1 Tag."
-                log.warning(msg.format(device=self))
+                self.log.warning(msg.format(device=self))
                 return None
         return target
 
@@ -296,7 +292,7 @@ class Device(pn53x.Device):
         # prevent active mode activation. Target active mode is not
         # really working with this device.
         if target.atr_res:
-            log.warning("target active communication mode is disabled")
+            self.log.warning("target active communication mode is disabled")
             del target.atr_res
         self.chipset.write_register("CIU_FelNFC2", 0x80)
 
@@ -306,7 +302,7 @@ class Device(pn53x.Device):
         # can only control the TO parameter for RWT, but must do it
         # before the actual listen.
         if target.tta.atr_res[15] != target.ttf.atr_res[15]:
-            log.warning("restricted choice of atr_res, using larger RWT")
+            self.log.warning("restricted choice of atr_res, using larger RWT")
         to = max(target.tta.atr_res[15] & 0x0F, target.ttf.atr_res[15] & 0x0F)
         self.chipset.rf_configuration(0x82, bytearray([to, 2, to]))
 
@@ -333,7 +329,7 @@ class Device(pn53x.Device):
         # firmware will do the same when sending ATR_RES and we tell
         # the truth to the caller.
         target.atr_res[12] = target.atr_req[12] # copy DID
-        log.debug("set general bytes for ATR_RES")
+        self.log.debug("set general bytes for ATR_RES")
         self.chipset.tg_set_general_bytes(target.atr_res[17:])
         return self.chipset.tg_get_initiator_command(timeout)
 
@@ -356,11 +352,16 @@ class Device(pn53x.Device):
         # RxLastBits field set to exactly the correct number of valid
         # bits in the last byte (when parity check is disabled,
         # i.e. the FIFO contains one more bit for each received byte.
-        log.debug("tt1 command can not be send with this hardware ")
+        self.log.debug("tt1 command can not be send with this hardware ")
         raise nfc.clf.TransmissionError("tt1 command can not be send")
 
 def init(transport):
-    device = Device(transport)
+    # Write ack to see if we can talk to the device. This raises
+    # IOError(EACCES) if it's claimed by some other process.
+    transport.write(Chipset.ACK)
+
+    chipset = Chipset(transport, logger=log)
+    device = Device(chipset, logger=log)
     
     device._vendor_name = transport.manufacturer_name
     device._device_name = transport.product_name
