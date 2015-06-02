@@ -297,12 +297,11 @@ class Chipset(object):
     def read_register(self, *args):
         """Send a ReadRegister command for the positional register address or
         name arguments. The register values are returned as a list for
-        multiple arguments or an integer for a single argument.
+        multiple arguments or an integer for a single argument. ::
 
-        >>> Chipset.read_register(0x6301) == Chipset.read_register("CIU_Mode")
-        True
-        >>> Chipset.read_register(0x6301, "CIU_TxMode", "CIU_RxMode")
-        [0, 0, 0]
+          tx_mode = Chipset.read_register(0x6302)
+          rx_mode = Chipset.read_register("CIU_RxMode")
+          tx_mode, rx_mode = Chipset.read_register("CIU_TxMode", "CIU_RxMode")
 
         """
         addr = lambda r: self.REGBYNAME[r] if type(r) is str else r
@@ -319,11 +318,11 @@ class Chipset(object):
         """Send a WriteRegister command. Each positional argument must be an
         (address, value) tuple except if exactly two arguments are
         supplied as register address and value. A register can also be
-        selected by name. There is no return value.
+        selected by name. There is no return value. ::
 
-        >>> Chipset.write_register(0x6301, 0x00)
-        >>> Chipset.write_register("CIU_Mode", 0x00)
-        >>> Chipset.write_register((0x6301, 0x00), ("CIU_TxMode", 0x00))
+          Chipset.write_register(0x6301, 0x00)
+          Chipset.write_register("CIU_Mode", 0x00)
+          Chipset.write_register((0x6301, 0x00), ("CIU_TxMode", 0x00))
 
         """
         assert type(args) in (tuple, list)
