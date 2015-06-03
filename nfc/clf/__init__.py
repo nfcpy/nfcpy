@@ -261,7 +261,22 @@ class ContactlessFrontend(object):
         
           Defines if the local LLC performs PDU aggregation and may
           thus send Aggregated Frame (AGF) PDUs to the remote LLC. The
-          dafault is to use aggregation.
+          default is to use aggregation.
+
+        'brs': integer
+
+          When in the Initiator role, the bit rate selector specifies
+          the bitrate to negotiate with the remote target as a
+          zero-based index of the tuple (106, 212, 424) kbps. The
+          default value is 2 (424 kbps). This parameter has no effect
+          for the local device in DEP Target role.
+
+        'acm': boolean
+
+          When in the Initiator role, a DEP Target may be initialized
+          in active communication mode if this parameter is set to
+          True. The default value is False. This parameter has no
+          effect for the local device in DEP Target role.
         
         >>> import nfc
         >>> import threading
@@ -432,7 +447,7 @@ class ContactlessFrontend(object):
         for role in ('target', 'initiator'):
             if options.get('role') is None or options.get('role') == role:
                 DEP = eval("nfc.dep." + role.capitalize())
-                dep_cfg = ('brs', 'acm', 'rwt', 'lrt')
+                dep_cfg = ('brs', 'acm', 'rwt', 'lrt', 'lri')
                 dep_cfg = {k: options[k] for k in dep_cfg if k in options}
                 if llc.activate(mac=DEP(clf=self), **dep_cfg):
                     log.debug("connected {0}".format(llc))
