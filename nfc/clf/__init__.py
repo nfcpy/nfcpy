@@ -663,7 +663,7 @@ class ContactlessFrontend(object):
             if not isinstance(target, TechnologyType):
                 raise ValueError("all targets must be TechnologyType objects")
 
-        SENSE = {TTA: self.device.sense_tta, TTB: self.device.sense_ttb,
+        SENSE = {TTA: self._sense_tta, TTB: self.device.sense_ttb,
                  TTF: self.device.sense_ttf, DEP: self._sense_dep}
 
         with self.lock:
@@ -688,6 +688,17 @@ class ContactlessFrontend(object):
                 if i < options.get('iterations', 1) - 1:
                     elapsed = time.time() - started
                     time.sleep(max(0, options.get('interval', 0.1)-elapsed))
+
+    def _sense_tta(self, target):
+        target = self.device.sense_tta(target)
+        if target and target.rid_res:
+            if len(target.rid_res) != 6:
+                log.error("RID Response Format Error (wrong length)")
+                return None
+            if target.rid_res[0] >> 4 != 0b0001:
+                log.error("RID Response Data Error (invalid HR0)")
+                return None
+        return target
 
     def _sense_dep(self, target):
         passive_target = None
