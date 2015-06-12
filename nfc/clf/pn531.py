@@ -191,7 +191,7 @@ class Device(pn53x.Device):
         if target and target.sdd_res and len(target.sdd_res) > 4:
             # Remove the cascade tag(s) from SDD_RES, only the PN531
             # has them included and we've set the policy that cascade
-            # tags are not part of the sdd_req/sdd_res parameters.
+            # tags are not part of the sel_req/sdd_res parameters.
             if len(target.sdd_res) == 8:
                 target.sdd_res = target.sdd_res[1:]
             elif len(target.sdd_res) == 12:

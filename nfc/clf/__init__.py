@@ -512,12 +512,13 @@ class ContactlessFrontend(object):
         106A(sdd_res=04497622D93881, sel_res=00, sens_res=4400)
         
         The search for a Type A Target can be restricted with an
-        ``sdd_req`` parameter that provides the UID/NFCID of the card
-        or listening device. The length of an ``sdd_req`` parameter
-        must be 4, 7, or 10 byte.
+        ``sel_req`` parameter to specify the UID/NFCID of the card or
+        listening device to respond. The ``sel_req`` parameter must be
+        4, 7, or 10 byte long (cascade tags are automatically inserted
+        as required).
         
         >>> target = nfc.clf.TTA(106)
-        >>> target.sdd_req = bytearray.fromhex("04497622D93881")
+        >>> target.sel_req = bytearray.fromhex("04497622D93881")
         >>> print(clf.sense(target))
         106A(sdd_res=04497622D93881, sel_res=00, sens_res=4400)
 
@@ -690,8 +691,8 @@ class ContactlessFrontend(object):
                     time.sleep(max(0, options.get('interval', 0.1)-elapsed))
 
     def _sense_tta(self, target):
-        if target.sdd_req and len(target.sdd_req) not in (4, 7, 10):
-            raise ValueError("TTA target sdd_req must be 4, 7, or 10 byte")
+        if target.sel_req and len(target.sel_req) not in (4, 7, 10):
+            raise ValueError("TTA target sel_req must be 4, 7, or 10 byte")
         target = self.device.sense_tta(target)
         if target:
             if len(target.sens_res) != 2:

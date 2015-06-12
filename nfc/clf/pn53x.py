@@ -504,7 +504,7 @@ class Device(device.Device):
             message = "unsupported bitrate {0}".format(target.brty)
             self.log.warning(message); raise ValueError(message)
 
-        uid = target.sdd_req if target.sdd_req else bytearray()
+        uid = target.sel_req if target.sel_req else bytearray()
         if len(uid) > 4: uid = "\x88" + uid
         if len(uid) > 8: uid = uid[0:4] + "\x88" + uid[4:]
             
