@@ -149,7 +149,7 @@ class Device(object):
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
         raise NotImplementedError(cname + ".sense() is not implemented")
 
-    def sense_tta(self, target, timeout):
+    def sense_tta(self, target):
         """A device driver must implement this method to discover a Type A
         Target. The :exc:`~exceptions.NotImplementedError` exception is
         raised by default.
@@ -158,7 +158,7 @@ class Device(object):
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
         raise NotImplementedError("sense_tta() is not implemented by "+cname)
 
-    def sense_ttb(self, target, timeout):
+    def sense_ttb(self, target):
         """A device driver must implement this method to discover a Type B
         Target. The :exc:`~exceptions.NotImplementedError` exception is
         raised by default.
@@ -167,7 +167,7 @@ class Device(object):
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
         raise NotImplementedError("sense_ttb() is not implemented by "+cname)
 
-    def sense_ttf(self, target, timeout):
+    def sense_ttf(self, target):
         """A device driver must implement this method to discover a Type F
         Target. The :exc:`~exceptions.NotImplementedError` exception is
         raised by default.
@@ -176,7 +176,7 @@ class Device(object):
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
         raise NotImplementedError("sense_ttf() is not implemented by "+cname)
 
-    def sense_dep(self, target, timeout):
+    def sense_dep(self, target):
         """A device driver must implement this method to discover a DEP
         Target. The :exc:`~exceptions.NotImplementedError` exception is
         raised by default.
