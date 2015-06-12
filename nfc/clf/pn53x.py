@@ -504,20 +504,10 @@ class Device(device.Device):
             message = "unsupported bitrate {0}".format(target.brty)
             self.log.warning(message); raise ValueError(message)
 
-        if not target.sdd_req:
-            uid = bytearray()
-        else:
-            if len(target.sdd_req) == 4:
-                uid = target.sdd_req
-            elif len(target.sdd_req) == 7:
-                uid = "\x88" + target.sdd_req
-            elif len(target.sdd_req) == 10:
-                uid = "\x88" + target.sdd_req[:3] + "\x88" + target.sdd_req[3:]
-            else:
-                message = "sdd_req must be 4, 7, or 10 bytes"
-                self.log.warning(message.format(target.brty))
-                raise ValueError(message)
-
+        uid = target.sdd_req if target.sdd_req else bytearray()
+        if len(uid) > 4: uid = "\x88" + uid
+        if len(uid) > 8: uid = uid[0:4] + "\x88" + uid[4:]
+            
         rsp = self.chipset.in_list_passive_target(1, 0, uid)
         if rsp is not None:
             sens, sel, sdd = rsp[1::-1], rsp[2:3], rsp[4:]

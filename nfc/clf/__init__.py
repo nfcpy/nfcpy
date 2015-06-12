@@ -690,14 +690,23 @@ class ContactlessFrontend(object):
                     time.sleep(max(0, options.get('interval', 0.1)-elapsed))
 
     def _sense_tta(self, target):
+        if target.sdd_req and len(target.sdd_req) not in (4, 7, 10):
+            raise ValueError("TTA target sdd_req must be 4, 7, or 10 byte")
         target = self.device.sense_tta(target)
-        if target and target.rid_res:
-            if len(target.rid_res) != 6:
-                log.error("RID Response Format Error (wrong length)")
+        if target:
+            if len(target.sens_res) != 2:
+                log.error("SENS Response Format Error (wrong length)")
                 return None
-            if target.rid_res[0] >> 4 != 0b0001:
-                log.error("RID Response Data Error (invalid HR0)")
-                return None
+            if target.sens_res[0] & 0b00011111 == 0:
+                if target.sens_res[1] & 0b00001111 != 0b1100:
+                    log.error("SENS Response Data Error (T1T configuration)")
+                    return None
+                if len(target.rid_res) != 6:
+                    log.error("RID Response Format Error (wrong length)")
+                    return None
+                if target.rid_res[0] >> 4 != 0b0001:
+                    log.error("RID Response Data Error (invalid HR0)")
+                    return None
         return target
 
     def _sense_dep(self, target):
