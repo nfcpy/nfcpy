@@ -30,10 +30,11 @@ import os
 import time
 import errno
 import struct
+import operator
 from binascii import hexlify
 
-import nfc.dev
 import nfc.clf
+from . import device
 
 def trace(func):
     def traced_func(*args, **kwargs):
@@ -125,11 +126,40 @@ class StatusError:
         except IndexError:
             return "UNKNOWN STATUS ERROR {0:02x}".format(self.errno)
     
-class Chipset():
-    ACK = bytearray('\x00\x00\xFF\x00\xFF\x00')
-    
-    def __init__(self, transport):
+class Chipset(object):
+    ACK = bytearray.fromhex('0000FF00FF00')
+    CMD = {
+        # RF Communication
+        0x00: "InSetRF",
+        0x02: "InSetProtocol",
+        0x04: "InCommRF",
+        0x06: "SwitchRF",
+        0x10: "MaintainFlash",
+        0x12: "ResetDevice",
+        0x20: "GetFirmwareVersion",
+        0x22: "GetPDDataVersion",
+        0x24: "GetProperty",
+        0x26: "InGetProtocol",
+        0x28: "GetCommandType",
+        0x2A: "SetCommandType",
+        0x30: "InSetRCT",
+        0x32: "InGetRCT",
+        0x34: "GetPDData",
+        0x36: "ReadRegister",
+        0x40: "TgSetRF",
+        0x42: "TgSetProtocol",
+        0x44: "TgSetAuto",
+        0x46: "TgSetRFOff",
+        0x48: "TgCommRF",
+        0x50: "TgGetProtocol",
+        0x60: "TgSetRCT",
+        0x62: "TgGetRCT",
+        0xF0: "Diagnose",
+    }
+
+    def __init__(self, transport, logger):
         self.transport = transport
+        self.log = logger
         
         # write ack to perform a soft reset
         # raises IOError(EACCES) if we're second
@@ -146,10 +176,12 @@ class Chipset():
         self.transport.write(Chipset.ACK)
         self.transport.close()
         self.transport = None
-        
+
     def send_command(self, cmd_code, cmd_data, timeout):
+        cmd_data = bytearray(cmd_data)
+        log.log(logging.DEBUG-1, self.CMD[cmd_code]+" "+hexlify(cmd_data))
         if self.transport is not None:
-            cmd = bytearray([0xD6, cmd_code]) + bytearray(cmd_data)
+            cmd = bytearray([0xD6, cmd_code]) + cmd_data
             self.transport.write(str(Frame(cmd)))
             if Frame(self.transport.read(timeout=100)).type == "ack":
                 rsp = Frame(self.transport.read(timeout)).data
@@ -157,11 +189,10 @@ class Chipset():
                     return rsp[2:]
         else: log.debug("transport closed in send_command")
                 
-    #@trace
     def in_set_rf(self, comm_type):
         in_comm_type = {"212F": (1, 1, 15, 1), "424F": (1, 2, 15, 2),
-                        "106A": (2, 3, 15, 3), "212A": (0, 4,  0, 4),
-                        "424A": (0, 5,  0, 5), "106B": (3, 7, 15, 7),
+                        "106A": (2, 3, 15, 3), "212A": (4, 4, 15, 4),
+                        "424A": (5, 5, 15, 5), "106B": (3, 7, 15, 7),
                         "212B": (0, 8,  0, 8), "424B": (0, 9,  0, 9)
                         }
         comm_type = in_comm_type[comm_type]
@@ -169,13 +200,24 @@ class Chipset():
         if data and data[0] != 0:
             raise StatusError(data[0])
         
-    #@trace
-    def in_set_protocol(self, data):
-        data = self.send_command(0x02, bytearray(data), 100)
+    in_set_protocol_defaults = bytearray.fromhex(
+        "0018 0101 0201 0300 0400 0500 0600 0708 0800 0900"
+        "0A00 0B00 0C00 0E04 0F00 1000 1100 1200 1306")
+
+    def in_set_protocol(self, data=None, **kwargs):
+        data = bytearray() if data is None else bytearray(data)
+        KEYS = ("initial_guard_time", "add_crc", "check_crc", "multi_card",
+                "add_parity", "check_parity", "bitwise_anticoll",
+                "last_byte_bit_count", "mifare_crypto", "add_sof",
+                "check_sof", "add_eof", "check_eof", "rfu", "deaf_time",
+                "continuous_receive_mode", "min_len_for_crm",
+                "type_1_tag_rrdd", "rfca", "guard_time")
+        for key, value in kwargs.iteritems():
+            data.extend(bytearray([KEYS.index(key), int(value)]))
+        data = self.send_command(0x02, data, 100)
         if data and data[0] != 0:
             raise StatusError(data[0])
         
-    #@trace
     def in_comm_rf(self, data, timeout):
         to = struct.pack("<H", timeout*10) if timeout <= 6553 else '\xFF\xFF'
         data = self.send_command(0x04, to + str(data), timeout+500)
@@ -183,7 +225,6 @@ class Chipset():
             raise CommunicationError(data[0:4])
         return data[5:] if data else None
         
-    #@trace
     def switch_rf(self, switch):
         switch = ("off", "on").index(switch)
         data = self.send_command(0x06, [switch], 100)
@@ -244,11 +285,11 @@ class Chipset():
         time.sleep(float(startup_delay + 500)/1000)
 
     @trace
-    def get_firmware_version(self):
-        data = self.send_command(0x20, [], 100)
+    def get_firmware_version(self, option=None):
+        assert option in (None, 0x60, 0x61, 0x80)
+        data = self.send_command(0x20, [option] if option else [], 100)
         log.debug("firmware version {1:x}.{0:02x}".format(*data))
-        data = self.send_command(0x20, [0x80], 100)
-        log.debug("boot version {1:x}.{0:02x}".format(*data))
+        return data
         
     @trace
     def get_pd_data_version(self):
@@ -266,184 +307,143 @@ class Chipset():
         if data and data[0] != 0:
             raise StatusError(data[0])
 
-class Device(nfc.dev.Device):
-    def __init__(self, transport):
-        self.chipset = Chipset(transport)
+class Device(device.Device):
+    def __init__(self, chipset, logger):
+        self.chipset = chipset
+        self.log = logger
+
+        minor, major = self.chipset.get_firmware_version()
+        self._chipset_name = "NFC Port-100 v{0:x}.{1:02x}".format(major, minor)
     
     def close(self):
         self.chipset.close()
-    
-    @property
-    def capabilities(self):
-        return {}
 
-    def sense(self, targets):
-        for tg in targets:
-            if type(tg) == nfc.clf.TTA:
-                target = self.sense_tta()
-                if (target and
-                    (tg.cfg is None or target.cfg.startswith(tg.cfg)) and
-                    (tg.uid is None or target.uid.startswith(tg.uid))):
-                    break
-            elif type(tg) == nfc.clf.TTB:
-                target = self.sense_ttb()
-                if (target and
-                    (tg.afi is None or target.afi.startswith(tg.afi)) and
-                    (tg.cfg is None or target.cfg.startswith(tg.cfg)) and
-                    (tg.uid is None or target.uid.startswith(tg.uid))):
-                    break
-            elif type(tg) == nfc.clf.TTF:
-                br, sc, rc = tg.br, tg.sys, 0
-                if sc is None: sc, rc = bytearray('\xFF\xFF'), 1
-                target = self.sense_ttf(br, sc, rc)
-                if (target and
-                    (tg.sys is None or target.sys == tg.sys) and
-                    (tg.idm is None or target.idm.startswith(tg.idm)) and
-                    (tg.pmm is None or target.pmm.startswith(tg.pmm))):
-                    break
-        else:
+    def mute(self):
+        self.chipset.switch_rf("off")
+
+    def sense_tta(self, target):
+        log.debug("polling for NFC-A technology")
+        
+        if target.brty not in ("106A", "212A", "424A"):
+            message = "unsupported bitrate {0}".format(target.brty)
+            self.log.warning(message); raise ValueError(message)
+
+        self.chipset.in_set_rf(target.brty)
+        self.chipset.in_set_protocol(self.chipset.in_set_protocol_defaults)
+        self.chipset.in_set_protocol(initial_guard_time=6, add_crc=0,
+                                     check_crc=0, check_parity=1,
+                                     last_byte_bit_count=7)
+        try:
+            sens_res = self.chipset.in_comm_rf("\x26", 30)
+            if len(sens_res) != 2: return None
+        except CommunicationError as error:
+            if error != "RECEIVE_TIMEOUT_ERROR": log.debug(error)
             return None
         
-        self.exchange = self.send_cmd_recv_rsp
-        return target
+        log.debug("rcvd SENS_RES " + hexlify(sens_res))
 
-    def sense_tta(self):
-        target = None
+        if sens_res[0] & 0x1F == 0:
+            log.debug("type 1 tag target found")
+            self.chipset.in_set_protocol(last_byte_bit_count=8, add_crc=2,
+                                         check_crc=2, type_1_tag_rrdd=2)
+            target = nfc.clf.TTA(target.bitrate, sens_res=sens_res)
+            if sens_res[1] & 0x0F == 0b1100:
+                rid_cmd = bytearray.fromhex("78 0000 00000000")
+                log.debug("send RID_CMD " + hexlify(rid_cmd))
+                try:
+                    target.rid_res = self.chipset.in_comm_rf(rid_cmd, 30)
+                except CommunicationError as error:
+                    log.debug(error)
+                    return None
+            return target
+
+        # other than type 1 tag
         try:
-            target = self._sense_tta()
-        except CommunicationError as error:
-            if error != "RECEIVE_TIMEOUT_ERROR":
-                log.debug(error)
-        if target is None:
-            self.chipset.switch_rf("off")
-        return target
-
-    def _sense_tta(self):
-        log.debug("polling for NFC-A technology")
-        self.chipset.switch_rf("off")
-        
-        self.chipset.in_set_rf("106A")
-        self.chipset.in_set_protocol(
-            "\x00\x06" "\x01\x00" "\x02\x00" "\x03\x00" "\x04\x00"
-            "\x05\x01" "\x06\x00" "\x07\x07" "\x08\x00" "\x09\x00"
-            "\x0A\x00" "\x0B\x00" "\x0C\x00" "\x0E\x04" "\x0F\x00"
-            "\x10\x00" "\x11\x00" "\x12\x00" "\x13\x06")
-        
-        sens_res = self.chipset.in_comm_rf("\x26", 30)
-        if sens_res is None or len(sens_res) != 2: return
-        log.debug("SENS_RES (ATQ) = " + str(sens_res).encode("hex"))
-
-        if sens_res[0] & 0x1F == 0 and sens_res[1] & 0x0F == 0b1100:
-            #
-            # type 1 tag platform
-            #
-            log.debug("NFC-A TT1 target @ 106 kbps")
-            
-            # set: add tt1 crc, check tt1 crc, all bits valid, rrdd = 60µs
-            self.chipset.in_set_protocol("\x01\x02\x02\x02\x07\x08\x11\x02")
-            
-            rid_cmd = bytearray("\x78\x00\x00\x00\x00\x00\x00")
-            rid_res = self.chipset.in_comm_rf(rid_cmd, 30)
-            if not rid_res[0] & 0xF0 == 0x10:
-                self.chipset.switch_rf("off")
-                raise nfc.clf.ProtocolError("8.6.2.1")
-            
-            return nfc.clf.TTA(br=106, cfg=sens_res, uid=rid_res[2:])
-
-        elif sens_res[0] & 0x1F == 0 or sens_res[1] & 0x0F == 0b1100:
-            self.chipset.switch_rf("off")
-            raise nfc.clf.ProtocolError("4.6.3.3")
-        
-        #
-        # other than type 1 tag platform
-        #
-        self.chipset.in_set_protocol("\x04\x01\x07\x08") # odd parity, all bits
-        uid = bytearray()
-        for cascade_level in range(3):
-            sel_cmd = ("\x93", "\x95", "\x97")[cascade_level]
-            self.chipset.in_set_protocol("\x01\x00\x02\x00") # no crc add/check
-            sdd_res = self.chipset.in_comm_rf(sel_cmd + "\x20", 30)
-            log.debug("SDD_RES = " + str(sdd_res).encode("hex"))
-            self.chipset.in_set_protocol("\x01\x01\x02\x01") # do crc add/check
-            sel_res = self.chipset.in_comm_rf(sel_cmd + "\x70" + sdd_res, 30)
-            log.debug("SEL_RES = " + str(sel_res).encode("hex"))
-            if bool(sel_res[0] & 0b00000100):
-                uid = uid + sdd_res[1:4]
+            self.chipset.in_set_protocol(last_byte_bit_count=8, add_parity=1)
+            if target.sel_req:
+                uid = target.sel_req
+                if len(uid) > 4: uid = "\x88" + uid
+                if len(uid) > 8: uid = uid[0:4] + "\x88" + uid[4:]
+                self.chipset.in_set_protocol(add_crc=1, check_crc=1)
+                for i, sel_cmd in zip(range(0,len(uid),4),"\x93\x95\x97"):
+                    sel_req = sel_cmd + "\x70" + uid[i:i+4]
+                    sel_req.append(reduce(operator.xor, sel_req[2:6])) # BCC
+                    log.debug("send SEL_REQ " + hexlify(sel_req))
+                    sel_res = self.chipset.in_comm_rf(sel_req, 30)
+                    log.debug("rcvd SEL_RES " + hexlify(sel_res))
+                uid = target.sel_req
             else:
-                uid = uid + sdd_res[0:4]
-                return nfc.clf.TTA(br=106, cfg=sens_res+sel_res, uid=uid)
-
-    def sense_ttb(self):
-        target = None
-        try:
-            target = self._sense_ttb()
+                uid = bytearray()
+                for sel_cmd in "\x93\x95\x97":
+                    self.chipset.in_set_protocol(add_crc=0, check_crc=0)
+                    sdd_req = sel_cmd + "\x20"
+                    log.debug("send SDD_REQ " + hexlify(sdd_req))
+                    sdd_res = self.chipset.in_comm_rf(sdd_req, 30)
+                    log.debug("rcvd SDD_RES " + hexlify(sdd_res))
+                    self.chipset.in_set_protocol(add_crc=1, check_crc=1)
+                    sel_req = sel_cmd + "\x70" + sdd_res
+                    log.debug("send SEL_REQ " + hexlify(sel_req))
+                    sel_res = self.chipset.in_comm_rf(sel_req, 30)
+                    log.debug("rcvd SEL_RES " + hexlify(sel_res))
+                    if sel_res[0] & 0b00000100: uid = uid + sdd_res[1:4]
+                    else: uid = uid + sdd_res[0:4]; break
+            if sel_res[0] & 0b00000100 == 0:
+                return nfc.clf.TTA(target.bitrate, sens_res=sens_res,
+                                   sel_res=sel_res, sdd_res=uid)
         except CommunicationError as error:
-            if error != "RECEIVE_TIMEOUT_ERROR":
-                log.debug(error)
-        if target is None:
-            self.chipset.switch_rf("off")
-        return target
+            log.debug(error)
 
-    def _sense_ttb(self):
+    def sense_ttb(self, target):
         log.debug("polling for NFC-B technology")
 
-        self.chipset.in_set_rf("106B")
-        self.chipset.in_set_protocol(
-            "\x00\x14" "\x01\x01" "\x02\x01" "\x03\x00" "\x04\x00"
-            "\x05\x00" "\x06\x00" "\x07\x08" "\x08\x00" "\x09\x01"
-            "\x0A\x01" "\x0B\x01" "\x0C\x01" "\x0E\x04" "\x0F\x00"
-            "\x10\x00" "\x11\x00" "\x12\x00" "\x13\x06")
+        if target.brty not in ("106B", "212B", "424B"):
+            message = "unsupported bitrate {0}".format(target.brty)
+            self.log.warning(message); raise ValueError(message)
 
-        cmd = "\x05\x00\x10"
-        log.debug(">> SENSB_CMD " + hexlify(cmd).upper())
-        rsp = self.chipset.in_comm_rf(cmd, 30)
-        if not (rsp and len(rsp) >= 12 and rsp[0] == 0x50):
-            log.warning("invalid response for sensb_cmd")
-            return
+        self.chipset.in_set_rf(target.brty)
+        self.chipset.in_set_protocol(self.chipset.in_set_protocol_defaults)
+        self.chipset.in_set_protocol(initial_guard_time=20, add_sof=1,
+                                     check_sof=1, add_eof=1, check_eof=1)
 
-        nfcid, adata, pinfo = rsp[1:5], rsp[5:9], rsp[9:]
-        log.debug("<< SENSB_RES " + hexlify(rsp).upper())
-        if pinfo[1] & 0b00001000 == True:
-            log.warning("SENSB_RES: b4 of protocol type is 1b")
-            return
-        if pinfo[1] & 0b00000001 == False:
-            log.warning("SENSB_RES: not configured for ISO-DEP")
-            return
-        attrib_req = '\x1D' + nfcid + '\x00\x08\x01\x00'
-        attrib_cmd = bytearray('\x1D' + nfcid + "\0\0\0\0")
-        attrib_cmd[7] = pinfo[1] & 0x07
-        #attrib_res = self.clf.exchange(attrib_req, timeout=0.03)
-            
-        return nfc.clf.TTB(br=106, uid=rsp[1:5], afi=rsp[5:9], cfg=rsp[9:])
-
-    def sense_ttf(self, br, sc, rc):
-        target = None
-        try:
-            target = self._sense_ttf(br, sc, rc)
-        except CommunicationError as error:
-            if error != "RECEIVE_TIMEOUT_ERROR":
-                log.debug(error)
-        if target is None:
-            self.chipset.switch_rf("off")
-        return target
-    
-    def _sense_ttf(self, br, sc, rc):
-        # poll felica (bit rate 'br', system code 'sc', request code 'rc')
-        poll_cmd = "0600{sc[0]:02x}{sc[1]:02x}{rc:02x}03".format(sc=sc, rc=rc)
-        log.debug("poll NFC-F {0}".format(poll_cmd))
-
-        self.chipset.in_set_rf(str(br) + "F")
-        self.chipset.in_set_protocol(
-            "\x00\x18" "\x01\x01" "\x02\x01" "\x03\x00" "\x04\x00"
-            "\x05\x00" "\x06\x00" "\x07\x08" "\x08\x00" "\x09\x00"
-            "\x0A\x00" "\x0B\x00" "\x0C\x00" "\x0E\x04" "\x0F\x00"
-            "\x10\x00" "\x11\x00" "\x12\x00" "\x13\x06")
+        sens_req = (target.sens_req if target.sens_req else
+                    bytearray.fromhex("050010"))
         
-        rsp = self.chipset.in_comm_rf(bytearray(poll_cmd.decode("hex")), 10)
-        if rsp and len(rsp) >= 18 and rsp[0] == len(rsp) and rsp[1] == 1:
-            if len(rsp) == 18: rsp += "\xff\xff"
-            idm, pmm, sys = rsp[2:10], rsp[10:18], rsp[18:20]
-            return nfc.clf.TTF(br=br, idm=idm, pmm=pmm, sys=sys)
+        log.debug("send SENSB_REQ " + hexlify(sens_req))
+        try:
+            sens_res = self.chipset.in_comm_rf(sens_req, 30)
+        except CommunicationError as error:
+            if error != "RECEIVE_TIMEOUT_ERROR": log.debug(error)
+            return None
+        
+        if len(sens_res) >= 12 and sens_res[0] == 0x50:
+            log.debug("rcvd SENSB_RES " + hexlify(sens_res))
+            return nfc.clf.TTB(106, sens_res=sens_res)
+
+    def sense_ttf(self, target):
+        log.debug("polling for NFC-F technology")
+
+        if target.brty not in ("212F", "424F"):
+            message = "unsupported bitrate {0}".format(target.brty)
+            self.log.warning(message); raise ValueError(message)
+
+        self.chipset.in_set_rf(target.brty)
+        self.chipset.in_set_protocol(self.chipset.in_set_protocol_defaults)
+        self.chipset.in_set_protocol(initial_guard_time=24)
+
+        sens_req = (target.sens_req if target.sens_req else
+                    bytearray.fromhex("00FFFF0000"))
+        
+        log.debug("send SENSF_REQ " + hexlify(sens_req))
+        try:
+            frame = chr(len(sens_req)+1) + sens_req
+            frame = self.chipset.in_comm_rf(frame, 10)
+        except CommunicationError as error:
+            if error != "RECEIVE_TIMEOUT_ERROR": log.debug(error)
+            return None
+        
+        if len(frame) >= 18 and frame[0] == len(frame) and frame[1] == 1:
+            log.debug("rcvd SENSF_RES " + hexlify(frame[1:]))
+            return nfc.clf.TTF(target.bitrate, sens_res=frame[1:])
             
     def listen_ttf(self, target, timeout):
         assert type(target) == nfc.clf.TTF
@@ -557,7 +557,15 @@ class Device(nfc.dev.Device):
         self.exchange = self.send_rsp_recv_cmd
         return target, data[7:]
 
-    def send_cmd_recv_rsp(self, data, timeout):
+    @property
+    def max_send_data_size(self):
+        return 290
+
+    @property
+    def max_recv_data_size(self):
+        return 290
+
+    def send_cmd_recv_rsp(self, target, data, timeout):
         timeout_msec = int(timeout * 1000) + 1 if timeout else 0
         try:
             return self.chipset.in_comm_rf(data, timeout_msec)
@@ -567,7 +575,7 @@ class Device(nfc.dev.Device):
                 raise nfc.clf.TimeoutError
             raise nfc.clf.TransmissionError
 
-    def send_rsp_recv_cmd(self, data, timeout):
+    def send_rsp_recv_cmd(self, target, data, timeout):
         timeout_msec = int(timeout * 1000) + 1 if timeout else 0
         try:
             data = self.chipset.tg_comm_rf(
@@ -581,31 +589,9 @@ class Device(nfc.dev.Device):
                 raise nfc.clf.TimeoutError
             raise nfc.clf.TransmissionError
 
-    def set_communication_mode(self, brm, **kwargs):
-        if self.exchange == self.send_rsp_recv_cmd:
-            self._tg_set_communication_mode(brm, **kwargs)
-        if self.exchange == self.send_cmd_recv_rsp:
-            self._in_set_communication_mode(brm, **kwargs)
-
-    def _tg_set_communication_mode(self, brm, **args):
-        if brm: self.chipset.tg_set_rf(brm)
-
-    def _in_set_communication_mode(self, brm, **kwargs):
-        # brm is a 'bitrate' + 'technology' string, e.g. '106A'
-        # technology letters: 'A', 'B', 'F', 'J' (Jewel/Topaz), 'P' (Picopass)
-        if brm: self.chipset.in_set_rf(brm)
-        settings = list()
-        if 'add_crc' in kwargs:
-            mapping = {'OFF': 0, 'ISO': 1, 'TT1': 2, 'PICO-2': 3, 'PICO-3': 4}
-            settings.extend([0x01, mapping.get(kwargs.get('add_crc'))])
-        if 'check_crc' in kwargs:
-            mapping = {'OFF': 0, 'ISO': 1, 'TT1': 2, 'PICO': 3}
-            settings.extend([0x02, mapping.get(kwargs.get('check_crc'))])
-        if settings:
-            self.chipset.in_set_protocol(settings)
-
 def init(transport):
-    device = Device(transport)
+    chipset = Chipset(transport, logger=log)
+    device = Device(chipset, logger=log)
     device._vendor_name = transport.manufacturer_name
     device._device_name = transport.product_name
     return device
