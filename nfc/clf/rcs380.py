@@ -193,7 +193,7 @@ class Chipset(object):
         in_comm_type = {"212F": (1, 1, 15, 1), "424F": (1, 2, 15, 2),
                         "106A": (2, 3, 15, 3), "212A": (4, 4, 15, 4),
                         "424A": (5, 5, 15, 5), "106B": (3, 7, 15, 7),
-                        "212B": (0, 8,  0, 8), "424B": (0, 9,  0, 9)
+                        "212B": (3, 8, 15, 8), "424B": (3, 9, 15, 9),
                         }
         comm_type = in_comm_type[comm_type]
         data = self.send_command(0x00, comm_type, 100)
@@ -326,15 +326,19 @@ class Device(device.Device):
         
         if target.brty not in ("106A", "212A", "424A"):
             message = "unsupported bitrate {0}".format(target.brty)
-            self.log.warning(message); raise ValueError(message)
+            raise nfc.clf.UnsupportedTargetError(message)
 
         self.chipset.in_set_rf(target.brty)
         self.chipset.in_set_protocol(self.chipset.in_set_protocol_defaults)
         self.chipset.in_set_protocol(initial_guard_time=6, add_crc=0,
                                      check_crc=0, check_parity=1,
                                      last_byte_bit_count=7)
+        
+        sens_req = (target.sens_req if target.sens_req else
+                    bytearray.fromhex("26"))
+        
         try:
-            sens_res = self.chipset.in_comm_rf("\x26", 30)
+            sens_res = self.chipset.in_comm_rf(sens_req, 30)
             if len(sens_res) != 2: return None
         except CommunicationError as error:
             if error != "RECEIVE_TIMEOUT_ERROR": log.debug(error)
@@ -346,7 +350,7 @@ class Device(device.Device):
             log.debug("type 1 tag target found")
             self.chipset.in_set_protocol(last_byte_bit_count=8, add_crc=2,
                                          check_crc=2, type_1_tag_rrdd=2)
-            target = nfc.clf.TTA(target.bitrate, sens_res=sens_res)
+            target = nfc.clf.RemoteTarget(target.brty, sens_res=sens_res)
             if sens_res[1] & 0x0F == 0b1100:
                 rid_cmd = bytearray.fromhex("78 0000 00000000")
                 log.debug("send RID_CMD " + hexlify(rid_cmd))
@@ -388,8 +392,12 @@ class Device(device.Device):
                     if sel_res[0] & 0b00000100: uid = uid + sdd_res[1:4]
                     else: uid = uid + sdd_res[0:4]; break
             if sel_res[0] & 0b00000100 == 0:
-                return nfc.clf.TTA(target.bitrate, sens_res=sens_res,
-                                   sel_res=sel_res, sdd_res=uid)
+                if sel_res[0] & 0b01100000 == 0:
+                    # For Type 2 Tags we must check CRC in software
+                    # to be able to receive ACK/NAK responses.
+                    self.chipset.in_set_protocol(check_crc=0)
+                return nfc.clf.RemoteTarget(target.brty, sens_res=sens_res,
+                                            sel_res=sel_res, sdd_res=uid)
         except CommunicationError as error:
             log.debug(error)
 
@@ -398,7 +406,7 @@ class Device(device.Device):
 
         if target.brty not in ("106B", "212B", "424B"):
             message = "unsupported bitrate {0}".format(target.brty)
-            self.log.warning(message); raise ValueError(message)
+            raise nfc.clf.UnsupportedTargetError(message)
 
         self.chipset.in_set_rf(target.brty)
         self.chipset.in_set_protocol(self.chipset.in_set_protocol_defaults)
@@ -417,14 +425,14 @@ class Device(device.Device):
         
         if len(sens_res) >= 12 and sens_res[0] == 0x50:
             log.debug("rcvd SENSB_RES " + hexlify(sens_res))
-            return nfc.clf.TTB(106, sens_res=sens_res)
+            return nfc.clf.RemoteTarget(target.brty, sens_res=sens_res)
 
     def sense_ttf(self, target):
         log.debug("polling for NFC-F technology")
 
         if target.brty not in ("212F", "424F"):
             message = "unsupported bitrate {0}".format(target.brty)
-            self.log.warning(message); raise ValueError(message)
+            raise nfc.clf.UnsupportedTargetError(message)
 
         self.chipset.in_set_rf(target.brty)
         self.chipset.in_set_protocol(self.chipset.in_set_protocol_defaults)
@@ -443,22 +451,26 @@ class Device(device.Device):
         
         if len(frame) >= 18 and frame[0] == len(frame) and frame[1] == 1:
             log.debug("rcvd SENSF_RES " + hexlify(frame[1:]))
-            return nfc.clf.TTF(target.bitrate, sens_res=frame[1:])
-            
-    def listen_ttf(self, target, timeout):
-        assert type(target) == nfc.clf.TTF
-        
-        timeout_msec = int(timeout * 1000) + 1 if timeout else 0
-        log.debug("listen_ttf for {0} msec".format(timeout_msec))
+            return nfc.clf.RemoteTarget(target.brty, sens_res=frame[1:])
 
-        if target.br is None:
-            log.warning("listen bitrate not specified, set to 212")
-            target.br = 212
-            
-        self.chipset.tg_set_rf(str(target.br) + 'F')
+    def sense_dep(self, target):
+        """Sense for an active DEP Target is not supported."""
+        message = "{device} does not support sense for active DEP Target"
+        raise nfc.clf.UnsupportedTargetError(message.format(device=self))
+        
+    def listen_ttf(self, target, timeout):
+        assert isinstance(target, LocalTarget)
+        assert target.brty.endswith('F')
+
+        if target.brty not in ('212F', '424F'):
+            info = "unsupported target bitrate: %r" % target.brty
+            raise nfc.clf.UnsupportedTargetError(info)
+        
+        self.chipset.tg_set_rf(target.brty)
         self.chipset.tg_set_protocol("\x00\x01\x01\x00\x02\x07")
 
         data = None
+        timeout_msec = int(timeout * 1000) + 1 if timeout else 0
         time_to_return = time.time() + timeout
 
         while timeout_msec > 0:
@@ -467,8 +479,7 @@ class Device(device.Device):
                     mdaa=False, recv_timeout=timeout_msec,
                     transmit_data=data)
             except CommunicationError as error:
-                if error != "RECEIVE_TIMEOUT_ERROR":
-                    log.debug(error)
+                if error != "RECEIVE_TIMEOUT_ERROR": log.debug(error)
             else:
                 tech = ('106A', '212F', '424F')[data[0]-11]
                 log.info("{0} {1}".format(tech, str(data).encode("hex")))
@@ -487,7 +498,6 @@ class Device(device.Device):
             return None
 
         self.chipset.tg_set_protocol("\x01\x01") # break on rf off
-        self.exchange = self.send_rsp_recv_cmd
         return target, data[7:]
 
     def listen_dep(self, target, timeout):
@@ -567,13 +577,30 @@ class Device(device.Device):
 
     def send_cmd_recv_rsp(self, target, data, timeout):
         timeout_msec = int(timeout * 1000) + 1 if timeout else 0
+        if target._brty_changed:
+            self.chipset.in_set_rf(target.brty)
+            del target._brty_changed
         try:
-            return self.chipset.in_comm_rf(data, timeout_msec)
+            if (target.brty == '106A' and target.sel_res and
+                target.sel_res[0] & 0x60 == 0x00):
+                return self._tt2_send_cmd_recv_rsp(data, timeout_msec)
+            else:
+                return self.chipset.in_comm_rf(data, timeout_msec)
         except CommunicationError as error:
             log.debug(error)
             if error == "RECEIVE_TIMEOUT_ERROR":
                 raise nfc.clf.TimeoutError
             raise nfc.clf.TransmissionError
+
+    def _tt2_send_cmd_recv_rsp(self, data, timeout_msec):
+        # The Type2Tag implementation needs to receive the Mifare
+        # ACK/NAK responses but the chipset reports them as crc error
+        # (indistinguishable from a real crc error). We thus have to
+        # switch off the crc check and do it here.
+        data = self.chipset.in_comm_rf(data, timeout_msec)
+        if len(data) > 2 and self.check_crc_a(data) is False:
+            raise nfc.clf.TransmissionError("crc_a check error")
+        return data[:-2] if len(data) > 2 else data
 
     def send_rsp_recv_cmd(self, target, data, timeout):
         timeout_msec = int(timeout * 1000) + 1 if timeout else 0

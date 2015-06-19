@@ -395,33 +395,37 @@ def activate(clf, target):
     import nfc.clf
     try:
         log.debug("trying to activate {0}".format(target))
-        if type(target) is nfc.clf.TTA:
+        if target.brty.endswith('A'):
             if target.sens_res[1] & 0x0F == 0x0C:
                 return activate_tt1(clf, target)
             elif target.sel_res[0] >> 5 & 3 == 0:
                 return activate_tt2(clf, target)
             elif target.sel_res[0] >> 5 & 1 == 1:
                 return activate_tt4(clf, target)
-        elif type(target) is nfc.clf.TTB:
+        elif target.brty.endswith('B'):
             return activate_tt4(clf, target)
-        elif type(target) is nfc.clf.TTF:
+        elif target.brty.endswith('F'):
             return activate_tt3(clf, target)
-    except nfc.clf.DigitalError:
+    except nfc.clf.CommunicationError:
         return None
 
 def activate_tt1(clf, target):
+    log.debug("trying type 1 tag activation for {0}".format(target.brty))
     import nfc.tag.tt1
     return nfc.tag.tt1.activate(clf, target)
     
 def activate_tt2(clf, target):
+    log.debug("trying type 2 tag activation for {0}".format(target.brty))
     import nfc.tag.tt2
     return nfc.tag.tt2.activate(clf, target)
     
 def activate_tt3(clf, target):
+    log.debug("trying type 3 tag activation for {0}".format(target.brty))
     import nfc.tag.tt3
     return nfc.tag.tt3.activate(clf, target)
     
 def activate_tt4(clf, target):
+    log.debug("trying type 4 tag activation for {0}".format(target.brty))
     import nfc.tag.tt4
     return nfc.tag.tt4.activate(clf, target)
     

@@ -26,6 +26,7 @@ log = logging.getLogger(__name__)
 from os import urandom
 from time import time
 from collections import namedtuple
+from binascii import hexlify
 
 import nfc.clf
 
@@ -64,20 +65,21 @@ class DataExchangeProtocol(object):
 class Initiator(DataExchangeProtocol):
     def __init__(self, clf):
         DataExchangeProtocol.__init__(self, clf)
-        self.brm = None # bit-rate modulation ('106A', '212F', '424F')
+        self.target = None
         self.miu = None # maximum information unit size
         self.did = None # dep device identifier
         self.nad = None # dep node address
         self.gbt = None # general bytes from target
         self.pni = None # dep packet number information
         self.rwt = None # target response waiting time
+        self.acm = None # active communication mode flag
 
     def __str__(self):
         msg = "NFC-DEP Initiator {brty} {mode} mode MIU={miu} RWT={rwt:.6f}"
-        return msg.format(brty=self.brm, miu=self.miu, rwt=self.rwt,
+        return msg.format(brty=self.target.brty, miu=self.miu, rwt=self.rwt,
                           mode=("passive", "active")[self.acm])
 
-    def activate(self, **options):
+    def activate(self, target=None, **options):
         """Activate DEP communication with a target."""
 
         log.debug("initiator options: {0}".format(options))
@@ -88,7 +90,8 @@ class Initiator(DataExchangeProtocol):
         self.gbi = options.get('gbi', '')
         self.brs = options.get('brs', 2)
         self.lri = options.get('lri', 3)
-        self.acm = options.get('acm', True)
+        if self.acm is None or 'acm' in options:
+            self.acm = bool(options.get('acm', True))
 
         assert self.did is None or (self.did >=0 and self.did <= 255)
         assert self.nad is None or (self.nad >=0 and self.nad <= 255)
@@ -98,68 +101,64 @@ class Initiator(DataExchangeProtocol):
 
         ppi = (self.lri << 4) | (bool(self.gbi) << 1) | int(bool(self.nad))
         did = 0 if self.did is None else self.did
-        atr_req = ATR_REQ(urandom(10), did, 0, 0, ppi, self.gbi).encode()
-        psl_req = PSL_REQ(did, (0, 9, 18)[self.brs], self.lri).encode()
+        atr_req = ATR_REQ(urandom(10), did, 0, 0, ppi, self.gbi)
+        psl_req = PSL_REQ(did, (0, 9, 18)[self.brs], self.lri)
+        atr_res = psl_res = None
+        self.target = target
+        
+        if self.target is None and self.acm is True:
+            log.debug("searching active communication mode target at 106A")
+            target = nfc.clf.RemoteTarget("106A", atr_req=atr_req)
+            try:
+                target = self.clf.sense(target,iterations=2,interval=0.1)
+                if target: atr_res = ATR_RES.decode(target.atr_res)
+            except nfc.clf.UnsupportedTargetError:
+                self.acm = False
+            except nfc.clf.CommunicationError:
+                pass
+            else:
+                self.target = target
 
-        targets = []
-        if self.acm == True and self.brs > 0:
-            # add 212 or 424 active communication mode
-            targets.append(nfc.clf.DEP((212,424)[self.brs-1], atr_req=atr_req))
-            # add 106 active communication mode with bitrate change
-            targets.append(nfc.clf.DEP(106, atr_req=atr_req, psl_req=psl_req))
-        if self.acm == True and self.brs == 0:
-            # only 106 kbps active communication mode is requested
-            targets.append(nfc.clf.DEP(106, atr_req=atr_req))
+        if self.target is None:
+            log.debug("searching passive communication mode target at 106A")
+            target = nfc.clf.RemoteTarget("106A")
+            target = self.clf.sense(target, iterations=2, interval=0.1)
+            if target:
+                if not (target.sel_res and bool(target.sel_res[0] & 0x40)):
+                    log.debug("Target does not support NFC-DEP")
+                    return None
+                self.target = target
 
-        if self.brs > 0:
-            # add sense for 212F or 424F passive communication mode
-            targets.append(nfc.clf.TTF(106 << self.brs))
-
-        # always sense for 106A passive communication mode
-        targets.append(nfc.clf.TTA(106))
-
-        self.clf.sense() # make sure to forget a captured target
-        target = self.clf.sense(*targets, iterations=2, interval=0.1)
-        if target is None: return None
-
-        if type(target) is nfc.clf.TTA:
-            if not (target.sel_res and target.sel_res[0] & 0x40 == 0x40):
-                log.debug("Type A Target does not support DEP")
+        if self.target and self.target.atr_res is None:
+            try: atr_res = self.send_req_recv_res(atr_req, 1.0)
+            except nfc.clf.CommunicationError: pass
+            if atr_res is None:
+                log.debug("NFC-DEP Attribute Request failed")
                 return None
 
-        if type(target) is nfc.clf.TTF:
-            if not target.sens_res[1:3] == "\x01\xFE":
-                log.debug("Type F Target does not support DEP")
-                return None
+        if self.target and atr_res:
+            if self.brs > 0:
+                try: psl_res = self.send_req_recv_res(psl_req, 0.1)
+                except nfc.clf.CommunicationError: pass
+                if psl_res is None:
+                    log.debug("NFC-DEP Parameter Selection failed")
+                    return None
+                self.target.brty = ('212F','424F')[self.brs-1]
 
-        if type(target) in (nfc.clf.TTA, nfc.clf.TTF):
-            self.acm = False
-            passive_dep_target = nfc.clf.DEP(target.bitrate)
-            passive_dep_target.atr_req = atr_req
-            if target.bitrate < (106 << self.brs):
-                passive_dep_target.psl_req = psl_req
-            target = self.clf.sense(passive_dep_target)
+            self.rwt = 4096/13.56E6 * 2**(atr_res.wt if atr_res.wt<15 else 14)
+            self.miu = atr_res.lr-3 - int(self.did!=None) - int(self.nad!=None)
+            self.gbt = atr_res.gb
+            self.pni = 0
 
-        if not (target and target.atr_res and len(target.atr_res) >= 17):
-            log.info("target activation failed")
-            return None
-
-        atr_res = ATR_RES.decode(target.atr_res)
-        self.rwt = 4096/13.56E6 * 2**(atr_res.wt if atr_res.wt < 15 else 14)
-        self.miu = atr_res.lr-3 - int(self.did != None) - int(self.nad != None)
-        self.gbt = atr_res.gb
-        self.pni = 0
-        self.brm = target.brty
-
-        log.info("running as " + str(self))
-        return self.gbt
+            log.info("running as " + str(self))
+            return self.gbt
 
     def deactivate(self, release=True):
         REQ, RES = (RLS_REQ, RLS_RES) if release else (DSL_REQ, DSL_RES)
         req = REQ(self.did)
         try:
             res = self.send_req_recv_res(req, 0.1)
-        except nfc.clf.DigitalError:
+        except nfc.clf.CommunicationError:
             pass
         else:
             if type(res) != RES:
@@ -264,7 +263,7 @@ class Initiator(DataExchangeProtocol):
                 if timeout <= 0: raise nfc.clf.TimeoutError
                 try:
                     res = self.send_req_recv_res(req, timeout)
-                except nfc.clf.DigitalError:
+                except nfc.clf.CommunicationError:
                     continue
                 self.count.atn_sent += 1
                 if res.pfb.type == DEP_RES.TimeoutExtension:
@@ -285,7 +284,7 @@ class Initiator(DataExchangeProtocol):
                 if timeout <= 0: raise nfc.clf.TimeoutError
                 try:
                     res = self.send_req_recv_res(req, timeout)
-                except nfc.clf.DigitalError:
+                except nfc.clf.CommunicationError:
                     continue
                 self.count.nak_sent += 1
                 if res.pfb.type == DEP_RES.TimeoutExtension:
@@ -331,12 +330,12 @@ class Initiator(DataExchangeProtocol):
         log.debug(">> {0}".format(packet))
         frame = packet.encode()
         frame = chr(len(frame) + 1) + frame
-        if self.brm == '106A':
+        if self.target.brty == '106A':
             frame = '\xF0' + frame
         return frame
         
     def decode_frame(self, frame):
-        if self.brm == '106A' and frame.pop(0) != 0xF0:
+        if self.target.brty == '106A' and frame.pop(0) != 0xF0:
             error = "first NFC-DEP frame byte must be F0h for 106A"
             raise nfc.clf.ProtocolError(error)
         if len(frame) != frame.pop(0):

@@ -648,7 +648,7 @@ class Type3Tag(nfc.tag.Tag):
             try:
                 rsp = self.clf.exchange(cmd, timeout)
                 break
-            except nfc.clf.DigitalError as error:
+            except nfc.clf.CommunicationError as error:
                 reason = error.__class__.__name__
                 log.debug("%s after %d retries" % (reason, retry))
         else:

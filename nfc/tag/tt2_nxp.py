@@ -33,15 +33,15 @@ def activate(clf, target):
     try:
         log.debug("check if authenticate command is available")
         rsp = clf.exchange('\x1A\x00', timeout=0.01)
-        if not clf.sense(target) == target: return None
+        if clf.sense(target) is None: return None
         if rsp.startswith("\xAF"):
             return MifareUltralightC(clf, target)
         if rsp == "\x00":
             return NTAG203(clf, target)
     except nfc.clf.TimeoutError:
         log.debug("nope, authenticate command is not supported")
-        if not clf.sense(target) == target: return None
-    except nfc.clf.DigitalError as error:
+        if clf.sense(target) is None: return None
+    except nfc.clf.CommunicationError as error:
         log.debug(repr(error))
         return
     
@@ -50,9 +50,9 @@ def activate(clf, target):
         version = clf.exchange('\x60', timeout=0.01)
     except nfc.clf.TimeoutError:
         log.debug("nope, version command is not supported")
-        if not clf.sense(target) == target: return None
+        if clf.sense(target) is None: return None
         version = None
-    except nfc.clf.DigitalError as error:
+    except nfc.clf.CommunicationError as error:
         log.debug(repr(error))
         return
     
@@ -224,10 +224,8 @@ class MifareUltralightC(tt2.Type2Tag):
 
         # Reactivate the tag to have the key effective and
         # authenticate with the same key
-        if self.clf.sense(self.target) == self.target:
-            return self.authenticate(key)
-        else:
-            return False
+        self.target = self.clf.sense(self.target)
+        return self.authenticate(key) if self.target else False
 
     def authenticate(self, password):
         """Authenticate with a Mifare Ultralight C Tag.
@@ -477,10 +475,8 @@ class NTAG21x(tt2.Type2Tag):
 
         # Reactivate the tag to have the key effective and
         # authenticate with the same key
-        if self.clf.sense(self.target) == self.target:
-            return self.authenticate(key)
-        else:
-            return False
+        self.target = self.clf.sense(self.target)
+        return self.authenticate(key) if self.target else False
 
     def authenticate(self, password):
         """Authenticate with password to access protected memory.

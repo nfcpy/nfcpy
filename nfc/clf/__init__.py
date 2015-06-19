@@ -362,7 +362,8 @@ class ContactlessFrontend(object):
         card_options = options.get('card')
 
         if isinstance(rdwr_options, dict):
-            rdwr_options.setdefault('targets', [TTA(106), TTB(106), TTF(212)])
+            targets = [RemoteTarget(brty) for brty in ("106A", "106B", "212F")]
+            rdwr_options.setdefault('targets', targets)
             if 'on-startup' in rdwr_options:
                 targets = rdwr_options.get('targets')
                 targets = rdwr_options['on-startup'](self, targets)
@@ -477,7 +478,7 @@ class ContactlessFrontend(object):
                                 command = tag.send_response(response, timeout=1)
                             except nfc.clf.TimeoutError:
                                 command = None
-                            except nfc.clf.DigitalError as error:
+                            except nfc.clf.CommunicationError as error:
                                 log.error(error)
                                 break
                             else:
@@ -487,7 +488,7 @@ class ContactlessFrontend(object):
                     else:
                         return tag
         
-    def sense(self, *targets, **options):
+    def __sense__(self, *targets, **options):
         """Discover a contactless card or listening device.
         
         The :meth:`sense` method provides low-level access to the
@@ -721,6 +722,80 @@ class ContactlessFrontend(object):
         target.atr_req[10:12] = bytearray("ST")
         return self.device.sense_dep(target, passive_target)
 
+    def sense(self, *targets, **options):
+        def sense_tta(target):
+            if target.sel_req and len(target.sel_req) not in (4, 7, 10):
+                raise ValueError("TTA target sel_req must be 4, 7, or 10 byte")
+            target = self.device.sense_tta(target)
+            if target and len(target.sens_res) != 2:
+                error = "SENS Response Format Error (wrong length)"
+                log.debug(error); raise ProtocolError(error)
+            if target and target.sens_res[0] & 0b00011111 == 0:
+                if target.sens_res[1] & 0b00001111 != 0b1100:
+                    error = "SENS Response Data Error (T1T config)"
+                    log.debug(error); raise ProtocolError(error)
+                if len(target.rid_res) != 6:
+                    error = "RID Response Format Error (wrong length)"
+                    log.debug(error); raise ProtocolError(error)
+                if target.rid_res[0] >> 4 != 0b0001:
+                    error = "RID Response Data Error (invalid HR0)"
+                    log.debug(error); raise ProtocolError(error)
+            return target
+        
+        def sense_ttb(target):
+            return self.device.sense_ttb(target)
+        
+        def sense_ttf(target):
+            return self.device.sense_ttf(target)
+
+        def sense_dep(target):
+            return self.device.sense_dep(target)
+
+        if self.device is None:
+            raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
+
+        for target in targets:
+            assert isinstance(target, RemoteTarget), \
+                "invalid target argument type: %r" % target
+            assert target.brty[-1:] in ('A', 'B', 'F'), \
+                "technology can be A/B/F but not %r" % target.brty[-1:]
+            assert target.brty[:-1] in ('106', '212', '424', '848'), \
+                "bitrate can be 106/212/424/848 but not %r" % target.brty[:-1]
+
+        with self.lock:
+            self.target = None # forget captured target
+            self.device.mute() # deactivate the rf field
+            for i in xrange(max(1, options.get('iterations', 1))):
+                started = time.time()
+                for target in targets:
+                    log.debug("sense {0}".format(target))
+                    try:
+                        if target.atr_req is not None:
+                            self.target = sense_dep(target)
+                        elif target.brty.endswith('A'):
+                            self.target = sense_tta(target)
+                        elif target.brty.endswith('B'):
+                            self.target = sense_ttb(target)
+                        elif target.brty.endswith('F'):
+                            self.target = sense_ttf(target)
+                        else:
+                            raise AssertionError("invalid technology type")
+                    except UnsupportedTargetError as error:
+                        if len(targets) == 1: raise
+                        else: log.debug(error)
+                    except CommunicationError as error:
+                        log.debug(error)
+                    else:
+                        if self.target is not None:
+                            log.debug("found {0}".format(self.target))
+                            return self.target
+                if len(targets):
+                    self.device.mute() # deactivate the rf field
+                if i < options.get('iterations', 1) - 1:
+                    elapsed = time.time() - started
+                    time.sleep(max(0, options.get('interval', 0.1)-elapsed))
+
+        
     def listen(self, target, timeout):
         """Listen *timeout* seconds to activate as a target.
 
@@ -822,27 +897,32 @@ class ContactlessFrontend(object):
           *target* is not supported by the device.
 
         """
-        if self.device is None:
-            raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
-
+        assert isinstance(target, LocalTarget), \
+            "invalid target argument type: %r" % target
+        assert target.brty[-1:] in ('A', 'B', 'F'), \
+            "technology can be A/B/F but not %r" % target.brty[-1:]
+        assert target.brty[:-1] in ('106', '212', '424', '848'), \
+            "bitrate can be 106/212/424/848 but not %r" % target.brty[:-1]
+        
         with self.lock:
+            if self.device is None:
+                raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
+            
             info = "listen {0:.3f} seconds for {1}"
-            self.listen_target = self.sensed_target = None
-            if type(target) is TTA:
-                log.debug(info.format(timeout, target.brty))
-                self.listen_target = self.device.listen_tta(target, timeout)
-            elif type(target) is TTB:
-                log.debug(info.format(timeout, target.brty))
-                self.listen_target = self.device.listen_ttb(target, timeout)
-            elif type(target) is TTF:
-                log.debug(info.format(timeout, target.brty))
-                self.listen_target = self.device.listen_ttf(target, timeout)
-            elif type(target) is DEP:
+            self.target = None
+            if target.atr_res is not None:
                 log.debug(info.format(timeout, "DEP"))
-                self.listen_target = self.device.listen_dep(target, timeout)
-            else:
-                raise TypeError("target is not a recognized technology type")
-            return self.listen_target
+                self.target = self.device.listen_dep(target, timeout)
+            elif target.brty.endswith('A'):
+                log.debug(info.format(timeout, target.brty))
+                self.target = self.device.listen_tta(target, timeout)
+            elif target.brty.endswith('B'):
+                log.debug(info.format(timeout, target.brty))
+                self.target = self.device.listen_ttb(target, timeout)
+            elif target.brty.endswith('F'):
+                log.debug(info.format(timeout, target.brty))
+                self.target = self.device.listen_ttf(target, timeout)
+            return self.target
 
     def exchange(self, send_data, timeout):
         """Exchange data with an activated target (*send_data* is a command
@@ -853,7 +933,7 @@ class ContactlessFrontend(object):
         link broke during exchange (if data is sent as a target). The
         timeout is the number of seconds to wait for data to return,
         if the timeout expires an nfc.clf.TimeoutException is
-        raised. Other nfc.clf.DigitalError exceptions may be raised if
+        raised. Other nfc.clf.CommunicationError exceptions may be raised if
         an error is detected during communication.
 
         """
@@ -862,16 +942,16 @@ class ContactlessFrontend(object):
         
         with self.lock:
             log.debug(">>> %s %.3fs" % (str(send_data).encode("hex"), timeout))
-            if self.sensed_target:
+            
+            if isinstance(self.target, RemoteTarget):
                 exchange = self.device.send_cmd_recv_rsp
-                target = self.sensed_target
-            elif self.listen_target:
+            elif isinstance(self.target, LocalTarget):
                 exchange = self.device.send_rsp_recv_cmd
-                target = self.listen_target
             else:
-                log.error("no active target for data exchange")
+                log.error("no target for data exchange")
                 return None
-            rcvd_data = exchange(target, send_data, timeout)
+            
+            rcvd_data = exchange(self.target, send_data, timeout)
             log.debug("<<< %s" % str(rcvd_data).encode("hex"))
             return rcvd_data
 
@@ -911,11 +991,86 @@ class ContactlessFrontend(object):
 
 ###############################################################################
 #
+# Target Class
+#
+###############################################################################
+
+class Target(object):
+    def __init__(self, **kwargs):
+        for name in kwargs:
+            self.__dict__[name] = kwargs[name]
+
+    def __getattr__(self, name):
+        return None
+
+    def __eq__(self, other):
+        return self.__dict__ == other.__dict__
+
+    def __len__(self):
+        return len(self.__dict__) - 1
+
+    def __str__(self):
+        attrs = []
+        for name in sorted(self.__dict__.keys()):
+            if name.startswith('_'): continue
+            value = self.__dict__[name]
+            if isinstance(value, (bytearray, str)):
+                value = str(value).encode("hex").upper()
+            attrs.append("{0}={1}".format(name, value))
+        return "{brty} {attrs}".format(brty=self.brty, attrs=' '.join(attrs))
+
+
+class RemoteTarget(Target):
+    """A Target class instance holds various attributes needed on input
+    and returned from the :meth:`sense` and :meth:`listen`
+    methods. Parameters depend on context and stage. Reading an
+    attribute that is not set yields *None* (and not an AttributeError
+    exception).
+
+    """
+    def __init__(self, brty, **kwargs):
+        super(RemoteTarget, self).__init__(**kwargs)
+        self._brty_send = self._brty_recv = brty
+
+    @property
+    def brty(self):
+        """A string that combines bitrate and technology type, e.g. '106A'."""
+        return "{0}".format(self._brty_send)
+
+    @brty.setter
+    def brty(self, value):
+        if value != self._brty_send:
+            self._brty_send = self._brty_recv = value
+            self._brty_changed = True
+
+class LocalTarget(Target):
+    """A Target class instance holds various attributes needed on input
+    and returned from the :meth:`sense` and :meth:`listen`
+    methods. Parameters depend on context and stage. Reading an
+    attribute that is not set yields *None* (and not an AttributeError
+    exception).
+
+    """
+    def __init__(self, brty, **kwargs):
+        super(RemoteTarget, self).__init__(**kwargs)
+        self._brty_send = self._brty_recv = brty
+
+    @property
+    def brty(self):
+        """A string that combines bitrate and technology type, e.g. '106A'."""
+        return "{0}".format(self._brty_send)
+
+    @brty.setter
+    def brty(self, value):
+        self._brty_recv = value
+
+###############################################################################
+#
 # Technology Type Classes
 #
 ###############################################################################
 
-class TechnologyType(object):
+class _TechnologyType(object):
     """The base class for all technology types. A technology type class
     holds various attributes needed on input and returned from the
     :meth:`sense` and :meth:`listen` methods. Parameters depend on
@@ -953,24 +1108,24 @@ class TechnologyType(object):
             attrs.append("{0}={1}".format(name, value))
         return "{brty}({attrs})".format(brty=self.brty, attrs=', '.join(attrs))
 
-class TTA(TechnologyType):
-    """Parameters for Technology Type A."""
+#class TTA(TechnologyType):
+#    """Parameters for Technology Type A."""
 
-class TTB(TechnologyType):
-    """Parameters for Technology Type B."""
+#class TTB(TechnologyType):
+#    """Parameters for Technology Type B."""
 
-class TTF(TechnologyType):
-    """Parameters for Technology Type F."""
+#class TTF(TechnologyType):
+#    """Parameters for Technology Type F."""
 
-class DEP(TechnologyType):
-    """Parameters for Data Exchange Protocol."""
+#class DEP(TechnologyType):
+#    """Parameters for Data Exchange Protocol."""
     
-    @property
-    def brty(self):
-        return ('', '106A', '212F', '', '424F')[self.bitrate//106]
+#    @property
+#    def brty(self):
+#        return ('', '106A', '212F', '', '424F')[self.bitrate//106]
 
-    def __str__(self):
-        return 'DEP ' + super(DEP, self).__str__()
+#    def __str__(self):
+#        return 'DEP ' + super(DEP, self).__str__()
 
 ###############################################################################
 #
@@ -978,29 +1133,44 @@ class DEP(TechnologyType):
 #
 ###############################################################################
 
-class DigitalError(Exception):
+class Error(Exception):
+    """
+    - Error
+      - UnsupportedTargetError
+      - CommunicationError
+        - ProtocolError
+        - TransmissionError
+        - TimeoutError
+    """
+    pass
+
+class UnsupportedTargetError(Error):
+    pass
+
+class CommunicationError(Error):
     """Base class for NFC Forum Digital Specification errors.
 
     """
     pass
     
-class ProtocolError(DigitalError):
+class ProtocolError(CommunicationError):
     """Raised when an NFC Forum Digital Specification protocol error
     occured.
 
     """
     pass
 
-class TransmissionError(DigitalError):
+class TransmissionError(CommunicationError):
     """Raised when an NFC Forum Digital Specification transmission error
     occured.
 
     """
     pass
 
-class TimeoutError(DigitalError):
+class TimeoutError(CommunicationError):
     """Raised when an NFC Forum Digital Specification timeout error
     occured.
 
     """
     pass
+

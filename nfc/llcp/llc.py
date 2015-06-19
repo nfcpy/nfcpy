@@ -310,7 +310,7 @@ class LogicalLinkController(object):
         try:
             data = self.mac.exchange(data, timeout)
             if data is None: return None
-        except nfc.clf.DigitalError as error:
+        except nfc.clf.CommunicationError as error:
             log.warning("{0!r}".format(error))
             return None
 

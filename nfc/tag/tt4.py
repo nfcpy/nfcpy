@@ -362,7 +362,7 @@ class Type4Tag(nfc.tag.Tag):
         try:
             self._dep.exchange(None)
             return True
-        except nfc.clf.DigitalError:
+        except nfc.clf.CommunicationError:
             return False
 
     def dump(self):
@@ -554,7 +554,7 @@ class Type4BTag(Type4Tag):
         self._extended_length_support = False
 
 def activate(clf, target):
-    if type(target) is nfc.clf.TTA:
+    if target.brty.endswith('A'):
         return Type4ATag(clf, target)
-    if type(target) is nfc.clf.TTB:
+    if target.brty.endswith('B'):
         return Type4BTag(clf, target)

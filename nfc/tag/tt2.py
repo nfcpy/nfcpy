@@ -457,7 +457,8 @@ class Type2Tag(Tag):
 
         if len(data) == 1 and data[0] & 0xFA == 0x00:
             log.debug("received nak response")
-            if not self.clf.sense(self.target) == self.target:
+            self.target.sel_req = self.target.sdd_res[:]
+            if self.clf.sense(self.target) is None:
                 raise Type2TagCommandError(nfc.tag.RECEIVE_ERROR)
             raise Type2TagCommandError(INVALID_PAGE_ERROR)
 
@@ -549,7 +550,7 @@ class Type2Tag(Tag):
             try:
                 data = self.clf.exchange(data, timeout)
                 break
-            except nfc.clf.DigitalError as error:
+            except nfc.clf.CommunicationError as error:
                 reason = error.__class__.__name__
                 log.debug("%s after %d retries" % (reason, retry))
         else:
@@ -637,12 +638,16 @@ class Type2TagMemoryReader(object):
         self._write_to_tag(stop=len(self))
 
 def activate(clf, target):
+    # Type 2 Tags go mute when they receive an unsupported command. It
+    # is then necessary to sense again and by copying sdd_res to
+    # sel_req we ensure that only the same tag will be found.
+    target.sel_req = target.sdd_res[:]
     if target.sdd_res[0] == 0x04: # NXP
         import nfc.tag.tt2_nxp
         tag = nfc.tag.tt2_nxp.activate(clf, target)
         if tag is not None: return tag
-        # the tag may have disappeared
-        if not clf.sense(target) == target:
-            return None
-    return Type2Tag(clf, target)
+        # make sure the tag is still alive
+        target = clf.sense(target)
+    if target:
+        return Type2Tag(clf, target)
     

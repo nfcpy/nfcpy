@@ -31,10 +31,10 @@ import logging
 logging.basicConfig(format='%(relativeCreated)d ms [%(name)s] %(message)s')
 
 import nfc
-from nfc.clf import TTA, TTB, TTF, DEP
+import nfc.clf
 
 ba = lambda hexstr: bytearray.fromhex(hexstr)
-target_pattern = re.compile(r'(\d+)([ABF]?)(?:\((.*)\)|.*)')
+target_pattern = re.compile(r'(\d+[A-Z]{1})(?:\((.*)\)|.*)')
 
 def main(args):
     if args.debug:
@@ -49,8 +49,8 @@ def main(args):
             if not target_pattern_match:
                 logging.error("invalid target pattern {!r}".format(target))
             else:
-                br, ty, attributes = target_pattern_match.groups()
-                target = {"A": TTA, "B": TTB, "F": TTF, "": DEP}[ty](int(br))
+                brty, attributes = target_pattern_match.groups()
+                target = nfc.clf.RemoteTarget(brty)
                 if attributes:
                     for attr in map(str.strip, attributes.split(',')):
                         name, value = map(str.strip, attr.split('='))
@@ -60,21 +60,8 @@ def main(args):
 
         try:
             while True:
-                clf.sense() # forget a captured target, if any
                 target = clf.sense(*targets, iterations=args.iterations,
                                    interval=args.interval)
-                if (target and args.dep is not None and (
-                        (target.brty == "106A" and target.sel_res and
-                         target.sel_res[0] & 0b01000000) or
-                        (target.brty in ("212F", "424F") and
-                         target.sens_res.startswith("\x01\xFE")))):
-                    target = DEP(target.bitrate)
-                    for attr in args.dep.lstrip("(").rstrip(")").split(","):
-                        if attr.strip():
-                            name, value = map(str.strip, attr.split('='))
-                            value = bytearray.fromhex(value)
-                            setattr(target, name, value)
-                    target = clf.sense(target)
                 print("{0} {1}".format(time.strftime("%X"), target))
                 if not args.repeat: break
                 time.sleep(args.waittime)
@@ -82,7 +69,7 @@ def main(args):
             if error.errno == errno.EIO:
                 print("lost connection to local device")
             else: print(error)
-        except (NotImplementedError, TypeError, ValueError) as error:
+        except nfc.clf.UnsupportedTargetError as error:
             print error
         except KeyboardInterrupt:
             pass
@@ -94,9 +81,6 @@ if __name__ == '__main__':
     parser.add_argument(
         "targets", nargs="*", metavar="target",
         help="bitrate/type string to sense")
-    parser.add_argument(
-        "--dep", metavar="params",
-        help="target for passive communication mode")
     parser.add_argument(
         "-i", dest="iterations", metavar="number", type=int, default=1,
         help="number of iterations to run (default %(default)s)")

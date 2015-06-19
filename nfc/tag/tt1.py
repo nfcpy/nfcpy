@@ -425,7 +425,7 @@ class Type1Tag(Tag):
             try:
                 data = self.clf.exchange(data, timeout)
                 break
-            except nfc.clf.DigitalError as error:
+            except nfc.clf.CommunicationError as error:
                 reason = error.__class__.__name__
                 log.debug("%s after %d retries" % (reason, retry))
         else:
