@@ -484,8 +484,8 @@ class Type4Tag(nfc.tag.Tag):
 
     def __str__(self):
         hx = lambda x: str(x) if x is None else hexlify(x).upper()
-        s = " MIU={tag._dep.miu} FWT={tag._dep.fwt:f}"
-        return nfc.tag.Tag.__str__(self) + s.format(tag=self)
+        s = "{tag.__class__.__name__} MIU={tag._dep.miu} FWT={tag._dep.fwt:f}"
+        return s.format(tag=self)
     
 class Type4ATag(Type4Tag):
     def __init__(self, clf, target):
