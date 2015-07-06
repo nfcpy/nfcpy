@@ -211,14 +211,12 @@ class ServiceDiscovery(object):
             self.resp.notify_all()
 
 class LogicalLinkController(object):
-    def __init__(self, recv_miu=248, send_lto=500, send_agf=True,
-                 symm_log=True):
+    def __init__(self, recv_miu=248, send_lto=500, send_agf=True):
         self.lock = threading.RLock()
         self.cfg = dict()
         self.cfg['recv-miu'] = recv_miu
         self.cfg['send-lto'] = send_lto
         self.cfg['send-agf'] = send_agf
-        self.cfg['symm-log'] = symm_log
         self.snl = dict({"urn:nfc:sn:sdp" : 1})
         self.sap = 64 * [None]
         self.sap[0] = ServiceAccessPoint(0, self)
@@ -303,8 +301,8 @@ class LogicalLinkController(object):
                 self.sap[i] = None
         
     def exchange(self, pdu, timeout):
-        if not isinstance(pdu, Symmetry) or self.cfg.get('symm-log') is True:
-            log.debug("SEND {0}".format(pdu))
+        if not isinstance(pdu, Symmetry): log.debug("SEND {0}".format(pdu))
+        else: log.log(logging.DEBUG-1, "SEND {0}".format(pdu))
 
         data = pdu.to_string() if pdu else None
         try:
@@ -315,8 +313,8 @@ class LogicalLinkController(object):
             return None
 
         pdu = ProtocolDataUnit.from_string(data)
-        if not isinstance(pdu, Symmetry) or self.cfg.get('symm-log') is True:
-            log.debug("RECV {0}".format(pdu))
+        if not isinstance(pdu, Symmetry): log.debug("RECV {0}".format(pdu))
+        else: log.log(logging.DEBUG-1, "RECV {0}".format(pdu))
         return pdu
 
     def run_as_initiator(self, terminate=lambda: False):

@@ -523,7 +523,7 @@ class Type4ATag(Type4Tag):
 class Type4BTag(Type4Tag):
     def __init__(self, clf, target):
         super(Type4BTag, self).__init__(clf, target)
-        self._nfcid = bytearray(target.sens_res[1:5])
+        self._nfcid = bytearray(target.sensb_res[1:5])
 
         log.debug("send ATTRIB command to activate the Type 4B Tag")
         if self.clf.max_recv_data_size < 256:
@@ -534,7 +534,7 @@ class Type4BTag(Type4Tag):
         attrib_res = self.clf.exchange(attrib_cmd, timeout=0.03)
         log.debug("rcvd ATTRIB response {0}".format(hexlify(attrib_res)))
 
-        fsci, fwti = target.sens_res[10] >> 4, target.sens_res[11] >> 4
+        fsci, fwti = target.sensb_res[10] >> 4, target.sensb_res[11] >> 4
         if fsci > 8:
             log.warning("FSCI with RFU value in SENSB_RES"); fsci = 8
         if fwti > 14:

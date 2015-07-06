@@ -45,6 +45,7 @@ import errno
 import struct
 from binascii import hexlify
 
+import nfc.clf
 from . import pn532
 
 def init(transport):
@@ -101,22 +102,22 @@ class Device(pn532.Device):
     def listen_tta(self, target, timeout):
         """Listen as Type A Target is not supported."""
         info = "{device} does not support listen as Type A Target"
-        raise NotImplementedError(info.format(device=self))
+        raise nfc.clf.UnsupportedTargetError(info.format(device=self))
 
     def listen_ttb(self, target, timeout):
         """Listen as Type B Target is not supported."""
         info = "{device} does not support listen as Type B Target"
-        raise NotImplementedError(info.format(device=self))
+        raise nfc.clf.UnsupportedTargetError(info.format(device=self))
 
     def listen_ttf(self, target, timeout):
         """Listen as Type F Target is not supported."""
         info = "{device} does not support listen as Type F Target"
-        raise NotImplementedError(info.format(device=self))
+        raise nfc.clf.UnsupportedTargetError(info.format(device=self))
 
     def listen_dep(self, target, timeout):
         """Listen as DEP Target is not supported."""
         info = "{device} does not support listen as DEP Target"
-        raise NotImplementedError(info.format(device=self))
+        raise nfc.clf.UnsupportedTargetError(info.format(device=self))
 
 class Chipset(pn532.Chipset):
     """Specialized chipset class for the ACR122U driver.

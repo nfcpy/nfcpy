@@ -87,17 +87,14 @@ class Initiator(DataExchangeProtocol):
         timeout = 4096 * 2**12 / 13.56E6
         self.did = options.get('did', None)
         self.nad = options.get('nad', None)
-        self.gbi = options.get('gbi', '')
-        self.brs = options.get('brs', 2)
-        self.lri = options.get('lri', 3)
+        self.gbi = options.get('gbi', '')[0:48]
+        self.brs = min(max(0, options.get('brs', 2)), 2)
+        self.lri = min(max(0, options.get('lri', 3)), 3)
         if self.acm is None or 'acm' in options:
             self.acm = bool(options.get('acm', True))
 
         assert self.did is None or (self.did >=0 and self.did <= 255)
         assert self.nad is None or (self.nad >=0 and self.nad <= 255)
-        assert self.brs in range(3)
-        assert self.lri in range(4)
-        assert len(self.gbi) <= 48
 
         ppi = (self.lri << 4) | (bool(self.gbi) << 1) | int(bool(self.nad))
         did = 0 if self.did is None else self.did
@@ -108,7 +105,7 @@ class Initiator(DataExchangeProtocol):
         
         if self.target is None and self.acm is True:
             log.debug("searching active communication mode target at 106A")
-            target = nfc.clf.RemoteTarget("106A", atr_req=atr_req)
+            target = nfc.clf.RemoteTarget("106A", atr_req=atr_req.encode())
             try:
                 target = self.clf.sense(target,iterations=2,interval=0.1)
                 if target: atr_res = ATR_RES.decode(target.atr_res)
@@ -354,57 +351,54 @@ class Initiator(DataExchangeProtocol):
 class Target(DataExchangeProtocol):
     def __init__(self, clf):
         DataExchangeProtocol.__init__(self, clf)
-        self.brm = None # bit-rate modulation (106A, 212F, 424F)
         self.miu = None # maximum information unit size
         self.did = None # dep device identifier
         self.nad = None # dep node address
         self.gbi = None # general bytes from initiator
         self.pni = None # dep packet number information
         self.rwt = None # target response waiting time
-        self.req = None # first dep-req received in activation
 
     def __str__(self):
         msg = "NFC-DEP Target {brty} {mode} mode MIU={miu} RWT={rwt:.6f}"
-        return msg.format(brty=self.brm, miu=self.miu, rwt=self.rwt,
+        return msg.format(brty=self.target.brty, miu=self.miu, rwt=self.rwt,
                           mode=("passive", "active")[self.acm])
 
     def activate(self, timeout=None, **options):
         """Activate DEP communication as a target."""
         
         if timeout is None: timeout = 1.0
-        self.gbt = options.get('gbt', '')
-        self.lrt = options.get('lrt', 3)
-        self.acm = options.get('acm', True)
-        self.rwt = options.get('rwt', 0.077)
-        for wt, rwt in enumerate([4096/13.56E6 * 2**wt for wt in range(15)]):
-            if rwt >= self.rwt: self.rwt = rwt; break
-        else: self.rwt = 67108864/13.56E6
-        
-        ba = lambda s: bytearray.fromhex(s)
-        sensa_res=ba("0101"); sdd_res=ba("08") + urandom(3); sel_res=ba("40")
-        sensf_res=ba("0101FE") + urandom(6) + ba("00000000 00000000 FFFF")
+        gbt = options.get('gbt', '')[0:47]
+        lrt = min(max(0, options.get('lrt', 3)), 3)
+        rwt = min(max(0, options.get('rwt', 8)), 14)
 
-        pp = (self.lrt << 4) | (bool(self.gbt) << 1) | int(bool(self.nad))
-        atr_res = ATR_RES(sensf_res[0:8]+"\0\0", 0, 0, 0, wt, pp, self.gbt)
+        pp = (lrt << 4) | (bool(gbt) << 1) | int(bool(self.nad))
+        nfcid3t = bytearray.fromhex("01FE") + urandom(6) + "ST"
+        atr_res = ATR_RES(nfcid3t, 0, 0, 0, rwt, pp, gbt)
         atr_res = atr_res.encode()
         
-        tta = nfc.clf.TTA(sens_res=sensa_res, sdd_res=sdd_res, sel_res=sel_res)
-        ttf = nfc.clf.TTF(sens_res=sensf_res)
-        tta.atr_res = ttf.atr_res = atr_res
-        target = nfc.clf.DEP(tta=tta, ttf=ttf)
-        if self.acm: target.atr_res = atr_res
-
+        target = nfc.clf.LocalTarget(atr_res=atr_res)
+        target.sens_res = bytearray.fromhex("0101")
+        target.sdd_res = bytearray.fromhex("08") + urandom(3)
+        target.sel_res = bytearray.fromhex("40")
+        target.sensf_res = bytearray.fromhex("01") + nfcid3t[0:8]
+        target.sensf_res += bytearray.fromhex("00000000 00000000 FFFF")
+        
         target = self.clf.listen(target, timeout)
-        if target and target.atr_req and target.cmd:
+        
+        if target and target.atr_req and target.dep_req:
             log.debug("activated as " + str(target))
         
             atr_req = ATR_REQ.decode(target.atr_req)
-            self.miu = atr_req.lr - 3
-            self.did = atr_req.did if atr_req.did > 0 else None
+            self.lrt = lrt
+            self.gbt = gbt
             self.gbi = atr_req.gb
-            self.cmd = target.cmd
-            self.brm = target.brty
-            self.acm = not (target.tta or target.ttf)
+            self.miu = atr_req.lr - 3
+            self.rwt = 4096/13.56E6 * pow(2, rwt)
+            self.did = atr_req.did if atr_req.did > 0 else None
+            self.acm = not (target.sens_res or target.sensf_res)
+            self.cmd = chr(len(target.dep_req)+1) + target.dep_req
+            if target.brty == "106A": self.cmd = "\xF0" + self.cmd
+            self.target = target
 
             log.info("running as " + str(self))
             return self.gbi
@@ -429,8 +423,8 @@ class Target(DataExchangeProtocol):
         deadline = time() + timeout
         
         if self.cmd is not None:
-            # first command frame that was received in activate is
-            # injected in send_res_recv_req and self.cmd set to None
+            # first command frame received in activate is injected in
+            # send_res_recv_req and self.cmd then set to None
             assert send_data is None, "send_data should be None on first call"
             req = self.send_dep_res_recv_dep_req(None, deadline)
             self.pni = 0
@@ -532,12 +526,12 @@ class Target(DataExchangeProtocol):
         log.debug(">> {0}".format(packet))
         frame = packet.encode()
         frame = chr(len(frame) + 1) + frame
-        if self.brm == '106A':
+        if self.target.brty == '106A':
             frame = '\xF0' + frame
         return frame
         
     def decode_frame(self, frame):
-        if self.brm == '106A' and frame.pop(0) != 0xF0:
+        if self.target.brty == '106A' and frame.pop(0) != 0xF0:
             error = "first NFC-DEP frame byte must be F0h for 106A"
             raise nfc.clf.ProtocolError(error)
         if len(frame) != frame.pop(0):

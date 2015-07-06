@@ -13,24 +13,26 @@ attributes for the contactless targets that may be discovered in a
 single sense loop. An empty loop (no targets) is allowed but is only
 useful to verify the :meth:`nfc.clf.ContactlessFrontend.sense` method
 behavior. Optional arguments allow to set an iteration count and
-interval, continiously repeat the (iterated) loop after a wait time,
+interval, continously repeat the (iterated) loop after a wait time,
 activate standard or verbose debug logs, and to specify the local
 device to use.
 
 A *target* is specified by bitrate and a type identifier ``A``, ``B``,
-``F``, or no type identifier to indicate ``DEP``. The following
-example would first sense for a DEP Target at 106kbps (in active
-communication mode), then for a Type A Target at 106 kbps, a Tyüpe B
-Target at 106kbps and a Type F Target at 212kbps. ::
+``F``. The following example would first sense for a DEP Target at
+106kbps (in active communication mode), then for a Type A Target at
+106 kbps, a Type B Target at 106kbps and a Type F Target at
+212kbps. ::
 
-  $ sense.py 106 106A 106B 212F
+  $ sense.py 106A 106B 212F
 
 Additional parameters can be supplied as comma-delimited name=value
 pairs in brackets. The example below searches for a 106 kbps DEP
 Target (in active communication mode) and then changes communication
 speed to 424 kbps. ::
 
-  $ sense.py '106(psl_req=D404001203)'
+  $ sense.py '106A(atr_req=d400FFFFFFFFFFFFFFFF62260000003246666d010110)'
+
+  $ sense.py 106A --atr d400FFFFFFFFFFFFFFFF62260000003246666d010110
 
 Options
 =======

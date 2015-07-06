@@ -37,7 +37,7 @@ from . import tt3
 
 def activate(clf, target):
     # http://www.sony.net/Products/felica/business/tech-support/list.html
-    ic_code = target.sens_res[10]
+    ic_code = target.sensf_res[10]
     if ic_code in FelicaLite.IC_CODE_MAP.keys():
         return FelicaLite(clf, target)
     if ic_code in FelicaLiteS.IC_CODE_MAP.keys():

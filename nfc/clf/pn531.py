@@ -33,7 +33,6 @@ import nfc.clf
 from . import pn53x
             
 class Chipset(pn53x.Chipset):
-    """Chipset commands and parameters that are specific for NXP PN531."""
     CMD = {
         # Miscellaneous
         0x00: "Diagnose",
@@ -201,7 +200,7 @@ class Device(pn53x.Device):
     def sense_ttb(self, target):
         """Sense for a Type B Target is not supported."""
         info = "{device} does not support sense for Type B Target"
-        raise NotImplementedError(info.format(device=self))
+        raise nfc.clf.UnsupportedTargetError(info.format(device=self))
 
     def sense_ttf(self, target):
         """Activate the RF field and probe for a Type F Target.
@@ -213,28 +212,20 @@ class Device(pn53x.Device):
         """
         return super(Device, self).sense_ttf(target)
 
-    def sense_dep(self, target, passive_target=None):
-        """Search for a DEP Target in active or passive communication mode.
-
-        Active communication mode is used if *passive_target* is
-        None. To use passive communication mode the *passive_target*
-        must be previously discovered Type A or Type F Target.
+    def sense_dep(self, target):
+        """Search for a DEP Target in active communication mode.
 
         Because the PN531 does not implement the extended frame syntax
-        for host controller communication it can not support the
+        for host controller communication, it can not support the
         maximum payload size of 254 byte. The driver handles this by
-        modifying the length-reduction values in ATR and PSL.
+        modifying the length-reduction values in atr_req and atr_res.
 
         """
         if target.atr_req[15] & 0x30 == 0x30:
             self.log.warning("must reduce the max payload size in atr_req")
             target.atr_req[15] = (target.atr_req[15] & 0xCF) | 0x20
 
-        if target.psl_req and target.psl_req[4] & 0x03 == 0x03:
-            self.log.warning("must reduce the max payload size in psl_req")
-            target.psl_req[4] = (target.psl_req[4] & 0xFC) | 0x02
-
-        target = super(Device, self).sense_dep(target, passive_target)
+        target = super(Device, self).sense_dep(target)
         if target is None: return
         
         if target.atr_res[16] & 0x30 == 0x30:
@@ -244,19 +235,33 @@ class Device(pn53x.Device):
         return target
         
     def listen_tta(self, target, timeout):
-        """Listen as Type A Target is not supported."""
-        info = "{device} does not support listen as Type A Target"
-        raise NotImplementedError(info.format(device=self))
+        """Listen *timeout* seconds for a Type A activation at 106 kbps. The
+        ``sens_res``, ``sdd_res``, and ``sel_res`` response data must
+        be provided and ``sdd_res`` must be a 4 byte UID that starts
+        with ``08h``. Depending on ``sel_res`` an activation may
+        return a target with a ``tt2_cmd``, ``tt4_cmd`` or ``atr_req``
+        attribute. The default RATS response sent for a Type 4 Tag
+        activation can be replaced with a ``rats_res`` attribute.
+
+        """
+        return super(Device, self).listen_tta(target, timeout)
 
     def listen_ttb(self, target, timeout):
         """Listen as Type B Target is not supported."""
         info = "{device} does not support listen as Type B Target"
-        raise NotImplementedError(info.format(device=self))
+        raise nfc.clf.UnsupportedTargetError(info.format(device=self))
 
     def listen_ttf(self, target, timeout):
-        """Listen as Type F Target is not supported."""
-        info = "{device} does not support listen as Type F Target"
-        raise NotImplementedError(info.format(device=self))
+        """Listen *timeout* seconds for a Type F card activation. The target
+        ``brty`` must be set to either 212F or 424F and ``sensf_res``
+        provide 19 byte response data (response code + 8 byte IDm + 8
+        byte PMm + 2 byte system code). Note that the maximum command
+        an response frame length is 64 bytes only (including the frame
+        length byte), because the driver must directly program the
+        contactless interface unit within the PN533.
+
+        """
+        return super(Device, self).listen_ttf(target, timeout)
 
     def listen_dep(self, target, timeout):
         """Listen *timeout* seconds to become initialized as a DEP Target.

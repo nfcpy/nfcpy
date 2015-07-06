@@ -428,14 +428,17 @@ def activate_tt4(clf, target):
     log.debug("trying type 4 tag activation for {0}".format(target.brty))
     import nfc.tag.tt4
     return nfc.tag.tt4.activate(clf, target)
-    
+
+class TagEmulation(object):
+    """Base class for tag emulation classes."""
+    pass
+
 def emulate(clf, target):
     import nfc.clf
-    if type(target) is nfc.clf.TTA:
-        log.debug("can't emulate TTA target'")
-    elif type(target) is nfc.clf.TTB:
-        log.debug("can't emulate TTB target'")
-    elif type(target) is nfc.clf.TTF:
+    assert isinstance(target, nfc.clf.LocalTarget)
+    if target.tt3_cmd:
         import nfc.tag.tt3
         return nfc.tag.tt3.Type3TagEmulation(clf, target)
+    else:
+        log.debug("can't emulate with %s", target)
 

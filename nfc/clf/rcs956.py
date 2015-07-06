@@ -49,7 +49,6 @@ import nfc.clf
 from . import pn53x
 
 class Chipset(pn53x.Chipset):
-    """Chipset class for RC-S956."""
     CMD = {
         0x00: "Diagnose",
         0x02: "GetFirmwareVersion",
@@ -106,7 +105,7 @@ class Chipset(pn53x.Chipset):
         0x2A: "PUPI information in ATQB response differs from initial value",
         0x2B: "Failure to select a deselected target",
         0x2F: "Already deselected by the initiator in operation as DEPTarget",
-        0x31: "Initiator RF-OFF state detected",
+        0x31: "Initiator RF-OFF state detected while operating as Target",
         0x32: "Buffer overflow detected by firmware during RF communication",
         0x34: "DEP_REQ(NACK) received but DEP_RES(INF) was never returned",
         0x35: "The received data exceeds LEN in the RF packet",
@@ -175,7 +174,7 @@ class Device(pn53x.Device):
         self.chipset.rf_configuration(0x04, "\x00")
         self.chipset.rf_configuration(0x05, "\x00\x00\x01")
         
-        self.log.debug("write rf settings for TTA 106")
+        self.log.debug("write rf settings for 106A")
         data = bytearray.fromhex("5A F4 3F 11 4D 85 61 6F 26 62 87")
         self.chipset.rf_configuration(0x0A, data)
             
@@ -190,9 +189,6 @@ class Device(pn53x.Device):
         # (Neither value makes it work in active mode).
         self.chipset.write_register(0x0328, 0x59)
         
-    def close(self):
-        self.mute()
-
     def mute(self):
         self.chipset.reset_mode()
         super(Device, self).mute()
@@ -202,9 +198,8 @@ class Device(pn53x.Device):
 
         The RC-S956 can discover all Type A Targets (Type 1 Tag, Type
         2 Tag, and Type 4A Tag) at 106 kbps. Due to firmware
-        restrictions it is not possible to use a Type 1 Tag with
-        dynamic memory layout (more than 128 byte memory) and those
-        will be discarded.
+        restrictions it is not possible to read a Type 1 Tag with
+        dynamic memory layout (more than 128 byte memory).
 
         """
         target = super(Device, self).sense_tta(target)
@@ -242,7 +237,7 @@ class Device(pn53x.Device):
         """
         return super(Device, self).sense_ttf(target)
 
-    def sense_dep(self, target, passive_target=None):
+    def sense_dep(self, target):
         """Search for a DEP Target in active or passive communication mode.
 
         Active communication mode is used if *passive_target* is
@@ -252,22 +247,29 @@ class Device(pn53x.Device):
         """
         # Set timeout for PSL_RES and ATR_RES
         self.chipset.rf_configuration(0x02, "\x0B\x0B\x0A")
-        return super(Device, self).sense_dep(target, passive_target)
+        return super(Device, self).sense_dep(target)
 
     def listen_tta(self, target, timeout):
-        """Listen as Type A Target is not supported."""
-        info = "{device} does not support listen as Type A Target"
-        raise NotImplementedError(info.format(device=self))
+        """Listen *timeout* seconds for a Type A activation at 106 kbps. The
+        ``sens_res``, ``sdd_res``, and ``sel_res`` response data must
+        be provided and ``sdd_res`` must be a 4 byte UID that starts
+        with ``08h``. Depending on ``sel_res`` an activation may
+        return a target with a ``tt2_cmd``, ``tt4_cmd`` or ``atr_req``
+        attribute. The default RATS response sent for a Type 4 Tag
+        activation can be replaced with a ``rats_res`` attribute.
+
+        """
+        return super(Device, self).listen_tta(target, timeout)
 
     def listen_ttb(self, target, timeout):
         """Listen as Type B Target is not supported."""
         info = "{device} does not support listen as Type B Target"
-        raise NotImplementedError(info.format(device=self))
+        raise nfc.clf.UnsupportedTargetError(info.format(device=self))
 
     def listen_ttf(self, target, timeout):
         """Listen as Type F Target is not supported."""
         info = "{device} does not support listen as Type F Target"
-        raise NotImplementedError(info.format(device=self))
+        raise nfc.clf.UnsupportedTargetError(info.format(device=self))
 
     def listen_dep(self, target, timeout):
         """Listen *timeout* seconds to become initialized as a DEP Target.
@@ -291,19 +293,14 @@ class Device(pn53x.Device):
         # Set the WaitForSelected bit in CIU_FelNFC2 register to
         # prevent active mode activation. Target active mode is not
         # really working with this device.
-        if target.atr_res:
-            self.log.warning("target active communication mode is disabled")
-            del target.atr_res
         self.chipset.write_register("CIU_FelNFC2", 0x80)
 
         # We can not send ATR_RES as as a regular response but must
-        # use TgSetGeneralBytes to get the state machine to Mode
-        # 3. Thus the ATR_RES is mostly determined by the firmware, we
-        # can only control the TO parameter for RWT, but must do it
-        # before the actual listen.
-        if target.tta.atr_res[15] != target.ttf.atr_res[15]:
-            self.log.warning("restricted choice of atr_res, using larger RWT")
-        to = max(target.tta.atr_res[15] & 0x0F, target.ttf.atr_res[15] & 0x0F)
+        # use TgSetGeneralBytes to advance the chipset state machine
+        # to mode 3. Thus the ATR_RES is mostly determined by the
+        # firmware, we can only control the TO parameter for RWT, but
+        # must do it before the actual listen.
+        to = target.atr_res[15] & 0x0F
         self.chipset.rf_configuration(0x82, bytearray([to, 2, to]))
 
         # Disable automatic ATR_RES transmission. This must be done
@@ -319,7 +316,7 @@ class Device(pn53x.Device):
         args = (mode & 0xFE, tta_params, ttf_params, nfcid3t, '', timeout)
         return self.chipset.tg_init_target(*args)
 
-    def _send_atr_response(self, target, timeout):
+    def _send_atr_response(self, atr_res, timeout):
         # Before ATR_RES the device is in Mode 2 which does not allow
         # the use of TgResponseToInitiator. To send the ATR_RES we
         # must use TgSetGeneralBytes and can control only the general
@@ -328,9 +325,8 @@ class Device(pn53x.Device):
         # have no effect on the actual response. The hope is that the
         # firmware will do the same when sending ATR_RES and we tell
         # the truth to the caller.
-        target.atr_res[12] = target.atr_req[12] # copy DID
-        self.log.debug("set general bytes for ATR_RES")
-        self.chipset.tg_set_general_bytes(target.atr_res[17:])
+        self.log.debug("calling TgSetGeneralBytes to send ATR_RES")
+        self.chipset.tg_set_general_bytes(atr_res[17:])
         return self.chipset.tg_get_initiator_command(timeout)
 
     def _tt1_send_cmd_recv_rsp(self, data, timeout):

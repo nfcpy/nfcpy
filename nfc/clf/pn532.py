@@ -26,6 +26,7 @@ import logging
 log = logging.getLogger(__name__)
 
 import time
+from binascii import hexlify
 
 import nfc.clf
 from . import pn53x
@@ -230,15 +231,9 @@ class Device(pn53x.Device):
         """
         return super(Device, self).sense_ttf(target)
 
-    def sense_dep(self, target, passive_target=None):
-        """Search for a DEP Target in active or passive communication mode.
-
-        Active communication mode is used if *passive_target* is
-        None. To use passive communication mode the *passive_target*
-        must be previously discovered Type A or Type F Target.
-
-        """
-        return super(Device, self).sense_dep(target, passive_target)
+    def sense_dep(self, target):
+        """Search for a DEP Target in active communication mode."""
+        return super(Device, self).sense_dep(target)
         
     def _tt1_send_cmd_recv_rsp(self, data, timeout):
         # Special handling for Tag Type 1 (Jewel/Topaz) card commands.
@@ -261,11 +256,11 @@ class Device(pn53x.Device):
         # Remaining commands READ8, WRITE-E8, WRITE-NE8 are not
         # implemented by the chipset. Fortunately we can directly
         # program the CIU through register read/write. Each TT1
-        # command byte must be send as a separate TTA frame, the first
-        # must be a short frame with only 7 data bits and the rest is
-        # normal frames. Reading is also a bit complicated because for
-        # sending we have to disable the parity generator which means
-        # that we will also receive the parity bits, thus 9 bits
+        # command byte must be send as a separate Type A frame, the
+        # first as a short frame with only 7 data bits and the others
+        # as normal frames. Reading is also a bit complicated because
+        # for sending we have to disable the parity generator which
+        # means that we will also receive the parity bits, thus 9 bits
         # received per 8 data bits. And because they are already
         # reversed in the FIFO we must swap before parity removal and
         # afterwards (maybe this could be optimized a bit)
@@ -297,19 +292,33 @@ class Device(pn53x.Device):
         return bytearray(data[0:-2])
 
     def listen_tta(self, target, timeout):
-        """Listen as Type A Target is not supported."""
-        info = "{device} does not support listen as Type A Target"
-        raise NotImplementedError(info.format(device=self))
+        """Listen *timeout* seconds for a Type A activation at 106 kbps. The
+        ``sens_res``, ``sdd_res``, and ``sel_res`` response data must
+        be provided and ``sdd_res`` must be a 4 byte UID that starts
+        with ``08h``. Depending on ``sel_res`` an activation may
+        return a target with a ``tt2_cmd``, ``tt4_cmd`` or ``atr_req``
+        attribute. The default RATS response sent for a Type 4 Tag
+        activation can be replaced with a ``rats_res`` attribute.
+
+        """
+        return super(Device, self).listen_tta(target, timeout)
 
     def listen_ttb(self, target, timeout):
         """Listen as Type B Target is not supported."""
         info = "{device} does not support listen as Type B Target"
-        raise NotImplementedError(info.format(device=self))
+        raise nfc.clf.UnsupportedTargetError(info.format(device=self))
 
     def listen_ttf(self, target, timeout):
-        """Listen as Type F Target is not supported."""
-        info = "{device} does not support listen as Type F Target"
-        raise NotImplementedError(info.format(device=self))
+        """Listen *timeout* seconds for a Type F card activation. The target
+        ``brty`` must be set to either 212F or 424F and ``sensf_res``
+        provide 19 byte response data (response code + 8 byte IDm + 8
+        byte PMm + 2 byte system code). Note that the maximum command
+        an response frame length is 64 bytes only (including the frame
+        length byte), because the driver must directly program the
+        contactless interface unit within the PN533.
+
+        """
+        return super(Device, self).listen_ttf(target, timeout)
 
     def listen_dep(self, target, timeout):
         """Listen *timeout* seconds to become initialized as a DEP Target.
@@ -326,9 +335,6 @@ class Device(pn53x.Device):
         return self.chipset.tg_init_as_target(*args)
 
 def init(transport):
-    """Initialize a PN532 based local device.
-
-    """
     if transport.TYPE == "TTY":
         # wakeup from power down and delay to operational state
         transport.write(bytearray([0x55, 0x00, 0x00, 0x00, 0x00]))

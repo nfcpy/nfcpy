@@ -194,9 +194,6 @@ class CommandLineInterface(object):
         group.add_argument(
             "--abstime", action="store_true",
             help="show absolute timestamps in screen log")
-        group.add_argument(
-            "--nolog-symm", action="store_true",
-            help="do not log LLCP SYMM PDUs")
         
     def add_llcp_options(self, argument_parser):
         group = argument_parser.add_argument_group(
@@ -208,8 +205,8 @@ class CommandLineInterface(object):
             "--lto", type=int, default=500, metavar='',
             help="LLCP Link Timeout in ms (default: %(default)s ms)")
         group.add_argument(
-            "--rwt", type=int, default=77, metavar='',
-            help="DEP response waiting time (default: %(default)s ms)")
+            "--rwt", type=int, default=8, metavar='',
+            help="response waiting time index (default: %(default)s)")
         group.add_argument(
             "--mode", choices=["t","target","i","initiator"], metavar='',
             help="connect as [t]arget or [i]nitiator (default: both)")
@@ -276,14 +273,14 @@ class CommandLineInterface(object):
             argument_parser.description += "  {0:2d} - {1}\n".format(
                 int(test_name.split('_')[1]), test_info)
         
-    def on_rdwr_startup(self, clf, targets):
+    def on_rdwr_startup(self, targets):
         return targets
 
     def on_rdwr_connect(self, tag):
         log.info(tag)
         return True
 
-    def on_llcp_startup(self, clf, llc):
+    def on_llcp_startup(self, llc):
         if "test" in self.groups and len(self.options.test) == 0:
             log.error("no test specified")
             return None
@@ -297,15 +294,15 @@ class CommandLineInterface(object):
             return False
         return True
 
-    def on_card_startup(self, clf, targets):
+    def on_card_startup(self, target):
         log.warning("on_card_startup should be customized")
-        return targets
+        return None
 
-    def on_card_connect(self, tag, command):
+    def on_card_connect(self, tag):
         log.info("activated as {0}".format(tag))
         if "test" in self.groups:
             self.test_completed = False
-            self.run_tests(tag, command)
+            self.run_tests(tag)
             return False
         return True
 
@@ -368,9 +365,9 @@ class CommandLineInterface(object):
                 }
             if self.options.technology:
                 rdwr_options["targets"] = {
-                    "A": [nfc.clf.TTA(106)],
-                    "B": [nfc.clf.TTB(106)],
-                    "F": [nfc.clf.TTF(424), nfc.clf.TTF(212)],
+                    "A": [nfc.clf.RemoteTarget("106A")],
+                    "B": [nfc.clf.RemoteTarget("106B")],
+                    "F": [nfc.clf.RemoteTarget("212F")],
                 }[self.options.technology.upper()]
         else:
             rdwr_options = None
@@ -390,10 +387,9 @@ class CommandLineInterface(object):
                 'acm': not self.options.passive_only,
                 'miu': self.options.miu,
                 'lto': self.options.lto,
-                'rwt': self.options.rwt * 1E-3,
+                'rwt': self.options.rwt,
                 'agf': not self.options.no_aggregation,
-                'symm-log': not self.options.nolog_symm,
-                }
+            }
         else:
             llcp_options = None
             

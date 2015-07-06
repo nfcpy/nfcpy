@@ -64,11 +64,9 @@ class ServiceCode:
         self.attribute = attribute
 
     def __repr__(self):
-        """x.__repr__() <==> repr(x)"""
         return "ServiceCode({0}, {1})".format(self.number, self.attribute)
 
     def __str__(self):
-        """x.__str__() <==> str(x)"""
         attribute_map = {
             0b001000: "Random RW with key",
             0b001001: "Random RW w/o key",
@@ -121,12 +119,10 @@ class BlockCode:
         self.service = service
 
     def __repr__(self):
-        """x.__repr__() <==> repr(x)"""
         return "BlockCode({0}, {1}, {2})".format(
             self.number, self.access, self.service)
 
     def __str__(self):
-        """x.__str__() <==> str(x)"""
         s = "BlockCode(number={0}, access={1:03b}, service={2})"
         return s.format(self.number, self.access, self.service)
 
@@ -238,16 +234,15 @@ class Type3Tag(nfc.tag.Tag):
 
     def __init__(self, clf, target):
         super(Type3Tag, self).__init__(clf, target)
-        self.idm = target.sens_res[1:9]
-        self.pmm = target.sens_res[9:17]
+        self.idm = target.sensf_res[1:9]
+        self.pmm = target.sensf_res[9:17]
         self.sys = 0xFFFF
-        if len(target.sens_res) > 17:
-            self.sys = unpack(">H", target.sens_res[17:19])[0]
+        if len(target.sensf_res) > 17:
+            self.sys = unpack(">H", target.sensf_res[17:19])[0]
         self._nbr, self._nbw = (1, 1)
         self._nfcid = bytearray(self.idm)
 
     def __str__(self):
-        """x.__str__() <==> str(x)"""
         s = " PMM={pmm} SYS={sys:04X}"
         return nfc.tag.Tag.__str__(self) + s.format(
             pmm=hexlify(self.pmm).upper(), sys=self.sys)
@@ -685,13 +680,18 @@ class Type3Tag(nfc.tag.Tag):
         return rsp[12:]
         
 
-class Type3TagEmulation(object):
+class Type3TagEmulation(nfc.tag.TagEmulation):
+    """Framework for Type 3 Tag emulation.
+
+    """
     def __init__(self, clf, target):
-        self.clf = clf
-        self.idm = target.idm
-        self.pmm = target.pmm
-        self.sys = target.sys
         self.services = dict()
+        self.target = target
+        self.cmd = chr(len(target.tt3_cmd)+1) + target.tt3_cmd
+        self.idm = target.sensf_res[1:9]
+        self.pmm = target.sensf_res[9:17]
+        self.sys = target.sensf_res[17:19]
+        self.clf = clf
 
     def __str__(self):
         """x.__str__() <==> str(x)"""
@@ -839,7 +839,7 @@ class Type3TagEmulation(object):
         return '\x01' + self.sys
 
 def activate(clf, target):
-    if not target.sens_res[1:3] == "\x01\xFE":
+    if not target.sensf_res[1:3] == "\x01\xFE":
         import nfc.tag.tt3_sony
         tag = nfc.tag.tt3_sony.activate(clf, target)
         return tag if tag else Type3Tag(clf, target)

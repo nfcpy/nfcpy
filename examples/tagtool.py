@@ -279,7 +279,7 @@ class TagTool(CommandLineInterface):
         super(TagTool, self).__init__(
             parser, groups="rdwr card dbg clf")
 
-    def on_rdwr_startup(self, clf, targets):
+    def on_rdwr_startup(self, targets):
         if self.options.command in self.rdwr_commands.keys():
             print("** waiting for a tag **", file=sys.stderr)
             return targets
@@ -303,15 +303,15 @@ class TagTool(CommandLineInterface):
         self.rdwr_commands[self.options.command](tag)
         return self.options.wait or self.options.loop
     
-    def on_card_startup(self, clf, targets):
+    def on_card_startup(self, target):
         if self.options.command == "emulate":
-            target = self.prepare_tag()
+            target = self.prepare_tag(target)
             print("** waiting for a reader **", file=sys.stderr)
-            return [target]
+            return target
 
-    def on_card_connect(self, tag, command):
+    def on_card_connect(self, tag):
         log.info("tag activated")
-        return self.emulate_tag_start(tag, command)
+        return self.emulate_tag_start(tag)
 
     def on_card_release(self, tag):
         log.info("tag released")
@@ -471,11 +471,11 @@ class TagTool(CommandLineInterface):
         elif result is None:
             print("Sorry, but this tag can not be protected.")
 
-    def prepare_tag(self):
+    def prepare_tag(self, target):
         if self.options.tagtype == "tt3":
-            return self.prepare_tt3_tag()
+            return self.prepare_tt3_tag(target)
 
-    def prepare_tt3_tag(self):
+    def prepare_tt3_tag(self, target):
         if self.options.size % 16 != 0:
             self.options.size = ((self.options.size + 15) // 16) * 16
             log.warning("tt3 ndef data area size rounded to {0}"
@@ -519,11 +519,14 @@ class TagTool(CommandLineInterface):
         idm = bytearray.fromhex(self.options.idm)
         pmm = bytearray.fromhex(self.options.pmm)
         sys = bytearray.fromhex(self.options.sys)
-        return nfc.clf.TTF(self.options.bitrate, idm, pmm, sys)
 
-    def emulate_tag_start(self, tag, command):
+        target.brty = str(self.options.bitrate) + "F"
+        target.sensf_res = "\x01" + idm + pmm + sys
+        return target
+
+    def emulate_tag_start(self, tag):
         if self.options.tagtype == "tt3":
-            return self.emulate_tt3_tag(tag, command)
+            return self.emulate_tt3_tag(tag)
 
     def emulate_tag_stop(self, tag):
         if self.options.preserve:
@@ -532,7 +535,7 @@ class TagTool(CommandLineInterface):
             log.info("wrote tag memory to file '{0}'"
                      .format(self.options.preserve.name))
 
-    def emulate_tt3_tag(self, tag, command):
+    def emulate_tt3_tag(self, tag):
         def ndef_read(block_number, rb, re):
             log.debug("tt3 read block #{0}".format(block_number))
             if block_number < len(self.options.tt3_data) / 16:

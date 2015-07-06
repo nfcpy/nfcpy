@@ -236,7 +236,7 @@ class TestProgram(CommandLineInterface):
         super(TestProgram, self).__init__(
             parser, groups="llcp rdwr dbg clf")
 
-    def on_llcp_startup(self, clf, llc):
+    def on_llcp_startup(self, llc):
         validation_service_name = "urn:nfc:xsn:nfc-forum.org:phdc-validation"
         self.phdc_manager_1 = PhdcPeerManager(llc, "urn:nfc:sn:phdc")
         self.phdc_manager_2 = PhdcPeerManager(llc, validation_service_name)

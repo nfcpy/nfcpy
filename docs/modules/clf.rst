@@ -19,29 +19,22 @@ nfc`` as used by the examples in this section.
 Technology Types
 ----------------
 
-.. autoclass:: TechnologyType
+.. autoclass:: RemoteTarget
    :members:
-
-.. autoclass:: TTA
-   :show-inheritance:
-   :members:
-
-.. autoclass:: TTB
-   :show-inheritance:
-   :members:
-
-.. autoclass:: TTF
-   :show-inheritance:
-   :members:
-
-.. autoclass:: DEP
-   :show-inheritance:
+   
+.. autoclass:: LocalTarget
    :members:
 
 Exceptions
 ----------
 
-.. autoexception:: DigitalError
+.. autoexception:: Error
+   :show-inheritance:
+
+.. autoexception:: UnsupportedTargetError
+   :show-inheritance:
+
+.. autoexception:: CommunicationError
    :show-inheritance:
 
 .. autoexception:: ProtocolError
@@ -51,6 +44,9 @@ Exceptions
    :show-inheritance:
 
 .. autoexception:: TimeoutError
+   :show-inheritance:
+
+.. autoexception:: BrokenLinkError
    :show-inheritance:
 
 Device Drivers

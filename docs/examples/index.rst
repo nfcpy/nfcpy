@@ -11,7 +11,13 @@ Example Programs
    Exchange NDEF data with a smartphone.
 
 :doc:`sense`
-   Find and activate contactless targets.
+   Sense for contactless targets.
+
+:doc:`listen`
+   Listen as contactless target.
+
+:doc:`rfstate`
+   Observe the RF field presence.
 
 .. toctree::
    :hidden:
@@ -20,4 +26,5 @@ Example Programs
    ndeftool
    beam
    sense
-   
+   listen
+   rfstate

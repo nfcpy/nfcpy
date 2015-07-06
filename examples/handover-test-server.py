@@ -198,7 +198,7 @@ class TestProgram(CommandLineInterface):
 
         self.select_carrier_lock = threading.Lock()
         
-    def on_llcp_startup(self, clf, llc):
+    def on_llcp_startup(self, llc):
         self.handover_service = HandoverServer(
             llc, self.select_carrier, self.options)
         if self.options.quirks:

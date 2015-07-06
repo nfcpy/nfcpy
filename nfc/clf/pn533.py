@@ -146,6 +146,12 @@ class Device(pn53x.Device):
 
     """
     def __init__(self, chipset, logger):
+        with open("pn533_init_1.txt", "w") as f:
+            for addr in range(0, 0x03FF, 16):
+                xram = chipset.read_register(*range(addr, addr+16))
+                xram = ' '.join(["%02X" % x for x in xram])
+                f.write("0x%04X: %s\n" % (addr, xram))
+
         assert isinstance(chipset, Chipset)
         super(Device, self).__init__(chipset, logger)
         
@@ -165,19 +171,23 @@ class Device(pn53x.Device):
             # attached, least CIU_RFCfg register for 106A is different
             # and prevents active mode initialization as target.
             self.log.debug("no eeprom attached")
-            self.log.debug("write analog settings for type A")
+            
+            self.log.debug("write analog settings for Type A")
             data = bytearray.fromhex("5A F4 3F 11 4D 85 61 6F 26 62 87")
             self.chipset.rf_configuration(0x0A, data)
-            #self.log.debug("write rf settings for TTF 212/424")
+            
+            #self.log.debug("write rf settings for 212F/424F")
             #data = bytearray.fromhex("6A FF 3F 11 41 85 61 6F")
             #self.chipset.rf_configuration(0x0B, data)
-            #self.log.debug("write rf settings for TTB 106")
+            
+            #self.log.debug("write rf settings for 106B")
             #data = bytearray.fromhex("FF 17 85") # ModGsP set differently
             #self.chipset.rf_configuration(0x0C, data)
-            #self.log.debug("write rf settings for TTA 212/424/848")
+            
+            #self.log.debug("write rf settings for 212A/424A/848A")
             #data = bytearray.fromhex("85 15 8A 85 0A B2 85 04 DA")
             #self.chipset.rf_configuration(0x0D, data)
-
+            
     def close(self):
         try:
             self.mute()
@@ -214,15 +224,9 @@ class Device(pn53x.Device):
         """
         return super(Device, self).sense_ttf(target)
 
-    def sense_dep(self, target, passive_target=None):
-        """Search for a DEP Target in active or passive communication mode.
-
-        Active communication mode is used if *passive_target* is
-        None. To use passive communication mode the *passive_target*
-        must be a previously discovered Type A or Type F Target.
-
-        """
-        return super(Device, self).sense_dep(target, passive_target)
+    def sense_dep(self, target):
+        """Search for a DEP Target in active communication mode."""
+        return super(Device, self).sense_dep(target)
 
     def send_cmd_recv_rsp(self, target, data, timeout):
         """Send command *data* to the remote *target* and return the response
@@ -253,11 +257,11 @@ class Device(pn53x.Device):
         # Remaining commands READ8, WRITE-E8, WRITE-NE8 are not
         # implemented by the chipset. Fortunately we can directly
         # program the CIU through register read/write. Each TT1
-        # command byte must be send as a separate TTA frame, the first
-        # must be a short frame with only 7 data bits and the rest is
-        # normal frames. Reading is also a bit complicated because for
-        # sending we have to disable the parity generator which means
-        # that we will also receive the parity bits, thus 9 bits
+        # command byte must be send as a separate Type A frame, the
+        # first is a short frame with only 7 data bits and the others
+        # are normal frames. Reading is also a bit complicated because
+        # for sending we have to disable the parity generator which
+        # means that we will also receive the parity bits, thus 9 bits
         # received per 8 data bits. And because they are already
         # reversed in the FIFO we must swap before parity removal and
         # afterwards (maybe this could be a bit more optimized).
@@ -294,13 +298,13 @@ class Device(pn53x.Device):
         return bytearray(data[:-2])
 
     def listen_tta(self, target, timeout):
-        """Listen *timeout* seconds to become initialized as a Type A Target.
-        
-        The PN533 can be set to listen as a Type A Target. The
-        *target* type must provide the ``sens_res``, ``sdd_res``, and
-        ``sel_res`` response data. The UID provided with ``sdd_res``
-        must conform to the dynamically generated cascade level 1
-        format, i.e. contain a 4 byte UID starting with ``80h``.
+        """Listen *timeout* seconds for a Type A activation at 106 kbps. The
+        ``sens_res``, ``sdd_res``, and ``sel_res`` response data must
+        be provided and ``sdd_res`` must be a 4 byte UID that starts
+        with ``08h``. Depending on ``sel_res`` an activation may
+        return a target with a ``tt2_cmd``, ``tt4_cmd`` or ``atr_req``
+        attribute. The default RATS response sent for a Type 4 Tag
+        activation can be replaced with a ``rats_res`` attribute.
 
         """
         return super(Device, self).listen_tta(target, timeout)
@@ -308,16 +312,16 @@ class Device(pn53x.Device):
     def listen_ttb(self, target, timeout):
         """Listen as Type B Target is not supported."""
         info = "{device} does not support listen as Type B Target"
-        raise NotImplementedError(info.format(device=self))
+        raise nfc.clf.UnsupportedTargetError(info.format(device=self))
 
     def listen_ttf(self, target, timeout):
-        """Listen *timeout* seconds to become initialized as a Type F Target.
-        
-        The PN533 can be set to listen as a Type F Target. The
-        *target* type must provide the ``sens_res`` response data with
-        the 8 byte IDm, 8 byte PMm, and 2 byte System Code. The IDm
-        should not start with the NFC-DEP prefix ``01FEh``, although
-        this is not enforced.
+        """Listen *timeout* seconds for a Type F card activation. The target
+        ``brty`` must be set to either 212F or 424F and ``sensf_res``
+        provide 19 byte response data (response code + 8 byte IDm + 8
+        byte PMm + 2 byte system code). Note that the maximum command
+        an response frame length is 64 bytes only (including the frame
+        length byte), because the driver must directly program the
+        contactless interface unit within the PN533.
 
         """
         return super(Device, self).listen_ttf(target, timeout)

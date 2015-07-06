@@ -217,7 +217,7 @@ class TestProgram(CommandLineInterface):
         parser = argparse.ArgumentParser()
         super(TestProgram, self).__init__(parser, "llcp dbg clf")
 
-    def on_llcp_startup(self, clf, llc):
+    def on_llcp_startup(self, llc):
         self.cl_echo_server = ConnectionLessEchoServer(llc)
         self.cm_echo_server = ConnectionModeEchoServer(llc)
         self.cm_dump_server = ConnectionModeDumpServer(llc)
