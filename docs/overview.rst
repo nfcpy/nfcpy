@@ -6,8 +6,9 @@ Requirements
 ============
 
 * Python 2.6 or newer but not Python 3.x
-* pyUSB and libusb (for native USB readers)
-* pySerial (for serial readers on COM or USB)
+* pyUSB and libusb for native USB readers
+* pySerial for serial readers on COM or USB
+* docopt for execution of some examples
 
 Supported Hardware
 ==================
@@ -44,14 +45,30 @@ Notes:
   generally less usable for NFC P2P communication due to the MCU
   interfering with settings made directly to the PN532.
 
+
+=======  === === === === ===  === === === === === === === ===
+..         Tag Read/Write        Tag Emulation     Peer2Peer 
+-------  -------------------  ------------------- -----------
+..        1   2   3   4A  4B   1   2   3   4A  4B  I   T  ACM
+=======  === === === === ===  === === === === === === === ===
+RC-S380   x   x   x   x   x    o   x   x   x   o   x   x   o 
+SCL3711   x   x   x   x   x    o   x   x   x   o   x   x   x 
+ACR122    o   x   x   x   x    o   o   o   o   o   x   o     
+RC-S330   x   x   x   x   x    o   x   x   x   o   x   x   x 
+PN533     x   x   x   x   x    o   x   x   x   o   x   x   x 
+PN532     x   x   x   x   x    o   x   x   x   o   x   x   x 
+PN531     o   x   x   x   o    o   o   o   o   o   x   x     
+=======  === === === === ===  === === === === === === === ===
+
+
 Implementation Status
 =====================
 
 ====================================  =========================
 Specification                         Status
 ====================================  =========================
-TS NFC Digital Protocol 1.1           except Type B
-TS NFC Activity 1.1                   except Type B
+TS NFC Digital Protocol 1.1           implemented
+TS NFC Activity 1.1                   implemented
 TS Type 1 Tag Operation 1.2           implemented
 TS Type 2 Tag Operation 1.2           implemented
 TS Type 3 Tag Operation 1.2           implemented

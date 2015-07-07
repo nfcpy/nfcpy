@@ -199,14 +199,25 @@ class ContactlessFrontend(object):
            that evaluates false will remove the 'rdwr' option
            completely.
 
+        'on-discover' : function(target)
+           This function is called when a :class:`RemoteTarget` has
+           been discovered. The *target* argument contains the
+           technology type specific discovery responses and should be
+           evaluated for multi-protocol support. The target will be
+           further activated only if this function returns a true
+           value. The default function depends on the 'llcp' option,
+           if present then the function returns True only if the
+           target does not indicate peer to peer protocol support,
+           otherwise it returns True for all targets.
+        
         'on-connect' : function(tag)
-           The 'on-connect' function is called when a remote tag has
-           been discovered and activated. The *tag* argument is an
-           instance of class :class:`nfc.tag.Tag` and can be used for
-           tag reading and writing within the callback or in a separate
-           thread. Any true return value instructs :meth:`connect` to
-           wait until the tag is no longer present and then return
-           True, any false return value implies immediate return of the
+           This function is called when a remote tag has been
+           activated. The *tag* argument is an instance of class
+           :class:`nfc.tag.Tag` and can be used for tag reading and
+           writing within the callback or in a separate thread. Any
+           true return value instructs :meth:`connect` to wait until
+           the tag is no longer present and then return True, any
+           false return value implies immediate return of the
            :class:`nfc.tag.Tag` object.
         
         'on-release' : function(tag)
@@ -383,6 +394,13 @@ class ContactlessFrontend(object):
            response data that is needed). The fully specified target
            object must then be returned.
         
+        'on-discover' : function(target)
+           This function is called when the :class:`LocalTarget` has
+           been discovered. The *target* argument contains the
+           technology type specific discovery commands. The target
+           will be further activated only if this function returns a
+           true value. The default function always returns True.
+        
         'on-connect' : function(tag)
            This function is called when the local target was
            discovered and a :class:`nfc.tag.TagEmulation` object
@@ -466,21 +484,6 @@ class ContactlessFrontend(object):
         except AssertionError as error:
             raise TypeError("argument '%s' must be dictionary type" % error)
         
-        if rdwr_options:
-            rdwr_options = dict(rdwr_options)
-            rdwr_options.setdefault('targets', ['106A', '106B', '212F'])
-            rdwr_options.setdefault('on-startup', lambda targets: targets)
-            rdwr_options.setdefault('on-connect', lambda tag: True)
-            rdwr_options.setdefault('on-release', lambda tag: True)
-            
-            targets = [RemoteTarget(brty) for brty in rdwr_options['targets']]
-            targets = rdwr_options['on-startup'](targets)
-            if targets and all([isinstance(o, RemoteTarget) for o in targets]):
-                rdwr_options['targets'] = targets
-            else:
-                log.debug("removing rdwr_options after on-startup")
-                rdwr_options = None
-        
         if llcp_options:
             llcp_options = dict(llcp_options)
             llcp_options.setdefault('on-startup', lambda llc: llc)
@@ -499,9 +502,29 @@ class ContactlessFrontend(object):
                 log.debug("removing llcp_options after on-startup")
                 llcp_options = None
 
+        if rdwr_options:
+            rdwr_options = dict(rdwr_options)
+            on_discover = (lambda t: True) if not llcp_options else (
+                lambda t: not ((t.sel_res and t.sel_res[0] & 0x40) or
+                               (t.sensf_res and t.sensf_res[1:3]=="\x01\xFE")))
+            rdwr_options.setdefault('targets', ['106A', '106B', '212F'])
+            rdwr_options.setdefault('on-startup', lambda targets: targets)
+            rdwr_options.setdefault('on-discover', on_discover)
+            rdwr_options.setdefault('on-connect', lambda tag: True)
+            rdwr_options.setdefault('on-release', lambda tag: True)
+            
+            targets = [RemoteTarget(brty) for brty in rdwr_options['targets']]
+            targets = rdwr_options['on-startup'](targets)
+            if targets and all([isinstance(o, RemoteTarget) for o in targets]):
+                rdwr_options['targets'] = targets
+            else:
+                log.debug("removing rdwr_options after on-startup")
+                rdwr_options = None
+        
         if card_options:
             card_options = dict(card_options)
             card_options.setdefault('on-startup', lambda target: None)
+            rdwr_options.setdefault('on-discover', lambda target: True)
             card_options.setdefault('on-connect', lambda tag: True)
             card_options.setdefault('on-release', lambda tag: True)
             
@@ -516,14 +539,19 @@ class ContactlessFrontend(object):
         if not (rdwr_options or llcp_options or card_options):
             log.warning("no options to connect")
             return None
+
+        log.debug("connect options after startup: %s",
+                  ', '.join(filter(bool, ["rdwr" if rdwr_options else None,
+                                          "llcp" if llcp_options else None,
+                                          "card" if card_options else None])))
         
         try:
             while not terminate():
-                if llcp_options:
-                    result = self._llcp_connect(llcp_options, terminate)
-                    if bool(result) is True: return result
                 if rdwr_options:
                     result = self._rdwr_connect(rdwr_options, terminate)
+                    if bool(result) is True: return result
+                if llcp_options:
+                    result = self._llcp_connect(llcp_options, terminate)
                     if bool(result) is True: return result
                 if card_options:
                     result = self._card_connect(card_options, terminate)
@@ -541,16 +569,17 @@ class ContactlessFrontend(object):
     def _rdwr_connect(self, options, terminate):
         target = self.sense(*options['targets'], iterations=5, interval=0.5)
         if target is not None:
-            log.debug("found target {0}".format(target))
-            tag = nfc.tag.activate(self, target)
-            if tag is not None:
-                log.debug("connected to {0}".format(tag))
-                if options['on-connect'](tag):
-                    while not terminate() and tag.is_present:
-                        time.sleep(0.1)
-                    return options['on-release'](tag)
-                else:
-                    return tag
+            log.debug("discovered target {0}".format(target))
+            if options['on-discover'](target):
+                tag = nfc.tag.activate(self, target)
+                if tag is not None:
+                    log.debug("connected to {0}".format(tag))
+                    if options['on-connect'](tag):
+                        while not terminate() and tag.is_present:
+                            time.sleep(0.1)
+                        return options['on-release'](tag)
+                    else:
+                        return tag
         
     def _llcp_connect(self, options, terminate):
         llc = options['llc']
@@ -569,30 +598,29 @@ class ContactlessFrontend(object):
         
     def _card_connect(self, options, terminate):
         tag_cmd_names = ("tt1_cmd", "tt2_cmd", "tt3_cmd", "tt4_cmd")
+        
         timeout = options.get('timeout', 1.0)
         target = self.listen(options['target'], timeout)
-        if not target: return False
-        
-        log.debug("activated as {0}".format(target))
-        tag = nfc.tag.emulate(self, target)
-        if not tag: return False
-        
-        log.debug("connected as {0}".format(tag))
-        if not options['on-connect'](tag): return tag
-
-        tag_rsp = tag.process_command(tag.cmd)
-        while not terminate():
-            try:
-                tag_cmd = tag.send_response(tag_rsp, timeout=None)
-                tag_rsp = tag.process_command(tag_cmd)
-            except nfc.clf.BrokenLinkError as error:
-                log.debug(error)
-                break
-            except nfc.clf.CommunicationError as error:
-                log.debug(error)
-                tag_rsp = None
-
-        return options['on-release'](tag)
+        if target and options['on-discover'](target):
+            log.debug("activated as {0}".format(target))
+            tag = nfc.tag.emulate(self, target)
+            if isinstance(tag, nfc.tag.TagEmulation):
+                log.debug("connected as {0}".format(tag))
+                if options['on-connect'](tag):
+                    tag_rsp = tag.process_command(tag.cmd)
+                    while not terminate():
+                        try:
+                            tag_cmd = tag.send_response(tag_rsp, None)
+                            tag_rsp = tag.process_command(tag_cmd)
+                        except nfc.clf.BrokenLinkError as error:
+                            log.debug(error)
+                            break
+                        except nfc.clf.CommunicationError as error:
+                            log.debug(error)
+                            tag_rsp = None
+                    return options['on-release'](tag)
+                else:
+                    return tag
         
     def sense(self, *targets, **options):
         """Discover a contactless card or listening device.
