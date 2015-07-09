@@ -969,13 +969,14 @@ class Device(device.Device):
             ("CIU_CommIRq",   0b01111111), # clear interrupt request bits
             ("CIU_DivIRq",    0b01111111), # clear interrupt request bits
         ]
-        regs.extend(zip(len(data)*["CIU_FIFOData"], data))
-        regs.append(("CIU_BitFraming", 0b10000000)) # StartSend (b7=1)
+        if data is not None:
+            regs.extend(zip(len(data)*["CIU_FIFOData"], data))
+            regs.append(("CIU_BitFraming", 0b10000000)) # StartSend (b7=1)
         self.chipset.write_register(*regs)
         
         irq_regs = ("CIU_CommIRq", "CIU_DivIRq")
-        time_to_return = time.time() + timeout
-        while time.time() < time_to_return:
+        time_to_return = time.time() + (timeout if timeout else 0)
+        while timeout is None or time.time() < time_to_return:
             time.sleep(0.01)
             commirq, divirq = self.chipset.read_register(*irq_regs)
             if divirq & 0b00000001:
