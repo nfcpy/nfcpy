@@ -370,7 +370,7 @@ def init(transport):
                 device._vendor_name = tlv_data[2:].decode("utf-16")
             index += 2 + tlv_len
     else:
-        device._vendor_name = "Sensor ID"
-        device._device_name = "Stick ID"
+        device._vendor_name = "SensorID"
+        device._device_name = "StickID"
 
     return device
