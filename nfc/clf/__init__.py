@@ -524,7 +524,7 @@ class ContactlessFrontend(object):
         if card_options:
             card_options = dict(card_options)
             card_options.setdefault('on-startup', lambda target: None)
-            rdwr_options.setdefault('on-discover', lambda target: True)
+            card_options.setdefault('on-discover', lambda target: True)
             card_options.setdefault('on-connect', lambda tag: True)
             card_options.setdefault('on-release', lambda tag: True)
             
