@@ -754,6 +754,7 @@ class ContactlessFrontend(object):
             if target.sel_req and len(target.sel_req) not in (4, 7, 10):
                 raise ValueError("sel_req must be 4, 7, or 10 byte")
             target = self.device.sense_tta(target)
+            log.debug("found %s", target)
             if target and len(target.sens_res) != 2:
                 error = "SENS Response Format Error (wrong length)"
                 log.debug(error); raise ProtocolError(error)

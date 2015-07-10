@@ -30,62 +30,68 @@ import sys
 import time
 import errno
 
-import pn531
-from pn531 import ChipsetError
+from . import pn531
+from . import pn532
 
-class Chipset(pn531.Chipset):
-    def __init__(self, transport):
-        self.transport = transport
-        for speed in (230400, 9600, 19200, 38400, 57600, 115200):
-            log.debug("try serial baud rate {0} kbps".format(speed))
-            self.transport.tty = self.transport.serial.Serial(
-                self.transport.tty.port, baudrate=speed, timeout=0.1)
-            log.debug("read arygon firmware version")
-            self.transport.tty.write("0av")
-            version = self.transport.tty.readline()
-            if version.startswith("FF0000"):
-                log.debug("Arygon Reader {0}".format(version.strip()[-4:]))                
-                self.transport.tty.timeout = 1.0
-                self.transport.tty.writeTimeout = 1.0
-                log.debug("set mcu-tama speed to 230.4 kbps")
-                self.transport.tty.write("0at05")
-                if self.transport.tty.readline().strip() != "FF000000":
-                    log.debug("failed to set mcu-tama speed")
-                    break
-                if self.transport.tty.baudrate != 230400:
-                    log.debug("set mcu-host speed to 230.4 kbps")
-                    self.transport.tty.write("0ah05")
-                    if self.transport.tty.readline().strip() != "FF000000":
-                        log.debug("failed to set mcu-host speed")
-                        break
-                    time.sleep(0.5)
-                    self.transport.tty.close()
-                    self.transport.tty = self.transport.serial.Serial(
-                        self.transport.tty.port, baudrate=230400,
-                        timeout=1.0, writeTimeout=1.0)
-                return super(Chipset, self).__init__(transport)
-        raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
-        
-    def close(self):
-        self.transport.tty.write("0ar")
-        self.transport.tty.readline()
-        self.transport.close()
-        self.transport = None
-
+class ChipsetA(pn531.Chipset):
     def write_frame(self, frame):
         self.transport.write("2" + frame)
 
-    def read_frame(self, timeout):
-        return self.transport.read(timeout)
+class DeviceA(pn531.Device):
+    def close(self):
+        super(DeviceA, self).close()
+        self.chipset.transport.tty.write("0au")
+    
+class ChipsetB(pn532.Chipset):
+    def write_frame(self, frame):
+        self.transport.write("2" + frame)
 
-class Device(pn531.Device):
-    pass
-            
+class DeviceB(pn532.Device):
+    def close(self):
+        super(DeviceB, self).close()
+        self.chipset.transport.tty.write("0au")
+    
 def init(transport):
-    chipset = Chipset(transport)
-    device = Device(chipset)
+    transport.tty.baudrate = 115200
+    transport.tty.write("0av") # read version
+    response = transport.tty.readline()
+    if response.startswith("FF00000600V"):
+        log.debug("Arygon Reader AxxB Version %s", response[11:])
+        transport.tty.timeout = 0.5
+        transport.tty.write("0at05")
+        if transport.tty.readline().startswith("FF0000"):
+            log.debug("MCU/TAMA communication set to 230400 bps")
+            transport.tty.write("0ah05")
+            if transport.tty.readline().startswith("FF0000"):
+                log.debug("MCU/HOST communication set to 230400 bps")
+                transport.tty.baudrate = 230400
+                transport.tty.timeout = 0.1
+                time.sleep(0.1)
+                chipset = ChipsetB(transport, logger=log)
+                device = DeviceB(chipset, logger=log)
+                device._vendor_name = "Arygon"
+                device._device_name = "ADRB"
+                return device
     
-    device._vendor_name = "Arygon"
-    device._device_name = "APPx-ADRx"
-    
-    return device
+    transport.tty.baudrate = 9600
+    transport.tty.write("0av") # read version
+    response = transport.tty.readline()
+    if response.startswith("FF00000600V"):
+        log.debug("Arygon Reader AxxA Version %s", response[11:])
+        transport.tty.timeout = 0.5
+        transport.tty.write("0at05")
+        if transport.tty.readline().startswith("FF0000"):
+            log.debug("MCU/TAMA communication set to 230400 bps")
+            transport.tty.write("0ah05")
+            if transport.tty.readline().startswith("FF0000"):
+                log.debug("MCU/HOST communication set to 230400 bps")
+                transport.tty.baudrate = 230400
+                transport.tty.timeout = 0.1
+                time.sleep(0.1)
+                chipset = ChipsetA(transport, logger=log)
+                device = DeviceA(chipset, logger=log)
+                device._vendor_name = "Arygon"
+                device._device_name = "ADRA"
+                return device
+
+    raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
