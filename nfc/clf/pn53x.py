@@ -627,12 +627,10 @@ class Device(device.Device):
         return nfc.clf.RemoteTarget(target.brty, atr_res=atr_res,
                                     atr_req=target.atr_req)
         
-    @property
-    def max_send_data_size(self):
+    def max_send_data_size(self, target):
         return self.chipset.host_command_frame_max_size - 2
 
-    @property
-    def max_recv_data_size(self):
+    def max_recv_data_size(self, target):
         return self.chipset.host_command_frame_max_size - 3
 
     def send_cmd_recv_rsp(self, target, data, timeout):

@@ -790,12 +790,10 @@ class Device(device.Device):
             target.sensf_res = "\x01" + nfcf_params
         return target
 
-    @property
-    def max_send_data_size(self):
+    def max_send_data_size(self, target):
         return 290
 
-    @property
-    def max_recv_data_size(self):
+    def max_recv_data_size(self, target):
         return 290
 
     def send_cmd_recv_rsp(self, target, data, timeout):

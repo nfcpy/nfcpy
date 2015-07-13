@@ -1017,10 +1017,11 @@ class ContactlessFrontend(object):
         :meth:`exchange` method in the established operating mode.
 
         """
-        if self.device is None:
-            raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
-
-        return self.device.max_send_data_size
+        with self.lock:
+            if self.device is None:
+                raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
+            else:
+                return self.device.max_send_data_size(self.target)
 
     @property
     def max_recv_data_size(self):
@@ -1028,10 +1029,11 @@ class ContactlessFrontend(object):
         :meth:`exchange` method in the established operating mode.
 
         """
-        if self.device is None:
-            raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
-
-        return self.device.max_recv_data_size
+        with self.lock:
+            if self.device is None:
+                raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
+            else:
+                return self.device.max_recv_data_size(self.target)
 
     def __enter__(self):
         return self
