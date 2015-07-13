@@ -134,6 +134,15 @@ class Device(object):
     def path(self):
         return self._path
 
+    def mute(self):
+        """A device driver implements this method to mute all existing
+        communication, most notably to stop genrating an RF field.
+
+        """
+        fname = "mute"
+        cname = self.__class__.__module__ + '.' + self.__class__.__name__
+        raise NotImplementedError("%s.%s() must be implemented"%(cname,fname))
+
     def sense_tta(self, target):
         """A device driver implements this method to discover a Type A Target
         with the bitrate and parameters given by *target* or raise
@@ -142,7 +151,7 @@ class Device(object):
         """
         fname = "sense_tta"
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError(cname+fname+"() must be implemented")
+        raise NotImplementedError("%s.%s() must be implemented"%(cname,fname))
 
     def sense_ttb(self, target):
         """A device driver implements this method to discover a Type B Target
@@ -152,7 +161,7 @@ class Device(object):
         """
         fname = "sense_ttb"
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError(cname+fname+"() must be implemented")
+        raise NotImplementedError("%s.%s() must be implemented"%(cname,fname))
 
     def sense_ttf(self, target):
         """A device driver implements this method to discover a Type F Target
@@ -162,7 +171,7 @@ class Device(object):
         """
         fname = "sense_ttf"
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError(cname+fname+"() must be implemented")
+        raise NotImplementedError("%s.%s() must be implemented"%(cname,fname))
 
     def sense_dep(self, target):
         """A device driver implements this method to discover a DEP Target in
@@ -172,7 +181,7 @@ class Device(object):
         """
         fname = "sense_dep"
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError(cname+fname+"() must be implemented")
+        raise NotImplementedError("%s.%s() must be implemented"%(cname,fname))
 
     def listen_tta(self, target, timeout):
         """A device driver implements this method to listen *timeout* seconds
@@ -182,7 +191,7 @@ class Device(object):
         """
         fname = "listen_tta"
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError(cname+fname+"() must be implemented")
+        raise NotImplementedError("%s.%s() must be implemented"%(cname,fname))
 
     def listen_ttb(self, target, timeout):
         """A device driver must implement this method to listen *timeout*
@@ -192,7 +201,7 @@ class Device(object):
         """
         fname = "listen_ttb"
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError(cname+fname+"() must be implemented")
+        raise NotImplementedError("%s.%s() must be implemented"%(cname,fname))
 
     def listen_ttf(self, target, timeout):
         """A device driver must implement this method to listen *timeout*
@@ -202,7 +211,7 @@ class Device(object):
         """
         fname = "listen_ttf"
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError(cname+fname+"() must be implemented")
+        raise NotImplementedError("%s.%s() must be implemented"%(cname,fname))
 
     def listen_dep(self, target, timeout):
         """A device driver must implement this method to listen *timeout*
@@ -212,7 +221,7 @@ class Device(object):
         """
         fname = "listen_dep"
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError(cname+fname+"() must be implemented")
+        raise NotImplementedError("%s.%s() must be implemented"%(cname,fname))
 
     def send_cmd_recv_rsp(self, target, data, timeout):
         """A device driver implements this method to exchange *data* as
@@ -224,7 +233,7 @@ class Device(object):
         """
         fname = "send_cmd_recv_rsp"
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError(cname+fname+"() must be implemented")
+        raise NotImplementedError("%s.%s() must be implemented"%(cname,fname))
 
     def send_rsp_recv_cmd(self, target, data, timeout=None):
         """A device driver implements this method to exchange data as target
@@ -236,7 +245,7 @@ class Device(object):
         """
         fname = "send_rsp_recv_cmd"
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError(cname+fname+"() must be implemented")
+        raise NotImplementedError("%s.%s() must be implemented"%(cname,fname))
 
     def max_send_data_size(self, target):
         """A device driver implements this method to return the maximum
@@ -246,7 +255,7 @@ class Device(object):
         """
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
         fname = "max_send_data_size"
-        raise NotImplementedError(cname+fname+"() must be implemented")
+        raise NotImplementedError("%s.%s() must be implemented"%(cname,fname))
 
     def max_recv_data_size(self, target):
         """A device driver implements this method to return the maximum
@@ -256,7 +265,7 @@ class Device(object):
         """
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
         fname = "max_recv_data_size"
-        raise NotImplementedError(cname+fname+"() must be implemented")
+        raise NotImplementedError("%s.%s() must be implemented"%(cname,fname))
     
     @staticmethod
     def add_crc_a(data):
