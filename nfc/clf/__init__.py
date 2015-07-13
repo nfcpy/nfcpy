@@ -961,8 +961,10 @@ class ContactlessFrontend(object):
             if self.device is None:
                 raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
             
+            self.target = None # forget captured target
+            self.device.mute() # deactivate the rf field
+            
             info = "listen %.3f seconds for %s"
-            self.target = None
             if target.atr_res is not None:
                 log.debug(info, timeout, "DEP")
                 self.target = listen_dep(target, timeout)
