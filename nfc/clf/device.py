@@ -134,115 +134,134 @@ class Device(object):
     def path(self):
         return self._path
 
-    def sense(self, *targets, **options):
-        # A driver must implement the sense() method to probe for a
-        # contactless Target. The target types and parameters are
-        # provided as positional arguments. Additional options are
-        # provided as keyword arguments. Possible target types are
-        # subclasses of nfc.clf.TechnologyType. All targets are
-        # sequentially probed within a single iteration. The number of
-        # iterations and the time interval between the start of two
-        # successive iterations may be set as options, the default is
-        # to run a single iteration. The return value is a single
-        # target type holding response data received from a
-        # contactless card/device, or None.
-        cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError(cname + ".sense() is not implemented")
-
     def sense_tta(self, target):
-        """A device driver must implement this method to discover a Type A
-        Target. The :exc:`~exceptions.NotImplementedError` exception is
-        raised by default.
+        """A device driver implements this method to discover a Type A Target
+        with the bitrate and parameters given by *target* or raise
+        :exc:`nfc.clf.UnsupportedTargetError`.
 
         """
+        fname = "sense_tta"
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError("sense_tta() is not implemented by "+cname)
+        raise NotImplementedError(cname+fname+"() must be implemented")
 
     def sense_ttb(self, target):
-        """A device driver must implement this method to discover a Type B
-        Target. The :exc:`~exceptions.NotImplementedError` exception is
-        raised by default.
+        """A device driver implements this method to discover a Type B Target
+        with the bitrate and parameters given by *target* or raise
+        :exc:`nfc.clf.UnsupportedTargetError`.
 
         """
+        fname = "sense_ttb"
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError("sense_ttb() is not implemented by "+cname)
+        raise NotImplementedError(cname+fname+"() must be implemented")
 
     def sense_ttf(self, target):
-        """A device driver must implement this method to discover a Type F
-        Target. The :exc:`~exceptions.NotImplementedError` exception is
-        raised by default.
+        """A device driver implements this method to discover a Type F Target
+        with the bitrate and parameters given by *target* or raise
+        :exc:`nfc.clf.UnsupportedTargetError`.
 
         """
+        fname = "sense_ttf"
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError("sense_ttf() is not implemented by "+cname)
+        raise NotImplementedError(cname+fname+"() must be implemented")
 
     def sense_dep(self, target):
-        """A device driver must implement this method to discover a DEP
-        Target. The :exc:`~exceptions.NotImplementedError` exception is
-        raised by default.
+        """A device driver implements this method to discover a DEP Target in
+        active communication mode with the bitrate and parameters
+        given by *target* or raise :exc:`nfc.clf.UnsupportedTargetError`.
 
         """
+        fname = "sense_dep"
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError("sense_dep() is not implemented by "+cname)
-
-    def send_cmd_recv_rsp(self, target, data, timeout):
-        """A device driver must implement this method to exchange *data* as
-        initiator with a remote target device.
-
-        """
-        cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        fname = "send_cmd_recv_rsp"
-        raise NotImplementedError(fname+"() is not implemented by "+cname)
+        raise NotImplementedError(cname+fname+"() must be implemented")
 
     def listen_tta(self, target, timeout):
-        """A device driver must implement this method to listen as a Type A
-        Target. The :exc:`~exceptions.NotImplementedError` exception is
-        raised by default.
+        """A device driver implements this method to listen *timeout* seconds
+        as a Type A Target with the bitrate and parameters given by
+        *target* or raise :exc:`nfc.clf.UnsupportedTargetError`.
 
         """
+        fname = "listen_tta"
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError("listen_tta() is not implemented by "+cname)
+        raise NotImplementedError(cname+fname+"() must be implemented")
 
     def listen_ttb(self, target, timeout):
-        """A device driver must implement this method to listen as a Type B
-        Target. The :exc:`~exceptions.NotImplementedError` exception is
-        raised by default.
+        """A device driver must implement this method to listen *timeout*
+        seconds as a Type B Target with the bitrate and parameters
+        given by *target* or raise :exc:`nfc.clf.UnsupportedTargetError`.
 
         """
+        fname = "listen_ttb"
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError("listen_ttb() is not implemented by "+cname)
+        raise NotImplementedError(cname+fname+"() must be implemented")
 
     def listen_ttf(self, target, timeout):
-        """A device driver must implement this method to listen as a Type F
-        Target. The :exc:`~exceptions.NotImplementedError` exception is
-        raised by default.
+        """A device driver must implement this method to listen *timeout*
+        seconds as a Type F Target with the bitrate and parameters
+        given by *target* or raise :exc:`nfc.clf.UnsupportedTargetError`.
 
         """
+        fname = "listen_ttf"
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError("listen_ttf() is not implemented by "+cname)
+        raise NotImplementedError(cname+fname+"() must be implemented")
 
     def listen_dep(self, target, timeout):
-        """A device driver must implement this method to listen as a DEP
-        Target. The :exc:`~exceptions.NotImplementedError` exception is
-        raised by default.
+        """A device driver must implement this method to listen *timeout*
+        seconds as a DEP Target with the bitrate and parameters given
+        by *target* or raise :exc:`nfc.clf.UnsupportedTargetError`.
 
         """
+        fname = "listen_dep"
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError("listen_dep() is not implemented by "+cname)
+        raise NotImplementedError(cname+fname+"() must be implemented")
 
-    def send_rsp_recv_cmd(self, target, data, timeout):
-        """A device driver must implement this method to exchange *data* as
-        target with a remote initiator device.
+    def send_cmd_recv_rsp(self, target, data, timeout):
+        """A device driver implements this method to exchange *data* as
+        initiator with a remote *target* device and wait at most
+        *timeout* seconds for a response. The *target* must be the
+        :class:`nfc.clf.RemoteTarget` object returned from the last
+        successful call of one of the sense_xxx methods.
 
         """
+        fname = "send_cmd_recv_rsp"
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
+        raise NotImplementedError(cname+fname+"() must be implemented")
+
+    def send_rsp_recv_cmd(self, target, data, timeout=None):
+        """A device driver implements this method to exchange data as target
+        with a remote initiator device and wait at most *timeout*
+        seconds or indefinitely for a response. The *target* must be
+        the :class:`nfc.clf.LocalTarget` instance returned from the
+        last successful call of one of the listen_xxx methods.
+
+        """
         fname = "send_rsp_recv_cmd"
-        raise NotImplementedError(fname+"() is not implemented by "+cname)
+        cname = self.__class__.__module__ + '.' + self.__class__.__name__
+        raise NotImplementedError(cname+fname+"() must be implemented")
 
+    def max_send_data_size(self, target):
+        """A device driver implements this method to return the maximum
+        number of bytes that can be send within one frame to the current
+        *target* device.
+
+        """
+        cname = self.__class__.__module__ + '.' + self.__class__.__name__
+        fname = "max_send_data_size"
+        raise NotImplementedError(cname+fname+"() must be implemented")
+
+    def max_recv_data_size(self, target):
+        """A device driver implements this method to return the maximum
+        number of bytes that can be received within one frame from the
+        current *target* device.
+
+        """
+        cname = self.__class__.__module__ + '.' + self.__class__.__name__
+        fname = "max_recv_data_size"
+        raise NotImplementedError(cname+fname+"() must be implemented")
+    
     @staticmethod
     def add_crc_a(data):
-        """Calculate the CRC-A for bytearray *data* and return *data* extended
-        with the two CRC bytes.
+        """This static method calculates the CRC-A for bytearray *data* and
+        returns *data* extended with the two CRC bytes.
 
         """
         crc = calculate_crc(data, len(data), 0x6363)
@@ -250,10 +269,10 @@ class Device(object):
 
     @staticmethod
     def check_crc_a(data):
-        """Calculate the CRC-A for the leading *len(data)-2* bytes of the
-        bytearray *data* and return True if the result matches the
-        trailing two bytes of *data*, return False if they do not
-        match.
+        """This static method calculates the CRC-A for the leading
+        *len(data)-2* bytes of the bytearray *data* and returns True
+        if the result matches the trailing two bytes of *data*, or
+        False if they do not match.
 
         """
         crc = calculate_crc(data, len(data)-2, 0x6363)
@@ -261,8 +280,8 @@ class Device(object):
 
     @staticmethod
     def add_crc_b(data):
-        """Calculate the CRC-B for bytearray *data* and return *data* extended
-        with the two CRC bytes.
+        """This static method calculates the CRC-B for bytearray *data* and
+        returns *data* extended with the two CRC bytes.
 
         """
         crc = ~calculate_crc(data, len(data), 0xFFFF) & 0xFFFF
@@ -270,10 +289,10 @@ class Device(object):
 
     @staticmethod
     def check_crc_b(data):
-        """Calculate the CRC-B for the leading *len(data)-2* bytes of the
-        bytearray *data* and return True if the result matches the
-        trailing two bytes of *data*, return False if they do not
-        match.
+        """This static method calculates the CRC-B for the leading
+        *len(data)-2* bytes of the bytearray *data* and returns True
+        if the result matches the trailing two bytes of *data*, or
+        False if they do not match.
 
         """
         crc = ~calculate_crc(data, len(data)-2, 0xFFFF) & 0xFFFF
