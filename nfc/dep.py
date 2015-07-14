@@ -151,19 +151,14 @@ class Initiator(DataExchangeProtocol):
             return self.gbt
 
     def deactivate(self, release=True):
-        REQ, RES = (RLS_REQ, RLS_RES) if release else (DSL_REQ, DSL_RES)
-        req = REQ(self.did)
-        try:
-            res = self.send_req_recv_res(req, 0.1)
-        except nfc.clf.CommunicationError:
-            pass
-        else:
-            if type(res) != RES:
-                log.error("received unexpected response for " + req.NAME)
-            if res.did != req.did:
-                log.error("target returned wrong DID in " + res.NAME)
         log.info("stop {0}, packets {1}".format(self, self.stat))
-        return True
+        REQ, RES = (RLS_REQ, RLS_RES) if release else (DSL_REQ, DSL_RES)
+        try: res = self.send_req_recv_res(REQ(self.did), 0.1)
+        except nfc.clf.CommunicationError: return
+        if type(res) != RES:
+            log.error("received unexpected response for " + req.NAME)
+        if res.did != req.did:
+            log.error("target returned wrong DID in " + res.NAME)
 
     def exchange(self, send_data, timeout):
         def INF(pni, data, more, did, nad):
@@ -403,8 +398,35 @@ class Target(DataExchangeProtocol):
             log.info("running as " + str(self))
             return self.gbi
     
-    def deactivate(self):
+    def deactivate(self, data=bytearray()):
+        def INF(pni, data, did, nad):
+            pdu_type = DEP_RES.LastInformation
+            pfb = DEP_RES.PFB(pdu_type, nad is not None, did is not None, pni)
+            return DEP_RES(pfb, did, nad, data)
+        def ATN(did, nad):
+            pdu_type = DEP_RES.Attention
+            pfb = DEP_RES.PFB(pdu_type, nad is not None, did is not None, 0)
+            return DEP_RES(pfb, did, nad, data=None)
+
         log.info("stop {0}, packets {1}".format(self, self.stat))
+
+        res = None
+        deadline = time() + 1.0
+        while time() < deadline:
+            try: req = self.send_res_recv_req(res, deadline)
+            except nfc.clf.CommunicationError: return
+            if req is None: return
+            if req.did == self.did:
+                if type(req) in (DSL_REQ, RLS_REQ):
+                    RES = DSL_RES if type(req) == DSL_REQ else RLS_RES
+                    try: self.send_res_recv_req(RES(self.did), 0)
+                    except nfc.clf.CommunicationError: pass
+                    return
+                if type(req) == DEP_REQ:
+                    if req.pfb.type == DEP_REQ.Attention:
+                        res = ATN(self.did, self.nad)
+                    else:
+                        res = INF(req.pfb.pni, data, self.did, self.nad)
 
     def exchange(self, send_data, timeout):
         def INF(pni, data, more, did, nad):

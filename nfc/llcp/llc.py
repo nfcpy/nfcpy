@@ -288,11 +288,12 @@ class LogicalLinkController(object):
 
     def terminate(self, reason):
         log.debug("llcp link termination caused by {0}".format(reason))
-        if reason == "local choice":
-            self.exchange(Disconnect(0, 0), timeout=0.1)
-            self.mac.deactivate()
-        elif reason == "remote choice":
-            self.mac.deactivate()
+        if type(self.mac) == nfc.dep.Initiator:
+            if reason == "local choice":
+                self.exchange(Disconnect(0, 0), timeout=0.5)
+            self.mac.deactivate(release=True)
+        if type(self.mac) == nfc.dep.Target:
+            self.mac.deactivate(data=bytearray("\x01\x40"))
         # shutdown local services
         for i in range(63, -1, -1):
             if not self.sap[i] is None:
