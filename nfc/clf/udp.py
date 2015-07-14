@@ -43,7 +43,8 @@ import nfc.clf
 
 class Device(nfc.clf.device.Device):
     def __init__(self, host, port):
-        self.addr = (host, port)
+        host, port = socket.getnameinfo((host, port), socket.NI_NUMERICHOST)
+        self.addr = (host, int(port))
         self.socket = None
     
     def close(self):
@@ -51,10 +52,9 @@ class Device(nfc.clf.device.Device):
     
     def mute(self):
         if self.socket:
-            sock_addr, serv_addr = self.socket.getsockname(), self.addr
-            sock_info = socket.getnameinfo(sock_addr, socket.NI_NUMERICHOST)
-            serv_info = socket.getnameinfo(serv_addr, socket.NI_NUMERICHOST)
-            if sock_info != serv_info: self.socket.sendto("RFOFF", serv_addr)
+            # send RFOFF when socket port != listen port
+            if self.socket.getsockname()[1] != self.addr[1]:
+                self._send_data("RFOFF", "", self.addr)
             self.socket.close()
             self.socket = None
 
@@ -194,7 +194,7 @@ class Device(nfc.clf.device.Device):
             log.debug("failed to bind socket")
             return None
         
-        log.debug("wait for data on socket %s:%d", *self.addr)
+        log.debug("wait for data on socket %s:%d", *self.socket.getsockname())
         return self._listen_tta(target, time_to_return)
 
     def _listen_tta(self, target, time_to_return, init=None):
@@ -272,7 +272,7 @@ class Device(nfc.clf.device.Device):
             return None
 
         assert target.sensb_res and len(target.sensb_res) >= 12
-        log.debug("wait for data on socket %s:%d", *self.addr)
+        log.debug("wait for data on socket %s:%d", *self.socket.getsockname())
         
         while time.time() < time_to_return:
             wait = max(0.5, time_to_return - time.time())
@@ -300,7 +300,7 @@ class Device(nfc.clf.device.Device):
             log.debug("failed to bind socket")
             return None
         
-        log.debug("wait for data on socket %s:%d", *self.addr)
+        log.debug("wait for data on socket %s:%d", *self.socket.getsockname())
         return self._listen_ttf(target, time_to_return)
         
     def _listen_ttf(self, target, time_to_return, init=None):
@@ -359,7 +359,7 @@ class Device(nfc.clf.device.Device):
             log.debug("failed to bind socket")
             return None
         
-        log.debug("wait for data on socket %s:%d", *self.addr)
+        log.debug("wait for data on socket %s:%d", *self.socket.getsockname())
         atr_res = bytearray(target.atr_res)
         
         while time.time() < time_to_return:
@@ -460,20 +460,20 @@ class Device(nfc.clf.device.Device):
         return 290
 
     def _bind_socket(self, time_to_return):
+        addr = ('0.0.0.0', self.addr[1])
         while time.time() < time_to_return:
-            log.debug("trying to bind socket to %s:%d", *self.addr)
+            log.debug("trying to bind socket to %s:%d", *addr)
             try:
-                self.socket.bind(self.addr)
+                self.socket.bind(addr)
             except socket.error as error:
-                print repr(error)
+                log.debug("bind failed with %r", error)
                 time.sleep(0.1)
             else:
                 return True
 
     def _send_data(self, brty, data, addr):
         data = "%s %s" % (brty, str(data).encode("hex"))
-        host, port = socket.getnameinfo(addr, socket.NI_NOFQDN)
-        log.log(logging.DEBUG-1, ">>> %s to %s:%s", data, host, port)
+        log.log(logging.DEBUG-1, ">>> %s to %s:%d", data, *addr)
         if self.socket.sendto(data, addr) != len(data):
             raise nfc.clf.TransmissionError("failed to send data")
 
@@ -483,8 +483,7 @@ class Device(nfc.clf.device.Device):
             wait = None if timeout is None else (time_to_return - time.time())
             if len(select.select([self.socket], [], [], wait)[0]) == 1:
                 data, addr = self.socket.recvfrom(1024)
-                host, port = socket.getnameinfo(addr, socket.NI_NOFQDN)
-                log.log(logging.DEBUG-1, "<<< %s from %s:%s", data, host, port)
+                log.log(logging.DEBUG-1, "<<< %s from %s:%d", data, *addr)
                 if data.startswith("RFOFF"):
                     raise nfc.clf.BrokenLinkError("RFOFF")
                 brty, data = data.split()
