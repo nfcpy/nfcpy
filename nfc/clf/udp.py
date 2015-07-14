@@ -131,7 +131,23 @@ class Device(nfc.clf.device.Device):
         if not self.socket:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-        return None
+        if target.brty not in ("106B", "212B", "424B"):
+            message = "unsupported bitrate {0}".format(target.brty)
+            raise nfc.clf.UnsupportedTargetError(message)
+
+        sensb_req = (target.sensb_req if target.sensb_req else
+                     bytearray.fromhex("050010"))
+        
+        log.debug("send SENSB_REQ " + hexlify(sensb_req))
+        try:
+            self._send_data(target.brty, sensb_req, self.addr)
+            brty, sensb_res, addr = self._recv_data(1.0, target.brty)
+        except nfc.clf.TimeoutError:
+            return None
+        
+        if len(sensb_res) >= 12 and sensb_res[0] == 0x50:
+            log.debug("rcvd SENSB_RES " + hexlify(sensb_res))
+            return nfc.clf.RemoteTarget(brty, sensb_res=sensb_res, _addr=addr)
 
     def sense_ttf(self, target):
         if not self.socket:
@@ -238,6 +254,35 @@ class Device(nfc.clf.device.Device):
                     target.tt2_cmd = data[:]
                 return target
     
+    def listen_ttb(self, target, timeout):
+        if not self.socket:
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+        log.debug("listen_ttb for %.3f seconds on %s:%d", timeout, *self.addr)
+        
+        time_to_return = time.time() + timeout
+        if not self._bind_socket(time_to_return):
+            log.debug("failed to bind socket")
+            return None
+
+        assert target.sensb_res and len(target.sensb_res) >= 12
+        log.debug("wait for data on socket %s:%d", *self.addr)
+        
+        while time.time() < time_to_return:
+            wait = max(0.5, time_to_return - time.time())
+            try: brty, data, addr = self._recv_data(wait, target.brty)
+            except nfc.clf.TimeoutError: return None
+            if data and len(data) == 3 and data.startswith('\x05'):
+                req = "ALLB_REQ" if data[1] & 0x08 else "SENSB_REQ"
+                sensb_req = data
+                log.debug("rcvd %s %s", req, hexlify(sensb_req))
+                log.debug("send SENSB_RES %s", hexlify(target.sensb_res))
+                self._send_data(brty, target.sensb_res, addr)
+                brty, data, addr = self._recv_data(wait, target.brty)
+                return nfc.clf.LocalTarget(brty, sensb_req=sensb_req,
+                                           sensb_res=target.sensb_res, 
+                                           tt4_cmd=data, _addr=addr)
+        
     def listen_ttf(self, target, timeout):
         if not self.socket:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -401,6 +446,12 @@ class Device(nfc.clf.device.Device):
         if timeout is None or timeout > 0:
             brty, data, addr = self._recv_data(timeout, target.brty)
             return data
+
+    def max_send_data_size(self, target):
+        return 290
+
+    def max_recv_data_size(self, target):
+        return 290
 
     def _bind_socket(self, time_to_return):
         while time.time() < time_to_return:
