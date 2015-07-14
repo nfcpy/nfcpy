@@ -19,10 +19,16 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-#
-# udp.py - NFC link simulation over UDP
-#
+"""Driver module for simulated contactless communication over
+UDP/IP. It can be activated with the device path ``udp:<host>:<port>``
+where the optional *host* may be the IP address or name of the node
+where the targeted communication partner is listening on *port*. The
+default values for *host* and *port* are ``localhost:54321``.
 
+The driver implements almost all communication modes, with the current
+exception of active communication mode data exchange protocol.
+
+"""
 import logging
 log = logging.getLogger(__name__)
 
