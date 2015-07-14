@@ -317,6 +317,7 @@ class Device(device.Device):
     
     def close(self):
         self.chipset.close()
+        self.chipset = None
 
     def mute(self):
         self.chipset.switch_rf("off")

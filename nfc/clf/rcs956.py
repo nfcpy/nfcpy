@@ -188,7 +188,11 @@ class Device(pn53x.Device):
         # at 106A. It works with the RFCfg value 0x59 stored in ROM-07
         # (Neither value makes it work in active mode).
         self.chipset.write_register(0x0328, 0x59)
-        
+
+    def close(self):
+        self.mute()
+        super(Device, self).close()
+
     def mute(self):
         self.chipset.reset_mode()
         super(Device, self).mute()

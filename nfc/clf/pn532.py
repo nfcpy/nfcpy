@@ -198,6 +198,7 @@ class Device(pn53x.Device):
             time.sleep(0.001)
             self.chipset.transport.baudrate = 115200
         self.chipset.power_down(wakeup_enable=("I2C", "SPI", "HSU"))
+        super(Device, self).close()
 
     def sense_tta(self, target):
         """Search for a Type A Target.

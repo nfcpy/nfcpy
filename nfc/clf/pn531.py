@@ -172,6 +172,7 @@ class Device(pn53x.Device):
 
     def close(self):
         self.mute()
+        super(Device, self).close()
 
     def sense_tta(self, target):
         """Activate the RF field and probe for a Type A Target.

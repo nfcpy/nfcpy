@@ -506,7 +506,6 @@ class Device(device.Device):
         #    self.log.debug("0x%04X: %s", addr, xram)
 
     def close(self):
-        self.mute()
         self.chipset.close()
         self.chipset = None
     

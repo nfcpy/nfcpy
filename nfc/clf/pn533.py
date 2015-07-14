@@ -189,10 +189,8 @@ class Device(pn53x.Device):
             #self.chipset.rf_configuration(0x0D, data)
             
     def close(self):
-        try:
-            self.mute()
-        except (Chipset.Error, IOError):
-            pass
+        self.mute()
+        super(Device, self).close()
 
     def sense_tta(self, target):
         """Activate the RF field and probe for a Type A Target.
