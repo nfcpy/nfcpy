@@ -562,8 +562,8 @@ class ContactlessFrontend(object):
         except UnsupportedTargetError as error:
             log.info(error)
             return False
-        except KeyboardInterrupt as error:
-            log.debug(error)
+        except KeyboardInterrupt:
+            log.debug("terminated by keyboard interrupt")
             return False
 
     def _rdwr_connect(self, options, terminate):
