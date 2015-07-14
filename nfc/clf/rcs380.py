@@ -19,7 +19,7 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-"""Driver module for contacless devices based on the Sony NFC Port-100
+"""Driver module for contactless devices based on the Sony NFC Port-100
 chipset. The only product known to use this chipset is the PaSoRi
 RC-S380. The RC-S380 connects to the host as a native USB device.
 
