@@ -21,6 +21,11 @@ To send a web link to a smartphone:
   True
   >>> clf.close()
 
+There are also many :doc:`examples/index` that can be used from the
+command line: ::
+
+  $ examples/beam.py send link http://nfcpy.org
+  
 .. toctree::
    :maxdepth: 2
 
