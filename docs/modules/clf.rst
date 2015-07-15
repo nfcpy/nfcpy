@@ -9,9 +9,8 @@ nfc.clf
 Contactless Frontend
 --------------------
 
-The contactless frontend class is also imported as
-:class:`nfc.ContactlessFrontend`, thus is available after ``import
-nfc`` as used by the examples in this section.
+.. note:: The contactless frontend defined in this module is also
+          available as :class:`nfc.ContactlessFrontend`.
 
 .. autoclass:: ContactlessFrontend
    :members:
@@ -49,68 +48,47 @@ Exceptions
 .. autoexception:: BrokenLinkError
    :show-inheritance:
 
+Driver Interface
+----------------
+
+.. automodule:: nfc.clf.device
+   :members:
+
 Device Drivers
 --------------
 
-This section documents the contactless devices that are supported by
-nfcpy. The device drivers are used by :class:`ContactlessFrontend` to
-provide the preferred interface for application code.
+rcs380
+~~~~~~
 
-.. note:: Device driver methods are not thread-safe and do not check
-   input arguments that are verified by the ContaclessFrontend. The
-   documentation of device driver classes and methods is not for
-   applications but merely to note the various functionality
-   support. Direct access to device drivers is not intended.
+.. automodule:: nfc.clf.rcs380
 
 pn531
 ~~~~~
 
 .. automodule:: nfc.clf.pn531
-   :show-inheritance:
-   :members:
 
 pn532
 ~~~~~
 
 .. automodule:: nfc.clf.pn532
-   :show-inheritance:
-   :members:
 
 pn533
 ~~~~~
 
 .. automodule:: nfc.clf.pn533
-   :show-inheritance:
-   :members:
 
 rcs956
 ~~~~~~
 
 .. automodule:: nfc.clf.rcs956
-   :show-inheritance:
-   :members:
 
 acr122
 ~~~~~~
 
 .. automodule:: nfc.clf.acr122
-   :show-inheritance:
-   :members:
 
-Driver Base Classes
--------------------
+udp
+~~~
 
-device
-~~~~~~
-
-.. automodule:: nfc.clf.device
-   :show-inheritance:
-   :members:
-
-pn53x
-~~~~~
-
-.. automodule:: nfc.clf.pn53x
-   :show-inheritance:
-   :members:
+.. automodule:: nfc.clf.udp
 
