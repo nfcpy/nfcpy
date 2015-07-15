@@ -28,12 +28,21 @@ directly with the inbuilt PN532 chipset by tunneling commands through
 the PC/SC Escape command. The driver is limited in functionality
 because the embedded microprocessor (that implements the PC/SC stack)
 also operates the PN532; it does not allow all commands to pass as
-desired and reacts on chip responses with its own interpretation of
-state.
+desired and reacts on chip responses with its own (legitimate)
+interpretation of state.
 
-.. note:: The ACR122U can not be reliably operated by nfcpy and there
-   is good chance that the device must frequently be hard reset. It is
-   not recommended to use it with nfcpy in critical projects.
+==========  =======  ============
+function    support  remarks
+==========  =======  ============
+sense_tta   yes      Type 1 (Topaz) Tags are not supported
+sense_ttb   yes      ATTRIB by firmware voided with S(DESELECT)
+sense_ttf   yes
+sense_dep   yes
+listen_tta  no
+listen_ttb  no
+listen_ttf  no
+listen_dep  no
+==========  =======  ============
 
 """
 import logging
@@ -49,16 +58,13 @@ import nfc.clf
 from . import pn532
 
 def init(transport):
-    """Initialize the driver for ACR122U.
-
-    """
     device = Device(Chipset(transport))
     device._vendor_name = transport.manufacturer_name
     device._device_name = transport.product_name.split()[0]
     return device
 
 class Device(pn532.Device):
-    """Device driver class for the ACR122U."""
+    # Device driver class for the ACR122U.
     
     def __init__(self, chipset):
         super(Device, self).__init__(chipset, logger=log)
@@ -120,9 +126,6 @@ class Device(pn532.Device):
         raise nfc.clf.UnsupportedTargetError(info.format(device=self))
 
 class Chipset(pn532.Chipset):
-    """Specialized chipset class for the ACR122U driver.
-
-    """
     # Maximum size of a host command frame to the contactless chip.
     host_command_frame_max_size = 254
     

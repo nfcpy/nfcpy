@@ -28,6 +28,19 @@ default values for *host* and *port* are ``localhost:54321``.
 The driver implements almost all communication modes, with the current
 exception of active communication mode data exchange protocol.
 
+==========  =======  ============
+function    support  remarks
+==========  =======  ============
+sense_tta   yes      
+sense_ttb   yes      
+sense_ttf   yes
+sense_dep   no
+listen_tta  yes
+listen_ttb  yes
+listen_ttf  yes
+listen_dep  yes      
+==========  =======  ============
+
 """
 import logging
 log = logging.getLogger(__name__)
@@ -447,10 +460,10 @@ class Device(nfc.clf.device.Device):
             brty, data, addr = self._recv_data(timeout, target.brty)
             return data
 
-    def max_send_data_size(self, target):
+    def get_max_send_data_size(self, target):
         return 290
 
-    def max_recv_data_size(self, target):
+    def get_max_recv_data_size(self, target):
         return 290
 
     def _create_socket(self):

@@ -19,9 +19,38 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-#
-# Driver for NXP PN531 based contactless readers.
-#
+"""Driver module for contactless devices based on the NXP PN531
+chipset. This was once a (sort of) joint development between Philips
+and Sony to supply hardware capable of running the ISO/IEC 18092 Data
+Exchange Protocol. The chip has selectable UART, I2C, SPI, or USB host
+interfaces, For USB the vendor and product ID can be switched by a
+hardware pin to either Philips or Sony.
+
+The internal chipset architecture comprises a small 8-bit MCU and a
+Contactless Interface Unit CIU that is basically a PN511. The CIU
+implements the analog and digital part of communication (modulation
+and framing) while the MCU handles the protocol parts and host
+communication. The PN511 and hence the PN531 does not support Type B
+Technology and can not handle the specific Jewel/Topaz (Type 1 Tag)
+communication. Compared to PN532/PN533 the host frame structure does
+not allow maximum size ISO/IEC 18092 packets to be transferred. The
+driver handles this restriction by modifying the initialization
+commands (ATR, PSL) when needed.
+
+==========  =======  ============
+function    support  remarks
+==========  =======  ============
+sense_tta   yes      Type 1 Tag is not supported
+sense_ttb   no      
+sense_ttf   yes
+sense_dep   yes      Reduced transport data byte length (max 192)
+listen_tta  yes      
+listen_ttb  no
+listen_ttf  yes      Maximimum frame size is 64 byte
+listen_dep  yes      
+==========  =======  ============
+
+"""
 import logging
 log = logging.getLogger(__name__)
 
@@ -152,9 +181,8 @@ class Chipset(pn53x.Chipset):
         return self.command(0x8c, data, timeout)
 
 class Device(pn53x.Device):
-    """Device driver for PN531 based contactless frontends.
+    # Device driver for PN531 based contactless frontends.
 
-    """
     def __init__(self, chipset, logger):
         assert isinstance(chipset, Chipset)
         super(Device, self).__init__(chipset, logger)
@@ -205,10 +233,6 @@ class Device(pn53x.Device):
 
     def sense_ttf(self, target):
         """Activate the RF field and probe for a Type F Target.
-
-        The PN531 can discover Type F Targets (Type 3 Tag) at 212 and
-        424 kbps. The driver uses the default polling command
-        ``06FFFF0000`` if no ``target.sens_req`` is supplied.
 
         """
         return super(Device, self).sense_ttf(target)
@@ -274,11 +298,6 @@ class Device(pn53x.Device):
         return super(Device, self).listen_dep(target, timeout)
 
     def _init_as_target(self, mode, tta_params, ttf_params, timeout):
-        # Set the WaitForSelected bit in CIU_FelNFC2 register if only
-        # passive mode activation is requested. The PN531 does not
-        # support this mode bit in TgInitTAMATarget.
-        #self.chipset.write_register(("CIU_FelNFC2", (mode & 1)<<7))
-        
         nfcid3t = ttf_params[0:8] + "\x00\x00"
         args = (mode, tta_params, ttf_params, nfcid3t, '', timeout)
         return self.chipset.tg_init_tama_target(*args)

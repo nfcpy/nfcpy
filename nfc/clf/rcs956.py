@@ -34,6 +34,19 @@ commands to certain modes. While direct access to the CIU registers is
 possible, some of the things that can be done with a PN53x are
 unfortunately prevented by the stricter state machine.
 
+==========  =======  ============
+function    support  remarks
+==========  =======  ============
+sense_tta   yes      Only Type 1 Tags up to 128 byte (Topaz-96)
+sense_ttb   yes      ATTRIB by firmware voided with S(DESELECT)
+sense_ttf   yes
+sense_dep   yes
+listen_tta  yes
+listen_ttb  no
+listen_ttf  no
+listen_dep  yes      Only passive communication mode
+==========  =======  ============
+
 """
 import logging
 log = logging.getLogger(__name__)
@@ -153,9 +166,8 @@ class Chipset(pn53x.Chipset):
         return self.command(0x8c, data, timeout)
 
 class Device(pn53x.Device):
-    """Device driver for Sony RC-S956 based contactless devices.
+    # Device driver for Sony RC-S956 based contactless devices.
 
-    """
     def __init__(self, chipset, logger):
         assert isinstance(chipset, Chipset)
         # Reset the RCS956 state machine to Mode 0. We may have left
@@ -234,19 +246,11 @@ class Device(pn53x.Device):
     def sense_ttf(self, target):
         """Activate the RF field and probe for a Type F Target.
 
-        The RC-S956 can discover Type F Targets (Type 3 Tag) at 212
-        and 424 kbps. The driver uses the default polling command
-        ``06FFFF0000`` if no ``target.sens_req`` is supplied.
-
         """
         return super(Device, self).sense_ttf(target)
 
     def sense_dep(self, target):
         """Search for a DEP Target in active or passive communication mode.
-
-        Active communication mode is used if *passive_target* is
-        None. To use passive communication mode the *passive_target*
-        must be a previously discovered Type A or Type F Target.
 
         """
         # Set timeout for PSL_RES and ATR_RES

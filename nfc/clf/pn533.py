@@ -19,9 +19,26 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-#
-# Driver for NXP PN533 based contactless readers.
-#
+"""Driver module for contactless devices based on the NXP PN533
+chipset. The PN533 is pretty similar to the PN532 except that it also
+has a USB host interface option and, probably due to the resources
+needed for USB, does not support two simultaneous targets. Anything
+else said about PN532 also applies to PN533.
+
+==========  =======  ============
+function    support  remarks
+==========  =======  ============
+sense_tta   yes      
+sense_ttb   yes      
+sense_ttf   yes
+sense_dep   yes      
+listen_tta  yes      
+listen_ttb  no
+listen_ttf  yes      Maximimum frame size is 64 byte
+listen_dep  yes      
+==========  =======  ============
+
+"""
 import logging
 log = logging.getLogger(__name__)
 
@@ -142,9 +159,8 @@ class Chipset(pn53x.Chipset):
         return self.command(0x8c, data, timeout)
 
 class Device(pn53x.Device):
-    """Device driver for PN533 based contactless frontends.
+    # Device driver for PN533 based contactless frontends.
 
-    """
     def __init__(self, chipset, logger):
         with open("pn533_init_1.txt", "w") as f:
             for addr in range(0, 0x03FF, 16):

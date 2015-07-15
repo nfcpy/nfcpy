@@ -19,16 +19,10 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-"""This module implements common functionality for the PN53x family of
-contactless interface chips, namely the NXP PN531, PN532, PN533 and
-the Sony RC-S956. All of these are built upon a PN512 Contactless
-Interface Unit (CIU) that is coupled with a 80C51 microprocessor and a
-host communication interface. The implementation is split into a
-:class:`Chipset` and a :class:`Device` class. The :class:`Chipset`
-class provides methods for many of the chipset commands and handles
-the host controller communication protocol. The :class:`Device` class
-implements the :class:`device.Device` interface for the common
-functionality across the chipset family.
+"""This is not really a device driver but a base module that
+implements common functionality for the PN53x family of contactless
+interface chips, namely the NXP PN531, PN532, PN533 and the Sony
+RC-S956.
 
 """
 import os
@@ -114,7 +108,6 @@ class Chipset(object):
     REGBYNAME = {v: k for k, v in REG.iteritems()}
 
     class Error(Exception):
-        """Chipset.Error"""
         def __init__(self, errno, strerr):
             self.errno, self.strerr = errno, strerr
 
@@ -462,12 +455,11 @@ class Chipset(object):
         return data[0], br_tx, br_rx
 
 class Device(device.Device):
-    """Base class for devices with an NXP PN531, PN532, PN533 or Sony
-    RC-S956 contactless interface chip. This class implements the
-    functionality that is identical or needed by most of the drivers
-    that inherit from pn53x.
+    # Base class for devices with an NXP PN531, PN532, PN533 or Sony
+    # RC-S956 contactless interface chip. This class implements the
+    # functionality that is identical or needed by most of the drivers
+    # that inherit from pn53x.
 
-    """
     def __init__(self, chipset, logger):
         self.chipset = chipset
         self.log = logger
@@ -626,10 +618,10 @@ class Device(device.Device):
         return nfc.clf.RemoteTarget(target.brty, atr_res=atr_res,
                                     atr_req=target.atr_req)
         
-    def max_send_data_size(self, target):
+    def get_max_send_data_size(self, target):
         return self.chipset.host_command_frame_max_size - 2
 
-    def max_recv_data_size(self, target):
+    def get_max_recv_data_size(self, target):
         return self.chipset.host_command_frame_max_size - 3
 
     def send_cmd_recv_rsp(self, target, data, timeout):
@@ -697,6 +689,9 @@ class Device(device.Device):
     def listen_tta(self, target, timeout):
         if target.brty != "106A":
             info = "unsupported bitrate/type: %r" % target.brty
+            raise nfc.clf.UnsupportedTargetError(info)
+        if target.rid_res:
+            info = "listening for type 1 tag activation is not supported"
             raise nfc.clf.UnsupportedTargetError(info)
         try:
             assert target.sens_res is not None, "sens_res is required"

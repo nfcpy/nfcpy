@@ -19,9 +19,39 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-#
-# Driver for NXP PN532 based contactless readers.
-#
+"""Driver module for contactless devices based on the NXP PN532
+chipset. This successor of the PN531 can additionally handle Type B
+Technology (type 4B Tags) and Type 1 Tag communication. It also
+supports an extended frame syntax for host communication that allows
+larger packets to be transferred. The chip has selectable UART, I2C or
+SPI host interfaces. A speciality of the PN532 is that it can manage
+two targets (cards) simultanously, although this is not used by
+*nfcpy*.
+
+The internal chipset architecture comprises a small 8-bit MCU and a
+Contactless Interface Unit CIU that is basically a PN512. The CIU
+implements the analog and digital part of communication (modulation
+and framing) while the MCU handles the protocol parts and host
+communication. Almost all PN532 firmware limitations (or bugs) can be
+avoided by directly programming the CIU. Type F Target mode for card
+emulation is completely implemented with the CIU and limited to 64
+byte frame exchanges by the CIU's FIFO size. Type B Target mode is not
+possible.
+
+==========  =======  ============
+function    support  remarks
+==========  =======  ============
+sense_tta   yes      
+sense_ttb   yes      
+sense_ttf   yes
+sense_dep   yes      
+listen_tta  yes      
+listen_ttb  no
+listen_ttf  yes      Maximimum frame size is 64 byte
+listen_dep  yes      
+==========  =======  ============
+
+"""
 import logging
 log = logging.getLogger(__name__)
 
@@ -154,9 +184,8 @@ class Chipset(pn53x.Chipset):
         return self.command(0x8c, data, timeout)
 
 class Device(pn53x.Device):
-    """Device driver for PN532 based contactless frontends.
+    # Device driver for PN532 based contactless frontends.
 
-    """
     def __init__(self, chipset, logger):
         assert isinstance(chipset, Chipset)
         super(Device, self).__init__(chipset, logger)

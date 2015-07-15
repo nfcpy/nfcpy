@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2012-2013 Stephen Tiedemann <stephen.tiedemann@gmail.com>
+# Copyright 2012-2015 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -29,6 +29,19 @@ mode. In addition, the NFC Port-100 also supports card emulation Type
 A and Type F Technology. A notable restriction is that peer-to-peer
 active communication mode (not required for NFC Forum certification)
 is not supported.
+
+==========  =======  ============
+function    support  remarks
+==========  =======  ============
+sense_tta   yes      
+sense_ttb   yes      
+sense_ttf   yes
+sense_dep   no
+listen_tta  yes      Type F responses can not be disabled
+listen_ttb  no
+listen_ttf  yes
+listen_dep  yes      Only passive communication mode
+==========  =======  ============
 
 """
 
@@ -307,7 +320,8 @@ class Chipset(object):
             raise StatusError(data[0])
 
 class Device(device.Device):
-    """Device driver for the Sony NFC Port-100 chipset."""
+    # Device driver for the Sony NFC Port-100 chipset.
+    
     def __init__(self, chipset, logger):
         self.chipset = chipset
         self.log = logger
@@ -491,13 +505,24 @@ class Device(device.Device):
           activation will still be attempted.
 
         """
-        assert target.sens_res and len(target.sens_res) == 2
-        assert target.sdd_res and len(target.sdd_res) == 4
-        assert target.sel_res and len(target.sel_res) == 1
-        
         if not target.brty == '106A':
             info = "unsupported target bitrate: %r" % target.brty
             raise nfc.clf.UnsupportedTargetError(info)
+        
+        if target.rid_res:
+            info = "listening for type 1 tag activation is not supported"
+            raise nfc.clf.UnsupportedTargetError(info)
+        
+        try:
+            assert target.sens_res is not None, "sens_res is required"
+            assert target.sdd_res is not None, "sdd_res is required"
+            assert target.sel_res is not None, "sel_res is required"
+            assert len(target.sens_res) == 2, "sens_res must be 2 byte"
+            assert len(target.sdd_res) == 4, "sdd_res must be 4 byte"
+            assert len(target.sel_res) == 1, "sel_res must be 1 byte"
+            assert target.sdd_res[0] == 0x08, "sdd_res[0] must be 08h"
+        except AssertionError as error:
+            raise ValueError(str(error))
         
         nfca_params = target.sens_res + target.sdd_res[1:4] + target.sel_res
         log.debug("nfca_params %s", hexlify(nfca_params))
@@ -791,10 +816,10 @@ class Device(device.Device):
             target.sensf_res = "\x01" + nfcf_params
         return target
 
-    def max_send_data_size(self, target):
+    def get_max_send_data_size(self, target):
         return 290
 
-    def max_recv_data_size(self, target):
+    def get_max_recv_data_size(self, target):
         return 290
 
     def send_cmd_recv_rsp(self, target, data, timeout):

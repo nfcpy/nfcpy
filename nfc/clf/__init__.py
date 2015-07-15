@@ -1023,7 +1023,7 @@ class ContactlessFrontend(object):
             if self.device is None:
                 raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
             else:
-                return self.device.max_send_data_size(self.target)
+                return self.device.get_max_send_data_size(self.target)
 
     @property
     def max_recv_data_size(self):
@@ -1035,7 +1035,7 @@ class ContactlessFrontend(object):
             if self.device is None:
                 raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
             else:
-                return self.device.max_recv_data_size(self.target)
+                return self.device.get_max_recv_data_size(self.target)
 
     def __enter__(self):
         return self
