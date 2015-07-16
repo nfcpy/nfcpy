@@ -16,14 +16,19 @@ sys.path.insert(0, os.path.abspath('../'))
 import nfc
 
 # -- General configuration -----------------------------------------------------
-extensions = ['sphinx.ext.autodoc']
+extensions = [
+    'sphinx.ext.autodoc',
+    'sphinx.ext.napoleon',
+    'sphinx.ext.intersphinx'
+]
+intersphinx_mapping = {'python':('http://docs.python.org/2.7', None)}
 templates_path = ['_templates']
 source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
 project = u'nfcpy'
-copyright = u'2009-2014, Stephen Tiedemann'
+copyright = u'2009-2015, Stephen Tiedemann'
 version = nfc.__version__
 release = version
 exclude_patterns = ['_build', '.#*', 'topics/.#*', 'examples/.#*']
@@ -35,15 +40,13 @@ pygments_style = 'sphinx'
 on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
 
 if not on_rtd:  # only import and set the theme if we're building docs locally
-    html_theme = "sphinx_rtd_theme"
-    html_theme_path = ["_themes", ]
-    #try:
-    #    import sphinx_rtd_theme
-    #    html_theme = "sphinx_rtd_theme"
-    #    html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
-    #    RTD_NEW_THEME = True
-    #except ImportError:
-    #    html_theme = 'nature'
+    try:
+        import sphinx_rtd_theme
+        html_theme = "sphinx_rtd_theme"
+        html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
+        RTD_NEW_THEME = True
+    except ImportError:
+        html_theme = 'nature'
 
 html_title = ' '.join([project, version, "documentation"])
 html_short_title = ' '.join([project, version])

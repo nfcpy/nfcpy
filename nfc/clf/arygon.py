@@ -1,0 +1,97 @@
+# -*- coding: latin-1 -*-
+# -----------------------------------------------------------------------------
+# Copyright 2009-2015 Stephen Tiedemann <stephen.tiedemann@gmail.com>
+#
+# Licensed under the EUPL, Version 1.1 or - as soon they 
+# will be approved by the European Commission - subsequent
+# versions of the EUPL (the "Licence");
+# You may not use this work except in compliance with the
+# Licence.
+# You may obtain a copy of the Licence at:
+#
+# http://www.osor.eu/eupl
+#
+# Unless required by applicable law or agreed to in
+# writing, software distributed under the Licence is
+# distributed on an "AS IS" basis,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
+# express or implied.
+# See the Licence for the specific language governing
+# permissions and limitations under the Licence.
+# -----------------------------------------------------------------------------
+#
+# Driver for the Arygon contactless reader with USB serial interface
+#
+import logging
+log = logging.getLogger(__name__)
+
+import os
+import sys
+import time
+import errno
+
+from . import pn531
+from . import pn532
+
+class ChipsetA(pn531.Chipset):
+    def write_frame(self, frame):
+        self.transport.write("2" + frame)
+
+class DeviceA(pn531.Device):
+    def close(self):
+        super(DeviceA, self).close()
+        self.chipset.transport.tty.write("0au")
+    
+class ChipsetB(pn532.Chipset):
+    def write_frame(self, frame):
+        self.transport.write("2" + frame)
+
+class DeviceB(pn532.Device):
+    def close(self):
+        super(DeviceB, self).close()
+        self.chipset.transport.tty.write("0au")
+    
+def init(transport):
+    transport.tty.baudrate = 115200
+    transport.tty.write("0av") # read version
+    response = transport.tty.readline()
+    if response.startswith("FF00000600V"):
+        log.debug("Arygon Reader AxxB Version %s", response[11:])
+        transport.tty.timeout = 0.5
+        transport.tty.write("0at05")
+        if transport.tty.readline().startswith("FF0000"):
+            log.debug("MCU/TAMA communication set to 230400 bps")
+            transport.tty.write("0ah05")
+            if transport.tty.readline().startswith("FF0000"):
+                log.debug("MCU/HOST communication set to 230400 bps")
+                transport.tty.baudrate = 230400
+                transport.tty.timeout = 0.1
+                time.sleep(0.1)
+                chipset = ChipsetB(transport, logger=log)
+                device = DeviceB(chipset, logger=log)
+                device._vendor_name = "Arygon"
+                device._device_name = "ADRB"
+                return device
+    
+    transport.tty.baudrate = 9600
+    transport.tty.write("0av") # read version
+    response = transport.tty.readline()
+    if response.startswith("FF00000600V"):
+        log.debug("Arygon Reader AxxA Version %s", response[11:])
+        transport.tty.timeout = 0.5
+        transport.tty.write("0at05")
+        if transport.tty.readline().startswith("FF0000"):
+            log.debug("MCU/TAMA communication set to 230400 bps")
+            transport.tty.write("0ah05")
+            if transport.tty.readline().startswith("FF0000"):
+                log.debug("MCU/HOST communication set to 230400 bps")
+                transport.tty.baudrate = 230400
+                transport.tty.timeout = 0.1
+                time.sleep(0.1)
+                chipset = ChipsetA(transport, logger=log)
+                device = DeviceA(chipset, logger=log)
+                device._vendor_name = "Arygon"
+                device._device_name = "ADRA"
+                return device
+
+    raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))

@@ -10,14 +10,23 @@ also be used to format for NDEF use. ::
 
 .. contents::
    :local:
+   :depth: 2
 
 Options
 =======
+
+.. program:: tagtool.py
 
 .. include:: cli-general-options.txt
 .. include:: cli-reader-options.txt
 .. include:: cli-debug-options.txt
 .. include:: cli-device-options.txt
+
+.. option:: -p PASSWORD
+
+   Use PASSWORD to authentication with a tag that supports password
+   protection. This would be the same password as used in
+   :option:`tagtool.py protect -p` to set a password.
 
 Commands
 ========
@@ -77,11 +86,30 @@ format
 ------
 
 The **format** command writes NDEF capability information for an empty
-NDEF memory area on NFC Forum compliant tags. The tag type must be
-specified. The only currently supported tag type it **tt3**. ::
+NDEF memory area on NFC Forum compliant tags. A tag type may be
+specified to give further options. ::
 
-  $ tagtool.py [options] format [-h] {tt1,tt3} ...
+  $ tagtool.py [options] format [-h] [options] {tt1,tt2,tt3,tt4} ...
 
+.. option:: --version x.y
+
+   The format of the management information that describes the NDEF
+   data area on the tag, as defined in the NFC Forum tag
+   specifications. Only defined version numbers are acceptable. The
+   version must be expressed as a version string of the form
+   ``<major>.<minor>``, where each component is an integer between 0
+   and 15, inclusively. For example, ``--version 1.3`` denotes major
+   version 1 and minor version 3. If ``--version`` is not provided,
+   the highest possible version number is used.
+
+.. option:: --wipe BYTE
+
+   When formatting a tag the NDEF message data itself is usually not
+   touched and could be easily recovered. The ``--wipe`` options
+   instructs the formatter to overwrite the complete data area with
+   the given 8-bit integer value. Depending on the tag type and size
+   this may take a couple of seconds.
+   
 format tt1
 ^^^^^^^^^^
 
@@ -92,13 +120,45 @@ Tag. ::
 
 .. program:: tagtool.py format tt1
 
+.. option:: --magic BYTE
+
+   The value to use as the NDEF magic byte. This option can be used to
+   set an invalid magic byte.
+
+.. option:: --ver x.y
+
+   The version number to write into the NDEF mapping version byte. The
+   difference to :option:`tagtool.py format --version` is that here
+   the version number does not need to be valid.
+
+.. option:: --tms BYTE
+
+   Value to write into the tag memory size byte.
+
+.. option:: --rwa BYTE
+
+   Value to write into the read/write access byte.
+
+format tt2
+^^^^^^^^^^
+
+The **format tt2** command formats the NDEF partition on a Type 2
+Tag. ::
+
+  $ tagtool.py [options] format tt2 [-h]
+
+.. program:: tagtool.py format tt2
+
 format tt3
 ^^^^^^^^^^
 
 The **format tt3** command formats the NDEF partition on a Type 3
 Tag. With no additional options it does format for the maximum
 capacity. With further options it is possible to create any kind of
-weird tag formats for testing reader implementations. ::
+weird tag formats for testing reader implementations. Note that none
+of these options is verified, except for the possible value range to
+fit the destination field. None of the options is necessary to
+create a correct format. ::
 
   $ tagtool.py [options] format tt3 [-h] [--ver STR] [--nbr INT] [--nbw INT]
                                     [--max INT] [--rfu INT] [--wf INT]
@@ -106,60 +166,117 @@ weird tag formats for testing reader implementations. ::
 
 .. program:: tagtool.py format tt3
 
-.. option:: --ver STR
+.. option:: --ver x.y
 
    Type 3 Tag NDEF mapping version number, specified as a version
-   string with minor and major number separated by a single dot
-   character. Both major and minor version numbers must be in range
-   ``0<=N<=15``. The default value is ``"1.1"``.
+   string in the same way as for to the `--version` argument. The
+   difference is that this version number will be written regardless
+   of whether it constitutes a valid version number.
 
-.. option:: --nbr INT
+.. option:: --nbr N
 
    Type 3 Tag attribute block *Nbr* field value, the number of blocks
-   that can be read at once. Must be in range ``0<=INT<=255``. If this
-   option is not specified the automatically detected value is
-   written.
+   that can be read at once.  Must be an 8-bit integer in decimal or
+   hexadecimal notation.
 
-.. option:: --nbw INT
+.. option:: --nbw N
 
    Type 3 Tag attribute block *Nbw* field value, the number of blocks
-   that can be written at once. Must be in range ``0<=INT<=255``. If
-   this option is not specified the automatically detected value is
-   written.
+   that can be written at once.  Must be an 8-bit integer in decimal
+   or hexadecimal notation.
 
-.. option:: --max INT
+.. option:: --max N
 
    Type 3 Tag attribute block *Nmaxb* field value, which is the
-   maximum number of blocks available for NDEF data. Must be in range
-   ``0<=INT<=255``. If this option is not specified the automatically
-   detected value is written.
+   maximum number of blocks available for NDEF data.  Must be a 16-bit
+   integer in decimal or hexadecimal notation.
 
-.. option:: --rfu INT
+.. option:: --rfu N
 
-   Type 3 Tag attribute block *reserved* field value. Must be in range
-   ``0<=INT<=255``. The default value is 0.
+   Type 3 Tag attribute block *reserved* field value. Must be an 8-bit
+   integer in decimal or hexadecimal notation.
 
-.. option:: --wf INT
+.. option:: --wf N
 
-   Type 3 Tag attribute block *WriteF* field value. Must be in range
-   ``0<=INT<=255``. The default value is 0.
+   Type 3 Tag attribute block *WriteF* field value. Must be an 8-bit
+   integer in decimal or hexadecimal notation.
 
-.. option:: --rw INT
+.. option:: --rw N
 
-   Type 3 Tag attribute block *RW Flag* field value. Must be in range
-   ``0<=INT<=255``. The default value is 1.
+   Type 3 Tag attribute block *RW Flag* field value. Must be an 8-bit
+   integer in decimal or hexadecimal notation.
 
-.. option:: --len INT
+.. option:: --len N
 
    Type 3 Tag attribute block *Ln* field value that specifies the
-   actual size of the NDEF data stored. Must be in range
-   ``0<=INT<=16777215``. The default value is 0.
+   actual size of the NDEF data stored. Must be a 24-bit integer in
+   decimal or hexadecimal notation.
 
-.. option:: --crs INT
+.. option:: --crc N
 
-   Type 3 Tag attribute block *Checksum* field value. Must be in range
-   ``0<=INT<=65535``. If this option is not specified the automatically
-   computed checksum is written.
+   Type 3 Tag attribute block *Checksum* field value. Must be a 16-bit
+   integer in decimal or hexadecimal notation. If not specified, the
+   checksum is computed to be correct.
+
+format tt4
+^^^^^^^^^^
+
+The **format tt4** command formats the NDEF partition on a Type 4
+Tag. ::
+
+  $ tagtool.py [options] format tt4 [-h]
+
+.. program:: tagtool.py format tt4
+
+protect
+-------
+
+The **protect** command attempts to protect the tag against write
+modifications, optionally also against unauthorized read
+access. Support for protection depends on the tag type and
+product. Without options the the default attempt is protect with lock
+bits, be warned that this can not be undone. Lock bits are only
+available for type 1 and type 2 tags. With option ``-p`` the
+protection will be based on a password and further modifications are
+possible for anyone in posession of the password. Password protection
+works on NXP NTAG 21x type 2 tags and Sony FeliCa Lite-S type 3
+tags. ::
+
+  $ tagtool.py protect [-h] [-p PASSWORD] [--unreadable]
+
+.. program:: tagtool.py protect
+
+.. option:: -p PASSWORD
+
+   Protect the tag with the given PASSWORD. This works only for the
+   NXP NTAG 21x type 2 tags and Sony FeliCa Lite-S type 3 tags. The
+   password string is used as a key to compute an HMAC-SHA256 with the
+   tag identifier (UID or IDm) as the message. The final password is
+   the leftmost number of octets as needed for the tag product, 6
+   octets for an NTAG 21x and 16 octets for a FeliCa Lite-S. A
+   password protected tag can then be unlocked with
+   :option:`tagtool.py -p`. ::
+
+      $ tagtool.py protect -p "my secret password"
+      $ tagtool.py -p "my secret password" protect -p "new secret"
+
+.. option:: --from BLOCK
+
+   Start protecting data from a given block number. This option does
+   only make sense on tags that organize memory in blocks or pages
+   (Type 1, 2 and 3 Tags). A block corresponds to 4 byte of memory (a
+   page) on Type 1 and 2 Tags, and 16 byte of memory on Type 3
+   Tags. If the tag has fewer blocks than specified, the value is
+   silently adjusted to the largest possible.
+
+.. option:: --unreadable
+
+   This option can only be used with password based protection. The
+   result is that the tag will become unreadable without a password,
+   i.e. the content is completely hidden. Further reads must then use
+   the password option before the command. ::
+
+     $ tagtool.py -p "secret password" show
 
 emulate
 -------

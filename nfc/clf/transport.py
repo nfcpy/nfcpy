@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2012-2013 Stephen Tiedemann <stephen.tiedemann@gmail.com>
+# Copyright 2012-2015 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -25,12 +25,8 @@
 import logging
 log = logging.getLogger(__name__)
 
-import importlib
-import errno
-import time
-import sys
-import os
-import re
+import os, sys, re, errno, importlib
+from binascii import hexlify
 
 class TTY(object):
     TYPE = "TTY"
@@ -81,28 +77,38 @@ class TTY(object):
     def __init__(self, port):
         self.open(port)
 
-    def open(self, port):
-        self.tty = self.serial.Serial(port, baudrate=115200, timeout=0.05)
+    def open(self, port, baudrate=115200):
+        self.tty = self.serial.Serial(port, baudrate, timeout=0.05)
+
+    @property
+    def baudrate(self):
+        return self.tty.baudrate if self.tty else 0
+
+    @baudrate.setter
+    def baudrate(self, value):
+        if self.tty:
+            self.tty.baudrate = value
 
     def read(self, timeout):
         if self.tty is not None:
-            self.tty.timeout = max(timeout / 1000.0, 0.05)
+            self.tty.timeout = max(timeout/1E3, 0.05)
             frame = bytearray(self.tty.read(6))
             if frame is None or len(frame) == 0:
                 raise IOError(errno.ETIMEDOUT, os.strerror(errno.ETIMEDOUT))
             if frame.startswith("\x00\x00\xff\x00\xff\x00"):
+                log.log(logging.DEBUG-1, "<<< %s", str(frame).encode("hex"))
                 return frame
             LEN = frame[3]
             if LEN == 0xFF:
                 frame += self.tty.read(3)
                 LEN = frame[5]<<8 | frame[6]
             frame += self.tty.read(LEN + 1)
-            log.debug("<<< " + str(frame).encode("hex"))
+            log.log(logging.DEBUG-1, "<<< %s", str(frame).encode("hex"))
             return frame
 
     def write(self, frame):
         if self.tty is not None:
-            log.debug(">>> " + str(frame).encode("hex"))
+            log.log(logging.DEBUG-1, ">>> %s", str(frame).encode("hex"))
             self.tty.flushInput()
             try:
                 self.tty.write(str(frame))
@@ -238,8 +244,7 @@ class USB(object):
         try:
             self.usb_dev.claimInterface(0)
         except self.usb.USBError:
-            log.debug("device probably used by another process")
-            raise IOError("unusable device")
+            raise IOError(errno.EBUSY, os.strerror(errno.EBUSY))
         interface = dev.configurations[0].interfaces[0]
         endpoints = interface[0].endpoints
         bulk_inp = lambda ep: (\
@@ -274,65 +279,82 @@ class USB(object):
             # implicitely claim interface
             self.usb_out.write('')
         except self.usb_core.USBError:
-            raise IOError(errno.EACCES, os.strerror(errno.EACCES))
+            raise IOError(errno.EBUSY, os.strerror(errno.EBUSY))
         self.manufacturer_name_id = self.usb_dev.iManufacturer
         self.product_name_id = self.usb_dev.iProduct
         
-    def _PYUSB0_read(self, timeout):
+    def _PYUSB0_read(self, timeout=None):
         if self.usb_inp is not None:
-            try:
-                frame = self.usb_dev.bulkRead(self.usb_inp, 300, timeout)
-            except self.usb.USBError as error:
-                if error.message == "Connection timed out":
-                    ETIMEDOUT = errno.ETIMEDOUT
-                    raise IOError(ETIMEDOUT, os.strerror(ETIMEDOUT))
+            while timeout is None or timeout > 0:
+                try:
+                    poll_wait = 500 if timeout is None else min(500, timeout)
+                    frame = self.usb_dev.bulkRead(self.usb_inp, 300, poll_wait)
+                except self.usb.USBError as error:
+                    if str(error) != "Connection timed out":
+                        log.error("%r", error)
+                        raise IOError(errno.EIO, os.strerror(errno.EIO))
+                    if timeout is not None:
+                        timeout -= poll_wait
                 else:
-                    log.error("{0!r}".format(error))
-                    raise IOError(errno.EIO, os.strerror(errno.EIO))
+                    if not frame:
+                        log.error("bulk read returned without data")
+                        raise IOError(errno.EIO, os.strerror(errno.EIO))
+                    else:
+                        frame = bytearray(frame)
+                        log.log(logging.DEBUG-1, "<<< %s", hexlify(frame))
+                        return frame
             else:
-                frame = bytearray(frame)
-                log.debug("<<< " + str(frame).encode("hex"))
-                return frame
+                raise IOError(errno.ETIMEDOUT, os.strerror(errno.ETIMEDOUT))
     
-    def _PYUSB1_read(self, timeout):
+    def _PYUSB1_read(self, timeout=None):
         if self.usb_inp is not None:
-            try:
-                frame = self.usb_inp.read(300, timeout)
-            except self.usb_core.USBError as error:
-                if error.errno != errno.ETIMEDOUT:
-                    log.error("{0!r}".format(error))
-                raise error
+            while timeout is None or timeout > 0:
+                try:
+                    poll_wait = 500 if timeout is None else min(500, timeout)
+                    frame = self.usb_inp.read(300, poll_wait)
+                except self.usb_core.USBError as error:
+                    if error.errno != errno.ETIMEDOUT:
+                        log.error("%r", error)
+                        raise IOError(error.errno, error.strerror)
+                    if timeout is not None:
+                        timeout -= poll_wait
+                else:
+                    if not frame:
+                        log.error("bulk read returned without data")
+                        raise IOError(errno.EIO, os.strerror(errno.EIO))
+                    else:
+                        frame = bytearray(frame)
+                        log.log(logging.DEBUG-1, "<<< %s", hexlify(frame))
+                        return frame
             else:
-                frame = bytearray(frame)
-                log.debug("<<< " + str(frame).encode("hex"))
-                return frame
+                raise IOError(errno.ETIMEDOUT, os.strerror(errno.ETIMEDOUT))
 
     def _PYUSB0_write(self, frame):
         if self.usb_out is not None:
-            log.debug(">>> " + str(frame).encode("hex"))
+            log.log(logging.DEBUG-1, ">>> %s", hexlify(frame))
             try:
                 self.usb_dev.bulkWrite(self.usb_out, frame)
-                if len(frame) % 64 == 0: # must end bulk transfer
+                if len(frame) % 64 == 0: # end bulk transfer
                     self.usb_dev.bulkWrite(self.usb_out, '')
             except self.usb.USBError as error:
                 if error.message == "Connection timed out":
                     ETIMEDOUT = errno.ETIMEDOUT
                     raise IOError(ETIMEDOUT, os.strerror(ETIMEDOUT))
                 else:
-                    log.error("{0!r}".format(error))
+                    log.error("%r", error)
                     raise IOError(errno.EIO, os.strerror(errno.EIO))
         
     def _PYUSB1_write(self, frame):
         if self.usb_out is not None:
-            log.debug(">>> " + str(frame).encode("hex"))
+            log.log(logging.DEBUG-1, ">>> %s", hexlify(frame))
             try:
                 self.usb_out.write(frame)
                 if len(frame) % self.usb_out.wMaxPacketSize == 0:
                     self.usb_out.write('') # end bulk transfer
             except self.usb_core.USBError as error:
                 if error.errno != errno.ETIMEDOUT:
-                    log.error("{0!r}".format(error))
-                raise error
+                    log.error("%r", error)
+                raise IOError(error.errno, error.strerror)
         
     def _PYUSB0_close(self):
         if self.usb_dev is not None:

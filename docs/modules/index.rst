@@ -4,6 +4,7 @@ Module Reference
 .. toctree::
 
    nfc
+   clf
    tag
    ndef
    llcp

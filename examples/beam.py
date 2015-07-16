@@ -268,7 +268,7 @@ class Main(CommandLineInterface):
         super(Main, self).__init__(
             parser, groups="llcp dbg clf")
 
-    def on_llcp_startup(self, clf, llc):
+    def on_llcp_startup(self, llc):
         self.default_snep_server = DefaultServer(self.options, llc)
         return llc
         

@@ -1,5 +1,12 @@
 .. option:: --wait
 
-   After reading or writing a tag wait until it is removed before
+   After reading or writing a tag, wait until it is removed before
    returning. This option is implicit when the option ``--loop`` is
-   set. Only relevant for reader/writer mode.
+   set.
+
+.. option:: --technology {A,B,F}
+
+   Poll only for tags of a specific technology. The technologies
+   NFC-A, NFC-B, and NFC-F are defined in the NFC Forum Digital
+   Specification. The technology indicator is case insensitive. The
+   default is to poll for all technologies.

@@ -211,14 +211,12 @@ class ServiceDiscovery(object):
             self.resp.notify_all()
 
 class LogicalLinkController(object):
-    def __init__(self, recv_miu=248, send_lto=500, send_agf=True,
-                 symm_log=True):
+    def __init__(self, recv_miu=248, send_lto=500, send_agf=True):
         self.lock = threading.RLock()
         self.cfg = dict()
         self.cfg['recv-miu'] = recv_miu
         self.cfg['send-lto'] = send_lto
         self.cfg['send-agf'] = send_agf
-        self.cfg['symm-log'] = symm_log
         self.snl = dict({"urn:nfc:sn:sdp" : 1})
         self.sap = 64 * [None]
         self.sap[0] = ServiceAccessPoint(0, self)
@@ -231,7 +229,7 @@ class LogicalLinkController(object):
             miu=self.cfg.get('send-miu'), lto=self.cfg.get('recv-lto'))
         return "LLC: {local} {remote}".format(local=local, remote=remote)
 
-    def activate(self, mac):
+    def activate(self, mac, **options):
         assert type(mac) in (nfc.dep.Initiator, nfc.dep.Target)
         self.mac = None
         
@@ -239,13 +237,14 @@ class LogicalLinkController(object):
         lto = self.cfg['send-lto']
         wks = 1+sum(sorted([1<<sap for sap in self.snl.values() if sap < 15]))
         pax = ParameterExchange(version=(1,1), miu=miu, lto=lto, wks=wks)
-        
+
         if type(mac) == nfc.dep.Initiator:
-            gb = mac.activate(gbi='Ffm'+pax.to_string()[2:])
+            gb = mac.activate(gbi='Ffm'+pax.to_string()[2:], **options)
             self.run = self.run_as_initiator
             role = "Initiator"
+
         if type(mac) == nfc.dep.Target:
-            gb = mac.activate(gbt='Ffm'+pax.to_string()[2:], wt=9)
+            gb = mac.activate(gbt='Ffm'+pax.to_string()[2:], **options)
             self.run = self.run_as_target
             role = "Target"
 
@@ -257,6 +256,10 @@ class LogicalLinkController(object):
             info.append("  Link Timeout: {0} ms".format(pax.lto))
             info.append("  Max Inf Unit: {0} octet".format(pax.miu))
             info.append("  Service List: {0:016b}".format(pax.wks))
+
+            if type(mac) == nfc.dep.Target and mac.rwt >= pax.lto * 1E3:
+                msg = "local NFC-DEP RWT {0:.3f} contradicts LTO {1:.3f} sec"
+                log.warning(msg.format(mac.rwt, pax.lto*1E3))
 
             pax = ProtocolDataUnit.from_string("\x00\x40" + str(gb[3:]))
             info.append("Remote LLCP Settings")
@@ -276,8 +279,8 @@ class LogicalLinkController(object):
             if type(mac) == nfc.dep.Initiator and mac.rwt is not None:
                 max_rwt = 4096/13.56E6 * 2**10
                 if mac.rwt > max_rwt:
-                    log.warning("NFC-DEP RWT {0:.3f} exceeds max {1:.3f} sec"
-                                .format(mac.rwt, max_rwt))
+                    msg = "remote NFC-DEP RWT {0:.3f} exceeds max {1:.3f} sec"
+                    log.warning(msg.format(mac.rwt, max_rwt))
 
             self.mac = mac
 
@@ -285,11 +288,12 @@ class LogicalLinkController(object):
 
     def terminate(self, reason):
         log.debug("llcp link termination caused by {0}".format(reason))
-        if reason == "local choice":
-            self.exchange(Disconnect(0, 0), timeout=0.1)
-            self.mac.deactivate()
-        elif reason == "remote choice":
-            self.mac.deactivate()
+        if type(self.mac) == nfc.dep.Initiator:
+            if reason == "local choice":
+                self.exchange(Disconnect(0, 0), timeout=0.5)
+            self.mac.deactivate(release=True)
+        if type(self.mac) == nfc.dep.Target:
+            self.mac.deactivate(data=bytearray("\x01\x40"))
         # shutdown local services
         for i in range(63, -1, -1):
             if not self.sap[i] is None:
@@ -298,26 +302,28 @@ class LogicalLinkController(object):
                 self.sap[i] = None
         
     def exchange(self, pdu, timeout):
-        if not isinstance(pdu, Symmetry) or self.cfg.get('symm-log') is True:
-            log.debug("SEND {0}".format(pdu))
+        if not isinstance(pdu, Symmetry): log.debug("SEND {0}".format(pdu))
+        else: log.log(logging.DEBUG-1, "SEND {0}".format(pdu))
 
         data = pdu.to_string() if pdu else None
         try:
             data = self.mac.exchange(data, timeout)
             if data is None: return None
-        except nfc.clf.DigitalProtocolError as error:
-            log.debug("{0!r}".format(error))
+        except nfc.clf.CommunicationError as error:
+            log.warning("{0!r}".format(error))
             return None
 
         pdu = ProtocolDataUnit.from_string(data)
-        if not isinstance(pdu, Symmetry) or self.cfg.get('symm-log') is True:
-            log.debug("RECV {0}".format(pdu))
+        if not isinstance(pdu, Symmetry): log.debug("RECV {0}".format(pdu))
+        else: log.log(logging.DEBUG-1, "RECV {0}".format(pdu))
         return pdu
 
     def run_as_initiator(self, terminate=lambda: False):
         recv_timeout = 1E-3 * (self.cfg['recv-lto'] + 10)
-        symm = 0
+        msg = "starting initiator run loop with a timeout of {0:.3f} sec"
+        log.debug(msg.format(recv_timeout))
 
+        symm = 0
         try:
             pdu = self.collect(delay=0.01)
             while not terminate():
@@ -346,8 +352,10 @@ class LogicalLinkController(object):
 
     def run_as_target(self, terminate=lambda: False):
         recv_timeout = 1E-3 * (self.cfg['recv-lto'] + 10)
-        symm = 0
+        msg = "starting target run loop with a timeout of {0:.3f} sec"
+        log.debug(msg.format(recv_timeout))
         
+        symm = 0
         try:
             pdu = None
             while not terminate():

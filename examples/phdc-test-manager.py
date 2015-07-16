@@ -102,7 +102,7 @@ class PhdcTagManager(PhdcManager):
         t0 = time.time()
         while True:
             time.sleep(0.01)
-            if self.tag.ndef.changed:
+            if self.tag.ndef.has_changed:
                 if self.tag.ndef.message.type == "urn:nfc:wkt:PHD":
                     data = bytearray(self.tag.ndef.message[0].data)
                     if data[0] & 0x8F == (self.mc % 16) | 0x80:
@@ -236,7 +236,7 @@ class TestProgram(CommandLineInterface):
         super(TestProgram, self).__init__(
             parser, groups="llcp rdwr dbg clf")
 
-    def on_llcp_startup(self, clf, llc):
+    def on_llcp_startup(self, llc):
         validation_service_name = "urn:nfc:xsn:nfc-forum.org:phdc-validation"
         self.phdc_manager_1 = PhdcPeerManager(llc, "urn:nfc:sn:phdc")
         self.phdc_manager_2 = PhdcPeerManager(llc, validation_service_name)

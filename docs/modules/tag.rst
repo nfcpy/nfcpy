@@ -1,29 +1,50 @@
 nfc.tag
 =======
 
+.. contents::
+   :local:
+
 .. automodule:: nfc.tag
-
-nfc.tag.tt1.Type1Tag
---------------------
-
-.. autoclass:: nfc.tag.tt1.Type1Tag()
+   :show-inheritance:
    :members:
 
-nfc.tag.tt2.Type2Tag
---------------------
+Type 1 Tag
+----------
 
-.. autoclass:: nfc.tag.tt2.Type2Tag()
+.. automodule:: nfc.tag.tt1
+   :show-inheritance:
    :members:
 
-nfc.tag.tt3.Type3Tag
---------------------
-
-.. autoclass:: nfc.tag.tt3.Type3Tag()
+.. automodule:: nfc.tag.tt1_broadcom
+   :show-inheritance:
    :members:
 
-nfc.tag.tt4.Type4Tag
---------------------
+Type 2 Tag
+----------
 
-.. autoclass:: nfc.tag.tt4.Type4Tag()
+.. automodule:: nfc.tag.tt2
+   :show-inheritance:
+   :members:
+
+.. automodule:: nfc.tag.tt2_nxp
+   :show-inheritance:
+   :members:
+
+Type 3 Tag
+----------
+
+.. automodule:: nfc.tag.tt3
+   :show-inheritance:
+   :members:
+
+.. automodule:: nfc.tag.tt3_sony
+   :show-inheritance:
+   :members:
+
+Type 4 Tag
+----------
+
+.. automodule:: nfc.tag.tt4
+   :show-inheritance:
    :members:
 

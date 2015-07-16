@@ -217,11 +217,14 @@ class PhdcTagAgentTest(CommandLineInterface):
         super(PhdcTagAgentTest, self).__init__(
             parser, groups="test card dbg clf")
 
-    def on_card_startup(self, clf, targets):
+    def on_card_startup(self, target):
         idm = bytearray.fromhex("02FE") + os.urandom(6)
         pmm = bytearray.fromhex("01E0000000FFFF00")
         sys = bytearray.fromhex("12FC")
-        return [nfc.clf.TTF(br=212, idm=idm, pmm=pmm, sys=sys)]
+        
+        target.brty = str(self.options.bitrate) + "F"
+        target.sensf_res = "\x01" + idm + pmm + sys
+        return target
     
     def test_00(self, tag, command):
         """Send data read from scenario file"""

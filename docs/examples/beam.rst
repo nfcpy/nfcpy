@@ -40,6 +40,8 @@ data. ::
 
   $ beam.py send [--timeit] {link,text,file,ndef} [-h] [OPTIONS]
 
+.. program:: beam.py send
+
 .. option:: --timeit
 
    Measure and print the time that was needed to send the message.
@@ -50,6 +52,8 @@ send link
 Send a hyperlink embedded into a smartposter record. ::
 
   $ beam.py send link URI [TITLE]
+
+.. program:: beam.py send link
 
 .. option:: URI
 
@@ -66,6 +70,8 @@ Send plain text embedded into an NDEF Text Record. The default
 language identifier ``en`` can be changed with the ``--lang`` flag. ::
 
   $ beam.py send text TEXT [OPTIONS]
+
+.. program:: beam.py send text
 
 .. option:: TEXT
 
@@ -84,6 +90,8 @@ containing the file content. Both record type and name can also be
 explicitly set with the options ``-t`` and ``-n``, respectively. ::
 
   $ beam.py send file FILE [OPTIONS]
+
+.. program:: beam.py send file
 
 .. option:: FILE
 
@@ -114,6 +122,8 @@ first. ::
 
   $ beam.py send ndef FILE [OPTIONS]
 
+.. program:: beam.py send ndef
+
 .. option:: FILE
 
    The file from which to read NDEF messages.
@@ -138,6 +148,8 @@ Print the received message to the standard output stream. ::
 
   $ beam.py recv print
 
+.. program:: beam.py recv print
+
 recv save
 ^^^^^^^^^
 
@@ -145,6 +157,8 @@ Save the received message into a file. If the file already exists the
 message is appended. ::
 
   $ beam.py recv save FILE
+
+.. program:: beam.py recv file
 
 .. option:: FILE
 
@@ -158,6 +172,8 @@ Receive a message and send it back to the peer device. ::
 
   $ beam.py recv echo
 
+.. program:: beam.py recv echo
+
 recv send
 ^^^^^^^^^
 
@@ -169,6 +185,8 @@ message corresponds to any of the translation table inbound messages
 the corresponding outbound message is then sent back. ::
 
   $ beam.py [OPTIONS] recv send [-h] TRANSLATIONS
+
+.. program:: beam.py recv send
 
 .. option:: TRANSLATIONS
 
