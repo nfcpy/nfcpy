@@ -2,12 +2,12 @@
 Python module for near field communication
 ##########################################
 
-Release v\ |version|
+This documentation covers the '\ |release|\ ' version of *nfcpy*.
 
-The **nfcpy** module implements NFC Forum specifications for wireless
+The *nfcpy* module implements NFC Forum specifications for wireless
 short-range data exchange with NFC devices and tags. It is written in
 Python and aims to provide an easy-to-use yet powerful framework for
-Python applications. The software is licensed under the 
+contactless applications. The software is licensed under the 
 `EUPL <http://ec.europa.eu/idabc/eupl>`_.
 
 To send a web link to a smartphone:
