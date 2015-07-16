@@ -83,7 +83,7 @@ def send_message(args, llc, message):
     elif args.timeit:
         transfer_time = time.time() - t0
         message_size = len(str(message))
-        print("message sent in {0:.3f} seconds ({1} byte @ {2:.0f} kbyte/sec)"
+        print("message sent in {0:.3f} seconds ({1} byte @ {2:.0f} byte/sec)"
             .format(transfer_time, message_size, message_size/transfer_time))
 
 def add_send_link_parser(parser):
