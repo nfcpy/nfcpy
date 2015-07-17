@@ -533,7 +533,7 @@ class Device(device.Device):
 
         time_to_return = time.time() + timeout
         tg_comm_rf_args = {'mdaa': True, 'nfca_params': nfca_params}
-        tg_comm_rf_args['recv_timeout'] = int(1000 * timeout)
+        tg_comm_rf_args['recv_timeout'] = min(int(1000 * timeout), 0xFFFF)
         
         def listen_tta_tt2():
             recv_timeout = tg_comm_rf_args['recv_timeout']
@@ -635,7 +635,7 @@ class Device(device.Device):
         self.chipset.tg_set_protocol(self.chipset.tg_set_protocol_defaults)
         self.chipset.tg_set_protocol(rf_off_error=False)
 
-        recv_timeout = int(1000 * timeout)
+        recv_timeout = min(int(1000 * timeout), 0xFFFF)
         time_to_return = time.time() + timeout
         transmit_data = sensf_req = sensf_res = None
 
@@ -698,7 +698,7 @@ class Device(device.Device):
         tg_comm_rf_args['nfca_params'] = nfca_params
         tg_comm_rf_args['nfcf_params'] = nfcf_params
 
-        recv_timeout = int(1000 * timeout)
+        recv_timeout = min(int(1000 * timeout), 0xFFFF)
         time_to_return = time.time() + timeout
 
         while recv_timeout > 0:
@@ -823,7 +823,7 @@ class Device(device.Device):
         return 290
 
     def send_cmd_recv_rsp(self, target, data, timeout):
-        timeout_msec = int(timeout * 1000) + 1 if timeout else 0
+        timeout_msec = min(int(timeout * 1000), 0xFFFF) if timeout else 0
         self.chipset.in_set_rf(target.brty_send, target.brty_recv)
         self.chipset.in_set_protocol(self.chipset.in_set_protocol_defaults)
         self.chipset.in_set_protocol(
@@ -853,7 +853,7 @@ class Device(device.Device):
 
     def send_rsp_recv_cmd(self, target, data, timeout):
         assert timeout is None or timeout >= 0
-        timeout_msec = int(timeout * 1000) + 1 if timeout else 0
+        timeout_msec = min(int(timeout * 1000), 0xFFFF) if timeout else 0
         kwargs = {
             'guard_time': 500,
             'transmit_data': data,
