@@ -12,7 +12,7 @@ PAPEROPT_a4     = -D latex_paper_size=a4
 PAPEROPT_letter = -D latex_paper_size=letter
 ALLSPHINXOPTS   = -d $(BUILDDIR)/doctrees $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) .
 
-.PHONY: help clean html dirhtml singlehtml pickle json htmlhelp qthelp devhelp epub latex latexpdf text man changes linkcheck doctest
+.PHONY: help clean html dirhtml singlehtml pickle json htmlhelp qthelp devhelp epub latex latexpdf text man changes linkcheck doctest upload
 
 help:
 	@echo "Please use \`make <target>' where <target> is one of"
@@ -128,3 +128,15 @@ doctest:
 	$(SPHINXBUILD) -b doctest $(ALLSPHINXOPTS) $(BUILDDIR)/doctest
 	@echo "Testing of doctests in the sources finished, look at the " \
 	      "results in $(BUILDDIR)/doctest/output.txt."
+
+BRANCH := $(shell bzr info | \
+			sed -ne 's|.*push branch.*/nfcpy||p' | \
+			sed -re 's|^/$$|/trunk/|' -e 's|/(.*)/|\1|')
+
+upload: html linkcheck
+	@bzr info | grep --silent "push branch" || \
+		echo "this branch is not yet pushed"; exit
+	ssh nfcpy 'rm -rf /var/www/nfcpy/$(BRANCH)/*'
+	scp -r $(BUILDDIR)/html/* nfcpy:///var/www/nfcpy/$(BRANCH)/
+	@echo "Upload to nfcpy.or server finished. The new documentation is" \
+		  "now live at http://nfcpy.org/$(BRANCH)"

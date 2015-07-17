@@ -33,6 +33,7 @@ version = nfc.__version__
 release = version
 exclude_patterns = ['_build', '.#*', 'topics/.#*', 'examples/.#*']
 pygments_style = 'sphinx'
+linkcheck_timeout = 30
 
 # -- Options for HTML output ---------------------------------------------------
 
@@ -56,9 +57,6 @@ html_static_path = ['_static']
 html_last_updated_fmt = '%b %d, %Y'
 html_show_sourcelink = True
 htmlhelp_basename = 'nfcpydoc'
-
-# -- Options for linkcheck -----------------------------------------------------
-linkcheck_timeout = 1.0
 
 # -- Options for LaTeX output --------------------------------------------------
 # The paper size ('letter' or 'a4').
