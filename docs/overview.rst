@@ -11,10 +11,10 @@ Requirements
 * `docopt`_ for execution of some of the example programs
 
 .. _Python: https://www.python.org
-.. _PyUSB: http://walac.githus.io/pyusb
+.. _PyUSB: http://walac.github.io/pyusb
 .. _libusb: http://www.libusb.org
-.. _pyserial: http://pyserial.sourceforge.net/
-.. _docopt: https://github.com/docopt/docopt    
+.. _pyserial: http://pythonhosted.org/pyserial/
+.. _docopt: https://github.com/docopt/docopt
 
 Supported Devices
 =================
@@ -163,4 +163,5 @@ AD Bluetooth Secure Simple Pairing    implemented
 References
 ==========
 
-* NFC Forum Specifications: http://www.nfc-forum.org/specs/
+* NFC Forum Specifications:
+  http://nfc-forum.org/our-work/specifications-and-application-documents/

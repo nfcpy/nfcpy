@@ -41,7 +41,7 @@ https://launchpad.net/nfcpy.
 **2. Install Python**
 
 Python is already installed on every Desktop Linux. Windows installers
-can be found at http://www.python.org/download/windows/. Make sure to
+can be found at https://www.python.org/downloads/windows/. Make sure to
 choose a 2.x version, usually the latest, as *nfcpy* is not yet ported
 to Python 3.
 
@@ -425,4 +425,4 @@ different service name.
           the API classes and methods that are available.
 
 .. _NFC Forum Assigned Numbers Register:
-   http://www.nfc-forum.org/specs/nfc_forum_assigned_numbers_register
+   http://members.nfc-forum.org/specs/nfc_forum_assigned_numbers_register

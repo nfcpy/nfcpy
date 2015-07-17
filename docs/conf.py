@@ -21,7 +21,7 @@ extensions = [
     'sphinx.ext.napoleon',
     'sphinx.ext.intersphinx'
 ]
-intersphinx_mapping = {'python':('http://docs.python.org/2.7', None)}
+intersphinx_mapping = {'python':('https://docs.python.org/2.7', None)}
 templates_path = ['_templates']
 source_suffix = '.rst'
 master_doc = 'index'
@@ -57,8 +57,10 @@ html_last_updated_fmt = '%b %d, %Y'
 html_show_sourcelink = True
 htmlhelp_basename = 'nfcpydoc'
 
-# -- Options for LaTeX output --------------------------------------------------
+# -- Options for linkcheck -----------------------------------------------------
+linkcheck_timeout = 1.0
 
+# -- Options for LaTeX output --------------------------------------------------
 # The paper size ('letter' or 'a4').
 #latex_paper_size = 'letter'
 

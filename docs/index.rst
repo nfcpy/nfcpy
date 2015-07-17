@@ -8,7 +8,7 @@ The *nfcpy* module implements NFC Forum specifications for wireless
 short-range data exchange with NFC devices and tags. It is written in
 Python and aims to provide an easy-to-use yet powerful framework for
 contactless applications. The software is licensed under the 
-`EUPL <http://ec.europa.eu/idabc/eupl>`_.
+`EUPL <http://ec.europa.eu/idabc/eupl.html>`_.
 
 To send a web link to a smartphone:
 
