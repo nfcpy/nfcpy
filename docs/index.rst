@@ -2,7 +2,9 @@
 Python module for near field communication
 ##########################################
 
-This documentation covers the '\ |release|\ ' version of *nfcpy*.
+.. epigraph:: This documentation covers the '\ |release|\ ' version of
+   *nfcpy*.  Source code, issue tracker and a question/answer section
+   are at https://launchpad.net/nfcpy.
 
 The *nfcpy* module implements NFC Forum specifications for wireless
 short-range data exchange with NFC devices and tags. It is written in
@@ -21,8 +23,8 @@ To send a web link to a smartphone:
   True
   >>> clf.close()
 
-There are also many :doc:`examples/index` that can be used from the
-command line: ::
+There are also a number of :doc:`examples/index` that can be used from
+the command line: ::
 
   $ examples/beam.py send link http://nfcpy.org
   
