@@ -412,10 +412,6 @@ class Device(device.Device):
                     if sel_res[0] & 0b00000100: uid = uid + sdd_res[1:4]
                     else: uid = uid + sdd_res[0:4]; break
             if sel_res[0] & 0b00000100 == 0:
-                if sel_res[0] & 0b01100000 == 0:
-                    # For Type 2 Tags we must check CRC in software
-                    # to be able to receive ACK/NAK responses.
-                    self.chipset.in_set_protocol(check_crc=0)
                 return nfc.clf.RemoteTarget(target.brty, sens_res=sens_res,
                                             sel_res=sel_res, sdd_res=uid)
         except CommunicationError as error:
@@ -826,14 +822,19 @@ class Device(device.Device):
         timeout_msec = min(int(timeout * 1000), 0xFFFF) if timeout else 0
         self.chipset.in_set_rf(target.brty_send, target.brty_recv)
         self.chipset.in_set_protocol(self.chipset.in_set_protocol_defaults)
-        self.chipset.in_set_protocol(
-            add_parity=1 if target.brty_send.endswith('A') else 0,
-            check_parity=1 if target.brty_recv.endswith('A') else 0)
+        in_set_protocol_settings = {
+            'add_parity': 1 if target.brty_send.endswith('A') else 0,
+            'check_parity': 1 if target.brty_recv.endswith('A') else 0
+        }
         try:
             if (target.brty == '106A' and target.sel_res and
                 target.sel_res[0] & 0x60 == 0x00):
+                # Driver must check TT2 CRC to get ACK/NAK
+                in_set_protocol_settings['check_crc'] = 0
+                self.chipset.in_set_protocol(**in_set_protocol_settings)
                 return self._tt2_send_cmd_recv_rsp(data, timeout_msec)
             else:
+                self.chipset.in_set_protocol(**in_set_protocol_settings)
                 return self.chipset.in_comm_rf(data, timeout_msec)
         except CommunicationError as error:
             log.debug(error)
@@ -844,7 +845,7 @@ class Device(device.Device):
     def _tt2_send_cmd_recv_rsp(self, data, timeout_msec):
         # The Type2Tag implementation needs to receive the Mifare
         # ACK/NAK responses but the chipset reports them as crc error
-        # (indistinguishable from a real crc error). We thus have to
+        # (indistinguishable from a real crc error). We thus had to
         # switch off the crc check and do it here.
         data = self.chipset.in_comm_rf(data, timeout_msec)
         if len(data) > 2 and self.check_crc_a(data) is False:
