@@ -439,7 +439,7 @@ class CommandLineInterface(object):
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-class _AnsiColorStreamHandler(logging.StreamHandler):
+class AnsiColorStreamHandler(logging.StreamHandler):
     DEFAULT = '\x1b[0m'
     RED     = '\x1b[31m'
     GREEN   = '\x1b[32m'
@@ -461,15 +461,12 @@ class _AnsiColorStreamHandler(logging.StreamHandler):
         elif level >= logging.DEBUG:   return cls.DEBUG
         else:                          return cls.DEFAULT
 
-    def __init__(self, stream=None):
-        logging.StreamHandler.__init__(self, stream)
-
     def format(self, record):
         text = logging.StreamHandler.format(self, record)
         color = self._get_color(record.levelno)
         return color + text + self.DEFAULT
 
-class _WinColorStreamHandler(logging.StreamHandler):
+class WindowsColorStreamHandler(logging.StreamHandler):
     # wincon.h
     FOREGROUND_BLACK     = 0x0000
     FOREGROUND_BLUE      = 0x0001
@@ -514,12 +511,12 @@ class _WinColorStreamHandler(logging.StreamHandler):
         ctypes.windll.kernel32.SetConsoleTextAttribute(self._outhdl, code)
 
     def __init__(self, stream=None):
-        logging.StreamHandler.__init__(self, stream)
+        super(WindowsColorStreamHandler, self).__init__(stream)
         # get file handle for the stream
         import ctypes, ctypes.util
         crtname = ctypes.util.find_msvcrt()
         crtlib = ctypes.cdll.LoadLibrary(crtname)
-        self._outhdl = crtlib._get_osfhandle(stream.fileno())
+        self._outhdl = crtlib._get_osfhandle(self.stream.fileno())
 
     def emit(self, record):
         color = self._get_color(record.levelno)
@@ -530,6 +527,6 @@ class _WinColorStreamHandler(logging.StreamHandler):
 # select ColorStreamHandler based on platform
 import platform
 if platform.system() == 'Windows':
-    ColorStreamHandler = _WinColorStreamHandler
+    ColorStreamHandler = WindowsColorStreamHandler
 else:
-    ColorStreamHandler = _AnsiColorStreamHandler
+    ColorStreamHandler = AnsiColorStreamHandler
