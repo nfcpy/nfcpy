@@ -366,8 +366,13 @@ class Device(pn53x.Device):
 
 def init(transport):
     if transport.TYPE == "TTY":
+        transport.open(transport.port, 115200)
         # wakeup from power down and delay to operational state
-        transport.write(bytearray([0x55, 0x00, 0x00, 0x00, 0x00]))
+        transport.write(bytearray.fromhex("5500000000"))
+        transport.write(bytearray.fromhex("0000FF03FDD400002C00"))
+        if (transport.read(0.05) != bytearray.fromhex("0000ff00ff00") or
+            transport.read(0.05) != bytearray.fromhex("0000ff03fdd501002a00")):
+            raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
 
     chipset = Chipset(transport, logger=log)
     return Device(chipset, logger=log)
