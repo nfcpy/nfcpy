@@ -17,21 +17,21 @@ To get the latest development version: ::
 
   $ sudo apt-get install bzr
   $ cd <somedir>
-  $ bzr branch lp:nfcpy
+  $ bzr branch lp:nfcpy trunk
 
 This will download a branch of the `nfcpy trunk`_ repository from
 Canonical's `Launchpad`_ source code hosting platform into the local
 directory ``<somedir>/trunk``.
 
-For a Windows install the easiest is to download the Bazaar standalone
+For Windows install, the easiest is to download the Bazaar standalone
 installer from http://wiki.bazaar.canonical.com/WindowsDownloads and
 choose the *Typical Installation* that includes the *Bazaar Explorer
 GUI Application*. Start *Bazaar Explorer*, go to *Get project source
 from elsewhere* and create a local **branch** of ``lp:nfcpy`` into
 ``C:/src/nfcpy`` or some other directory of choice.
 
-A release versions can be branched from the appropriate series, for
-example to grab the latest 0.0.x release.::
+A release version can be branched from the appropriate series, for
+example the latest 0.9.x release. ::
 
   $ bzr branch lp:nfcpy/0.9
 
@@ -40,10 +40,10 @@ https://launchpad.net/nfcpy.
 
 **2. Install Python**
 
-Python is already installed on every Desktop Linux. Windows installers
-can be found at https://www.python.org/downloads/windows/. Make sure to
-choose a 2.x version, usually the latest, as *nfcpy* is not yet ported
-to Python 3.
+Python is usually installed on Linux, otherwise can be downloaded at
+https://www.python.org/downloads/. Windows users may grab an installer
+at https://www.python.org/downloads/windows/. Choose the latest 2.x
+version, *nfcpy* is not yet ready for Python 3.
 
 **3. Install libusb**
 

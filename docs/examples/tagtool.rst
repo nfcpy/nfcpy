@@ -242,7 +242,7 @@ possible for anyone in posession of the password. Password protection
 works on NXP NTAG 21x type 2 tags and Sony FeliCa Lite-S type 3
 tags. ::
 
-  $ tagtool.py protect [-h] [-p PASSWORD] [--unreadable]
+  $ tagtool.py protect [-h] [-p PASSWORD] [--from BLOCK] [--unreadable]
 
 .. program:: tagtool.py protect
 
