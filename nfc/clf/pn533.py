@@ -162,12 +162,6 @@ class Device(pn53x.Device):
     # Device driver for PN533 based contactless frontends.
 
     def __init__(self, chipset, logger):
-        with open("pn533_init_1.txt", "w") as f:
-            for addr in range(0, 0x03FF, 16):
-                xram = chipset.read_register(*range(addr, addr+16))
-                xram = ' '.join(["%02X" % x for x in xram])
-                f.write("0x%04X: %s\n" % (addr, xram))
-
         assert isinstance(chipset, Chipset)
         super(Device, self).__init__(chipset, logger)
         
