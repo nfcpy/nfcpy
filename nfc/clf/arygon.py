@@ -39,8 +39,8 @@ class ChipsetA(pn531.Chipset):
 
 class DeviceA(pn531.Device):
     def close(self):
-        super(DeviceA, self).close()
         self.chipset.transport.tty.write("0au")
+        super(DeviceA, self).close()
     
 class ChipsetB(pn532.Chipset):
     def write_frame(self, frame):
@@ -48,8 +48,8 @@ class ChipsetB(pn532.Chipset):
 
 class DeviceB(pn532.Device):
     def close(self):
-        super(DeviceB, self).close()
         self.chipset.transport.tty.write("0au")
+        super(DeviceB, self).close()
     
 def init(transport):
     transport.tty.baudrate = 115200
