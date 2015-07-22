@@ -56,6 +56,7 @@ import logging
 log = logging.getLogger(__name__)
 
 import time
+import errno
 from binascii import hexlify
 
 import nfc.clf
@@ -136,19 +137,19 @@ class Chipset(pn53x.Chipset):
     in_list_passive_target_brty_range = (0, 1, 2, 3, 4)
 
     def _read_register(self, data):
-        return self.command(0x06, data, timeout=250)
+        return self.command(0x06, data, timeout=0.25)
 
     def _write_register(self, data):
-        self.command(0x08, data, timeout=250)
+        self.command(0x08, data, timeout=0.25)
         
     def set_serial_baudrate(self, baudrate):
         br = (9600,19200,38400,57600,115200,230400,460800,921600,1288000)
-        self.command(0x10, chr(br.index(baudrate)), timeout=100)
+        self.command(0x10, chr(br.index(baudrate)), timeout=0.1)
         self.write_frame(self.ACK)
 
     def sam_configuration(self, mode, timeout=0, irq=False):
         mode = ("normal", "virtual", "wired", "dual").index(mode) + 1
-        self.command(0x14, bytearray([mode, timeout, int(irq)]), timeout=100)
+        self.command(0x14, bytearray([mode, timeout, int(irq)]), timeout=0.1)
 
     power_down_wakeup_src = ("INT0","INT1","rfu","RF","HSU","SPI","GPIO","I2C")
     def power_down(self, wakeup_enable, generate_irq=False):
@@ -156,12 +157,12 @@ class Chipset(pn53x.Chipset):
         for i, src in enumerate(self.power_down_wakeup_src):
             if src in wakeup_enable: wakeup_set |= 1 << i
         cmd_data = bytearray([wakeup_set, int(generate_irq)])
-        data = self.command(0x16, cmd_data, timeout=100)
+        data = self.command(0x16, cmd_data, timeout=0.1)
         if data[0] != 0: self.chipset_error(data)
 
     def in_auto_poll(self, poll_nr, period, *types):
         assert len(types) <= 15
-        timeout = poll_nr * len(types) * period * 150 + 100
+        timeout = poll_nr * len(types) * period * 0.15 + 0.1
         data = chr(poll_nr) + chr(period) + bytearray(types)
         data = self.command(0x60, data, timeout=timeout)
         targets = []
@@ -370,8 +371,8 @@ def init(transport):
         # wakeup from power down and delay to operational state
         transport.write(bytearray.fromhex("5500000000"))
         transport.write(bytearray.fromhex("0000FF03FDD400002C00"))
-        if (transport.read(0.05) != bytearray.fromhex("0000ff00ff00") or
-            transport.read(0.05) != bytearray.fromhex("0000ff03fdd501002a00")):
+        if (transport.read(100) != bytearray.fromhex("0000ff00ff00") or
+            transport.read(100) != bytearray.fromhex("0000ff03fdd501002a00")):
             raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
 
     chipset = Chipset(transport, logger=log)
