@@ -28,43 +28,67 @@ log = logging.getLogger(__name__)
 import os, sys, re, errno, importlib
 from binascii import hexlify
 
+PATH = re.compile(r'^([a-z]+)(?::|)([a-zA-Z0-9]+|)(?::|)([a-zA-Z0-9]+|)$')
+
 class TTY(object):
     TYPE = "TTY"
     
     @classmethod
     def find(cls, path):
-        if not (path.startswith("tty") or path.startswith("com")):
-            return
-
         try:
             cls.serial = importlib.import_module("serial")
         except ImportError:
             log.error("python serial library not found")
             return None
         
-        match = re.match(r"^(tty|com):([a-zA-Z0-9]+):([a-zA-Z0-9]+)$", path)
-
+        match = PATH.match(path)
+        
         if match and match.group(1) == "tty":
-            try:
-                port = int(match.group(2))
-            except ValueError:
-                port = "/dev/tty{0}".format(match.group(2))
-            try:
-                tty = cls.serial.Serial(port)
-                return tty.port, match.group(3)
-            except cls.serial.SerialException:
-                log.debug("failed to open serial port '{0}'".format(port))
+            import termios
+            if re.match(r'^\D+\d+$', match.group(2)):
+                TTYS = re.compile(r'^tty{0}$'.format(match.group(2)))
+            elif re.match(r'^\D+$', match.group(2)):
+                TTYS = re.compile(r'^tty{0}\d+$'.format(match.group(2)))
+            elif re.match(r'^$', match.group(2)):
+                TTYS = re.compile(r'^tty(S|ACM|AMA|USB)\d+$')
+            else:
+                log.error("invalid port in 'tty' path: %r", match.group(2))
+                return
+            
+            ttys = [fn for fn in os.listdir('/dev') if TTYS.match(fn)]
+            if len(ttys) == 0: return
+
+            # Sort ttys with custom function to correctly order numbers.
+            ttys.sort(key=lambda s:"%s%3s"%(re.match('(\D+)(\d+)',s).groups()))
+            log.debug('trying /dev/tty%s', ' '.join([tty[3:] for tty in ttys]))
+
+            # Eliminate tty nodes that are not physically present or
+            # inaccessible by the current user. Propagate IOError when
+            # path designated exactly one device, otherwise just log.
+            for i, tty in enumerate(ttys):
+                try:
+                    try: termios.tcgetattr(open('/dev/%s' % tty))
+                    except termios.error: pass
+                    else: ttys[i] = '/dev/%s' % tty
+                except IOError as error:
+                    if not TTYS.pattern.endswith(r'\d+$'): raise
+                    else: log.debug(error)
+
+            ttys = [tty for tty in ttys if tty.startswith('/dev/')]
+            log.debug('avail: %s', ' '.join([tty for tty in ttys]))
+            return ttys, match.group(3), TTYS.pattern.endswith(r'\d+$')
         
         if match and match.group(1) == "com":
-            try:
-                port = int(match.group(2))
-            except ValueError:
-                port = match.group(2)
-            try:
-                com = cls.serial.Serial(port)
-                return com.port, match.group(3)
-            except cls.serial.SerialException:
-                log.debug("failed to open serial port '{0}'".format(port))
+            if re.match(r'^COM\d+$', match.group(2)):
+                return [match.group(2)], match.group(3), False
+            if re.match(r'^\d+$', match.group(2)):
+                return ["COM" + match.group(2)], match.group(3), False
+            if re.match(r'^$', match.group(2)):
+                import serial.tools.list_ports
+                ports = [p[0] for p in serial.tools.list_ports.comports()]
+                log.debug('serial ports: %s', ' '.join([p for p in ports]))
+                return ports, match.group(3), True
+            log.error("invalid port in 'com' path: %r", match.group(2))
 
     @property
     def manufacturer_name(self):
@@ -74,11 +98,17 @@ class TTY(object):
     def product_name(self):
         return None
 
-    def __init__(self, port):
+    def __init__(self, port=None):
+        self.tty = None
         self.open(port)
 
     def open(self, port, baudrate=115200):
+        self.close()
         self.tty = self.serial.Serial(port, baudrate, timeout=0.05)
+
+    @property
+    def port(self):
+        return self.tty.port if self.tty else ''
 
     @property
     def baudrate(self):
@@ -117,8 +147,7 @@ class TTY(object):
 
     def close(self):
         if self.tty is not None:
-            self.tty.timeout = 0.1
-            self.tty.read(300)
+            self.tty.flushOutput()
             self.tty.close()
             self.tty = None
         

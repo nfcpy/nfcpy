@@ -50,6 +50,8 @@ usb_device_map = {
     (0x072f, 0x2200) : "acr122", # ACS ACR122U
 }
 
+tty_driver_list = ["arygon", "pn532"]
+
 def connect(path):
     """Connect to a local device identified by *path* and load the
     appropriate device driver. The *path* argument is documented at
@@ -88,19 +90,25 @@ def connect(path):
             device._path = "usb:{0:03}:{1:03}".format(int(bus), int(dev))
             return device
 
-    found = transport.TTY.find(path) 
+    found = transport.TTY.find(path)
     if found is not None:
-        port, module = found
-        log.debug("trying {0} on '{1}'".format(module, path))
-        driver = importlib.import_module("nfc.clf." + module)
-        try:
-            tty = transport.TTY(port)
-            device = driver.init(tty)
-            device._path = port
-            return device
-        except IOError:
-            pass
-        
+        devices = found[0]
+        drivers = [found[1]] if found[1] else tty_driver_list
+        globbed = found[2]; print "globbed", globbed
+        for drv in drivers:
+            for dev in devices:
+                log.debug("trying {0} on {1}".format(drv, dev))
+                driver = importlib.import_module("nfc.clf." + drv)
+                try:
+                    tty = transport.TTY(dev)
+                    device = driver.init(tty)
+                    device._path = dev
+                    return device
+                except IOError as error:
+                    log.debug(error)
+                    tty.close()
+                    if not globbed: raise
+
     if path.startswith("udp"):
         path = path.split(':')
         host = str(path[1]) if len(path) > 1 and path[1] else 'localhost'

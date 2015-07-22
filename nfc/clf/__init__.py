@@ -144,13 +144,9 @@ class ContactlessFrontend(object):
         with self.lock:
             log.info("searching for reader on path " + path)
             self.device = device.connect(path)
-
-        if self.device is None:
-            log.error("no reader available on path " + path)
-        else:
-            log.info("using {0}".format(self.device))
-
-        return bool(self.device)
+            if self.device: log.info("using {0}".format(self.device))
+            else: log.error("no reader available on path " + path)
+            return bool(self.device)
 
     def close(self):
         """Close the contacless reader device."""
