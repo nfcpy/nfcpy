@@ -224,6 +224,8 @@ class Device(pn53x.Device):
                 target.sdd_res = target.sdd_res[1:]
             elif len(target.sdd_res) == 12:
                 target.sdd_res = target.sdd_res[1:4] + target.sdd_res[4:]
+            # Also the SENS_RES bytes are reversed compared to PN532/533
+            target.sens_res = bytearray(reversed(target.sens_res))
         return target
 
     def sense_ttb(self, target):
