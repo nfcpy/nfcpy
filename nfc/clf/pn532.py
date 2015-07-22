@@ -55,6 +55,7 @@ listen_dep  yes
 import logging
 log = logging.getLogger(__name__)
 
+import os
 import time
 import errno
 from binascii import hexlify
