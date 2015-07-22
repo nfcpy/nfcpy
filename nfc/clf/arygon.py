@@ -39,8 +39,9 @@ class ChipsetA(pn531.Chipset):
 
 class DeviceA(pn531.Device):
     def close(self):
-        self.chipset.transport.tty.write("0au")
-        super(DeviceA, self).close()
+        self.chipset.transport.tty.write("0au") # device reset
+        self.chipset.close()
+        self.chipset = None
     
 class ChipsetB(pn532.Chipset):
     def write_frame(self, frame):
@@ -48,11 +49,12 @@ class ChipsetB(pn532.Chipset):
 
 class DeviceB(pn532.Device):
     def close(self):
-        self.chipset.transport.tty.write("0au")
-        super(DeviceB, self).close()
+        self.chipset.transport.tty.write("0au") # device reset
+        self.chipset.close()
+        self.chipset = None
     
 def init(transport):
-    transport.tty.baudrate = 115200
+    transport.open(transport.port, 115200)
     transport.tty.write("0av") # read version
     response = transport.tty.readline()
     if response.startswith("FF00000600V"):
@@ -72,8 +74,8 @@ def init(transport):
                 device._vendor_name = "Arygon"
                 device._device_name = "ADRB"
                 return device
-    
-    transport.tty.baudrate = 9600
+
+    transport.open(transport.port, 9600)
     transport.tty.write("0av") # read version
     response = transport.tty.readline()
     if response.startswith("FF00000600V"):
