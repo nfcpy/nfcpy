@@ -120,8 +120,8 @@ General Notes
 
 * Testbed devices are are verfied to work with the latest stable nfcpy
   release. Test platforms are Ubuntu Linux (usually the latest
-  version), Raspbian (with a Raspberry Pi 2 Model B), and Windows
-  (currently a Windows 8.1 virtual machine). No tests are done for MAC
+  version), Raspbian (with Raspberry Pi 2 Model B), and Windows
+  (currently a Windows 7 virtual machine). No tests are done for MAC
   OS X because of lack of hardware.
 
 * All device architectures with a PN532 or PN533 suffer from a
