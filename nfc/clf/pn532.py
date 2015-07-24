@@ -186,33 +186,31 @@ class Chipset(pn53x.Chipset):
         return self.command(0x8c, data, timeout)
 
 class ChipsetTTY(Chipset):
+    extra_preamble = bytearray(10)
     def write_frame(self, frame):
         # Add long preamble to wakeup PN532. Interestingly this is
         # only needed on Raspberry Pi, when running on an Ubuntu
         # Desktop/Laptop it works equally well without.
-        self.transport.write((10 * "\0") + frame)
+        self.transport.write(self.extra_preamble + frame)
 
 class Device(pn53x.Device):
     # Device driver for PN532 based contactless frontends.
 
     def __init__(self, chipset, logger):
         assert isinstance(chipset, Chipset)
+        
+        if 0 and chipset.transport.TYPE == "TTY":
+            chipset.set_serial_baudrate(921600)
+            time.sleep(0.001)
+            chipset.transport.baudrate = 921600
+            logger.debug("changed uart speed to 921600 baud")
+            chipset.extra_preamble = bytearray(0)
+
         super(Device, self).__init__(chipset, logger)
         
         ic, ver, rev, support = self.chipset.get_firmware_version()
         self._chipset_name = "PN5{0:02x}v{1}.{2}".format(ic, ver, rev)
         self.log.debug("chipset is a {0}".format(self._chipset_name))
-
-        if (self.chipset.transport.TYPE == "TTY" and
-            self.chipset.read_register(0x6103) & 0b00101111 == 0b00000100):
-            # The Multi Interface (MIF) register says we're using HSU.
-            self.log.debug("connected via high speed uart at {0} baud"
-                           .format(self.chipset.transport.baudrate))
-            self.chipset.set_serial_baudrate(921600)
-            time.sleep(0.001)
-            self.chipset.transport.baudrate = 921600
-            self.log.debug("changed high speed uart speed to {0} baud"
-                           .format(self.chipset.transport.baudrate))
 
         self.chipset.sam_configuration("normal")
         self.chipset.set_parameters(0b00000000)
@@ -229,12 +227,11 @@ class Device(pn53x.Device):
         self.mute()
 
     def close(self):
-        if (self.chipset.transport.TYPE == "TTY" and
-            self.chipset.read_register(0x6103) & 0b00101111 == 0b00000100):
-            # The Multi Interface (MIF) register says we're using HSU.
+        if self.chipset.transport.TYPE == "TTY":
             self.chipset.set_serial_baudrate(115200)
-            time.sleep(0.001)
             self.chipset.transport.baudrate = 115200
+            time.sleep(0.001)
+        
         self.chipset.power_down(wakeup_enable=("I2C", "SPI", "HSU"))
         super(Device, self).close()
 
@@ -377,12 +374,22 @@ def init(transport):
     if transport.TYPE == "TTY":
         # PN532 initial baudrate is 115200
         transport.open(transport.port, 115200)
-        # wakeup from power down and delay to operational state
-        #transport.write(bytearray.fromhex("5500000000"))
-        transport.write(bytearray.fromhex((10*"00") +"0000FF03FDD400002C00"))
-        if (transport.read(100) == bytearray.fromhex("0000ff00ff00") and
-            transport.read(100) == bytearray.fromhex("0000ff03fdd501002a00")):
-            chipset = ChipsetTTY(transport, logger=log)
-            return Device(chipset, logger=log)
+        long_preamble = bytearray(10)
+        get_version_cmd = bytearray.fromhex("0000ff02fed4022a00")
+        get_version_rsp = bytearray.fromhex("0000ff06fad50332")
+        set_bitrate_cmd = bytearray.fromhex("0000ff03fdd410071500") # 921600
+        set_bitrate_rsp = bytearray.fromhex("0000ff02fed5111a00")
+        transport.write(long_preamble + get_version_cmd)
+        if (transport.read(timeout=100) == Chipset.ACK and
+            transport.read(timeout=100).startswith(get_version_rsp)):
+            transport.write(long_preamble + set_bitrate_cmd)
+            if (transport.read(timeout=100) == Chipset.ACK and
+                transport.read(timeout=100).startswith(set_bitrate_rsp)):
+                transport.write(Chipset.ACK)
+                transport.open(transport.port, 921600)
+                log.debug("changed uart speed from 115.2 to 921.6 kbaud")
+                time.sleep(0.001)
+                chipset = Chipset(transport, logger=log)
+                return Device(chipset, logger=log)
     
     raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
