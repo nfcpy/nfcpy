@@ -39,7 +39,7 @@ Identive     SCL3710 PN531     usb:04cc:0531   No      [#hw4]_
 ACS          ACR122U PN532v1.4 usb:072f:2200   Yes     [#hw5]_
 ACS          ACR122U PN532v1.6 usb:072f:2200   Yes     [#hw5]_
 Stollmann    Reader  PN532v1.4 tty:USB0:pn532  Yes     [#hw6]_
-Adafruit     Board   PN532     tty:AMA0:pn532  No      [#hw7]_
+Adafruit     Board   PN532v1.6 tty:AMA0:pn532  Yes     [#hw7]_
 Identive     SCL3711 PN533v2.7 usb:04e6:5591   Yes     [#hw8]_
 Identive     SCL3712 PN533     usb:04e6:5593   No      [#hw9]_
 SensorID     StickID PN533v2.7 usb:04cc:2533   Yes     [#hw10]_
@@ -74,9 +74,12 @@ Arygon       ADRA    PN531v4.2 tty:USB0:arygon Yes
 
 .. [#hw7] This is sold by Adafruit as "PN532 NFC/RFID Controller
    Breakout Board" and can directly be connected to a serial port of,
-   for example, a Raspberry Pi (the device path shown is for the first
-   serial port, when using a USB/UART bridge it would be
-   ``usb:USB0:pn532``).
+   for example, a Raspberry Pi (the device path shown is for the
+   Raspberry Pi's UART, when using a USB/UART bridge it would be
+   ``usb:USB0:pn532``). Note that the serial link speed is only 115200
+   baud when connected at /dev/ttyAMA0 while with a USB/UART bridge it
+   may be up to 921600 baud (on Linux the driver tries to figure this
+   out).
 
 .. [#hw8] The SCL3711 has a relatively small antenna that winds
    around the circuitry and may be the reason for less superior
