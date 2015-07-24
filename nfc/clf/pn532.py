@@ -186,27 +186,11 @@ class Chipset(pn53x.Chipset):
                 chr(len(historical_bytes)) + historical_bytes)
         return self.command(0x8c, data, timeout)
 
-class ChipsetTTY(Chipset):
-    extra_preamble = bytearray(10)
-    def write_frame(self, frame):
-        # Add long preamble to wakeup PN532. Interestingly this is
-        # only needed on Raspberry Pi, when running on an Ubuntu
-        # Desktop/Laptop it works equally well without.
-        self.transport.write(self.extra_preamble + frame)
-
 class Device(pn53x.Device):
     # Device driver for PN532 based contactless frontends.
 
     def __init__(self, chipset, logger):
         assert isinstance(chipset, Chipset)
-        
-        if 0 and chipset.transport.TYPE == "TTY":
-            chipset.set_serial_baudrate(921600)
-            time.sleep(0.001)
-            chipset.transport.baudrate = 921600
-            logger.debug("changed uart speed to 921600 baud")
-            chipset.extra_preamble = bytearray(0)
-
         super(Device, self).__init__(chipset, logger)
         
         ic, ver, rev, support = self.chipset.get_firmware_version()
