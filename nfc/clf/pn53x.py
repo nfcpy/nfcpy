@@ -241,17 +241,11 @@ class Chipset(object):
         return frame[2:-2]
 
     def write_frame(self, frame):
-        """Write a command *frame* to the chipset via the transport write
-        method.
-
-        """
+        """Write a command *frame* to the chipset."""
         self.transport.write(frame)
         
     def read_frame(self, timeout):
-        """Read a response frame from the chipset via the transport read
-        method. The *timeout* value is in milliseconds.
-
-        """
+        """Wait *timeout* milliseconds to return a chip response frame."""
         return self.transport.read(timeout)
         
     def diagnose(self, test, test_data=None):
@@ -472,22 +466,6 @@ class Device(device.Device):
         if chipset_communication is False:
             self.log.error("chipset communication test failed")
             raise IOError(errno.EIO, os.strerror(errno.EIO))
-
-        self.eeprom = bytearray()
-        try:
-            self.chipset.read_register(0xA000) # check access
-            for addr in range(0xA000, 0xA100, 64):
-                data = self.chipset.read_register(*range(addr, addr+64))
-                self.eeprom.extend(data)
-        except Chipset.Error:
-            self.log.debug("no eeprom attached")
-
-        if self.eeprom:
-            head = "EEPROM  " + ' '.join(["%2X" % i for i in range(16)])
-            self.log.debug(head)
-            for i in range(0, len(self.eeprom), 16):
-                data = ' '.join(["%02X" % x for x in self.eeprom[i:i+16]])
-                self.log.debug(('0x%04X: %s' % (0xA000+i, data)))
 
         #for line in self._print_ciu_register_page(0, 1, 2, 3):
         #    self.log.debug(line)
