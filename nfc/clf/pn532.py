@@ -56,6 +56,7 @@ import logging
 log = logging.getLogger(__name__)
 
 import os
+import sys
 import time
 import errno
 from binascii import hexlify
@@ -372,23 +373,34 @@ class Device(pn53x.Device):
 
 def init(transport):
     if transport.TYPE == "TTY":
-        # PN532 initial baudrate is 115200
-        transport.open(transport.port, 115200)
+        baudrate = 115200 # PN532 initial baudrate
+        transport.open(transport.port, baudrate)
         long_preamble = bytearray(10)
         get_version_cmd = bytearray.fromhex("0000ff02fed4022a00")
         get_version_rsp = bytearray.fromhex("0000ff06fad50332")
-        set_bitrate_cmd = bytearray.fromhex("0000ff03fdd410071500") # 921600
-        set_bitrate_rsp = bytearray.fromhex("0000ff02fed5111a00")
         transport.write(long_preamble + get_version_cmd)
         if (transport.read(timeout=100) == Chipset.ACK and
             transport.read(timeout=100).startswith(get_version_rsp)):
-            transport.write(long_preamble + set_bitrate_cmd)
-            if (transport.read(timeout=100) == Chipset.ACK and
-                transport.read(timeout=100).startswith(set_bitrate_rsp)):
-                transport.write(Chipset.ACK)
-                transport.open(transport.port, 921600)
-                log.debug("changed uart speed from 115.2 to 921.6 kbaud")
-                time.sleep(0.001)
+            if sys.platform.startswith("linux"):
+                stty = 'stty -F %s %%d 2> /dev/null' % transport.port
+                for baudrate in (921600, 460800, 230400, 115200):
+                    log.debug("trying to set %d baud", baudrate) #continue
+                    if os.system(stty % baudrate) == 0:
+                        os.system(stty % 115200); break
+            if baudrate > 115200:
+                set_baudrate_cmd = bytearray.fromhex("0000ff03fdd410000000")
+                set_baudrate_rsp = bytearray.fromhex("0000ff02fed5111a00")
+                set_baudrate_cmd[7] = 5+(230400,460800,921600).index(baudrate)
+                set_baudrate_cmd[8] = 256 - sum(set_baudrate_cmd[5:8])
+                transport.write(long_preamble + set_baudrate_cmd)
+                if (transport.read(timeout=100) == Chipset.ACK and
+                    transport.read(timeout=100) == set_baudrate_rsp):
+                    transport.write(Chipset.ACK)
+                    transport.open(transport.port, baudrate)
+                    log.debug("changed uart speed to %d baud", baudrate)
+                    time.sleep(0.001)
+                else: baudrate = 0
+            if baudrate > 0:
                 chipset = Chipset(transport, logger=log)
                 return Device(chipset, logger=log)
     
