@@ -241,17 +241,11 @@ class Chipset(object):
         return frame[2:-2]
 
     def write_frame(self, frame):
-        """Write a command *frame* to the chipset via the transport write
-        method.
-
-        """
+        """Write a command *frame* to the chipset."""
         self.transport.write(frame)
         
     def read_frame(self, timeout):
-        """Read a response frame from the chipset via the transport read
-        method. The *timeout* value is in milliseconds.
-
-        """
+        """Wait *timeout* milliseconds to return a chip response frame."""
         return self.transport.read(timeout)
         
     def diagnose(self, test, test_data=None):
