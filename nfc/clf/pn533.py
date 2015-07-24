@@ -175,7 +175,22 @@ class Device(pn53x.Device):
         self.chipset.rf_configuration(0x05, "\x01\x00\x01")
         self.chipset.set_parameters(0b00000000)
 
-        if not self.eeprom:
+        self.eeprom = bytearray()
+        try:
+            self.chipset.read_register(0xA000) # check access
+            for addr in range(0xA000, 0xA100, 64):
+                data = self.chipset.read_register(*range(addr, addr+64))
+                self.eeprom.extend(data)
+        except Chipset.Error:
+            self.log.debug("no eeprom attached")
+
+        if self.eeprom:
+            head = "EEPROM  " + ' '.join(["%2X" % i for i in range(16)])
+            self.log.debug(head)
+            for i in range(0, len(self.eeprom), 16):
+                data = ' '.join(["%02X" % x for x in self.eeprom[i:i+16]])
+                self.log.debug(('0x%04X: %s' % (0xA000+i, data)))
+        else:
             # Write default RF settings from PN533 data sheet. Looks
             # like they are not the same if there is no eeprom
             # attached, least CIU_RFCfg register for 106A is different
