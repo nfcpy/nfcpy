@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2011-2014
+# Copyright 2011-2015
 #   Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #   Alexander Knaub <sanyok.og@googlemail.com>
 #
