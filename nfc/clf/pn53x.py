@@ -25,11 +25,13 @@ interface chips, namely the NXP PN531, PN532, PN533 and the Sony
 RC-S956.
 
 """
+import logging
+log = logging.getLogger(__name__)
+
 import os
 import sys
 import time
 import errno
-import logging
 from binascii import hexlify
 
 if sys.hexversion >= 0x020704F0:
@@ -996,3 +998,7 @@ class Device(device.Device):
             for r, v in zip(regs, vals):
                 lines.append("{0:16s} {1:08b}b {2:02X}h".format(r, v, v))
         return lines
+
+def init(transport):
+    log.warning("pn53x is not a driver module, use pn531, pn532, or pn533")
+    raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
