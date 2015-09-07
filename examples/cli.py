@@ -444,6 +444,7 @@ class AnsiColorStreamHandler(logging.StreamHandler):
     RED     = '\x1b[31m'
     GREEN   = '\x1b[32m'
     YELLOW  = '\x1b[33m'
+    BLUE    = '\x1b[34m'
     CYAN    = '\x1b[36m'
 
     CRITICAL = RED
@@ -451,6 +452,7 @@ class AnsiColorStreamHandler(logging.StreamHandler):
     WARNING  = YELLOW
     INFO     = GREEN
     DEBUG    = CYAN
+    VERBOSE  = BLUE
 
     @classmethod
     def _get_color(cls, level):
@@ -459,6 +461,7 @@ class AnsiColorStreamHandler(logging.StreamHandler):
         elif level >= logging.WARNING: return cls.WARNING
         elif level >= logging.INFO:    return cls.INFO
         elif level >= logging.DEBUG:   return cls.DEBUG
+        elif level >= logging.DEBUG-1: return cls.VERBOSE
         else:                          return cls.DEFAULT
 
     def format(self, record):
@@ -496,6 +499,7 @@ class WindowsColorStreamHandler(logging.StreamHandler):
     WARNING  = FOREGROUND_YELLOW | FOREGROUND_INTENSITY
     INFO     = FOREGROUND_GREEN
     DEBUG    = FOREGROUND_CYAN
+    VERBOSE  = FOREGROUND_BLUE
 
     @classmethod
     def _get_color(cls, level):
@@ -504,6 +508,7 @@ class WindowsColorStreamHandler(logging.StreamHandler):
         elif level >= logging.WARNING: return cls.WARNING
         elif level >= logging.INFO:    return cls.INFO
         elif level >= logging.DEBUG:   return cls.DEBUG
+        elif level >= logging.DEBUG-1: return cls.VERBOSE
         else:                          return cls.DEFAULT
 
     def _set_color(self, code):
