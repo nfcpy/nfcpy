@@ -793,6 +793,8 @@ class TestProgram(CommandLineInterface):
                     service_name, e.reason))
             if not e.reason in (0x02, 0x10, 0x11):
                 raise TestError("invalid DM reason code {0}".format(e.reason))
+        except nfc.llcp.Error as e:
+            info(str(e))
         finally:
             socket.close()
 
