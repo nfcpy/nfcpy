@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2009-2011 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2009-2015 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -33,10 +33,11 @@ import nfc.clf
 import nfc.dep
 
 # local imports
-from tco import *
-from pdu import *
-from err import *
-from opt import *
+from .tco import *
+from .pdu import *
+from .err import *
+from .opt import *
+from . import sec
 
 RAW_ACCESS_POINT, LOGICAL_DATA_LINK, DATA_LINK_CONNECTION = range(3)
 
@@ -236,7 +237,8 @@ class LogicalLinkController(object):
         miu = self.cfg['recv-miu']
         lto = self.cfg['send-lto']
         wks = 1+sum(sorted([1<<sap for sap in self.snl.values() if sap < 15]))
-        pax = ParameterExchange(version=(1,1), miu=miu, lto=lto, wks=wks)
+        pax = ParameterExchange(version=(1,3), miu=miu, lto=lto, wks=wks)
+        pax.dpc = 1 if sec.OpenSSL else 0
 
         if type(mac) == nfc.dep.Initiator:
             gb = mac.activate(gbi='Ffm'+pax.to_string()[2:], **options)
@@ -256,6 +258,7 @@ class LogicalLinkController(object):
             info.append("  Link Timeout: {0} ms".format(pax.lto))
             info.append("  Max Inf Unit: {0} octet".format(pax.miu))
             info.append("  Service List: {0:016b}".format(pax.wks))
+            info.append("  Secured Data: {0}".format(bool(pax.dpc)))
 
             if type(mac) == nfc.dep.Target and mac.rwt >= pax.lto * 1E3:
                 msg = "local NFC-DEP RWT {0:.3f} contradicts LTO {1:.3f} sec"
@@ -267,6 +270,7 @@ class LogicalLinkController(object):
             info.append("  Link Timeout: {0} ms".format(pax.lto))
             info.append("  Max Inf Unit: {0} octet".format(pax.miu))
             info.append("  Service List: {0:016b}".format(pax.wks))
+            info.append("  Secured Data: {0}".format(bool(pax.dpc)))
             log.info('\n'.join(info))
 
             self.cfg['rcvd-ver'] = pax.version
@@ -274,6 +278,7 @@ class LogicalLinkController(object):
             self.cfg['recv-lto'] = pax.lto
             self.cfg['send-wks'] = pax.wks
             self.cfg['send-lsc'] = pax.lsc
+            self.cfg['llcp-dpc'] = pax.dpc if sec.OpenSSL else 0
             log.debug("llc cfg {0}".format(self.cfg))
             
             if type(mac) == nfc.dep.Initiator and mac.rwt is not None:
@@ -301,22 +306,19 @@ class LogicalLinkController(object):
                 self.sap[i].shutdown()
                 self.sap[i] = None
         
-    def exchange(self, pdu, timeout):
-        if not isinstance(pdu, Symmetry): log.debug("SEND {0}".format(pdu))
-        else: log.log(logging.DEBUG-1, "SEND {0}".format(pdu))
-
-        data = pdu.to_string() if pdu else None
+    def exchange(self, send_pdu, timeout):
         try:
-            data = self.mac.exchange(data, timeout)
-            if data is None: return None
-        except nfc.clf.CommunicationError as error:
+            loglevel = logging.DEBUG - int(isinstance(send_pdu, Symmetry))
+            log.log(loglevel, "SEND {0}".format(send_pdu))
+            send_data = send_pdu.to_string() if send_pdu else None
+            rcvd_data = self.mac.exchange(send_data, timeout)
+            if rcvd_data is not None:
+                rcvd_pdu = ProtocolDataUnit.from_string(rcvd_data)
+                loglevel = logging.DEBUG - int(isinstance(rcvd_pdu, Symmetry))
+                log.log(loglevel, "RECV {0}".format(rcvd_pdu))
+                return rcvd_pdu
+        except (nfc.clf.CommunicationError, ProtocolDataUnitError) as error:
             log.warning("{0!r}".format(error))
-            return None
-
-        pdu = ProtocolDataUnit.from_string(data)
-        if not isinstance(pdu, Symmetry): log.debug("RECV {0}".format(pdu))
-        else: log.log(logging.DEBUG-1, "RECV {0}".format(pdu))
-        return pdu
 
     def run_as_initiator(self, terminate=lambda: False):
         recv_timeout = 1E-3 * (self.cfg['recv-lto'] + 10)
@@ -325,19 +327,31 @@ class LogicalLinkController(object):
 
         symm = 0
         try:
-            pdu = self.collect(delay=0.01)
+            if self.cfg['llcp-dpc'] == 1:
+                cipher = sec.cipher_suite("ECDH_anon_WITH_AEAD_AES_128_CCM_4")
+                pubkey = cipher.public_key_x + cipher.public_key_y
+                random = cipher.random_nonce
+                send_dps = DataProtectionSetup(0, 0, pubkey, random)
+                rcvd_dps = self.exchange(send_dps, recv_timeout)
+                assert isinstance(rcvd_dps, DataProtectionSetup)
+                assert rcvd_dps.ecpk and len(rcvd_dps.ecpk) == 64
+                assert rcvd_dps.rn and len(rcvd_dps.rn) == 8
+                cipher.calculate_session_key(rcvd_dps.ecpk, rn_t=rcvd_dps.rn)
+                return self.terminate(reason="key agreement error")
+        
+            send_pdu = self.collect(delay=0.01)
             while not terminate():
-                if pdu is None: pdu = Symmetry()
-                pdu = self.exchange(pdu, recv_timeout)
-                if pdu is None:
+                if send_pdu is None: send_pdu = Symmetry()
+                rcvd_pdu = self.exchange(send_pdu, recv_timeout)
+                if rcvd_pdu is None:
                     return self.terminate(reason="link disruption")
-                if pdu == Disconnect(0, 0):
+                if rcvd_pdu == Disconnect(0, 0):
                     return self.terminate(reason="remote choice")
-                symm = symm + 1 if type(pdu) == Symmetry else 0
-                self.dispatch(pdu)
-                pdu = self.collect(delay=0.001)
-                if pdu is None and symm >= 10:
-                    pdu = self.collect(delay=0.05)
+                symm += 1 if type(rcvd_pdu) == Symmetry else 0
+                self.dispatch(rcvd_pdu)
+                send_pdu = self.collect(delay=0.001)
+                if send_pdu is None and symm >= 10:
+                    send_pdu = self.collect(delay=0.05)
             else:
                 self.terminate(reason="local choice")
         except KeyboardInterrupt:
@@ -357,19 +371,33 @@ class LogicalLinkController(object):
         
         symm = 0
         try:
-            pdu = None
+            if self.cfg['llcp-dpc'] == 1:
+                cipher = sec.cipher_suite("ECDH_anon_WITH_AEAD_AES_128_CCM_4")
+                pubkey = cipher.public_key_x + cipher.public_key_y
+                random = cipher.random_nonce
+                send_dps = DataProtectionSetup(0, 0, pubkey, random)
+                rcvd_dps = self.exchange(None, recv_timeout)
+                assert isinstance(rcvd_dps, DataProtectionSetup)
+                assert rcvd_dps.ecpk and len(rcvd_dps.ecpk) == 64
+                assert rcvd_dps.rn and len(rcvd_dps.rn) == 8
+                rcvd_pdu = self.exchange(send_dps, recv_timeout)
+                cipher.calculate_session_key(rcvd_dps.ecpk, rn_i=rcvd_dps.rn)
+                return self.terminate(reason="key agreement error")
+            else:
+                rcvd_pdu = self.exchange(None, recv_timeout)
+
             while not terminate():
-                pdu = self.exchange(pdu, recv_timeout)
-                if pdu is None:
+                if rcvd_pdu is None:
                     return self.terminate(reason="link disruption")
-                if pdu == Disconnect(0, 0):
+                if rcvd_pdu == Disconnect(0, 0):
                     return self.terminate(reason="remote choice")
-                symm = symm + 1 if type(pdu) == Symmetry else 0
-                self.dispatch(pdu)
-                pdu = self.collect(delay=0.001)
-                if pdu is None and symm >= 10:
-                    pdu = self.collect(delay=0.05)
-                if pdu is None: pdu = Symmetry()
+                symm += 1 if isinstance(rcvd_pdu, Symmetry) else 0
+                self.dispatch(rcvd_pdu)
+                send_pdu = self.collect(delay=0.001)
+                if send_pdu is None and symm >= 10:
+                    send_pdu = self.collect(delay=0.05)
+                if send_pdu is None: send_pdu = Symmetry()
+                rcvd_pdu = self.exchange(send_pdu, recv_timeout)
             else:
                 self.terminate(reason="local choice")
         except KeyboardInterrupt:
@@ -575,7 +603,7 @@ class LogicalLinkController(object):
             raise Error(errno.ENOTSOCK)
         if isinstance(socket, RawAccessPoint):
             if not isinstance(message, ProtocolDataUnit):
-                raise TypeError("message must be a pdu on raw access point")
+                raise TypeError("on a raw access point message must be a pdu")
             if not socket.is_bound:
                 self.bind(socket)
             # FIXME: set socket send miu when activated

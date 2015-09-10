@@ -23,8 +23,10 @@
 __all__ = ["ProtocolDataUnit", "Symmetry", "ParameterExchange",
            "AggregatedFrame", "UnnumberedInformation", "Connect",
            "Disconnect", "ConnectionComplete", "DisconnectedMode",
-           "FrameReject", "ServiceNameLookup", "Information",
-           "ReceiveReady", "ReceiveNotReady", "connection_mode_pdu_types"]
+           "FrameReject", "ServiceNameLookup", "DataProtectionSetup",
+           "Information", "ReceiveReady", "ReceiveNotReady",
+           "ProtocolDataUnitDecodeError", "ProtocolDataUnitEncodeError",
+           "ProtocolDataUnitError", "connection_mode_pdu_types"]
 
 import struct
 import logging
@@ -32,8 +34,17 @@ log = logging.getLogger(__name__)
 
 connection_mode_pdu_types = (4, 5, 6, 7, 8, 12, 13, 14)
 
+class ProtocolDataUnitError(Exception):
+    pass
+
+class ProtocolDataUnitDecodeError(ProtocolDataUnitError):
+    pass
+
+class ProtocolDataUnitEncodeError(ProtocolDataUnitError):
+    pass
+
 class Parameter:
-    VERSION, MIUX, WKS, LTO, RW, SN, OPT, SDREQ, SDRES = range(1, 10)
+    VERSION, MIUX, WKS, LTO, RW, SN, OPT, SDREQ, SDRES, ECPK, RN = range(1, 12)
 
 class ProtocolDataUnit(object):
     Symmetry = 0b0000
@@ -46,6 +57,7 @@ class ProtocolDataUnit(object):
     DisconnectedMode = 0b0111
     FrameReject = 0b1000
     ServiceNameLookup = 0b1001
+    DataProtectionSetup = 0b1010
     Information = 0b1100
     ReceiveReady = 0b1101
     ReceiveNotReady = 0b1110
@@ -58,8 +70,11 @@ class ProtocolDataUnit(object):
 
     @staticmethod
     def from_string(s):
-        h = struct.unpack("!H", s[0:2])[0]
-        dsap, ptype, ssap = (h>>10, h>>6 & 0b1111, h & 0b111111)
+        try:
+            hdr = struct.unpack("!H", s[0:2])[0]
+            dsap, ptype, ssap = (hdr>>10, hdr>>6 & 0b1111, hdr & 0b111111)
+        except struct.error:
+            raise ProtocolDataUnitDecodeError('insufficient pdu header bytes')
 
         if ptype == 0b0000:
             return Symmetry(dsap=dsap, ssap=ssap).from_string(s)
@@ -81,6 +96,8 @@ class ProtocolDataUnit(object):
             return FrameReject(dsap=dsap, ssap=ssap).from_string(s)
         if ptype == 0b1001:
             return ServiceNameLookup(dsap=dsap, ssap=ssap).from_string(s)
+        if ptype == 0b1010:
+            return DataProtectionSetup(dsap=dsap, ssap=ssap).from_string(s)
         if ptype == 0b1100:
             return Information(dsap=dsap, ssap=ssap).from_string(s)
         if ptype == 0b1101:
@@ -128,14 +145,16 @@ class Symmetry(ProtocolDataUnit):
         return ProtocolDataUnit.__str__(self)
 
 class ParameterExchange(ProtocolDataUnit):
-    def __init__(self, dsap=0, ssap=0, version=(1,0), miu=128, wks=3, lto=100):
+    def __init__(self, dsap=0, ssap=0, version=(1,0), miu=128, wks=3,
+                 lto=100, lsc=3, dpc=0):
         ProtocolDataUnit.__init__(self, 0b0001, dsap, ssap)
         self.name = "PAX"
         self.version = version
         self.miu = miu
         self.wks = wks
         self.lto = lto
-        self.lsc = 3
+        self.lsc = lsc
+        self.dpc = dpc
 
     def from_string(self, s):
         offset = 2
@@ -152,7 +171,8 @@ class ParameterExchange(ProtocolDataUnit):
             elif t == Parameter.LTO and l == 1:
                 self.lto = ord(v[0]) * 10
             elif t == Parameter.OPT and l == 1:
-                self.lsc = ord(v[0])
+                self.lsc = ord(v[0]) & 0b00000011
+                self.dpc = ord(v[0]) >> 2 & 0b00000001
             offset += 2 + l
         return self
 
@@ -165,7 +185,7 @@ class ParameterExchange(ProtocolDataUnit):
         s += struct.pack("!BBH", Parameter.WKS, 2, self.wks)
         if self.lto != 100:
             s += struct.pack("!BBB", Parameter.LTO, 1, self.lto / 10)
-        s += struct.pack("!BBB", Parameter.OPT, 1, self.lsc)
+        s += struct.pack("!BBB", Parameter.OPT, 1, self.dpc<<2 | self.lsc)
         return s
 
     def __len__(self):
@@ -176,7 +196,7 @@ class ParameterExchange(ProtocolDataUnit):
     def __str__(self):
         return ProtocolDataUnit.__str__(self) + \
             " VER={pax.version} MIU={pax.miu} WKS={pax.wks:016b}"\
-            " LTO={pax.lto}".format(pax=self)
+            " LTO={pax.lto} LSC={pax.lsc} DPC={pax.dpc}".format(pax=self)
 
 
 
@@ -236,7 +256,6 @@ class UnnumberedInformation(ProtocolDataUnit):
         ProtocolDataUnit.__init__(self, 0b0011, dsap, ssap)
         self.name = "UI"
         self.sdu = sdu
-        pass
 
     def from_string(self, s):
         self.sdu = s[2:]
@@ -449,7 +468,7 @@ class ServiceNameLookup(ProtocolDataUnit):
         while offset < len(s):
             t, l = [ord(x) for x in s[offset:offset+2]]
             v = s[offset+2:offset+2+l]
-            if t == Parameter.SDREQ and len >= 1:
+            if t == Parameter.SDREQ and l >= 1:
                 tid, sn = ord(v[0]), v[1:]
                 self.sdreq.append((tid, sn))
             if t == Parameter.SDRES and l == 2:
@@ -474,8 +493,48 @@ class ServiceNameLookup(ProtocolDataUnit):
             + sum([3+len(sdreq[1]) for sdreq in self.sdreq])
 
     def __str__(self):
-        return ProtocolDataUnit.__str__(self) \
-            + "SDRES={0} SDREQ={1}".format(str(self.sdres), str(self.sdreq))
+        return ProtocolDataUnit.__str__(self) + \
+            " SDRES={0} SDREQ={1}".format(str(self.sdres), str(self.sdreq))
+
+
+
+class DataProtectionSetup(ProtocolDataUnit):
+    def __init__(self, dsap, ssap, ecpk=None, rn=None):
+        ProtocolDataUnit.__init__(self, 0b1010, dsap, ssap)
+        self.name = "DPS"
+        self.ecpk = ecpk
+        self.rn = rn
+
+    def from_string(self, s):
+        offset = 2
+        while offset < len(s):
+            t, l = [ord(x) for x in s[offset:offset+2]]
+            v = s[offset+2:offset+2+l]
+            if t == Parameter.ECPK:
+                self.ecpk = bytearray(v)
+            if t == Parameter.RN:
+                self.rn = bytearray(v)
+            offset += 2 + l
+        return self
+
+    def to_string(self):
+        s = chr(self.dsap<<2|0b10) + chr(0b10<<6|self.ssap)
+        if self.ecpk is not None:
+            s = s + chr(Parameter.ECPK) + chr(len(self.ecpk)) + str(self.ecpk)
+        if self.rn is not None:
+            s = s + chr(Parameter.RN) + chr(len(self.rn)) + str(self.rn)
+        return s
+
+    def __len__(self):
+        return 2 + \
+            2 + (len(self.ecpk) if self.ecpk else 0) + \
+            2 + (len(self.rn) if self.rn else 0)
+
+    def __str__(self):
+        return ProtocolDataUnit.__str__(self) + \
+            " ECPK={0} RN={1}".format(
+                'None' if self.ecpk is None else str(self.ecpk).encode('hex'),
+                'None' if self.rn is None else str(self.rn).encode('hex'))
 
 
 
