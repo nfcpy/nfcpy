@@ -156,6 +156,28 @@ class ParameterExchange(ProtocolDataUnit):
         self.lsc = lsc
         self.dpc = dpc
 
+    @property
+    def version_text(self):
+        return "{0}.{1}".format(*self.version)
+    
+    @property
+    def wks_text(self):
+        t = {0: "LLC", 1: "SDP", 4: "SNEP"}
+        l = [t.get(i, str(i)) for i in range(15, -1, -1) if (self.wks>>i) & 1]
+        return ', '.join(l)
+
+    @property
+    def lsc_text(self):
+        return ("link service class unknown at activation",
+                "connection-less link service only",
+                "connection-oriented link service only",
+                "connection-less and connection-oriented")[self.lsc]
+
+    @property
+    def dpc_text(self):
+        return ("secure data transfer mode not supported",
+                "secure data transfer mode is supported")[self.dpc]
+
     def from_string(self, s):
         offset = 2
         while offset < len(s):

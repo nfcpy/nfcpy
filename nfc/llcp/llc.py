@@ -212,12 +212,14 @@ class ServiceDiscovery(object):
             self.resp.notify_all()
 
 class LogicalLinkController(object):
-    def __init__(self, recv_miu=248, send_lto=500, send_agf=True):
+    def __init__(self, recv_miu=248, send_lto=500, send_agf=True,
+                 llcp_sec=True):
         self.lock = threading.RLock()
         self.cfg = dict()
         self.cfg['recv-miu'] = recv_miu
         self.cfg['send-lto'] = send_lto
         self.cfg['send-agf'] = send_agf
+        self.cfg['llcp-sec'] = llcp_sec if sec.OpenSSL else False
         self.snl = dict({"urn:nfc:sn:sdp" : 1})
         self.sap = 64 * [None]
         self.sap[0] = ServiceAccessPoint(0, self)
@@ -234,53 +236,55 @@ class LogicalLinkController(object):
         assert type(mac) in (nfc.dep.Initiator, nfc.dep.Target)
         self.mac = None
         
-        miu = self.cfg['recv-miu']
-        lto = self.cfg['send-lto']
-        wks = 1+sum(sorted([1<<sap for sap in self.snl.values() if sap < 15]))
-        pax = ParameterExchange(version=(1,3), miu=miu, lto=lto, wks=wks)
-        pax.dpc = 1 if sec.OpenSSL else 0
+        send_pax = ParameterExchange(version=(1,3))
+        send_pax.miu = self.cfg['recv-miu']
+        send_pax.lto = self.cfg['send-lto']
+        send_pax.dpc = 1 if self.cfg['llcp-sec'] else 0
+        send_pax.wks = 1+sum([1<<sap for sap in self.snl.values() if sap<15])
 
         if type(mac) == nfc.dep.Initiator:
-            gb = mac.activate(gbi='Ffm'+pax.to_string()[2:], **options)
+            gb = mac.activate(gbi='Ffm'+send_pax.to_string()[2:], **options)
             self.run = self.run_as_initiator
             role = "Initiator"
 
         if type(mac) == nfc.dep.Target:
-            gb = mac.activate(gbt='Ffm'+pax.to_string()[2:], **options)
+            gb = mac.activate(gbt='Ffm'+send_pax.to_string()[2:], **options)
             self.run = self.run_as_target
             role = "Target"
 
         if gb is not None and gb.startswith('Ffm') and len(gb) >= 6:
-            info = ["LLCP Link established as NFC-DEP {0}".format(role)]
-
-            info.append("Local LLCP Settings")
-            info.append("  LLCP Version: {0[0]}.{0[1]}".format(pax.version))
-            info.append("  Link Timeout: {0} ms".format(pax.lto))
-            info.append("  Max Inf Unit: {0} octet".format(pax.miu))
-            info.append("  Service List: {0:016b}".format(pax.wks))
-            info.append("  Secured Data: {0}".format(bool(pax.dpc)))
-
-            if type(mac) == nfc.dep.Target and mac.rwt >= pax.lto * 1E3:
+            if type(mac) == nfc.dep.Target and mac.rwt >= send_pax.lto*1E3:
                 msg = "local NFC-DEP RWT {0:.3f} contradicts LTO {1:.3f} sec"
-                log.warning(msg.format(mac.rwt, pax.lto*1E3))
+                log.warning(msg.format(mac.rwt, send_pax.lto*1E3))
 
-            pax = ProtocolDataUnit.from_string("\x00\x40" + str(gb[3:]))
-            info.append("Remote LLCP Settings")
-            info.append("  LLCP Version: {0[0]}.{0[1]}".format(pax.version))
-            info.append("  Link Timeout: {0} ms".format(pax.lto))
-            info.append("  Max Inf Unit: {0} octet".format(pax.miu))
-            info.append("  Service List: {0:016b}".format(pax.wks))
-            info.append("  Secured Data: {0}".format(bool(pax.dpc)))
-            log.info('\n'.join(info))
+            rcvd_pax = ProtocolDataUnit.from_string("\x00\x40" + str(gb[3:]))
 
-            self.cfg['rcvd-ver'] = pax.version
-            self.cfg['send-miu'] = pax.miu
-            self.cfg['recv-lto'] = pax.lto
-            self.cfg['send-wks'] = pax.wks
-            self.cfg['send-lsc'] = pax.lsc
-            self.cfg['llcp-dpc'] = pax.dpc if sec.OpenSSL else 0
+            self.cfg['rcvd-ver'] = rcvd_pax.version
+            self.cfg['send-miu'] = rcvd_pax.miu
+            self.cfg['recv-lto'] = rcvd_pax.lto
+            self.cfg['send-wks'] = rcvd_pax.wks
+            self.cfg['send-lsc'] = rcvd_pax.lsc
+            self.cfg['llcp-dpc'] = rcvd_pax.dpc if self.cfg['llcp-sec'] else 0
             log.debug("llc cfg {0}".format(self.cfg))
             
+            log.info('\n'.join([
+                "LLCP Link established as NFC-DEP {role}",
+                "Local LLCP Settings",
+                "  LLCP Version: {send_pax.version_text}",
+                "  Link Timeout: {send_pax.lto} ms",
+                "  Max Inf Unit: {send_pax.miu} octet",
+                "  Link Service: {send_pax.lsc_text}",
+                "  Data Protect: {send_pax.dpc_text}",
+                "  Service List: {send_pax.wks:016b} ({send_pax.wks_text})",
+                "Remote LLCP Settings",
+                "  LLCP Version: {rcvd_pax.version[0]}.{rcvd_pax.version[1]}",
+                "  Link Timeout: {rcvd_pax.lto} ms",
+                "  Max Inf Unit: {rcvd_pax.miu} octet",
+                "  Link Service: {rcvd_pax.lsc_text}",
+                "  Data Protect: {rcvd_pax.dpc_text}",
+                "  Service List: {rcvd_pax.wks:016b} ({rcvd_pax.wks_text})"])
+                     .format(role=role,send_pax=send_pax,rcvd_pax=rcvd_pax))
+
             if type(mac) == nfc.dep.Initiator and mac.rwt is not None:
                 max_rwt = 4096/13.56E6 * 2**10
                 if mac.rwt > max_rwt:
@@ -419,26 +423,26 @@ class LogicalLinkController(object):
             for sap in active_sap_list:
                 #log.debug("query sap {0}, max_data={1}"
                 #          .format(sap, max_data))
-                pdu = sap.dequeue(max_data if max_data else 2179)
-                if pdu is not None:
+                send_pdu = sap.dequeue(max_data if max_data else 2179)
+                if send_pdu is not None:
                     if self.cfg['send-agf'] == False:
-                        return pdu
-                    pdu_list.append(pdu)
+                        return send_pdu
+                    pdu_list.append(send_pdu)
                     if max_data is None:
                         max_data = self.cfg["send-miu"] + 2
-                    max_data -= len(pdu)
+                    max_data -= len(send_pdu)
                     if max_data < bool(len(pdu_list)==1) * 2 + 2 + 2:
                         break
             else: max_data = self.cfg["send-miu"] + 2
 
             for sap in active_sap_list:
                 if sap.mode == DATA_LINK_CONNECTION:
-                    pdu = sap.sendack(max_data)
-                    if not pdu is None:
+                    send_pdu = sap.sendack(max_data)
+                    if send_pdu is not None:
                         if self.cfg['send-agf'] == False:
-                            return pdu
-                        pdu_list.append(pdu)
-                        max_data -= len(pdu)
+                            return send_pdu
+                        pdu_list.append(send_pdu)
+                        max_data -= len(send_pdu)
                         if max_data < bool(len(pdu_list)==1) * 2 + 2 + 3:
                             break
 
@@ -448,33 +452,38 @@ class LogicalLinkController(object):
             return pdu_list[0]
         return None
 
-    def dispatch(self, pdu):
-        if isinstance(pdu, Symmetry):
+    def dispatch(self, rcvd_pdu):
+        if isinstance(rcvd_pdu, Symmetry):
             return
 
-        if isinstance(pdu, AggregatedFrame):
-            if pdu.dsap == 0 and pdu.ssap == 0:
-                [log.debug("     " + str(p)) for p in pdu]
-                [self.dispatch(p) for p in pdu]
+        if isinstance(rcvd_pdu, AggregatedFrame):
+            if rcvd_pdu.dsap == 0 and rcvd_pdu.ssap == 0:
+                for p in rcvd_pdu:
+                    log.debug("     " + str(p))
+                for p in rcvd_pdu:
+                    self.dispatch(p)
             return
 
-        if isinstance(pdu, Connect) and pdu.dsap == 1:
+        if isinstance(rcvd_pdu, Connect) and rcvd_pdu.dsap == 1:
             # connect-by-name
-            addr = self.snl.get(pdu.sn)
+            addr = self.snl.get(rcvd_pdu.sn)
             if not addr or self.sap[addr] is None:
-                log.debug("no service named '{0}'".format(pdu.sn))
-                pdu = DisconnectedMode(pdu.ssap, 1, reason=2)
-                self.sap[1].dmpdu.append(pdu)
+                log.debug("no service named '{0}'".format(rcvd_pdu.sn))
+                # no such service -> schedule a DM PDU
+                self.sap[1].dmpdu.append(
+                    DisconnectedMode(rcvd_pdu.ssap, 1, reason=2))
                 return
-            pdu = Connect(dsap=addr, ssap=pdu.ssap, rw=pdu.rw, miu=pdu.miu)
+            # service found, rewrite CONNECT PDU to its DSAP
+            rcvd_pdu = Connect(dsap=addr, ssap=rcvd_pdu.ssap,
+                               rw=rcvd_pdu.rw, miu=rcvd_pdu.miu)
 
         with self.lock:
-            sap = self.sap[pdu.dsap]
+            sap = self.sap[rcvd_pdu.dsap]
             if sap:
-                sap.enqueue(pdu)
+                sap.enqueue(rcvd_pdu)
                 return
 
-        log.debug("discard PDU {0}".format(str(pdu)))
+        log.debug("discard PDU {0}".format(str(rcvd_pdu)))
         return
 
     def resolve(self, name):

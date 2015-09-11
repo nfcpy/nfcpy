@@ -223,6 +223,9 @@ class CommandLineInterface(object):
         group.add_argument(
             "--no-aggregation", action="store_true",
             help="disable outbound packet aggregation")
+        group.add_argument(
+            "--no-encryption", action="store_true",
+            help="disable secure data transport")
 
     def add_rdwr_options(self, argument_parser):
         group = argument_parser.add_argument_group(
@@ -389,6 +392,7 @@ class CommandLineInterface(object):
                 'lto': self.options.lto,
                 'rwt': self.options.rwt,
                 'agf': not self.options.no_aggregation,
+                'sec': not self.options.no_encryption,
             }
         else:
             llcp_options = None
