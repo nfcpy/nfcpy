@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2009-2011 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2009-2015 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -19,13 +19,12 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-
-from os import strerror
+import os
 import errno
 
 class Error(IOError):
     def __init__(self, errno):
-        super(Error, self).__init__(errno, strerror(errno))
+        super(Error, self).__init__(errno, os.strerror(errno))
 
     def __str__(self):
         return "nfc.llcp.Error: [{0}] {1}".format(

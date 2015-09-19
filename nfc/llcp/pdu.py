@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2009-2011 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2009-2015 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -19,29 +19,14 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-
-__all__ = ["ProtocolDataUnit", "Symmetry", "ParameterExchange",
-           "AggregatedFrame", "UnnumberedInformation", "Connect",
-           "Disconnect", "ConnectionComplete", "DisconnectedMode",
-           "FrameReject", "ServiceNameLookup", "DataProtectionSetup",
-           "Information", "ReceiveReady", "ReceiveNotReady",
-           "ProtocolDataUnitDecodeError", "ProtocolDataUnitEncodeError",
-           "ProtocolDataUnitError", "connection_mode_pdu_types"]
-
-import struct
 import logging
 log = logging.getLogger(__name__)
 
-connection_mode_pdu_types = (4, 5, 6, 7, 8, 12, 13, 14)
+import struct
 
-class ProtocolDataUnitError(Exception):
-    pass
-
-class ProtocolDataUnitDecodeError(ProtocolDataUnitError):
-    pass
-
-class ProtocolDataUnitEncodeError(ProtocolDataUnitError):
-    pass
+class Error(Exception): pass
+class DecodeError(Error): pass
+class EncodeError(Error): pass
 
 class Parameter:
     VERSION, MIUX, WKS, LTO, RW, SN, OPT, SDREQ, SDRES, ECPK, RN = range(1, 12)
@@ -66,15 +51,20 @@ class ProtocolDataUnit(object):
         self.type = ptype
         self.dsap = dsap
         self.ssap = ssap
-        self.name = "{0:04b}".format(ptype)
 
+    @property
+    def name(self):
+        try: return self._name
+        except AttributeError:
+            return "{0:04b}".format(ptype)
+    
     @staticmethod
     def from_string(s):
         try:
             hdr = struct.unpack("!H", s[0:2])[0]
             dsap, ptype, ssap = (hdr>>10, hdr>>6 & 0b1111, hdr & 0b111111)
         except struct.error:
-            raise ProtocolDataUnitDecodeError('insufficient pdu header bytes')
+            raise DecodeError('insufficient pdu header bytes')
 
         if ptype == 0b0000:
             return Symmetry(dsap=dsap, ssap=ssap).from_string(s)
@@ -125,12 +115,14 @@ class ProtocolDataUnit(object):
         string = "{pdu.ssap:2} -> {pdu.dsap:2} {pdu.name:4.4s}"
         return string.format(pdu=self)
 
-
-
+# -----------------------------------------------------------------------------
+#                                                                  Symmetry PDU
+# -----------------------------------------------------------------------------
 class Symmetry(ProtocolDataUnit):
+    _name = "SYMM"
+    
     def __init__(self, dsap=0, ssap=0):
         ProtocolDataUnit.__init__(self, 0b0000, dsap, ssap)
-        self.name = "SYMM"
 
     def from_string(self, s):
         return self
@@ -144,11 +136,15 @@ class Symmetry(ProtocolDataUnit):
     def __str__(self):
         return ProtocolDataUnit.__str__(self)
 
+# -----------------------------------------------------------------------------
+#                                                        Parameter Exchange PDU
+# -----------------------------------------------------------------------------
 class ParameterExchange(ProtocolDataUnit):
+    _name = "PAX"
+    
     def __init__(self, dsap=0, ssap=0, version=(1,0), miu=128, wks=3,
                  lto=100, lsc=3, dpc=0):
         ProtocolDataUnit.__init__(self, 0b0001, dsap, ssap)
-        self.name = "PAX"
         self.version = version
         self.miu = miu
         self.wks = wks
@@ -220,12 +216,14 @@ class ParameterExchange(ProtocolDataUnit):
             " VER={pax.version} MIU={pax.miu} WKS={pax.wks:016b}"\
             " LTO={pax.lto} LSC={pax.lsc} DPC={pax.dpc}".format(pax=self)
 
-
-
+# -----------------------------------------------------------------------------
+#                                                          Aggregated Frame PDU
+# -----------------------------------------------------------------------------
 class AggregatedFrame(ProtocolDataUnit):
+    _name = "AGF"
+    
     def __init__(self, dsap=0, ssap=0, aggregate=[]):
         ProtocolDataUnit.__init__(self, 0b0010, dsap, ssap)
-        self.name = "AGF"
         self._aggregate = aggregate[:]
 
     def from_string(self, s):
@@ -271,12 +269,14 @@ class AggregatedFrameIterator(object):
         self._current += 1
         return self._aggregate[self._current-1]
 
-
-
+# -----------------------------------------------------------------------------
+#                                                    Unnumbered Information PDU
+# -----------------------------------------------------------------------------
 class UnnumberedInformation(ProtocolDataUnit):
+    _name = "UI"
+    
     def __init__(self, dsap, ssap, sdu=""):
         ProtocolDataUnit.__init__(self, 0b0011, dsap, ssap)
-        self.name = "UI"
         self.sdu = sdu
 
     def from_string(self, s):
@@ -293,12 +293,14 @@ class UnnumberedInformation(ProtocolDataUnit):
         return ProtocolDataUnit.__str__(self) + " LEN={len} SDU={sdu}".\
             format(len=len(self.sdu), sdu=self.sdu.encode("hex"))
 
-
-
+# -----------------------------------------------------------------------------
+#                                                                   Connect PDU
+# -----------------------------------------------------------------------------
 class Connect(ProtocolDataUnit):
+    _name = "CONNECT"
+    
     def __init__(self, dsap, ssap, miu=128, rw=1, sn=""):
         ProtocolDataUnit.__init__(self, 0b0100, dsap, ssap)
-        self.name = "CONNECT"
         self.miu = miu
         self.rw = rw
         self.sn = sn
@@ -338,12 +340,14 @@ class Connect(ProtocolDataUnit):
         s += " SN={conn.sn}".format(conn=self) if self.sn else ""
         return ProtocolDataUnit.__str__(self) + s
 
-
-
+# -----------------------------------------------------------------------------
+#                                                                Disconnect PDU
+# -----------------------------------------------------------------------------
 class Disconnect(ProtocolDataUnit):
+    _name = "DISC"
+    
     def __init__(self, dsap, ssap):
         ProtocolDataUnit.__init__(self, 0b0101, dsap, ssap)
-        self.name = "DISC"
 
     def from_string(self, s):
         return self
@@ -357,11 +361,14 @@ class Disconnect(ProtocolDataUnit):
     def __str__(self):
         return ProtocolDataUnit.__str__(self)
 
-
+# -----------------------------------------------------------------------------
+#                                                       Connection Complete PDU
+# -----------------------------------------------------------------------------
 class ConnectionComplete(ProtocolDataUnit):
+    _name = "CC"
+    
     def __init__(self, dsap, ssap, miu=128, rw=1):
         ProtocolDataUnit.__init__(self, 0b0110, dsap, ssap)
-        self.name = "CC"
         self.miu = miu
         self.rw = rw
 
@@ -393,12 +400,14 @@ class ConnectionComplete(ProtocolDataUnit):
         return ProtocolDataUnit.__str__(self) + \
             " MIU={cc.miu} RW={cc.rw}".format(cc=self)
 
-
-
+# -----------------------------------------------------------------------------
+#                                                         Disconnected Mode PDU
+# -----------------------------------------------------------------------------
 class DisconnectedMode(ProtocolDataUnit):
+    _name = "DM"
+    
     def __init__(self, dsap, ssap, reason=0):
         ProtocolDataUnit.__init__(self, 0b0111, dsap, ssap)
-        self.name = "DM"
         self.reason = reason
 
     def from_string(self, s):
@@ -416,13 +425,15 @@ class DisconnectedMode(ProtocolDataUnit):
         return ProtocolDataUnit.__str__(self) + \
             " REASON={dm.reason}".format(dm=self)
 
-
-
+# -----------------------------------------------------------------------------
+#                                                              Frame Reject PDU
+# -----------------------------------------------------------------------------
 class FrameReject(ProtocolDataUnit):
+    _name = "FRMR"
+    
     def __init__(self, dsap, ssap, flags=0, ptype=0,
                  ns=0, nr=0, vs=0, vr=0, vsa=0, vra=0):
         ProtocolDataUnit.__init__(self, 0b1000, dsap, ssap)
-        self.name = "FRMR"
         self.flags = flags
         self.ptype = ptype
         self.ns = ns
@@ -476,12 +487,14 @@ class FrameReject(ProtocolDataUnit):
             " V(SA)={frmr.vsa} V(RA)={frmr.vra}"\
             .format(frmr=self)
 
-
-
+# -----------------------------------------------------------------------------
+#                                                       Service Name Lookup PDU
+# -----------------------------------------------------------------------------
 class ServiceNameLookup(ProtocolDataUnit):
+    _name = "SNL"
+    
     def __init__(self, dsap, ssap):
         ProtocolDataUnit.__init__(self, 0b1001, dsap, ssap)
-        self.name = "SNL"
         self.sdreq = list()
         self.sdres = list()
 
@@ -518,12 +531,14 @@ class ServiceNameLookup(ProtocolDataUnit):
         return ProtocolDataUnit.__str__(self) + \
             " SDRES={0} SDREQ={1}".format(str(self.sdres), str(self.sdreq))
 
-
-
+# -----------------------------------------------------------------------------
+#                                                     Data Protection Setup PDU
+# -----------------------------------------------------------------------------
 class DataProtectionSetup(ProtocolDataUnit):
+    _name = "DPS"
+    
     def __init__(self, dsap, ssap, ecpk=None, rn=None):
         ProtocolDataUnit.__init__(self, 0b1010, dsap, ssap)
-        self.name = "DPS"
         self.ecpk = ecpk
         self.rn = rn
 
@@ -558,12 +573,14 @@ class DataProtectionSetup(ProtocolDataUnit):
                 'None' if self.ecpk is None else str(self.ecpk).encode('hex'),
                 'None' if self.rn is None else str(self.rn).encode('hex'))
 
-
-
+# -----------------------------------------------------------------------------
+#                                                               Information PDU
+# -----------------------------------------------------------------------------
 class Information(ProtocolDataUnit):
+    _name = "I"
+    
     def __init__(self, dsap, ssap, ns=None, nr=None, sdu=""):
         ProtocolDataUnit.__init__(self, 0b1100, dsap, ssap)
-        self.name = "I"
         self.ns = ns
         self.nr = nr
         self.sdu = sdu
@@ -586,12 +603,14 @@ class Information(ProtocolDataUnit):
             " N(S)={inf.ns} N(R)={inf.nr} LEN={len} SDU={sdu}" \
             .format(inf=self, len=len(self.sdu), sdu=self.sdu.encode("hex"))
 
-
-
+# -----------------------------------------------------------------------------
+#                                                             Receive Ready PDU
+# -----------------------------------------------------------------------------
 class ReceiveReady(ProtocolDataUnit):
+    _name = "RR"
+    
     def __init__(self, dsap, ssap, nr=None):
         ProtocolDataUnit.__init__(self, 0b1101, dsap, ssap)
-        self.name = "RR"
         self.nr = nr
 
     def from_string(self, s):
@@ -608,12 +627,14 @@ class ReceiveReady(ProtocolDataUnit):
         return ProtocolDataUnit.__str__(self) +\
             " N(R)={rr.nr}".format(rr=self)
 
-
-
+# -----------------------------------------------------------------------------
+#                                                         Receive Not Ready PDU
+# -----------------------------------------------------------------------------
 class ReceiveNotReady(ProtocolDataUnit):
+    _name = "RNR"
+    
     def __init__(self, dsap, ssap, nr=None):
         ProtocolDataUnit.__init__(self, 0b1110, dsap, ssap)
-        self.name = "RNR"
         self.nr = nr
 
     def from_string(self, s):
@@ -630,59 +651,3 @@ class ReceiveNotReady(ProtocolDataUnit):
         return ProtocolDataUnit.__str__(self) +\
             " N(R)={rnr.nr}".format(rnr=self)
 
-
-
-if __name__ == '__main__':
-    print "--------------------------"
-    print "- running positive tests -"
-    print "--------------------------"
-    test = (
-        ( Symmetry(), 
-          "\x00\x00" ),
-        ( ParameterExchange(version=(1,1), miu=1024, wks=0x100F, lto=1000),
-          "\x00\x40\x01\x01\x11\x02\x02\x03\x80\x03\x02\x10\x0F\x04\x01\x64" ),
-        ( AggregatedFrame(aggregate=[Symmetry(), Symmetry()]),
-          "\x00\x80\x00\x02\x00\x00\x00\x02\x00\x00" ),
-        ( UnnumberedInformation(0, 0, "\xAA\xBB"),
-          "\x00\xC0\xAA\xBB" ),
-        ( Connect(0, 0, miu=1024, rw=8, sn="urn:nfc:sn:snep"),
-          "\x01\x00\x02\x02\x03\x80\x05\x01\x08\x06\x0Furn:nfc:sn:snep" ),
-        ( Disconnect(0, 0),
-          "\x01\x40" ),
-        ( ConnectionComplete(0, 0, miu=1024, rw=8),
-          "\x01\x80\x02\x02\x03\x80\x05\x01\x08" ),
-        ( DisconnectedMode(0, 0, reason=1),
-          "\x01\xC0\x01" ),
-        ( FrameReject(0, 0, 0b1010, 0b1100, 2, 3, 2, 3, 2, 3),
-          "\x02\x00\xAC\x23\x23\x23" ),
-        ( Information(0, 0, ns=2, nr=3, sdu="\x01\x02\x03\x04"),
-          "\x03\x00\x23\x01\x02\x03\x04" ),
-        ( ReceiveReady(0, 0, nr=4),
-          "\x03\x40\x04" ),
-        ( ReceiveNotReady(0, 0, nr=5),
-          "\x03\x80\x05" ),
-        )
-
-    for p, s in test:
-        print ("failed", "passed")[p.to_string() == s and len(p) == len(s)],
-        print ProtocolDataUnit.from_string(s)
-
-    print 
-    for p, s in test:
-        b0, b1 = struct.unpack("!BB", s[0:2])
-        b0 |= 0x80; b1 |= 0x01
-        s = struct.pack("!BB", b0, b1) + s[2:]
-        s = str(ProtocolDataUnit.from_string(s))
-        print ("failed", "passed")[s.startswith(" 1 -> 32")], s
-
-    print
-    agf = AggregatedFrame()
-    for p, s in test:
-        agf.append(p)
-    print agf
-    for p in agf:
-        print p
-
-    pdu1 = Disconnect(0,0)
-    pdu2 = Disconnect(0,0)
-    print repr(pdu1), "==", repr(pdu2), "->", pdu1 == pdu2
