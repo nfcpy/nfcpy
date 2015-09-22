@@ -24,6 +24,7 @@ import logging
 log = logging.getLogger(__name__)
 
 import time
+import errno
 from types import *
 import threading
 import collections
@@ -152,7 +153,7 @@ class ServiceDiscovery(object):
     @property
     def mode(self):
         return LOGICAL_DATA_LINK
-
+    
     def resolve(self, name):
         with self.resp:
             if self.snl is None: return None
@@ -175,13 +176,13 @@ class ServiceDiscovery(object):
                 and not self.snl is None):
                 for tid, sap in rcvd_pdu.sdres:
                     try: name = self.sent[tid]
-                    except KeyError: pass
-                    else:
-                        log.debug("resolved '{0}' to remote addr {1}"
-                                  .format(name, sap))
-                        self.snl[name] = sap
-                        self.tids.append(tid)
-                        self.resp.notify_all()
+                    except KeyError: continue
+                    log.debug("resolved %r to remote addr %d", name, sap)
+                    csn, sap = sap >> 6 & 1, sap & 63
+                    if csn: sap = 1
+                    self.snl[name] = sap
+                    self.tids.append(tid)
+                    self.resp.notify_all()
                 for tid, name in rcvd_pdu.sdreq:
                     try: sap = self.llc.snl[name]
                     except KeyError: sap = 0
@@ -245,12 +246,12 @@ class LogicalLinkController(object):
         send_pax.wks = 1+sum([1<<sap for sap in self.snl.values() if sap<15])
 
         if type(mac) == nfc.dep.Initiator:
-            gb = mac.activate(gbi='Ffm'+send_pax.to_string()[2:], **options)
+            gb = mac.activate(gbi='Ffm'+pdu.encode(send_pax)[2:], **options)
             self.run = self.run_as_initiator
             role = "Initiator"
 
         if type(mac) == nfc.dep.Target:
-            gb = mac.activate(gbt='Ffm'+send_pax.to_string()[2:], **options)
+            gb = mac.activate(gbt='Ffm'+pdu.encode(send_pax)[2:], **options)
             self.run = self.run_as_target
             role = "Target"
 
@@ -259,7 +260,7 @@ class LogicalLinkController(object):
                 msg = "local NFC-DEP RWT {0:.3f} contradicts LTO {1:.3f} sec"
                 log.warning(msg.format(mac.rwt, send_pax.lto*1E3))
 
-            rcvd_pax = pdu.ProtocolDataUnit.from_string("\x00\x40"+str(gb[3:]))
+            rcvd_pax = pdu.decode("\x00\x40"+str(gb[3:]))
 
             self.cfg['rcvd-ver'] = rcvd_pax.version
             self.cfg['send-miu'] = rcvd_pax.miu
@@ -316,10 +317,10 @@ class LogicalLinkController(object):
         try:
             loglevel = logging.DEBUG - int(isinstance(send_pdu, pdu.Symmetry))
             log.log(loglevel, "SEND {0}".format(send_pdu))
-            send_data = send_pdu.to_string() if send_pdu else None
+            send_data = pdu.encode(send_pdu) if send_pdu else None
             rcvd_data = self.mac.exchange(send_data, timeout)
             if rcvd_data is not None:
-                rcvd_pdu = pdu.ProtocolDataUnit.from_string(rcvd_data)
+                rcvd_pdu = pdu.decode(rcvd_data)
                 loglevel = logging.DEBUG-int(isinstance(rcvd_pdu,pdu.Symmetry))
                 log.log(loglevel, "RECV {0}".format(rcvd_pdu))
                 return rcvd_pdu

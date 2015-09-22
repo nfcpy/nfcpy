@@ -263,7 +263,7 @@ class LogicalDataLink(TransmissionControlObject):
             raise err.Error(errno.EDESTADDRREQ)
         if len(message) > self.send_miu:
             raise err.Error(errno.EMSGSIZE)
-        send_pdu = pdu.UnnumberedInformation(dest, self.addr, sdu=message)
+        send_pdu = pdu.UnnumberedInformation(dest, self.addr, data=message)
         super(LogicalDataLink, self).send(send_pdu)
         return self.state.ESTABLISHED == True
 
@@ -274,7 +274,7 @@ class LogicalDataLink(TransmissionControlObject):
             rcvd_pdu = super(LogicalDataLink, self).recv()
         except IndexError:
             raise err.Error(errno.EPIPE)
-        return (rcvd_pdu.sdu, rcvd_pdu.ssap) if rcvd_pdu else (None, None)
+        return (rcvd_pdu.data, rcvd_pdu.ssap) if rcvd_pdu else (None, None)
 
     def close(self):
         super(LogicalDataLink, self).close()
@@ -286,7 +286,7 @@ class LogicalDataLink(TransmissionControlObject):
         if not rcvd_pdu.name == "UI":
             log.warn("ignore %s PDU on logical data link", rcvd_pdu.name)
             return False
-        if len(rcvd_pdu.sdu) > self.recv_miu:
+        if len(rcvd_pdu.data) > self.recv_miu:
             log.warn("received UI PDU exceeds local link MIU")
             return False
         return super(LogicalDataLink, self).enqueue(rcvd_pdu)
@@ -474,7 +474,7 @@ class DataLinkConnection(TransmissionControlObject):
                 self.send_token.wait()
             self.log("send() {0}".format(str(self)))
             if self.state.ESTABLISHED:
-                send_pdu = pdu.Information(self.peer, self.addr, sdu=message)
+                send_pdu = pdu.Information(self.peer, self.addr, data=message)
                 send_pdu.ns = self.send_cnt
                 self.send_cnt = (self.send_cnt + 1) % 16
                 super(DataLinkConnection, self).send(send_pdu)
@@ -496,7 +496,7 @@ class DataLinkConnection(TransmissionControlObject):
                     self.err("recv_confs({0}) > recv_win({1})"
                              .format(self.recv_confs, self.recv_win))
                     raise RuntimeError("recv_confs > recv_win")
-                return rcvd_pdu.sdu
+                return rcvd_pdu.data
             
             if rcvd_pdu.name == "DISC":
                 self.close()
@@ -584,7 +584,7 @@ class DataLinkConnection(TransmissionControlObject):
     def _enqueue_state_established(self, rcvd_pdu):
         if rcvd_pdu.name == "I":
             frmr = None
-            if len(rcvd_pdu.sdu) > self.recv_miu:
+            if len(rcvd_pdu.data) > self.recv_miu:
                 frmr = pdu.FrameReject.from_pdu(rcvd_pdu, flags="I", dlc=self)
             elif rcvd_pdu.ns != self.recv_cnt:
                 frmr = pdu.FrameReject.from_pdu(rcvd_pdu, flags="S", dlc=self)

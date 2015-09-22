@@ -563,12 +563,12 @@ class TestProgram(CommandLineInterface):
             socket.send(agf)
             if not socket.poll("recv", timeout=5):
                 raise TestError("did not receive first message within 5 sec")
-            if not socket.recv().sdu == 50*"\x01":
+            if not socket.recv().data == 50*"\x01":
                 raise TestError("first message came back wrong")
             info("received first message")
             if not socket.poll("recv", timeout=5):
                 raise TestError("did not receive second message within 5 sec")
-            if not socket.recv().sdu == 50*"\x02":
+            if not socket.recv().data == 50*"\x02":
                 raise TestError("second message came back wrong")
             info("received second message")
 
@@ -577,12 +577,12 @@ class TestProgram(CommandLineInterface):
             socket.send(agf)
             if not socket.poll("recv", timeout=5):
                 raise TestError("did not receive first message within 5 sec")
-            if not socket.recv().sdu == 50*"\x01":
+            if not socket.recv().data == 50*"\x01":
                 raise TestError("first message came back wrong")
             info("received first message")
             if not socket.poll("recv", timeout=5):
                 raise TestError("did not receive second message within 5 sec")
-            if not socket.recv().sdu == 50*"\x02":
+            if not socket.recv().data == 50*"\x02":
                 raise TestError("second message came back wrong")
             info("received second message")
             if socket.poll("recv", timeout=5):
@@ -673,7 +673,7 @@ class TestProgram(CommandLineInterface):
             send_miu = dlc_socket.getsockopt(nfc.llcp.SO_SNDMIU)
             info("the peers receive MIU is {0} octets".format(send_miu))
             sdu = (send_miu + 1) * '\x00'
-            pdu = nfc.llcp.pdu.Information(dsap=peer, ssap=addr, sdu=sdu)
+            pdu = nfc.llcp.pdu.Information(peer, addr, sdu)
             pdu.ns, pdu.nr = 0, 0
             raw_socket.send(pdu)
             dlc_socket.recv()
@@ -699,8 +699,7 @@ class TestProgram(CommandLineInterface):
             addr = dlc_socket.getsockname()
             peer = dlc_socket.getpeername()
             info("connected with sap {0}".format(peer))
-            pdu = nfc.llcp.pdu.Information(
-                dsap=peer, ssap=addr, sdu="wrong N(S)")
+            pdu = nfc.llcp.pdu.Information(peer, addr, "wrong N(S)")
             pdu.ns, pdu.nr = 15, 0
             raw_socket.send(pdu)
             dlc_socket.recv()
