@@ -116,7 +116,8 @@ class ProtocolDataUnit(object):
         self.ssap = ssap
 
     @staticmethod
-    def decode_header(data, offset, size):
+    def decode_header(data, offset=0, size=None):
+        if size is None: size = len(data)
         if size < 2: raise DecodeError("insufficient pdu header bytes")
         (dsap, ssap) = struct.unpack_from('!BB', data, offset)
         return (dsap >> 2, ssap & 63)
@@ -142,7 +143,8 @@ class NumberedProtocolDataUnit(ProtocolDataUnit):
         self.ns, self.nr = ns, nr
 
     @staticmethod
-    def decode_header(data, offset, size):
+    def decode_header(data, offset=0, size=None):
+        if size is None: size = len(data)
         if size < 3: raise DecodeError("numbered pdu header length error")
         (dsap, ssap, sequence) = struct.unpack_from('!BBB', data, offset)
         return (dsap >> 2, ssap & 63, sequence >> 4, sequence & 15)
@@ -583,7 +585,7 @@ class ServiceNameLookup(ProtocolDataUnit):
         while size >= 2:
             T, L, V = Parameter.decode(data, offset, size)
             if T == Parameter.SDREQ: snl_pdu.sdreq.append(V)
-            if T == Parameter.SDRES: snl_pdu.sdres.append(V)
+            elif T == Parameter.SDRES: snl_pdu.sdres.append(V)
             else: log.debug("unknown TLV %r in SNL PDU", (T, L, V))
             offset, size = offset + 2 + L, size - 2 - L
         return snl_pdu

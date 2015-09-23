@@ -67,6 +67,18 @@ class CipherSuite1:
         log.debug("session key   %r", hexlify(k_encr))
         self.pcs = self.pcr = 0
 
+    @property
+    def icv_size(self):
+        return 4
+    
+    def encrypt(self, a, p):
+        c = p + bytes(bytearray(4))
+        return c
+
+    def decrypt(self, a, c):
+        p = c[0:-4]
+        return p
+
 class OpenSSLWrapper:
     def __init__(self, libcrypto):
         self.crypto = ctypes.CDLL(libcrypto)

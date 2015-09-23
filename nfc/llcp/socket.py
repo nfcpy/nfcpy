@@ -50,11 +50,16 @@ class Socket(object):
         """Resolve a service name into an address. This may involve
         conversation with the remote service discovery component if
         the name is hasn't yet been resolved. The return value is the
-        service access point address that the service name is bound to
-        at the remote device. A zero address indicates that the remote
-        device does not know about the service name requested. The
-        return value is None if communication with the peer device got
-        terminated."""
+        service access point address for the service name bound at the
+        remote device. The address value 0 indicates that the remote
+        device does not have a service with the requested name. The
+        address value 1 indicates that the remote device has a data
+        link connection service with the requested name that can only
+        be connected by service name. The return value is None when
+        communication with the peer device terminated while waiting
+        for a response.
+
+        """
         return self.llc.resolve(name)
 
     def setsockopt(self, option, value):
@@ -104,20 +109,22 @@ class Socket(object):
         socket._tco = self.llc.accept(self._tco)
         return socket
     
-    def send(self, string):
-        """Send data to the socket. The socket must be connected to a
-        remote socket. Returns a boolean value that indicates success
-        or failure. Failure to send is generally an indication that
-        the socket or connection was closed."""
-        return self.llc.send(self._tco, string)
+    def send(self, data, flags=0):
+        """Send data to the socket. The socket must be connected to a remote
+        socket. Returns a boolean value that indicates success or
+        failure. A false value is typically an indication that the
+        socket or connection was closed.
 
-    def sendto(self, string, address):
+        """
+        return self.llc.send(self._tco, data, flags)
+
+    def sendto(self, data, addr, flags=0):
         """Send data to the socket. The socket should not be connected
         to a remote socket, since the destination socket is specified
-        by address. Returns a boolean value that indicates success
+        by addr. Returns a boolean value that indicates success
         or failure. Failure to send is generally an indication that
         the socket was closed."""
-        return self.llc.sendto(self._tco, string, address)
+        return self.llc.sendto(self._tco, data, addr, flags)
 
     def recv(self):
         """Receive data from the socket. The return value is a string

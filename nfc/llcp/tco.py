@@ -113,10 +113,11 @@ class TransmissionControlObject(object):
                     self.send_ready.wait(timeout)
                 return len(self.send_queue) < self.send_buf
 
-    def send(self, send_pdu):
+    def send(self, send_pdu, flags):
         with self.send_ready:
             self.send_queue.append(send_pdu)
-            self.send_ready.wait()
+            if not (flags & opt.MSG_DONTWAIT):
+                self.send_ready.wait()
 
     def recv(self):
         with self.recv_ready:
@@ -186,11 +187,11 @@ class RawAccessPoint(TransmissionControlObject):
             raise err.Error(errno.EINVAL)
         return super(RawAccessPoint, self).poll(event, timeout) is not None
         
-    def send(self, send_pdu):
+    def send(self, send_pdu, flags):
         if self.state.SHUTDOWN:
             raise err.Error(errno.EBADF)
         log.debug("{0} send {1}".format(str(self), send_pdu))
-        super(RawAccessPoint, self).send(send_pdu)
+        super(RawAccessPoint, self).send(send_pdu, flags)
         return self.state.ESTABLISHED == True
 
     def recv(self):
@@ -256,7 +257,7 @@ class LogicalDataLink(TransmissionControlObject):
             raise err.Error(errno.EINVAL)
         return super(LogicalDataLink, self).poll(event, timeout) is not None
         
-    def sendto(self, message, dest):
+    def sendto(self, message, dest, flags):
         if self.state.SHUTDOWN:
             raise err.Error(errno.EBADF)
         if self.peer and dest != self.peer:
@@ -264,7 +265,7 @@ class LogicalDataLink(TransmissionControlObject):
         if len(message) > self.send_miu:
             raise err.Error(errno.EMSGSIZE)
         send_pdu = pdu.UnnumberedInformation(dest, self.addr, data=message)
-        super(LogicalDataLink, self).send(send_pdu)
+        super(LogicalDataLink, self).send(send_pdu, flags)
         return self.state.ESTABLISHED == True
 
     def recvfrom(self):
@@ -460,7 +461,7 @@ class DataLinkConnection(TransmissionControlObject):
         # RW(L) - V(R) + V(RA) mod 16
         return (self.recv_win - self.recv_cnt + self.recv_ack) % 16
 
-    def send(self, message):
+    def send(self, message, flags):
         with self.send_token:
             if not self.state.ESTABLISHED:
                 self.err("send() in socket state {0}".format(self.state))
@@ -470,6 +471,8 @@ class DataLinkConnection(TransmissionControlObject):
             if len(message) > self.send_miu:
                 raise err.Error(errno.EMSGSIZE)
             while self.send_window_slots == 0 and self.state.ESTABLISHED:
+                if flags & opt.MSG_DONTWAIT:
+                    raise err.Error(errno.WOULDBLOCK)
                 self.log("waiting on busy send window")
                 self.send_token.wait()
             self.log("send() {0}".format(str(self)))
@@ -477,7 +480,7 @@ class DataLinkConnection(TransmissionControlObject):
                 send_pdu = pdu.Information(self.peer, self.addr, data=message)
                 send_pdu.ns = self.send_cnt
                 self.send_cnt = (self.send_cnt + 1) % 16
-                super(DataLinkConnection, self).send(send_pdu)
+                super(DataLinkConnection, self).send(send_pdu, flags)
             return self.state.ESTABLISHED == True
 
     def recv(self):

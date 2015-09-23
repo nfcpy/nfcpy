@@ -123,7 +123,6 @@ class ServiceAccessPoint(object):
     def dequeue(self, max_size):
         with self.llc.lock:
             for socket in self.sock_list:
-                #print "dequeue from", socket
                 send_pdu = socket.dequeue(max_size)
                 if send_pdu: return send_pdu
             else:
@@ -223,6 +222,7 @@ class LogicalLinkController(object):
         self.cfg['send-lto'] = send_lto
         self.cfg['send-agf'] = send_agf
         self.cfg['llcp-sec'] = llcp_sec if sec.OpenSSL else False
+        self.sec = None
         self.snl = dict({"urn:nfc:sn:sdp" : 1})
         self.sap = 64 * [None]
         self.sap[0] = ServiceAccessPoint(0, self)
@@ -340,11 +340,17 @@ class LogicalLinkController(object):
                 random = cipher.random_nonce
                 send_dps = pdu.DataProtectionSetup(0, 0, pubkey, random)
                 rcvd_dps = self.exchange(send_dps, recv_timeout)
-                assert isinstance(rcvd_dps, pdu.DataProtectionSetup)
-                assert rcvd_dps.ecpk and len(rcvd_dps.ecpk) == 64
-                assert rcvd_dps.rn and len(rcvd_dps.rn) == 8
+                if not isinstance(rcvd_dps, pdu.DataProtectionSetup):
+                    log.error("expected a DPS PDU response")
+                    return self.terminate(reason="key agreement error")
+                if not (rcvd_dps.ecpk and len(rcvd_dps.ecpk) == 64):
+                    log.error("absent or invalid ECPK parameter")
+                    return self.terminate(reason="key agreement error")
+                if not (rcvd_dps.rn and len(rcvd_dps.rn) == 8):
+                    log.error("absent or invalid RN parameter")
+                    return self.terminate(reason="key agreement error")
                 cipher.calculate_session_key(rcvd_dps.ecpk, rn_t=rcvd_dps.rn)
-                return self.terminate(reason="key agreement error")
+                self.sec = cipher
         
             send_pdu = self.collect(delay=0.01)
             while not terminate():
@@ -384,12 +390,18 @@ class LogicalLinkController(object):
                 random = cipher.random_nonce
                 send_dps = pdu.DataProtectionSetup(0, 0, pubkey, random)
                 rcvd_dps = self.exchange(None, recv_timeout)
-                assert isinstance(rcvd_dps, pdu.DataProtectionSetup)
-                assert rcvd_dps.ecpk and len(rcvd_dps.ecpk) == 64
-                assert rcvd_dps.rn and len(rcvd_dps.rn) == 8
+                if not isinstance(rcvd_dps, pdu.DataProtectionSetup):
+                    log.error("expected a DPS PDU request")
+                    return self.terminate(reason="key agreement error")
+                if not (rcvd_dps.ecpk and len(rcvd_dps.ecpk) == 64):
+                    log.error("absent or invalid ECPK parameter")
+                    return self.terminate(reason="key agreement error")
+                if not (rcvd_dps.rn and len(rcvd_dps.rn) == 8):
+                    log.error("absent or invalid RN parameter")
+                    return self.terminate(reason="key agreement error")
                 rcvd_pdu = self.exchange(send_dps, recv_timeout)
                 cipher.calculate_session_key(rcvd_dps.ecpk, rn_i=rcvd_dps.rn)
-                return self.terminate(reason="key agreement error")
+                self.sec = cipher
             else:
                 rcvd_pdu = self.exchange(None, recv_timeout)
 
@@ -418,48 +430,55 @@ class LogicalLinkController(object):
             log.debug("llc run loop terminated on target")
 
     def collect(self, delay=None):
+        #log.debug("start pdu collect after %f seconds", delay if delay else 0)
         if delay: time.sleep(delay)
+        max_size = self.cfg["send-miu"] + 2
         pdu_list = list()
-        max_data = None
+        
         with self.lock:
             active_sap_list = [sap for sap in self.sap if sap is not None]
-            for sap in active_sap_list:
-                #log.debug("query sap {0}, max_data={1}"
-                #          .format(sap, max_data))
-                send_pdu = sap.dequeue(max_data if max_data else 2179)
-                if send_pdu is not None:
-                    if self.cfg['send-agf'] == False:
-                        return send_pdu
-                    pdu_list.append(send_pdu)
-                    if max_data is None:
-                        max_data = self.cfg["send-miu"] + 2
-                    max_data -= len(send_pdu)
-                    if max_data < bool(len(pdu_list)==1) * 2 + 2 + 2:
-                        break
-            else: max_data = self.cfg["send-miu"] + 2
-
-            for sap in active_sap_list:
-                if sap.mode == DATA_LINK_CONNECTION:
-                    send_pdu = sap.sendack(max_data)
-                    if send_pdu is not None:
-                        if self.cfg['send-agf'] == False:
-                            return send_pdu
+            stop_dequeue = False
+            while not stop_dequeue:
+                stop_dequeue = True
+                for sap in active_sap_list:
+                    #log.debug("query sap %s, max_size=%d", sap, max_size)
+                    send_pdu = sap.dequeue(max_size)
+                    if send_pdu:
+                        if self.sec and send_pdu.name in ("UI", "I"):
+                            pdu_type = type(send_pdu)
+                            a = send_pdu.encode_header()
+                            c = self.sec.encrypt(a, send_pdu.data)
+                            pdu_args = pdu_type.decode_header(a) + (c,)
+                            send_pdu = pdu_type(*pdu_args)
                         pdu_list.append(send_pdu)
-                        max_data -= len(send_pdu)
-                        if max_data < bool(len(pdu_list)==1) * 2 + 2 + 3:
+                        max_size -= 2 + len(send_pdu)
+                        required = 4 + self.sec.icv_size if self.sec else 4
+                        if max_size >= required and self.cfg['send-agf']:
+                            stop_dequeue = False
+                        else:
                             break
+            
+            if max_size >= 5 and (self.cfg['send-agf'] or len(pdu_list) == 0):
+                for sap in active_sap_list:
+                    if sap.mode == DATA_LINK_CONNECTION:
+                        send_pdu = sap.sendack(max_size)
+                        if send_pdu:
+                            pdu_list.append(send_pdu)
+                            max_size -= 2 + len(send_pdu)
+                            if not (max_size >= 5 and self.cfg['send-agf']):
+                                break
 
         if len(pdu_list) > 1:
-            return pdu.AggregatedFrame(aggregate=pdu_list)
+            return pdu.AggregatedFrame(0, 0, pdu_list)
         if len(pdu_list) == 1:
             return pdu_list[0]
         return None
 
     def dispatch(self, rcvd_pdu):
-        if isinstance(rcvd_pdu, pdu.Symmetry):
+        if rcvd_pdu is None or rcvd_pdu.name == "SYMM":
             return
 
-        if isinstance(rcvd_pdu, pdu.AggregatedFrame):
+        if rcvd_pdu.name == "AGF":
             if rcvd_pdu.dsap == 0 and rcvd_pdu.ssap == 0:
                 for p in rcvd_pdu:
                     log.debug("     " + str(p))
@@ -467,7 +486,7 @@ class LogicalLinkController(object):
                     self.dispatch(p)
             return
 
-        if isinstance(rcvd_pdu, pdu.Connect) and rcvd_pdu.dsap == 1:
+        if rcvd_pdu.name == "CONNECT" and rcvd_pdu.dsap == 1:
             # connect-by-name
             addr = self.snl.get(rcvd_pdu.sn)
             if not addr or self.sap[addr] is None:
@@ -480,14 +499,16 @@ class LogicalLinkController(object):
             rcvd_pdu = pdu.Connect(dsap=addr, ssap=rcvd_pdu.ssap,
                                    rw=rcvd_pdu.rw, miu=rcvd_pdu.miu)
 
+        if self.sec and rcvd_pdu.name in ("UI", "I"):
+            pdu_type = type(rcvd_pdu)
+            a = rcvd_pdu.encode_header()
+            p = self.sec.decrypt(a, rcvd_pdu.data)
+            rcvd_pdu = pdu_type(*pdu_type.decode_header(a), data=p)
+        
         with self.lock:
             sap = self.sap[rcvd_pdu.dsap]
-            if sap:
-                sap.enqueue(rcvd_pdu)
-                return
-
-        log.debug("discard PDU {0}".format(str(rcvd_pdu)))
-        return
+            if sap: sap.enqueue(rcvd_pdu)
+            else: log.debug("discard PDU %s", rcvd_pdu)
 
     def resolve(self, name):
         return self.sap[1].resolve(name)
@@ -607,10 +628,10 @@ class LogicalLinkController(object):
                 dm = pdu.DisconnectedMode(client.peer, socket.addr, reason=0x20)
                 super(tco.DataLinkConnection, socket).send(dm)
 
-    def send(self, socket, message):
-        return self.sendto(socket, message, socket.peer)
+    def send(self, socket, message, flags):
+        return self.sendto(socket, message, socket.peer, flags)
 
-    def sendto(self, socket, message, dest):
+    def sendto(self, socket, message, dest, flags):
         if not isinstance(socket, tco.TransmissionControlObject):
             raise err.Error(errno.ENOTSOCK)
         if isinstance(socket, tco.RawAccessPoint):
@@ -620,7 +641,7 @@ class LogicalLinkController(object):
                 self.bind(socket)
             # FIXME: set socket send miu when activated
             socket.send_miu = self.cfg['send-miu']
-            return socket.send(message)
+            return socket.send(message, flags)
         if not type(message) == StringType:
             raise TypeError("sendto() argument *message* must be a string")
         if isinstance(socket, tco.LogicalDataLink):
@@ -630,9 +651,9 @@ class LogicalLinkController(object):
                 self.bind(socket)
             # FIXME: set socket send miu when activated
             socket.send_miu = self.cfg['send-miu']
-            return socket.sendto(message, dest)
+            return socket.sendto(message, dest, flags)
         if isinstance(socket, tco.DataLinkConnection):
-            return socket.send(message)
+            return socket.send(message, flags)
 
     def recv(self, socket):
         message, sender = self.recvfrom(socket)

@@ -465,7 +465,7 @@ class TestProgram(CommandLineInterface):
             info("first connection established with sap {0}".format(peer_sap))
             try: socket2.connect(co_echo_server)
             except nfc.llcp.ConnectRefused as e:
-                info("second connection rejected with reason {0}"
+                info("second connection rejected with reason {0:02x}h"
                      .format(e.reason))
             else:
                 raise TestError("second connection not rejected")
@@ -518,6 +518,80 @@ class TestProgram(CommandLineInterface):
             socket.close()
 
     def test_08(self, llc):
+        """Aggregation and disaggregation
+
+        Verify that the aggregation procedure is performed correctly. The
+        LLCP Link must be activated prior to running this scenario.  In
+        this scenario, sending of a service data unit (SDU) shall mean
+        that the SDU is carried within the information field of a UI PDU.
+
+        1. Send two service data units of 50 octets length to the
+           connection-less mode echo service such that the two resulting
+           UI PDUs will be aggregated into a single AGF PDU by the LLC
+           sublayer. Verify that both SDUs are sent back correctly and in
+           the same order.
+
+        2. Send three service data units of 50 octets length to the
+           connection-less mode echo service such that the three resulting
+           UI PDUs will be aggregated into a single AGF PDU by the LLC
+           sublayer. Verify that the two first SDUs are sent back
+           correctly and the third SDU is discarded.
+        """
+        socket = nfc.llcp.Socket(llc, nfc.llcp.LOGICAL_DATA_LINK)
+        try:
+            socket.bind()
+            socket.setsockopt(nfc.llcp.SO_RCVBUF, 10)
+            if socket.getsockopt(nfc.llcp.SO_RCVBUF) != 10:
+                raise TestError("could not set the socket recv buffer")
+            info("socket recv buffer set to 10")
+            cl_echo_server = self.options.cl_echo_sap
+            if not cl_echo_server:
+                cl_echo_server = llc.resolve("urn:nfc:sn:cl-echo")
+            if not cl_echo_server:
+                raise TestError("connection-less echo server not available")
+            info("connection-less echo server on sap %d" % cl_echo_server)
+            addr = socket.getsockname()
+            sdu1 = 50 * "\x01"
+            sdu2 = 50 * "\x02"
+            sdu3 = 50 * "\x03"
+
+            info("step 1: send two datagrams with 50 byte payload")
+            with llc.lock: # temporarily stop llc (only for testing)
+                socket.sendto(sdu1, cl_echo_server, nfc.llcp.MSG_DONTWAIT)
+                socket.sendto(sdu2, cl_echo_server, nfc.llcp.MSG_DONTWAIT)
+            if not socket.poll("recv", timeout=5):
+                raise TestError("did not receive first message within 5 sec")
+            if not socket.recv() == sdu1:
+                raise TestError("first message came back wrong")
+            info("received first message")
+            if not socket.poll("recv", timeout=5):
+                raise TestError("did not receive second message within 5 sec")
+            if not socket.recv() == sdu2:
+                raise TestError("second message came back wrong")
+            info("received second message")
+            
+            info("step2: send three datagrams with 50 byte payload")
+            with llc.lock: # temporarily stop llc (only for testing)
+                socket.sendto(sdu1, cl_echo_server, nfc.llcp.MSG_DONTWAIT)
+                socket.sendto(sdu2, cl_echo_server, nfc.llcp.MSG_DONTWAIT)
+                socket.sendto(sdu3, cl_echo_server, nfc.llcp.MSG_DONTWAIT)
+            if not socket.poll("recv", timeout=5):
+                raise TestError("did not receive first message within 5 sec")
+            if not socket.recv() == sdu1:
+                raise TestError("first message came back wrong")
+            info("received first message")
+            if not socket.poll("recv", timeout=5):
+                raise TestError("did not receive second message within 5 sec")
+            if not socket.recv() == sdu2:
+                raise TestError("second message came back wrong")
+            info("received second message")
+            if socket.poll("recv", timeout=5):
+                raise TestError("received third message")
+            info("did not receive third message within 5 sec")
+        finally:
+            socket.close()
+
+    def __test_08(self, llc):
         """Aggregation and disaggregation
 
         Verify that the aggregation procedure is performed correctly. The
