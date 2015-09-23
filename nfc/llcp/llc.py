@@ -214,14 +214,16 @@ class ServiceDiscovery(object):
             self.resp.notify_all()
 
 class LogicalLinkController(object):
-    def __init__(self, recv_miu=248, send_lto=500, send_agf=True,
-                 llcp_sec=True):
+    def __init__(self, **options):
         self.lock = threading.RLock()
         self.cfg = dict()
-        self.cfg['recv-miu'] = recv_miu
-        self.cfg['send-lto'] = send_lto
-        self.cfg['send-agf'] = send_agf
-        self.cfg['llcp-sec'] = llcp_sec if sec.OpenSSL else False
+        self.cfg['recv-miu'] = options.get('miu', 248)
+        self.cfg['send-lto'] = options.get('lto', 500)
+        self.cfg['send-lsc'] = options.get('lsc', 3)
+        self.cfg['send-agf'] = options.get('agf', True)
+        self.cfg['llcp-sec'] = options.get('sec', True)
+        if not sec.OpenSSL: self.cfg['llcp-sec'] = False
+        log.debug("llc cfg {0}".format(self.cfg))
         self.sec = None
         self.snl = dict({"urn:nfc:sn:sdp" : 1})
         self.sap = 64 * [None]
@@ -239,11 +241,17 @@ class LogicalLinkController(object):
         assert type(mac) in (nfc.dep.Initiator, nfc.dep.Target)
         self.mac = None
         
-        send_pax = pdu.ParameterExchange(version=(1,3))
-        send_pax.miu = self.cfg['recv-miu']
-        send_pax.lto = self.cfg['send-lto']
-        send_pax.dpc = 1 if self.cfg['llcp-sec'] else 0
+        send_pax = pdu.ParameterExchange()
+        send_pax.version = (1, 3)
         send_pax.wks = 1+sum([1<<sap for sap in self.snl.values() if sap<15])
+        if self.cfg['recv-miu'] != 128:
+            send_pax.miu = self.cfg['recv-miu']
+        if self.cfg['send-lto'] != 100:
+            send_pax.lto = self.cfg['send-lto']
+        if self.cfg['send-lsc'] != 0:
+            send_pax.lsc = self.cfg['send-lsc']
+        if self.cfg['llcp-sec']:
+            send_pax.dpc = 1
 
         if type(mac) == nfc.dep.Initiator:
             gb = mac.activate(gbi='Ffm'+pdu.encode(send_pax)[2:], **options)
@@ -261,6 +269,9 @@ class LogicalLinkController(object):
                 log.warning(msg.format(mac.rwt, send_pax.lto*1E3))
 
             rcvd_pax = pdu.decode("\x00\x40"+str(gb[3:]))
+            
+            log.debug("SENT {0}".format(send_pax))
+            log.debug("RCVD {0}".format(rcvd_pax))
 
             self.cfg['rcvd-ver'] = rcvd_pax.version
             self.cfg['send-miu'] = rcvd_pax.miu

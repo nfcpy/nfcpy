@@ -485,13 +485,8 @@ class ContactlessFrontend(object):
             llcp_options.setdefault('on-startup', lambda llc: llc)
             llcp_options.setdefault('on-connect', lambda llc: True)
             llcp_options.setdefault('on-release', lambda llc: True)
-            
-            llc = nfc.llcp.llc.LogicalLinkController(
-                recv_miu=llcp_options.get('miu', 128),
-                send_lto=llcp_options.get('lto', 500),
-                send_agf=llcp_options.get('agf', True),
-                llcp_sec=llcp_options.get('sec', True),
-            )
+
+            llc = nfc.llcp.llc.LogicalLinkController(**llcp_options)
             llc = llcp_options['on-startup'](llc)
             if isinstance(llc, nfc.llcp.llc.LogicalLinkController):
                 llcp_options['llc'] = llc

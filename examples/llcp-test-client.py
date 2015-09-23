@@ -68,6 +68,13 @@ class TestProgram(CommandLineInterface):
         super(TestProgram, self).__init__(
             parser, groups="test llcp dbg clf")
 
+    def on_llcp_startup(self, llc):
+        #if len(self.options.test) > 1:
+        #    if 2 in self.options.test:
+        #        i = self.options.test.index(2)
+        #        self.options.test[i:i+1] = []
+        return super(TestProgram, self).on_llcp_startup(llc)
+        
     def test_01(self, llc):
         """Link activation, symmetry and deactivation
 

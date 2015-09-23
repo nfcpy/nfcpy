@@ -40,7 +40,7 @@ class Parameter:
             if T == Parameter.VERSION:
                 assert L == 1, "VERSION TLV length error"
                 (version,) = struct.unpack_from('!B', data, offset+2)
-                return (T, L, (version>>4, version&15))
+                return (T, L, version)
             if T == Parameter.MIUX:
                 assert L == 2, "MIUX TLV length error"
                 (miux,) = struct.unpack_from('!H', data, offset+2)
@@ -86,13 +86,11 @@ class Parameter:
 
     @staticmethod
     def encode(T, V):
-        if T == Parameter.VERSION:
-            return struct.pack('!BBB', T, 1, V[0]<<4 | V[1])
-        if T in (Parameter.LTO, Parameter.RW, Parameter.OPT):
+        if T in (Parameter.VERSION,Parameter.LTO,Parameter.RW,Parameter.OPT):
             return struct.pack('!BBB', T, 1, V)
-        if T in (Parameter.MIUX, Parameter.WKS):
+        if T in (Parameter.MIUX,Parameter.WKS):
             return struct.pack('!BBH', T, 2, V)
-        if T in (Parameter.SN, Parameter.ECPK, Parameter.RN):
+        if T in (Parameter.SN,Parameter.ECPK,Parameter.RN):
             if len(V) > 255:
                 raise EncodeError("can't encode TLV %r" % (T, len(V), V))
             return struct.pack('!BB', T, len(V)) + bytes(V)
@@ -196,15 +194,13 @@ class Symmetry(ProtocolDataUnit):
 class ParameterExchange(ProtocolDataUnit):
     name = "PAX"
     
-    def __init__(self, dsap=0, ssap=0, version=(1,0), miu=128, wks=3,
-                 lto=100, lsc=3, dpc=0):
+    def __init__(self, dsap=0, ssap=0):
         super(ParameterExchange, self).__init__(0b0001, dsap, ssap)
-        self.version = version
-        self.miu = miu
-        self.wks = wks
-        self.lto = lto
-        self.lsc = lsc
-        self.dpc = dpc
+        self._version = None
+        self._miux = None
+        self._wks = None
+        self._lto = None
+        self._opt = None
 
     @classmethod
     def decode(cls, data, offset, size):
@@ -215,40 +211,65 @@ class ParameterExchange(ProtocolDataUnit):
         offset, size = offset + 2, size - 2
         while size >= 2:
             T, L, V = Parameter.decode(data, offset, size)
-            if T == Parameter.VERSION: pax_pdu.version = V
-            elif T == Parameter.MIUX: pax_pdu.miu = 128 + V
-            elif T == Parameter.WKS: pax_pdu.wks = V
-            elif T == Parameter.LTO: pax_pdu.lto = V * 10
-            elif T == Parameter.OPT: pax_pdu.lsc, pax_pdu.dpc = V & 3, V>>2 & 1
+            if T == Parameter.VERSION: pax_pdu._version = V
+            elif T == Parameter.MIUX: pax_pdu._miux = V
+            elif T == Parameter.WKS: pax_pdu._wks = V
+            elif T == Parameter.LTO: pax_pdu._lto = V
+            elif T == Parameter.OPT: pax_pdu._opt = V
             else: log.debug("unknown TLV %r in PAX PDU", (T, L, V))
             offset, size = offset + 2 + L, size - 2 - L
         return pax_pdu
     
     def encode(self):
         data = self.encode_header()
-        if self.version:
-            data += Parameter.encode(Parameter.VERSION, self.version)
-        if self.miu and self.miu > 128:
-            data += Parameter.encode(Parameter.MIUX, self.miu - 128)
-        if self.wks:
-            data += Parameter.encode(Parameter.WKS, self.wks)
-        if self.lto and self.lto != 100:
-            data += Parameter.encode(Parameter.LTO, self.lto // 10)
-        if self.lsc or self.dpc:
-            data += Parameter.encode(Parameter.OPT, self.dpc<<2|self.lsc)
+        if self._version is not None:
+            data += Parameter.encode(Parameter.VERSION, self._version)
+        if self._miux is not None:
+            data += Parameter.encode(Parameter.MIUX, self._miux)
+        if self._wks is not None:
+            data += Parameter.encode(Parameter.WKS, self._wks)
+        if self._lto is not None:
+            data += Parameter.encode(Parameter.LTO, self._lto)
+        if self._opt is not None:
+            data += Parameter.encode(Parameter.OPT, self._opt)
         return data
 
     def __len__(self):
         return (2 +
-                (3 if self.version else 0) +
-                (4 if self.miu and self.miu > 128 else 0) +
-                (4 if self.wks else 0) +
-                (3 if self.lto and self.lto != 100 else 0) +
-                (3 if self.lsc or self.dpc else 0))
+                (3 if self._version is not None else 0) +
+                (4 if self._miux is not None else 0) +
+                (4 if self._wks is not None else 0) +
+                (3 if self._lto is not None else 0) +
+                (3 if self._opt is not None else 0))
 
+    @property
+    def version(self):
+        version = self._version
+        return (version>>4, version&15) if version is not None else (0, 0)
+    
+    @version.setter
+    def version(self, value):
+        self._version = (value[0]<<4 & 0xF0) | (value[1] & 0x0F)
+    
     @property
     def version_text(self):
         return "{0}.{1}".format(*self.version)
+    
+    @property
+    def miu(self):
+        return self._miux + 128 if self._miux is not None else 128
+    
+    @miu.setter
+    def miu(self, value):
+        self._miux = max(value - 128, 0)
+    
+    @property
+    def wks(self):
+        return self._wks if self._wks is not None else 0
+    
+    @wks.setter
+    def wks(self, value):
+        self._wks = value & 0xFFFF
     
     @property
     def wks_text(self):
@@ -257,6 +278,23 @@ class ParameterExchange(ProtocolDataUnit):
         return ', '.join(l)
 
     @property
+    def lto(self):
+        return (self._lto if self._lto is not None else 10) * 10
+    
+    @lto.setter
+    def lto(self, value):
+        self._lto = (value // 10) & 0xFF
+    
+    @property
+    def lsc(self):
+        return self._opt & 3 if self._opt is not None else 0
+    
+    @lsc.setter
+    def lsc(self, value):
+        if self._opt is None: self._opt = 0
+        self._opt = (self._opt & 0b11111100) | (value & 0b00000011)
+    
+    @property
     def lsc_text(self):
         return ("link service class unknown at activation",
                 "connection-less link service only",
@@ -264,14 +302,32 @@ class ParameterExchange(ProtocolDataUnit):
                 "connection-less and connection-oriented")[self.lsc]
 
     @property
+    def dpc(self):
+        return self._opt >> 2 & 1 if self._opt is not None else 0
+    
+    @dpc.setter
+    def dpc(self, value):
+        if self._opt is None: self._opt = 0
+        self._opt = (self._opt & 0b11111011) | (bool(value) << 2)
+    
+    @property
     def dpc_text(self):
         return ("secure data transfer mode not supported",
                 "secure data transfer mode is supported")[self.dpc]
 
     def __str__(self):
-        return super(ParameterExchange, self).__str__() + \
-            " VER={pax.version} MIU={pax.miu} WKS={pax.wks:016b}"\
-            " LTO={pax.lto} LSC={pax.lsc} DPC={pax.dpc}".format(pax=self)
+        s = super(ParameterExchange, self).__str__()
+        if self._version is not None:
+            s += " VER={0}.{1}".format(*self.version)
+        if self._wks is not None:
+            s += " WKS={0:016b}".format(self._wks)
+        if self._miux is not None:
+            s += " MIUX={0}".format(self._miux)
+        if self._lto is not None:
+            s += " LTO={0}".format(self._lto)
+        if self._opt is not None:
+            s += " OPT={0:08b}".format(self._opt)
+        return s
 
 # -----------------------------------------------------------------------------
 #                                                          Aggregated Frame PDU

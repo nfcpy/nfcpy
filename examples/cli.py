@@ -200,26 +200,29 @@ class CommandLineInterface(object):
             title="Peer Mode Options")
         group.add_argument(
             "--miu", type=int, default=2175, metavar='',
-            help="LLCP Link MIU octets (default: %(default)s octets)")
+            help="LLC Link MIU octets (default: %(default)s octets)")
         group.add_argument(
             "--lto", type=int, default=500, metavar='',
-            help="LLCP Link Timeout in ms (default: %(default)s ms)")
+            help="LLC Link Timeout in ms (default: %(default)s ms)")
+        group.add_argument(
+            "--lsc", type=int, choices=range(3), default=3, metavar='',
+            help="LLC Link Service Class (default: %(default)s)")
         group.add_argument(
             "--rwt", type=int, default=8, metavar='',
-            help="response waiting time index (default: %(default)s)")
+            help="DEP Response Waiting Time index (default: %(default)s)")
         group.add_argument(
             "--mode", choices=["t","target","i","initiator"], metavar='',
             help="connect as [t]arget or [i]nitiator (default: both)")
         group.add_argument(
             "--bitrate", type=int, default=424, metavar='',
             choices=(106, 212, 424),
-            help="initiator bitrate 106/212/424 (default: %(default)s)")
+            help="DEP Initiator bitrate 106/212/424 (default: %(default)s)")
         group.add_argument(
             "--passive-only", action="store_true",
             help="only passive mode activation when initiator")
         group.add_argument(
             "--listen-time", type=int, default=250, metavar='',
-            help="target listen time in ms (default: %(default)s ms)")
+            help="DEP Target listen time in ms (default: %(default)s ms)")
         group.add_argument(
             "--no-aggregation", action="store_true",
             help="disable outbound packet aggregation")
@@ -388,9 +391,10 @@ class CommandLineInterface(object):
                 'role': self.options.role,
                 'brs': (106, 212, 424).index(self.options.bitrate),
                 'acm': not self.options.passive_only,
+                'rwt': self.options.rwt,
                 'miu': self.options.miu,
                 'lto': self.options.lto,
-                'rwt': self.options.rwt,
+                'lsc': self.options.lsc,
                 'agf': not self.options.no_aggregation,
                 'sec': not self.options.no_encryption,
             }
