@@ -23,6 +23,7 @@
 import logging
 log = logging.getLogger(__name__)
 
+import struct
 import ctypes
 import ctypes.util
 from ctypes import c_void_p, c_int, c_size_t
@@ -35,6 +36,10 @@ def cipher_suite(name):
         return CipherSuite1()
 
 class CipherSuite1:
+    _ccm_t = 4
+    _ccm_q = 2
+    _ccm_n = 13
+    
     def __init__(self):
         self.random_nonce = None
         self.public_key_x = None
@@ -45,7 +50,7 @@ class CipherSuite1:
             pubkey = ec_key.get_public_key()
             x, y = pubkey.get_affine_coordinates_GFp(ec_key.get_group())
             self.public_key_x, self.public_key_y  = (x, y)
-            self.random_nonce = OpenSSL.RAND.bytes(8)
+            self.random_nonce = OpenSSL.rand_bytes(8)
             self._ec_key = ec_key
 
     def calculate_session_key(self, ecpk, rn_i=None, rn_t=None):
@@ -58,25 +63,66 @@ class CipherSuite1:
         ec_key = OpenSSL.EC_KEY.new_by_curve_name(415)
         ec_key.set_public_key_affine_coordinates(ecpk[:32], ecpk[32:])
         secret = OpenSSL.ECDH(self._ec_key).compute_key(ec_key.get_public_key())
-        cipher = OpenSSL.crypto.EVP_aes_128_cbc()
+        cipher = OpenSSL.EVP_aes_128_cbc()
         k_encr = OpenSSL.CMAC(cipher).init(rn_i+rn_t).update(secret).final()
         log.debug("remote ecpk-x %r", hexlify(ecpk[:32]))
         log.debug("remote ecpk-y %r", hexlify(ecpk[32:]))
         log.debug("shared secret %r", hexlify(secret))
         log.debug("shared nonce  %r", hexlify(rn_i+rn_t))
         log.debug("session key   %r", hexlify(k_encr))
-        self.pcs = self.pcr = 0
+        self._pcs = self._pcr = 0
+        self._k_encr = k_encr
+        return self._k_encr
 
     @property
     def icv_size(self):
-        return 4
+        return self._ccm_t
     
     def encrypt(self, a, p):
-        c = p + bytes(bytearray(4))
+        # The nonce N is constructed as a leftmost 40-bit fixed part
+        # all bits zero and a rightmost 64-bit counter part taken from
+        # PC(S). The final slicing is only needed for test.
+        nonce = struct.pack('!xxxxxQ', self._pcs)[-self._ccm_n:]
+        if self._pcs < 0xFFFFFFFFFFFFFFFF: self._pcs += 1
+        else: raise EncryptError("send counter out of range")
+
+        # from https://wiki.openssl.org/index.php/
+        # EVP_Authenticated_Encryption_and_Decryption#
+        # Authenticated_Encryption_using_CCM_mode
+        evp = OpenSSL.EVP()
+        evp.encrypt_init(OpenSSL.EVP_aes_128_ccm())
+        evp.cipher_ctx.ctrl_set(OpenSSL.EVP.CTRL_CCM_SET_L, self._ccm_q)
+        evp.cipher_ctx.ctrl_set(OpenSSL.EVP.CTRL_CCM_SET_TAG, self._ccm_t)
+        evp.encrypt_init(key=self._k_encr, iv=nonce)
+        evp.encrypt_update(None, None, len(p))
+        evp.encrypt_update(None, bytes(a), len(a))
+        c = evp.encrypt_update(len(p), bytes(p), len(p))
+        c += evp.cipher_ctx.ctrl_get(OpenSSL.EVP.CTRL_CCM_GET_TAG, self._ccm_t)
         return c
 
     def decrypt(self, a, c):
-        p = c[0:-4]
+        # The nonce N is constructed as a leftmost 40-bit fixed part
+        # all bits zero and a rightmost 64-bit counter part taken from
+        # PC(R). The final slicing is only needed for test.
+        nonce = struct.pack('!xxxxxQ', self._pcr)[-self._ccm_n:]
+        if self._pcr < 0xFFFFFFFFFFFFFFFF: self._pcr += 1
+        else: raise EncryptError("recv counter out of range")
+
+        aad = bytes(a)
+        inf = bytes(c[:-self._ccm_t])
+        icv = bytes(c[-self._ccm_t:])
+
+        # from https://wiki.openssl.org/index.php/
+        # EVP_Authenticated_Encryption_and_Decryption#
+        # Authenticated_Decryption_using_CCM_mode
+        evp = OpenSSL.EVP()
+        evp.decrypt_init(OpenSSL.EVP_aes_128_ccm())
+        evp.cipher_ctx.ctrl_set(OpenSSL.EVP.CTRL_CCM_SET_L, self._ccm_q)
+        evp.cipher_ctx.ctrl_set(OpenSSL.EVP.CTRL_CCM_SET_TAG, len(icv), icv)
+        evp.decrypt_init(key=self._k_encr, iv=nonce)
+        evp.decrypt_update(None, None, len(inf))
+        evp.decrypt_update(None, aad, len(aad))
+        p = evp.decrypt_update(len(inf), inf, len(inf))
         return p
 
 class OpenSSLWrapper:
@@ -108,8 +154,26 @@ class OpenSSLWrapper:
         self.crypto.CMAC_Init.restype = c_int
         self.crypto.CMAC_Update.restype = c_int
         self.crypto.CMAC_Final.restype = c_int
+
+        self.crypto.EVP_CIPHER_CTX_new.restype = c_void_p
+        self.crypto.EVP_CIPHER_CTX_init.restype = None
+        self.crypto.EVP_CIPHER_CTX_ctrl.restype = c_int
+        self.crypto.EVP_CIPHER_CTX_free.restype = None
+        
+        self.crypto.EVP_EncryptInit_ex.restype = c_int
+        self.crypto.EVP_EncryptUpdate.restype = c_int
+        self.crypto.EVP_EncryptFinal.restype = c_int
+        self.crypto.EVP_DecryptInit_ex.restype = c_int
+        self.crypto.EVP_DecryptUpdate.restype = c_int
+        self.crypto.EVP_DecryptFinal.restype = c_int
+        
         self.crypto.EVP_aes_128_cbc.restype = c_void_p
         self.crypto.EVP_aes_128_cbc.argtypes = []
+        self.crypto.EVP_aes_128_ccm.restype = c_void_p
+        self.crypto.EVP_aes_128_ccm.argtypes = []
+
+        self.EVP_aes_128_cbc = self.crypto.EVP_aes_128_cbc    
+        self.EVP_aes_128_ccm = self.crypto.EVP_aes_128_ccm
     
     class BIGNUM:
         def __init__(self, bignum, release=False):
@@ -151,14 +215,12 @@ class OpenSSLWrapper:
             if res is None: log.error("BN_bin2bn")
             else: return OpenSSL.BIGNUM(res)
 
-    class RAND:
-        @staticmethod
-        def bytes(num):
-            # int RAND_bytes(unsigned char *buf, int num);
-            buf = ctypes.create_string_buffer(num)
-            res = OpenSSL.crypto.RAND_bytes(buf, c_int(num))
-            if res == 0: log.error("RAND_bytes")
-            return buf.raw if res != 0 else None
+    def rand_bytes(self, num):
+        # int RAND_bytes(unsigned char *buf, int num);
+        buf = ctypes.create_string_buffer(num)
+        res = self.crypto.RAND_bytes(buf, c_int(num))
+        if res == 0: log.error("RAND_bytes")
+        return buf.raw if res != 0 else None
 
     class EC_KEY:
         def __init__(self, ec_key):
@@ -317,6 +379,155 @@ class OpenSSLWrapper:
             assert rc == 1 and maclen.value == 16, "CMAC_Final"
             return macbuf.raw
 
+    class EVP:
+        CTRL_CCM_SET_IVLEN = 0x09
+        CTRL_CCM_GET_TAG = 0x10
+        CTRL_CCM_SET_TAG = 0x11
+        CTRL_CCM_SET_L = 0x14
+
+        class CIPHER_CTX:
+            def __init__(self):
+                # EVP_CIPHER_CTX *EVP_CIPHER_CTX_new(void);
+                self._ctx = OpenSSL.crypto.EVP_CIPHER_CTX_new()
+
+            def __del__(self):
+                # void EVP_CIPHER_CTX_free(EVP_CIPHER_CTX *ctx);
+                OpenSSL.crypto.EVP_CIPHER_CTX_free(self)
+
+            @property
+            def _as_parameter_(self):
+                return c_void_p(self._ctx)
+
+            def init(self):
+                # void EVP_CIPHER_CTX_init(EVP_CIPHER_CTX *ctx);
+                OpenSSL.crypto.EVP_CIPHER_CTX_init(self)
+
+            def ctrl_set(self, op, arg, ptr=None):
+                # int EVP_CIPHER_CTX_ctrl(EVP_CIPHER_CTX *ctx, int type,
+                #                         int arg, void *ptr);
+                r = OpenSSL.crypto.EVP_CIPHER_CTX_ctrl(self, op, arg, ptr)
+                assert r == 1, "EVP_CIPHER_CTX_ctrl"
+
+            def ctrl_get(self, op, arg):
+                # int EVP_CIPHER_CTX_ctrl(EVP_CIPHER_CTX *ctx, int type,
+                #                         int arg, void *ptr);
+                outbuf = ctypes.create_string_buffer(arg)
+                r = OpenSSL.crypto.EVP_CIPHER_CTX_ctrl(self, op, arg, outbuf)
+                assert r == 1, "EVP_CIPHER_CTX_ctrl"
+                return outbuf.raw
+
+        def __init__(self, evp_cipher_ctx=None):
+            if evp_cipher_ctx: self._ctx = evp_cipher_ctx
+            else: self._ctx = OpenSSL.EVP.CIPHER_CTX()
+
+        def __del__(self):
+            pass
+
+        @property
+        def cipher_ctx(self):
+            return self._ctx
+        
+        def encrypt_init(self, evp_cipher=None, key=None, iv=None):
+            # int EVP_EncryptInit_ex(EVP_CIPHER_CTX *ctx,
+            #     const EVP_CIPHER *type, ENGINE *impl,
+            #     unsigned char *key, unsigned char *iv);
+            r = OpenSSL.crypto.EVP_EncryptInit_ex(
+                self._ctx, c_void_p(evp_cipher), None, key, iv)
+            assert r == 1, "EVP_EncryptInit_ex"
+
+        def encrypt_update(self, out_len, message, msg_len=None):
+            # int EVP_EncryptUpdate(EVP_CIPHER_CTX *ctx, unsigned char *out,
+            #     int *outl, unsigned char *in, int inl);
+            if out_len is None:
+                out_buf = None
+                out_len = c_int(0)
+            else:
+                out_buf = ctypes.create_string_buffer(out_len)
+                out_len = c_int(out_len)
+            if msg_len is None:
+                msg_len = len(message)
+            r = OpenSSL.crypto.EVP_EncryptUpdate(
+                self._ctx, out_buf, ctypes.byref(out_len), message, msg_len)
+            assert r == 1, "EVP_EncryptUpdate"
+            return out_buf.raw[0:out_len.value] if out_buf else b''
+        
+        def encrypt_final(self, out_len):
+            # int EVP_EncryptFinal_ex(EVP_CIPHER_CTX *ctx, unsigned char *out,
+            #     int *outl);
+            out_buf = ctypes.create_string_buffer(out_len)
+            out_len = c_int(out_len)
+            r = OpenSSL.crypto.EVP_EncryptFinal(
+                self._ctx, out_buf, ctypes.byref(out_len))
+            assert r == 1, "EVP_EncryptFinal"
+            return out_buf.raw[0:out_len.value] if out_buf else b''
+        
+        def decrypt_init(self, evp_cipher=None, key=None, iv=None):
+            # int EVP_DecryptInit_ex(EVP_CIPHER_CTX *ctx,
+            #     const EVP_CIPHER *type, ENGINE *impl,
+            #     unsigned char *key, unsigned char *iv);
+            r = OpenSSL.crypto.EVP_DecryptInit_ex(
+                self._ctx, c_void_p(evp_cipher), None, key, iv)
+            assert r == 1, "EVP_DecryptInit_ex"
+
+        def decrypt_update(self, out_len, message, msg_len=None):
+            # int EVP_DecryptUpdate(EVP_CIPHER_CTX *ctx, unsigned char *out,
+            #     int *outl, unsigned char *in, int inl);
+            if out_len is None:
+                out_buf = None
+                out_len = c_int(0)
+            else:
+                out_buf = ctypes.create_string_buffer(out_len)
+                out_len = c_int(out_len)
+            if msg_len is None:
+                msg_len = len(message)
+            r = OpenSSL.crypto.EVP_EncryptUpdate(
+                self._ctx, out_buf, ctypes.byref(out_len), message, msg_len)
+            assert r == 1, "EVP_DecryptUpdate"
+            return out_buf.raw[0:out_len.value] if out_buf else b''
+        
+        def decrypt_final(self, out_len):
+            # int EVP_DecryptFinal_ex(EVP_CIPHER_CTX *ctx, unsigned char *out,
+            #     int *outl);
+            out_buf = ctypes.create_string_buffer(out_len)
+            out_len = c_int(out_len)
+            r = OpenSSL.crypto.EVP_DecryptFinal(
+                self._ctx, out_buf, ctypes.byref(out_len))
+            assert r == 1, "EVP_DecryptFinal"
+            return out_buf.raw[0:out_len.value] if out_buf else b''
+        
 libcrypto = ctypes.util.find_library('crypto')
 if libcrypto is not None:
     OpenSSL = OpenSSLWrapper(libcrypto)
+
+if __name__ == "__main__":
+    if OpenSSL:
+        K = bytearray.fromhex("40414243 44454647 48494a4b 4c4d4e4f")
+        N = bytearray.fromhex("10111213 141516")
+        A = bytearray.fromhex("00010203 04050607")
+        P = bytearray.fromhex("20212223")
+        C = bytearray.fromhex("7162015b 4dac255d")
+
+        cs = CipherSuite1()
+        cs._ccm_t, cs._ccm_q, cs._ccm_n = (4, 8, 7)
+        cs._k_encr = bytes(K)
+
+        cs._pcs = struct.unpack('!Q', b'\0'+N)[0]
+        if C == cs.encrypt(A, P):
+            print("NIST SP800-38C Example Vector 1 passed 1st encrypt")
+
+        cs._pcs = struct.unpack('!Q', b'\0'+N)[0]
+        if C == cs.encrypt(A, P):
+            print("NIST SP800-38C Example Vector 1 passed 2nd encrypt")
+
+        cs._pcr = struct.unpack('!Q', b'\0'+N)[0]
+        if P == cs.decrypt(A, C):
+            print("NIST SP800-38C Example Vector 1 passed 1st decrypt")
+        
+        cs._pcr = struct.unpack('!Q', b'\0'+N)[0]
+        if P == cs.decrypt(A, C):
+            print("NIST SP800-38C Example Vector 1 passed 2nd decrypt")
+
+        p = bytearray(0)
+        if p == cs.decrypt(A, cs.encrypt(A, p)):
+            print("Zero-length data passed encrypt/decrypt")
+        
