@@ -110,8 +110,8 @@ class Parameter:
 class ProtocolDataUnit(object):
     def __init__(self, ptype, dsap, ssap):
         self.ptype = ptype
-        self.dsap = dsap
-        self.ssap = ssap
+        self.dsap = int(dsap)
+        self.ssap = int(ssap)
 
     @staticmethod
     def decode_header(data, offset=0, size=None):
@@ -571,8 +571,8 @@ class FrameReject(ProtocolDataUnit):
     def __init__(self, dsap, ssap, flags=0, ptype=0,
                  ns=0, nr=0, vs=0, vr=0, vsa=0, vra=0):
         super(FrameReject, self).__init__(0b1000, dsap, ssap)
-        self.flags = flags
-        self.ptype = ptype
+        self.rej_flags = flags
+        self.rej_ptype = ptype
         self.ns = ns
         self.nr = nr
         self.vs = vs
@@ -584,7 +584,7 @@ class FrameReject(ProtocolDataUnit):
     def decode(cls, data, offset, size):
         if size != 6: raise DecodeError("FRMR PDU length error")
         dsap, ssap = cls.decode_header(data, offset, size)
-        (b0, b1, b2, b3) = struct.unpack_from('!BBBB', data, offset)
+        (b0, b1, b2, b3) = struct.unpack_from('!BBBB', data, offset+2)
         flags, ptype = b0 >> 4, b0 & 15
         ns,    nr    = b1 >> 4, b1 & 15
         vs,    vr    = b2 >> 4, b2 & 15
@@ -593,11 +593,9 @@ class FrameReject(ProtocolDataUnit):
 
     @staticmethod
     def from_pdu(pdu, flags, dlc):
-        frmr = FrameReject(pdu.ssap, pdu.dsap, ptype=pdu.ptype)
-        if "W" in flags: frmr.flags |= 0b1000
-        if "I" in flags: frmr.flags |= 0b0100
-        if "R" in flags: frmr.flags |= 0b0010
-        if "S" in flags: frmr.flags |= 0b0001
+        rej_ptype = pdu.ptype
+        rej_flags = sum([1 << "SRIW".index(f) for f in flags])
+        frmr = FrameReject(pdu.ssap, pdu.dsap, rej_flags, rej_ptype)
         if isinstance(pdu, Information):
             frmr.ns, frmr.nr = pdu.ns, pdu.nr
         if isinstance(pdu, ReceiveReady) or isinstance(pdu, ReceiveNotReady):
@@ -607,17 +605,17 @@ class FrameReject(ProtocolDataUnit):
         return frmr
 
     def encode(self):
-        data = self.encode_header() + struct.pack(
-            '!BBBB', self.flags<<4|self.ptype, self.ns<<4|self.nr,
+        return self.encode_header() + struct.pack(
+            '!BBBB', self.rej_flags<<4|self.rej_ptype, self.ns<<4|self.nr,
             self.vs<<4|self.vr, self.vsa<<4|self.vra)
-        return data
         
     def __len__(self):
         return 6
 
     def __str__(self):
         return super(FrameReject, self).__str__() +\
-            " FLAGS={frmr.flags:04b} N(S)={frmr.ns} N(R)={frmr.nr}"\
+            " FLAGS={frmr.rej_flags:04b} PTYPE={frmr.rej_ptype}"\
+            " N(S)={frmr.ns} N(R)={frmr.nr}"\
             " V(S)={frmr.vs} V(R)={frmr.vr}"\
             " V(SA)={frmr.vsa} V(RA)={frmr.vra}"\
             .format(frmr=self)

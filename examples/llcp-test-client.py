@@ -780,8 +780,7 @@ class TestProgram(CommandLineInterface):
             addr = dlc_socket.getsockname()
             peer = dlc_socket.getpeername()
             info("connected with sap {0}".format(peer))
-            pdu = nfc.llcp.pdu.Information(peer, addr, "wrong N(S)")
-            pdu.ns, pdu.nr = 15, 0
+            pdu = nfc.llcp.pdu.Information(peer, addr, 15, 0, "wrong N(S)")
             raw_socket.send(pdu)
             dlc_socket.recv()
         except nfc.llcp.Error as e:
