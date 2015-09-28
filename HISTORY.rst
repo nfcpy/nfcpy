@@ -1,6 +1,17 @@
 Changelog for nfcpy
 ===================
 
+0.10.1 (2015-09-28)
+-------------------
+
+* Issue warning when nfc/clf/pn53x.py is atttempted to be used as a
+  driver (since version 0.10 pn53x contains only an abstract base
+  class, drivers are in pn531.py/pn532.py/pn533.py).
+
+* Fixed an issue with PN532 deactivation - the chip needs additional
+  time after change of serial baudrate before the next command may be
+  send.
+
 0.10.0 (2015-07-27)
 -------------------
 

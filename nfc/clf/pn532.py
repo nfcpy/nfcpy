@@ -148,6 +148,7 @@ class Chipset(pn53x.Chipset):
         br = (9600,19200,38400,57600,115200,230400,460800,921600,1288000)
         self.command(0x10, chr(br.index(baudrate)), timeout=0.1)
         self.write_frame(self.ACK)
+        time.sleep(0.001)
 
     def sam_configuration(self, mode, timeout=0, irq=False):
         mode = ("normal", "virtual", "wired", "dual").index(mode) + 1
