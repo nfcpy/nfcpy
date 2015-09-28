@@ -316,7 +316,7 @@ class USB(object):
         if self.usb_inp is not None:
             while timeout is None or timeout > 0:
                 try:
-                    poll_wait = 500 if timeout is None else min(500, timeout)
+                    poll_wait = 444 if timeout is None else min(500, timeout)
                     frame = self.usb_dev.bulkRead(self.usb_inp, 300, poll_wait)
                 except self.usb.USBError as error:
                     if str(error) != "Connection timed out":
