@@ -44,8 +44,7 @@ class CipherSuite1:
         self.random_nonce = None
         self.public_key_x = None
         self.public_key_y = None
-        # 415: NID_X9_62_prime256v1 (NIST Curve P-256)
-        ec_key = OpenSSL.EC_KEY.new_by_curve_name(415)
+        ec_key = OpenSSL.EC_KEY.new_by_curve_name(OpenSSL.NID_X9_62_prime256v1)
         if ec_key and ec_key.generate_key() and ec_key.check_key():
             pubkey = ec_key.get_public_key()
             x, y = pubkey.get_affine_coordinates_GFp(ec_key.get_group())
@@ -126,6 +125,8 @@ class CipherSuite1:
         return p
 
 class OpenSSLWrapper:
+    NID_X9_62_prime256v1 = 415 # NIST Curve P-256
+    
     def __init__(self, libcrypto):
         self.crypto = ctypes.CDLL(libcrypto)
         self.crypto.BN_new.restype = c_void_p
