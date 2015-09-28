@@ -172,31 +172,31 @@ class RawAccessPoint(TransmissionControlObject):
 
     def setsockopt(self, option, value):
         if self.state.SHUTDOWN:
-            raise err.Error(errno.EBADF)
+            raise err.Error(errno.ESHUTDOWN)
         super(RawAccessPoint, self).setsockopt(option, value)
 
     def getsockopt(self, option):
         if self.state.SHUTDOWN:
-            raise err.Error(errno.EBADF)
+            raise err.Error(errno.ESHUTDOWN)
         return super(RawAccessPoint, self).getsockopt(option)
 
     def poll(self, event, timeout):
         if self.state.SHUTDOWN:
-            raise err.Error(errno.EBADF)
+            raise err.Error(errno.ESHUTDOWN)
         if not event in ("recv", "send"):
             raise err.Error(errno.EINVAL)
         return super(RawAccessPoint, self).poll(event, timeout) is not None
         
     def send(self, send_pdu, flags):
         if self.state.SHUTDOWN:
-            raise err.Error(errno.EBADF)
+            raise err.Error(errno.ESHUTDOWN)
         log.debug("{0} send {1}".format(str(self), send_pdu))
         super(RawAccessPoint, self).send(send_pdu, flags)
         return self.state.ESTABLISHED == True
 
     def recv(self):
         if self.state.SHUTDOWN:
-            raise err.Error(errno.EBADF)
+            raise err.Error(errno.ESHUTDOWN)
         try: return super(RawAccessPoint, self).recv()
         except IndexError: raise err.Error(errno.EPIPE)
 
@@ -235,31 +235,31 @@ class LogicalDataLink(TransmissionControlObject):
 
     def setsockopt(self, option, value):
         if self.state.SHUTDOWN:
-            raise err.Error(errno.EBADF)
+            raise err.Error(errno.ESHUTDOWN)
         super(LogicalDataLink, self).setsockopt(option, value)
 
     def getsockopt(self, option):
         if self.state.SHUTDOWN:
-            raise err.Error(errno.EBADF)
+            raise err.Error(errno.ESHUTDOWN)
         return super(LogicalDataLink, self).getsockopt(option)
 
     def connect(self, dest):
         if self.state.SHUTDOWN:
-            raise err.Error(errno.EBADF)
+            raise err.Error(errno.ESHUTDOWN)
         with self.lock:
             self.peer = dest
             return self.peer > 0
 
     def poll(self, event, timeout):
         if self.state.SHUTDOWN:
-            raise err.Error(errno.EBADF)
+            raise err.Error(errno.ESHUTDOWN)
         if not event in ("recv", "send"):
             raise err.Error(errno.EINVAL)
         return super(LogicalDataLink, self).poll(event, timeout) is not None
         
     def sendto(self, message, dest, flags):
         if self.state.SHUTDOWN:
-            raise err.Error(errno.EBADF)
+            raise err.Error(errno.ESHUTDOWN)
         if self.peer and dest != self.peer:
             raise err.Error(errno.EDESTADDRREQ)
         if len(message) > self.send_miu:
@@ -270,7 +270,7 @@ class LogicalDataLink(TransmissionControlObject):
 
     def recvfrom(self):
         if self.state.SHUTDOWN:
-            raise err.Error(errno.EBADF)
+            raise err.Error(errno.ESHUTDOWN)
         try:
             rcvd_pdu = super(LogicalDataLink, self).recv()
         except IndexError:
@@ -376,7 +376,7 @@ class DataLinkConnection(TransmissionControlObject):
     def listen(self, backlog):
         with self.lock:
             if self.state.SHUTDOWN:
-                raise err.Error(errno.EBADF)
+                raise err.Error(errno.ESHUTDOWN)
             if not self.state.CLOSED:
                 self.err("listen() but socket state is {0}".format(self.state))
                 raise RuntimeError # should raise err.Error(errno.E???)
@@ -386,7 +386,7 @@ class DataLinkConnection(TransmissionControlObject):
     def accept(self):
         with self.lock:
             if self.state.SHUTDOWN:
-                raise err.Error(errno.EBADF)
+                raise err.Error(errno.ESHUTDOWN)
             if not self.state.LISTEN:
                 self.err("accept() but socket state is {0}".format(self.state))
                 raise err.Error(errno.EINVAL)
@@ -509,7 +509,7 @@ class DataLinkConnection(TransmissionControlObject):
 
     def poll(self, event, timeout):
         if self.state.SHUTDOWN:
-            raise err.Error(errno.EBADF)
+            raise err.Error(errno.ESHUTDOWN)
         if not event in ("recv", "send", "acks"):
             raise err.Error(errno.EINVAL)
         

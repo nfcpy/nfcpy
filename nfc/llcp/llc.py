@@ -237,6 +237,10 @@ class LogicalLinkController(object):
             miu=self.cfg.get('send-miu'), lto=self.cfg.get('recv-lto'))
         return "LLC: {local} {remote}".format(local=local, remote=remote)
 
+    @property
+    def secure_data_transfer(self):
+        return self.cfg.get('llcp-dpc', 0) == 1
+    
     def activate(self, mac, **options):
         assert type(mac) in (nfc.dep.Initiator, nfc.dep.Target)
         self.mac = None
@@ -355,10 +359,10 @@ class LogicalLinkController(object):
                     log.error("expected a DPS PDU response")
                     return self.terminate(reason="key agreement error")
                 if not (rcvd_dps.ecpk and len(rcvd_dps.ecpk) == 64):
-                    log.error("absent or invalid ECPK parameter")
+                    log.error("absent or invalid ECPK parameter in DPS PDU")
                     return self.terminate(reason="key agreement error")
                 if not (rcvd_dps.rn and len(rcvd_dps.rn) == 8):
-                    log.error("absent or invalid RN parameter")
+                    log.error("absent or invalid RN parameter in DPS PDU")
                     return self.terminate(reason="key agreement error")
                 cipher.calculate_session_key(rcvd_dps.ecpk, rn_t=rcvd_dps.rn)
                 self.sec = cipher
@@ -379,11 +383,20 @@ class LogicalLinkController(object):
             else:
                 self.terminate(reason="local choice")
         except KeyboardInterrupt:
-            print # move to new line
+            print() # move to new line
             self.terminate(reason="local choice")
             raise KeyboardInterrupt
         except IOError:
             self.terminate(reason="input/output error")
+            raise SystemExit
+        except sec.KeyError:
+            self.terminate(reason="key agreement error")
+            raise SystemExit
+        except sec.DecryptError:
+            self.terminate(reason="decryption error")
+            raise SystemExit
+        except sec.EncryptError:
+            self.terminate(reason="encryption error")
             raise SystemExit
         finally:
             log.debug("llc run loop terminated on initiator")
@@ -405,10 +418,10 @@ class LogicalLinkController(object):
                     log.error("expected a DPS PDU request")
                     return self.terminate(reason="key agreement error")
                 if not (rcvd_dps.ecpk and len(rcvd_dps.ecpk) == 64):
-                    log.error("absent or invalid ECPK parameter")
+                    log.error("absent or invalid ECPK parameter in DPS PDU")
                     return self.terminate(reason="key agreement error")
                 if not (rcvd_dps.rn and len(rcvd_dps.rn) == 8):
-                    log.error("absent or invalid RN parameter")
+                    log.error("absent or invalid RN parameter in DPS PDU")
                     return self.terminate(reason="key agreement error")
                 rcvd_pdu = self.exchange(send_dps, recv_timeout)
                 cipher.calculate_session_key(rcvd_dps.ecpk, rn_i=rcvd_dps.rn)
@@ -431,11 +444,20 @@ class LogicalLinkController(object):
             else:
                 self.terminate(reason="local choice")
         except KeyboardInterrupt:
-            print # move to new line
+            print() # move to new line
             self.terminate(reason="local choice")
             raise KeyboardInterrupt
         except IOError:
             self.terminate(reason="input/output error")
+            raise SystemExit
+        except sec.KeyError:
+            self.terminate(reason="key agreement error")
+            raise SystemExit
+        except sec.DecryptError:
+            self.terminate(reason="decryption error")
+            raise SystemExit
+        except sec.EncryptError:
+            self.terminate(reason="encryption error")
             raise SystemExit
         finally:
             log.debug("llc run loop terminated on target")
