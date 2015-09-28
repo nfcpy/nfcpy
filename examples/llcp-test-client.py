@@ -70,12 +70,6 @@ class TestProgram(CommandLineInterface):
             parser, groups="test llcp dbg clf")
 
     def on_llcp_startup(self, llc):
-        if len(self.options.test) > 1:
-            for t in (16,):
-                if t in self.options.test:
-                    info("Test %d can only be run in single test mode" % t)
-                    i = self.options.test.index(t)
-                    self.options.test[i:i+1] = []
         return super(TestProgram, self).on_llcp_startup(llc)
         
     def test_01(self, llc):
