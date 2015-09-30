@@ -34,75 +34,104 @@ class Parameter:
     
     @staticmethod
     def decode(data, offset, size):
-        (T, L) = struct.unpack_from('!BB', data, offset)
         try:
-            assert L <= size - 2, "TLV length error for T=%d" % T
+            (T, L) = struct.unpack_from('!BB', data, offset)
+        except struct.error as error:
+            msg = " while decoding TLV %r" % hexlify(data[offset:])
+            raise DecodeError(str(error) + msg)
+        if L > size - 2:
+            raise DecodeError("TLV length error for T=%d" % T)
+        try:
             if T == Parameter.VERSION:
-                assert L == 1, "VERSION TLV length error"
+                if L != 1:
+                    raise DecodeError("VERSION TLV length error")
                 (version,) = struct.unpack_from('!B', data, offset+2)
                 return (T, L, version)
             if T == Parameter.MIUX:
-                assert L == 2, "MIUX TLV length error"
+                if L != 2:
+                    raise DecodeError("MIUX TLV length error")
                 (miux,) = struct.unpack_from('!H', data, offset+2)
-                if miux & 0xF800: log.warn("MIUX TLV reserved bits set")
+                if miux & 0xF800:
+                    log.warn("MIUX TLV reserved bits set")
                 return (T, L, miux & 0x07FF)
             if T == Parameter.WKS:
-                assert L == 2, "WKS TLV length error"
+                if L != 2:
+                    raise DecodeError("WKS TLV length error")
                 (wks,) = struct.unpack_from('!H', data, offset+2)
                 return (T, L, wks)
             if T == Parameter.LTO:
-                assert L == 1, "LTO TLV length error"
+                if L != 1:
+                    raise DecodeError("LTO TLV length error")
                 (lto,) = struct.unpack_from('!B', data, offset+2)
                 return (T, L, lto)
             if T == Parameter.RW:
-                assert L == 1, "RW TLV length error"
+                if L != 1:
+                    raise DecodeError("RW TLV length error")
                 (rw,) = struct.unpack_from('!B', data, offset+2)
-                if rw & 0xF0: log.warn("RW TLV reserved bits set")
-                return (T, L, rw)
+                if rw & 0xF0:
+                    log.warn("RW TLV reserved bits set")
+                return (T, L, rw & 0x0F)
             if T == Parameter.SN:
                 if L == 0: log.warn("SN TLV with zero-length service name")
                 return (T, L, bytes(data[offset+2:offset+2+L]))
             if T == Parameter.OPT:
-                assert L == 1, "OPT TLV length error"
+                if L != 1:
+                    raise DecodeError("OPT TLV length error")
                 (opt,) = struct.unpack_from('!B', data, offset+2)
-                if opt & 0xF8: log.warn("OPT TLV reserved bits set")
-                return (T, L, opt)
+                if opt & 0xF8:
+                    log.warn("OPT TLV reserved bits set")
+                return (T, L, opt & 0x07)
             if T == Parameter.SDREQ:
+                if L == 0:
+                    raise DecodeError("SDREQ TLV length error")
+                if L == 1:
+                    log.warn("SDREQ TLV with zero-length service name")
                 (tid, sn) = struct.unpack_from('!B%ds'%(L-1), data, offset+2)
                 return (T, L, (tid, sn))
             if T == Parameter.SDRES:
-                assert L == 2, "SDRES TLV length error"
+                if L != 2:
+                    raise DecodeError("SDRES TLV length error")
                 (tid, sap) = struct.unpack_from('!BB', data, offset+2)
                 return (T, L, (tid, sap))
             if T == Parameter.ECPK:
-                if L == 0: log.warn("ECPK TLV with zero-length value")
-                if L & 1: log.warn("ECPK TLV with odd length value")
+                if L == 0:
+                    log.warn("ECPK TLV with zero-length value")
+                if L & 1:
+                    log.warn("ECPK TLV with odd length value")
                 return (T, L, bytes(data[offset+2:offset+2+L]))
             if T == Parameter.RN:
-                if L == 0: log.warn("RN TLV with zero-length value")
+                if L == 0:
+                    log.warn("RN TLV with zero-length value")
                 return (T, L, bytes(data[offset+2:offset+2+L]))
-        except AssertionError as error:
-            raise DecodeError(str(error))
+            return (T, L, bytes(data[offset+2:offset+2+L]))
+        except struct.error as error:
+            msg = " while decoding TLV %r" % hexlify(data[offset:])
+            raise DecodeError(str(error) + msg)
 
     @staticmethod
     def encode(T, V):
-        if T in (Parameter.VERSION,Parameter.LTO,Parameter.RW,Parameter.OPT):
-            return struct.pack('!BBB', T, 1, V)
-        if T in (Parameter.MIUX,Parameter.WKS):
-            return struct.pack('!BBH', T, 2, V)
-        if T in (Parameter.SN,Parameter.ECPK,Parameter.RN):
-            if len(V) > 255:
-                raise EncodeError("can't encode TLV %r" % (T, len(V), V))
-            return struct.pack('!BB', T, len(V)) + bytes(V)
-        if T == Parameter.SDREQ:
-            tid, sn = V[0], V[1]
-            if len(sn) > 254:
-                raise EncodeError("can't encode TLV %r" % (T, len(V), V))
-            return struct.pack('!BBB', T, 1+len(sn), tid) + bytes(sn)
-        if T == Parameter.SDRES:
-            tid, sap = V[0], V[1]
-            return struct.pack('!BBBB', T, 2, tid, sap)
-        raise EncodeError("unknown TLV %r" % (T, len(V), V))
+        try:
+            if T in (Parameter.VERSION, Parameter.LTO,
+                     Parameter.RW, Parameter.OPT):
+                return struct.pack('!BBB', T, 1, V)
+            if T in (Parameter.MIUX, Parameter.WKS):
+                return struct.pack('!BBH', T, 2, V)
+            if T in (Parameter.SN, Parameter.ECPK, Parameter.RN):
+                if len(V) > 255:
+                    raise EncodeError("can't encode TLV T=%d, V=%r" % (T, V))
+                return struct.pack('!BB', T, len(V)) + bytes(V)
+            if T == Parameter.SDREQ:
+                tid, sn = V[0], V[1]
+                if len(sn) > 254:
+                    raise EncodeError("can't encode TLV T=%d, V=%r" % (T, V))
+                return struct.pack('!BBB', T, 1+len(sn), tid) + bytes(sn)
+            if T == Parameter.SDRES:
+                tid, sap = V[0], V[1]
+                return struct.pack('!BBBB', T, 2, tid, sap)
+            raise EncodeError("unknown TLV T=%d, V=%r" % (T, V))
+        except struct.error as error:
+            msg = " for TLV T=%d, V=%r" % (T, V)
+            raise EncodeError(str(error) + msg)
 
 # -----------------------------------------------------------------------------
 #                                                   ProtocolDataUnit Base Class
