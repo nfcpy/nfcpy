@@ -257,22 +257,21 @@ class LogicalLinkController(object):
         if self.cfg['llcp-sec']:
             send_pax.dpc = 1
 
-        if type(mac) == nfc.dep.Initiator:
-            gb = mac.activate(gbi='Ffm'+pdu.encode(send_pax)[2:], **options)
+        gb = b'Ffm' + pdu.encode(send_pax)[2:]
+        if isinstance(mac, nfc.dep.Initiator):
+            gb = mac.activate(gbi=gb, **options)
             self.run = self.run_as_initiator
-            role = "Initiator"
-
-        if type(mac) == nfc.dep.Target:
-            gb = mac.activate(gbt='Ffm'+pdu.encode(send_pax)[2:], **options)
+        elif isinstance(mac, nfc.dep.Target):
+            gb = mac.activate(gbt=gb, **options)
             self.run = self.run_as_target
-            role = "Target"
+        else: gb = None
 
-        if gb is not None and gb.startswith('Ffm') and len(gb) >= 6:
+        if gb and gb.startswith('Ffm') and len(gb) >= 6:
             if type(mac) == nfc.dep.Target and mac.rwt >= send_pax.lto*1E3:
                 msg = "local NFC-DEP RWT {0:.3f} contradicts LTO {1:.3f} sec"
                 log.warning(msg.format(mac.rwt, send_pax.lto*1E3))
 
-            rcvd_pax = pdu.decode("\x00\x40"+str(gb[3:]))
+            rcvd_pax = pdu.decode(b"\x00\x40" + bytes(gb[3:]))
             
             log.debug("SENT {0}".format(send_pax))
             log.debug("RCVD {0}".format(rcvd_pax))
@@ -284,8 +283,8 @@ class LogicalLinkController(object):
             self.cfg['send-lsc'] = rcvd_pax.lsc
             self.cfg['llcp-dpc'] = rcvd_pax.dpc if self.cfg['llcp-sec'] else 0
             log.debug("llc cfg {0}".format(self.cfg))
-            
-            log.info('\n'.join([
+
+            info = '\n'.join([
                 "LLCP Link established as NFC-DEP {role}",
                 "Local LLCP Settings",
                 "  LLCP Version: {send_pax.version_text}",
@@ -300,10 +299,11 @@ class LogicalLinkController(object):
                 "  Max Inf Unit: {rcvd_pax.miu} octet",
                 "  Link Service: {rcvd_pax.lsc_text}",
                 "  Data Protect: {rcvd_pax.dpc_text}",
-                "  Service List: {rcvd_pax.wks:016b} ({rcvd_pax.wks_text})"])
-                     .format(role=role,send_pax=send_pax,rcvd_pax=rcvd_pax))
+                "  Service List: {rcvd_pax.wks:016b} ({rcvd_pax.wks_text})"
+            ]).format(role=mac.role, send_pax=send_pax, rcvd_pax=rcvd_pax)
+            log.info(info)
 
-            if type(mac) == nfc.dep.Initiator and mac.rwt is not None:
+            if isinstance(mac, nfc.dep.Initiator) and mac.rwt is not None:
                 max_rwt = 4096/13.56E6 * 2**10
                 if mac.rwt > max_rwt:
                     msg = "remote NFC-DEP RWT {0:.3f} exceeds max {1:.3f} sec"
@@ -329,6 +329,12 @@ class LogicalLinkController(object):
                 self.sap[i] = None
         
     def exchange(self, send_pdu, timeout):
+        # Send and receive one protocol data unit. The send_pdu is
+        # None for the first call when running as target (because the
+        # target first receives a pdu). All PDUs except SYMM are
+        # logged with debug level, SYMM is logged with DEBUG-1 so that
+        # it must be explicitely enabled. The return value is either a
+        # PDU instance or None.
         try:
             loglevel = logging.DEBUG - int(isinstance(send_pdu, pdu.Symmetry))
             log.log(loglevel, "SEND {0}".format(send_pdu))
@@ -344,10 +350,10 @@ class LogicalLinkController(object):
 
     def run_as_initiator(self, terminate=lambda: False):
         recv_timeout = 1E-3 * (self.cfg['recv-lto'] + 10)
-        msg = "starting initiator run loop with a timeout of {0:.3f} sec"
-        log.debug(msg.format(recv_timeout))
+        msg = "starting initiator run loop with a receive timeout of %.3f sec"
+        log.debug(msg, recv_timeout)
 
-        symm = 0
+        symm = 0 # counts the number of consecutive SYMM PDUs
         try:
             if self.cfg['llcp-dpc'] == 1:
                 cipher = sec.cipher_suite("ECDH_anon_WITH_AEAD_AES_128_CCM_4")
@@ -375,7 +381,7 @@ class LogicalLinkController(object):
                     return self.terminate(reason="link disruption")
                 if rcvd_pdu == pdu.Disconnect(0, 0):
                     return self.terminate(reason="remote choice")
-                symm += 1 if type(rcvd_pdu) == pdu.Symmetry else 0
+                symm += 1 if rcvd_pdu.name == "SYMM" else 0
                 self.dispatch(rcvd_pdu)
                 send_pdu = self.collect(delay=0.001)
                 if send_pdu is None and symm >= 10:
@@ -403,10 +409,10 @@ class LogicalLinkController(object):
 
     def run_as_target(self, terminate=lambda: False):
         recv_timeout = 1E-3 * (self.cfg['recv-lto'] + 10)
-        msg = "starting target run loop with a timeout of {0:.3f} sec"
-        log.debug(msg.format(recv_timeout))
+        msg = "starting target run loop with a receive timeout of %.3f sec"
+        log.debug(msg, recv_timeout)
         
-        symm = 0
+        symm = 0 # counts the number of consecutive SYMM PDUs
         try:
             if self.cfg['llcp-dpc'] == 1:
                 cipher = sec.cipher_suite("ECDH_anon_WITH_AEAD_AES_128_CCM_4")
