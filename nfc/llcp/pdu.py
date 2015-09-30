@@ -39,8 +39,6 @@ class Parameter:
         except struct.error as error:
             msg = " while decoding TLV %r" % hexlify(data[offset:])
             raise DecodeError(str(error) + msg)
-        if L > size - 2:
-            raise DecodeError("TLV length error for T=%d" % T)
         try:
             if T == Parameter.VERSION:
                 if L != 1:
@@ -234,8 +232,8 @@ class ParameterExchange(ProtocolDataUnit):
     @classmethod
     def decode(cls, data, offset, size):
         dsap, ssap = cls.decode_header(data, offset, size)
-        if dsap != 0: raise DecodeError("PAX PDU DSAP must be zero")
-        if ssap != 0: raise DecodeError("PAX PDU SSAP must be zero")
+        if dsap != 0 or ssap != 0:
+            raise DecodeError("SSAP and DSAP must be 0 in PAX PDU")
         pax_pdu = ParameterExchange(dsap, ssap)
         offset, size = offset + 2, size - 2
         while size >= 2:
@@ -245,7 +243,7 @@ class ParameterExchange(ProtocolDataUnit):
             elif T == Parameter.WKS: pax_pdu._wks = V
             elif T == Parameter.LTO: pax_pdu._lto = V
             elif T == Parameter.OPT: pax_pdu._opt = V
-            else: log.debug("unknown TLV %r in PAX PDU", (T, L, V))
+            else: log.warn("invalid TLV %r in PAX PDU", (T, L, V))
             offset, size = offset + 2 + L, size - 2 - L
         return pax_pdu
     
@@ -274,7 +272,7 @@ class ParameterExchange(ProtocolDataUnit):
     @property
     def version(self):
         version = self._version
-        return (version>>4, version&15) if version is not None else (0, 0)
+        return (version>>4, version&15) if version else (0, 0)
     
     @version.setter
     def version(self, value):
@@ -371,12 +369,15 @@ class AggregatedFrame(ProtocolDataUnit):
     @classmethod
     def decode(cls, data, offset, size):
         dsap, ssap = cls.decode_header(data, offset, size)
-        if dsap != 0: raise DecodeError("AGF PDU DSAP must be zero")
-        if ssap != 0: raise DecodeError("AGF PDU SSAP must be zero")
+        if dsap != 0 or ssap != 0:
+            raise DecodeError("SSAP and DSAP must be 0 in AGF PDU")
         agf_pdu = AggregatedFrame(dsap, ssap)
         offset, size = offset + 2, size - 2
         while size > 0:
-            (pdu_size,) = struct.unpack_from('!H', data, offset)
+            try:
+                (pdu_size,) = struct.unpack_from('!H', data, offset)
+            except struct.error:
+                raise DecodeError("aggregated PDU length field error in AGF")
             agf_pdu.append(decode(data, offset+2, pdu_size))
             offset, size = offset + 2 + pdu_size, size - 2 - pdu_size
         return agf_pdu
@@ -463,7 +464,7 @@ class Connect(ProtocolDataUnit):
             if T == Parameter.MIUX: connect_pdu.miu = 128 + V
             elif T == Parameter.RW: connect_pdu.rw = V
             elif T == Parameter.SN: connect_pdu.sn = str(V)
-            else: log.debug("unknown TLV %r in CONNECT PDU", (T, L, V))
+            else: log.warn("invalid TLV %r in CONNECT PDU", (T, L, V))
             offset, size = offset + 2 + L, size - 2 - L
         return connect_pdu
     
@@ -531,7 +532,7 @@ class ConnectionComplete(ProtocolDataUnit):
             T, L, V = Parameter.decode(data, offset, size)
             if T == Parameter.MIUX: cc_pdu.miu = 128 + V
             elif T == Parameter.RW: cc_pdu.rw = V
-            else: log.debug("unknown TLV %r in CC PDU", (T, L, V))
+            else: log.warn("invalid TLV %r in CC PDU", (T, L, V))
             offset, size = offset + 2 + L, size - 2 - L
         return cc_pdu
     
@@ -579,6 +580,7 @@ class DisconnectedMode(ProtocolDataUnit):
         return super(DisconnectedMode, self).__str__() + \
             " REASON={dm.reason:02x}h".format(dm=self)
 
+    @property
     def reason_text(self):
         return {
             0x00: "disconnected",
@@ -655,21 +657,23 @@ class FrameReject(ProtocolDataUnit):
 class ServiceNameLookup(ProtocolDataUnit):
     name = "SNL"
     
-    def __init__(self, dsap, ssap):
+    def __init__(self, dsap, ssap, sdreq=None, sdres=None):
         super(ServiceNameLookup, self).__init__(0b1001, dsap, ssap)
-        self.sdreq = list()
-        self.sdres = list()
+        self.sdreq = sdreq if sdreq else list()
+        self.sdres = sdres if sdres else list()
 
     @classmethod
     def decode(cls, data, offset, size):
         dsap, ssap = cls.decode_header(data, offset, size)
+        if dsap != 1 or ssap != 1:
+            raise DecodeError("SSAP and DSAP must be 1 in SNL PDU")
         snl_pdu = ServiceNameLookup(dsap, ssap)
         offset, size = offset + 2, size - 2
         while size >= 2:
             T, L, V = Parameter.decode(data, offset, size)
             if T == Parameter.SDREQ: snl_pdu.sdreq.append(V)
             elif T == Parameter.SDRES: snl_pdu.sdres.append(V)
-            else: log.debug("unknown TLV %r in SNL PDU", (T, L, V))
+            else: log.warn("invalid TLV %r in SNL PDU", (T, L, V))
             offset, size = offset + 2 + L, size - 2 - L
         return snl_pdu
     
@@ -703,6 +707,8 @@ class DataProtectionSetup(ProtocolDataUnit):
     @classmethod
     def decode(cls, data, offset, size):
         dsap, ssap = cls.decode_header(data, offset, size)
+        if dsap != 0 or ssap != 0:
+            raise DecodeError("SSAP and DSAP must be 0 in DPS PDU")
         dps_pdu = DataProtectionSetup(dsap, ssap)
         offset, size = offset + 2, size - 2
         while size >= 2:
@@ -799,7 +805,7 @@ class ReceiveNotReady(NumberedProtocolDataUnit):
 # -----------------------------------------------------------------------------
 class UnknownProtocolDataUnit(ProtocolDataUnit):
     def __init__(self, ptype, dsap, ssap, payload):
-        super(ProtocolDataUnit, self).__init__(ptype, dsap, ssap)
+        super(UnknownProtocolDataUnit, self).__init__(ptype, dsap, ssap)
         self.name = "{0:04b}".format(ptype)
         self.payload = payload
 
@@ -814,8 +820,7 @@ class UnknownProtocolDataUnit(ProtocolDataUnit):
         return self.encode_header() + bytes(self.payload)
 
     def __len__(self):
-        return (super(UnknownProtocolDataUnit, self).__len__()
-                + len(self.payload))
+        return 2 + len(self.payload)
 
     def __str__(self):
         return (super(UnknownProtocolDataUnit, self).__str__()

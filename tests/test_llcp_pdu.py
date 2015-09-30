@@ -4,6 +4,10 @@ sys.path.insert(1, os.path.split(sys.path[0])[0])
 import nfc.llcp.pdu
 from nose.tools import raises
 
+# -----------------------------------------------------------------------------
+# PDU Parameter Tests
+# -----------------------------------------------------------------------------
+
 def check_bv_decode_tlv(data, offset, size, T, L, V):
     data = bytearray.fromhex(data)
     t, l, v = nfc.llcp.pdu.Parameter.decode(data, offset, size)
@@ -25,7 +29,10 @@ def test_bv_decode_tlv():
         yield check_bv_decode_tlv, data, offset, size, T, L, V
 
 def test_bi_decode_tlv():
-    test_vector = (("01", 0, 1), ("0101", 0, 1), ("0001", 0, 2))
+    test_vector = (
+        ("01", 0, 1),
+        ("0101", 0, 2),
+    )
     for data, offset, size in test_vector:
         yield check_bi_decode_tlv, data, offset, size
 
@@ -283,4 +290,456 @@ def test_bi_encode_tlv_rn():
     test_vector = ((11, bytes(bytearray(range(256)))),)
     for T, V in test_vector:
         yield check_bi_encode_tlv, T, V
+
+# -----------------------------------------------------------------------------
+# Protocol Data Unit Tests
+# -----------------------------------------------------------------------------
+
+@raises(nfc.llcp.pdu.DecodeError)
+def check_bi_decode_pdu(frame, offset, size):
+    nfc.llcp.pdu.decode(bytearray.fromhex(frame), offset, size)
+
+def test_bi_decode_pdu():
+    test_vector = (
+        ("",   0, 0),
+        ("00", 0, 1),
+        ("00", 1, 1),
+        ("00", 0, 2),
+    )
+    for frame, offset, size in test_vector:
+        yield check_bi_decode_pdu, frame, offset, size
+
+def check_bv_decode_pdu_symm(frame, offset, size):
+    pdu = nfc.llcp.pdu.decode(bytearray.fromhex(frame), offset, size)
+    assert isinstance(pdu, nfc.llcp.pdu.Symmetry)
+    assert len(pdu) == size
+    assert pdu.name == "SYMM"
+    assert pdu.dsap == 0
+    assert pdu.ssap == 0
+    assert len(str(pdu))
+
+def test_bv_decode_pdu_symm():
+    test_vector = (
+        ("0000", 0, 2),
+        ("FF0000FF", 1, 2),
+    )
+    for frame, offset, size in test_vector:
+        yield check_bv_decode_pdu_symm, frame, offset, size
+
+def test_bi_decode_pdu_symm():
+    test_vector = (
+        ("1000", 0, 2),
+        ("0001", 0, 2),
+        ("000000", 0, 3),
+    )
+    for frame, offset, size in test_vector:
+        yield check_bi_decode_pdu, frame, offset, size
+
+def check_bv_decode_pdu_pax(frame, offset, size, plen,
+                            ver, miu, wks, lto, lsc, dpc):
+    pdu = nfc.llcp.pdu.decode(bytearray.fromhex(frame), offset, size)
+    assert isinstance(pdu, nfc.llcp.pdu.ParameterExchange)
+    assert len(pdu) == plen
+    assert pdu.name == "PAX"
+    assert pdu.dsap == 0
+    assert pdu.ssap == 0
+    assert pdu.version == ver
+    assert pdu.version_text == "{}.{}".format(*ver)
+    assert pdu.miu == miu
+    assert pdu.wks == wks
+    assert len(pdu.wks_text) if pdu.wks else True
+    assert pdu.lto == lto
+    assert pdu.lsc == lsc
+    assert len(pdu.lsc_text)
+    assert pdu.dpc == dpc
+    assert len(pdu.dpc_text)
+    assert len(str(pdu))
+
+def test_bv_decode_pdu_pax():
+    test_vector = (
+        ("0040",           0, 2, 2, (0, 0), 128, 0x0000,  100, 0, 0),
+        ("FF0040FF",       1, 2, 2, (0, 0), 128, 0x0000,  100, 0, 0),
+        ("00400101A5",     0, 5, 5, (10,5), 128, 0x0000,  100, 0, 0),
+        ("004002020000",   0, 6, 6, (0, 0), 128, 0x0000,  100, 0, 0),
+        ("00400202F367",   0, 6, 6, (0, 0), 999, 0x0000,  100, 0, 0),
+        ("00400302A55A",   0, 6, 6, (0, 0), 128, 0xA55A,  100, 0, 0),
+        ("00400401FF",     0, 5, 5, (0, 0), 128, 0x0000, 2550, 0, 0),
+        ("00400701FF",     0, 5, 5, (0, 0), 128, 0x0000,  100, 3, 1),
+        ("0040070102",     0, 5, 5, (0, 0), 128, 0x0000,  100, 2, 0),
+        ("0040070104",     0, 5, 5, (0, 0), 128, 0x0000,  100, 0, 1),
+        ("00400701040000", 0, 7, 5, (0, 0), 128, 0x0000,  100, 0, 1),
+        ("0040070104FFFF", 0, 7, 5, (0, 0), 128, 0x0000,  100, 0, 1),
+        ("00400000070104", 0, 7, 5, (0, 0), 128, 0x0000,  100, 0, 1),
+    )
+    for frame, offset, size, plen, ver, miu, wks, lto, lsc, dpc in test_vector:
+        yield (check_bv_decode_pdu_pax, frame, offset, size,
+               plen, ver, miu, wks, lto, lsc, dpc)
+
+def test_bi_decode_pdu_pax():
+    test_vector = (
+        ("1040", 0, 2),
+        ("0041", 0, 2),
+    )
+    for frame, offset, size in test_vector:
+        yield check_bi_decode_pdu, frame, offset, size
+
+def check_bv_decode_pdu_agf(frame, offset, size, pdu_list):
+    agf = nfc.llcp.pdu.decode(bytearray.fromhex(frame), offset, size)
+    assert isinstance(agf, nfc.llcp.pdu.AggregatedFrame)
+    assert len(agf) == size
+    assert agf.name == "AGF"
+    assert agf.dsap == 0
+    assert agf.ssap == 0
+    i = -1
+    for i, pdu in enumerate(agf):
+        assert pdu == nfc.llcp.pdu.decode(bytearray.fromhex(pdu_list[i]))
+    assert i+1 == len(pdu_list)
+    assert len(str(agf))
+
+def test_bv_decode_pdu_agf():
+    test_vector = (
+        ("0080", 0, 2, tuple()),
+        ("FF0080FF", 1, 2, tuple()),
+        ("008000020000", 0, 6, ("0000",)),
+        ("00800002000000020000", 0, 10, ("0000", "0000")),
+    )
+    for frame, offset, size, pdu_list in test_vector:
+        yield check_bv_decode_pdu_agf, frame, offset, size, pdu_list
+    
+def test_bi_decode_pdu_agf():
+    test_vector = (
+        ("008000", 0, None),
+        ("108000", 0, None),
+        ("008100", 0, None),
+        ("0080000200", 0, None),
+    )
+    for frame, offset, size in test_vector:
+        yield check_bi_decode_pdu, frame, offset, size
+
+def check_bv_decode_pdu_ui(frame, offset, size, data):
+    pdu = nfc.llcp.pdu.decode(bytearray.fromhex(frame), offset, size)
+    assert isinstance(pdu, nfc.llcp.pdu.UnnumberedInformation)
+    assert len(pdu) == size
+    assert pdu.name == "UI"
+    assert pdu.dsap == 32
+    assert pdu.ssap == 1
+    assert pdu.data == data
+    assert len(str(pdu))
+
+def test_bv_decode_pdu_ui():
+    test_vector = (
+        ("80C1", 0, 2, b''),
+        ("FF80C1FF", 1, 2, b''),
+        ("80C1414243", 0, 2, b''),
+        ("80C1414243", 0, 5, b'ABC'),
+    )
+    for frame, offset, size, data in test_vector:
+        yield check_bv_decode_pdu_ui, frame, offset, size, data
+
+def check_bv_decode_pdu_connect(frame, offset, size, lpdu, miu, rw, sn):
+    pdu = nfc.llcp.pdu.decode(bytearray.fromhex(frame), offset, size)
+    assert isinstance(pdu, nfc.llcp.pdu.Connect)
+    assert len(pdu) == lpdu
+    assert pdu.name == "CONNECT"
+    assert pdu.dsap == 32
+    assert pdu.ssap == 1
+    assert pdu.miu == miu
+    assert pdu.rw == rw
+    assert pdu.sn == sn
+    assert len(str(pdu))
+
+def test_bv_decode_pdu_connect():
+    test_vector = (
+        ("8101",             0, 2, 2, 128, 1, b''),
+        ("FF8101FF",         1, 2, 2, 128, 1, b''),
+        ("81010202F367",     0, 6, 6, 999, 1, b''),
+        ("81010501F9",       0, 5, 5, 128, 9, b''),
+        ("810106024142",     0, 6, 6, 128, 1, b'AB'),
+        ("8101000006024142", 0, 8, 6, 128, 1, b'AB'),
+        ("810106024142FFFF", 0, 8, 6, 128, 1, b'AB'),
+    )
+    for frame, offset, size, lp, miu, rw, sn in test_vector:
+        yield check_bv_decode_pdu_connect, frame, offset, size, lp, miu, rw, sn
+
+def check_bv_decode_pdu_disc(frame, offset, size):
+    pdu = nfc.llcp.pdu.decode(bytearray.fromhex(frame), offset, size)
+    assert isinstance(pdu, nfc.llcp.pdu.Disconnect)
+    assert len(pdu) == size
+    assert pdu.name == "DISC"
+    assert pdu.dsap == 32
+    assert pdu.ssap == 1
+    assert len(str(pdu))
+
+def test_bv_decode_pdu_disc():
+    test_vector = (
+        ("8141",     0, 2),
+        ("FF8141FF", 1, 2),
+    )
+    for frame, offset, size in test_vector:
+        yield check_bv_decode_pdu_disc, frame, offset, size
+
+def check_bv_decode_pdu_cc(frame, offset, size, lpdu, miu, rw):
+    pdu = nfc.llcp.pdu.decode(bytearray.fromhex(frame), offset, size)
+    assert isinstance(pdu, nfc.llcp.pdu.ConnectionComplete)
+    assert len(pdu) == lpdu
+    assert pdu.name == "CC"
+    assert pdu.dsap == 32
+    assert pdu.ssap == 1
+    assert pdu.miu == miu
+    assert pdu.rw == rw
+    assert len(str(pdu))
+
+def test_bv_decode_pdu_cc():
+    test_vector = (
+        ("8181",             0, 2, 2, 128, 1),
+        ("FF8181FF",         1, 2, 2, 128, 1),
+        ("81810202F367",     0, 6, 6, 999, 1),
+        ("81810501F9",       0, 5, 5, 128, 9),
+        ("818100000202F367", 0, 8, 6, 999, 1),
+        ("81810202F367FFFF", 0, 8, 6, 999, 1),
+    )
+    for frame, offset, size, lp, miu, rw in test_vector:
+        yield check_bv_decode_pdu_cc, frame, offset, size, lp, miu, rw
+
+def test_bi_decode_pdu_dm():
+    test_vector = (
+        ("814100", 0, None),
+    )
+    for frame, offset, size in test_vector:
+        yield check_bi_decode_pdu, frame, offset, size
+
+def check_bv_decode_pdu_dm(frame, offset, size, reason):
+    pdu = nfc.llcp.pdu.decode(bytearray.fromhex(frame), offset, size)
+    assert isinstance(pdu, nfc.llcp.pdu.DisconnectedMode)
+    assert len(pdu) == size
+    assert pdu.name == "DM"
+    assert pdu.dsap == 32
+    assert pdu.ssap == 1
+    assert pdu.reason == reason
+    assert len(pdu.reason_text)
+    assert len(str(pdu))
+
+def test_bv_decode_pdu_dm():
+    test_vector = (
+        ("81C100",     0, 3, 0),
+        ("81C1FF",     0, 3, 255),
+        ("FF81C100FF", 1, 3, 0),
+    )
+    for frame, offset, size, reason in test_vector:
+        yield check_bv_decode_pdu_dm, frame, offset, size, reason
+
+def test_bi_decode_pdu_dm():
+    test_vector = (
+        ("81C1", 0, None),
+        ("81C10000", 0, None),
+    )
+    for frame, offset, size in test_vector:
+        yield check_bi_decode_pdu, frame, offset, size
+
+def check_bv_decode_pdu_frmr(frame, offset, size, b0, b1, b2, b3):
+    pdu = nfc.llcp.pdu.decode(bytearray.fromhex(frame), offset, size)
+    assert isinstance(pdu, nfc.llcp.pdu.FrameReject)
+    assert len(pdu) == size
+    assert pdu.name == "FRMR"
+    assert pdu.dsap == 32
+    assert pdu.ssap == 1
+    assert pdu.rej_flags == b0 >> 4 & 15
+    assert pdu.rej_ptype == b0 >> 0 & 15
+    assert pdu.ns        == b1 >> 4 & 15
+    assert pdu.nr        == b1 >> 0 & 15
+    assert pdu.vs        == b2 >> 4 & 15
+    assert pdu.vr        == b2 >> 0 & 15
+    assert pdu.vsa       == b3 >> 4 & 15
+    assert pdu.vra       == b3 >> 0 & 15
+    assert len(str(pdu))
+
+def test_bv_decode_pdu_frmr():
+    test_vector = (
+        ("820100000000",     0, 6,  0,  0,  0,  0),
+        ("820160616263",     0, 6, 96, 97, 98, 99),
+        ("FF820100000000FF", 1, 6,  0,  0,  0,  0),
+    )
+    for frame, offset, size, b0, b1, b2, b3 in test_vector:
+        yield check_bv_decode_pdu_frmr, frame, offset, size, b0, b1, b2, b3
+
+def test_bi_decode_pdu_frmr():
+    test_vector = (
+        ("8201", 0, None),
+        ("820100", 0, None),
+        ("82010000", 0, None),
+        ("8201000000", 0, None),
+        ("82010000000000", 0, None),
+    )
+    for frame, offset, size in test_vector:
+        yield check_bi_decode_pdu, frame, offset, size
+
+def check_bv_decode_pdu_snl(frame, offset, size, plen, sdreq, sdres):
+    pdu = nfc.llcp.pdu.decode(bytearray.fromhex(frame), offset, size)
+    assert isinstance(pdu, nfc.llcp.pdu.ServiceNameLookup)
+    assert len(pdu) == plen
+    assert pdu.name == "SNL"
+    assert pdu.dsap == 1
+    assert pdu.ssap == 1
+    assert pdu.sdreq == sdreq
+    assert pdu.sdres == sdres
+    assert len(str(pdu))
+
+def test_bv_decode_pdu_snl():
+    test_vector = (
+        ("0641",                 0,  2,  2, [],             []),
+        ("000641",               1,  2,  2, [],             []),
+        ("064100",               0,  3,  2, [],             []),
+        ("06410000",             0,  4,  2, [],             []),
+        ("064100FF08020141",     0,  8,  2, [],             []),
+        ("0641000008020141",     0,  8,  6, [(0x01, b'A')], []),
+        ("06410000080201410000", 0, 10,  6, [(0x01, b'A')], []),
+        ("06410802014109020211", 0, 10, 10, [(0x01, b'A')], [(0x02, 0x11)]),
+        ("06410902021108020141", 0, 10, 10, [(0x01, b'A')], [(0x02, 0x11)]),
+    )
+    for frame, offset, size, plen, sdreq, sdres in test_vector:
+        yield (check_bv_decode_pdu_snl, frame, offset, size, plen, sdreq, sdres)
+
+def test_bi_decode_pdu_snl():
+    test_vector = (
+        ("0642", 0, None),
+        ("1641", 0, None),
+    )
+    for frame, offset, size in test_vector:
+        yield check_bi_decode_pdu, frame, offset, size
+
+def check_bv_decode_pdu_dps(frame, offset, size, plen, ecpk, rn):
+    pdu = nfc.llcp.pdu.decode(bytearray.fromhex(frame), offset, size)
+    assert isinstance(pdu, nfc.llcp.pdu.DataProtectionSetup)
+    assert len(pdu) == plen
+    assert pdu.name == "DPS"
+    assert pdu.dsap == 0
+    assert pdu.ssap == 0
+    assert pdu.ecpk == ecpk
+    assert pdu.rn == rn
+    assert len(str(pdu))
+
+def test_bv_decode_pdu_dps():
+    test_vector = (
+        ("0280",             0,  None, 2, None,  None),
+        ("000280",           1,     2, 2, None,  None),
+        ("02800A00",         0,  None, 2, b'',   None),
+        ("02800B00",         0,  None, 2, None,  b''),
+        ("02800A024142",     0,  None, 6, b'AB', None),
+        ("02800B024142",     0,  None, 6, None,  b'AB'),
+        ("02800A0241420B00", 0,  None, 6, b'AB', b''),
+        ("02800B0241420A00", 0,  None, 6, b'',   b'AB'),
+        ("028000000A000B00", 0,  None, 2, b'',   b''),
+    )
+    for frame, offset, size, plen, ecpk, rn in test_vector:
+        yield (check_bv_decode_pdu_dps, frame, offset, size, plen, ecpk, rn)
+
+def test_bi_decode_pdu_dps():
+    test_vector = (
+        ("0281", 0, None),
+        ("1280", 0, None),
+    )
+    for frame, offset, size in test_vector:
+        yield check_bi_decode_pdu, frame, offset, size
+
+def check_bv_decode_pdu_i(frame, offset, size, ns, nr, data):
+    pdu = nfc.llcp.pdu.decode(bytearray.fromhex(frame), offset, size)
+    assert isinstance(pdu, nfc.llcp.pdu.Information)
+    assert len(pdu) == size
+    assert pdu.name == "I"
+    assert pdu.dsap == 32
+    assert pdu.ssap == 1
+    assert pdu.ns == ns
+    assert pdu.nr == nr
+    assert pdu.data == data
+    assert len(str(pdu))
+
+def test_bv_decode_pdu_i():
+    test_vector = (
+        ("830100",       0, 3, 0, 0, b''),
+        ("830196",       0, 3, 9, 6, b''),
+        ("FF830196FF",   1, 3, 9, 6, b''),
+        ("830100414243", 0, 6, 0, 0, b'ABC'),
+    )
+    for frame, offset, size, ns, nr, data in test_vector:
+        yield check_bv_decode_pdu_i, frame, offset, size, ns, nr, data
+
+def test_bi_decode_pdu_i():
+    test_vector = (
+        ("8301", 0, 2),
+    )
+    for frame, offset, size in test_vector:
+        yield check_bi_decode_pdu, frame, offset, size
+
+def check_bv_decode_pdu_rr(frame, offset, size, nr):
+    pdu = nfc.llcp.pdu.decode(bytearray.fromhex(frame), offset, size)
+    assert isinstance(pdu, nfc.llcp.pdu.ReceiveReady)
+    assert len(pdu) == size
+    assert pdu.name == "RR"
+    assert pdu.dsap == 32
+    assert pdu.ssap == 1
+    assert pdu.ns == None
+    assert pdu.nr == nr
+    assert len(str(pdu))
+
+def test_bv_decode_pdu_rr():
+    test_vector = (
+        ("834101",     0, 3, 1),
+        ("8341F9",     0, 3, 9),
+        ("FF834101FF", 1, 3, 1),
+    )
+    for frame, offset, size, nr in test_vector:
+        yield check_bv_decode_pdu_rr, frame, offset, size, nr
+
+def _test_bi_decode_pdu_rr():
+    test_vector = (
+        ("8341", 0, 2),
+    )
+    for frame, offset, size in test_vector:
+        yield check_bi_decode_pdu, frame, offset, size
+
+def check_bv_decode_pdu_rnr(frame, offset, size, nr):
+    pdu = nfc.llcp.pdu.decode(bytearray.fromhex(frame), offset, size)
+    assert isinstance(pdu, nfc.llcp.pdu.ReceiveNotReady)
+    assert len(pdu) == size
+    assert pdu.name == "RNR"
+    assert pdu.dsap == 32
+    assert pdu.ssap == 1
+    assert pdu.ns == None
+    assert pdu.nr == nr
+    assert len(str(pdu))
+
+def test_bv_decode_pdu_rnr():
+    test_vector = (
+        ("838101",     0, 3, 1),
+        ("8381F9",     0, 3, 9),
+        ("FF838101FF", 1, 3, 1),
+    )
+    for frame, offset, size, nr in test_vector:
+        yield check_bv_decode_pdu_rnr, frame, offset, size, nr
+
+def _test_bi_decode_pdu_rnr():
+    test_vector = (
+        ("8381", 0, 2),
+    )
+    for frame, offset, size in test_vector:
+        yield check_bi_decode_pdu, frame, offset, size
+
+def check_bv_decode_pdu_unknown(frame, offset, size, name, payload):
+    pdu = nfc.llcp.pdu.decode(bytearray.fromhex(frame), offset, size)
+    assert isinstance(pdu, nfc.llcp.pdu.UnknownProtocolDataUnit)
+    assert len(pdu) == size
+    assert pdu.name == name
+    assert pdu.dsap == 32
+    assert pdu.ssap == 1
+    assert pdu.payload == payload
+    assert len(str(pdu))
+
+def test_bv_decode_pdu_unknown():
+    test_vector = (
+        ("83C1",       0, 2, '1111', b''),
+        ("FF83C1FF",   1, 2, '1111', b''),
+        ("83C1414243", 0, 5, '1111', b'ABC'),
+    )
+    for frame, offset, size, name, payload in test_vector:
+        yield check_bv_decode_pdu_unknown, frame, offset, size, name, payload
 
