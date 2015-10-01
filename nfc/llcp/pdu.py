@@ -137,8 +137,8 @@ class Parameter:
 class ProtocolDataUnit(object):
     def __init__(self, ptype, dsap, ssap):
         self.ptype = ptype
-        self.dsap = int(dsap)
-        self.ssap = int(ssap)
+        self.dsap = dsap
+        self.ssap = ssap
 
     @staticmethod
     def decode_header(data, offset=0, size=None):
@@ -148,8 +148,12 @@ class ProtocolDataUnit(object):
         return (dsap >> 2, ssap & 63)
     
     def encode_header(self):
-        if self.dsap > 63: raise EncodeError("DSAP out of bounds")
-        if self.ssap > 63: raise EncodeError("SSAP out of bounds")
+        if self.dsap is None or self.ssap is None:
+            raise EncodeError("pdu dsap and ssap field can not be None")
+        if self.dsap < 0 or self.ssap < 0:
+            raise EncodeError("pdu dsap and ssap field can not be < 0")
+        if self.dsap > 63 or self.ssap > 63:
+            raise EncodeError("pdu dsap and ssap field can not be > 63")
         return struct.pack('!H', self.dsap<<10 | self.ptype<<6 | self.ssap)
 
     def __eq__(self, other):
@@ -175,12 +179,14 @@ class NumberedProtocolDataUnit(ProtocolDataUnit):
         return (dsap >> 2, ssap & 63, sequence >> 4, sequence & 15)
     
     def encode_header(self):
-        if self.dsap > 63: raise EncodeError("DSAP out of bounds")
-        if self.ssap > 63: raise EncodeError("SSAP out of bounds")
-        if self.nr > 15: raise EncodeError("N(R) out of bounds")
-        if self.ns and self.ns > 15: raise EncodeError("N(S) out of bounds")
-        return struct.pack('!HB', self.dsap<<10 | self.ptype<<6 | self.ssap,
-                           (self.ns<<4 if self.ns else 0) | self.nr)
+        data = super(NumberedProtocolDataUnit, self).encode_header()
+        if self.ns is None or self.nr is None:
+            raise EncodeError("pdu ns and nr field can not be none")
+        if self.ns < 0 or self.nr < 0:
+            raise EncodeError("pdu ns and nr field can not be < 0")
+        if self.ns > 15 or self.nr > 15:
+            raise EncodeError("pdu ns and nr field can not be > 15")
+        return data + struct.pack('!B', self.ns<<4 | self.nr)
 
     def __len__(self):
         return 3
@@ -201,12 +207,14 @@ class Symmetry(ProtocolDataUnit):
     @classmethod
     def decode(cls, data, offset, size):
         dsap, ssap = cls.decode_header(data, offset, size)
-        if dsap != 0: raise DecodeError("SYMM PDU DSAP must be zero")
-        if ssap != 0: raise DecodeError("SYMM PDU SSAP must be zero")
-        if size >= 3: raise DecodeError("SYMM PDU DATA must be empty")
+        if dsap != 0 or ssap != 0:
+            raise DecodeError("SSAP and DSAP must be 0 in SYMM PDU")
+        if size >= 3: raise DecodeError("SYMM PDU PAYLOAD must be empty")
         return Symmetry(dsap, ssap)
 
     def encode(self):
+        if self.dsap != 0 or self.ssap != 0:
+            raise EncodeError("SSAP and DSAP must be 0 in SYMM PDU")
         return self.encode_header()
 
     def __len__(self):
@@ -221,13 +229,14 @@ class Symmetry(ProtocolDataUnit):
 class ParameterExchange(ProtocolDataUnit):
     name = "PAX"
     
-    def __init__(self, dsap=0, ssap=0):
+    def __init__(self, dsap=0, ssap=0, version=None, miux=None,
+                 wks=None, lto=None, opt=None):
         super(ParameterExchange, self).__init__(0b0001, dsap, ssap)
-        self._version = None
-        self._miux = None
-        self._wks = None
-        self._lto = None
-        self._opt = None
+        self._version = version
+        self._miux = miux
+        self._wks = wks
+        self._lto = lto
+        self._opt = opt
 
     @classmethod
     def decode(cls, data, offset, size):
@@ -248,6 +257,8 @@ class ParameterExchange(ProtocolDataUnit):
         return pax_pdu
     
     def encode(self):
+        if self.dsap != 0 or self.ssap != 0:
+            raise EncodeError("SSAP and DSAP must be 0 in PAX PDU")
         data = self.encode_header()
         if self._version is not None:
             data += Parameter.encode(Parameter.VERSION, self._version)
@@ -383,6 +394,8 @@ class AggregatedFrame(ProtocolDataUnit):
         return agf_pdu
 
     def encode(self):
+        if self.dsap != 0 or self.ssap != 0:
+            raise EncodeError("SSAP and DSAP must be 0 in AGF PDU")
         data = self.encode_header()
         for encoded_pdu in [pdu.encode() for pdu in self._aggregate]:
             data += struct.pack('!H', len(encoded_pdu)) + encoded_pdu
@@ -679,10 +692,10 @@ class ServiceNameLookup(ProtocolDataUnit):
     
     def encode(self):
         data = self.encode_header()
-        for sdres in self.sdres:
-            data += Parameter.encode(Parameter.SDRES, sdres)
         for sdreq in self.sdreq:
             data += Parameter.encode(Parameter.SDREQ, sdreq)
+        for sdres in self.sdres:
+            data += Parameter.encode(Parameter.SDRES, sdres)
         return data
         
     def __len__(self):
@@ -720,6 +733,8 @@ class DataProtectionSetup(ProtocolDataUnit):
         return dps_pdu
     
     def encode(self):
+        if self.dsap != 0 or self.ssap != 0:
+            raise EncodeError("SSAP and DSAP must be 0 in DPS PDU")
         data = self.encode_header()
         if self.ecpk:
             data += Parameter.encode(Parameter.ECPK, self.ecpk)
@@ -771,7 +786,7 @@ class ReceiveReady(NumberedProtocolDataUnit):
     name = "RR"
     
     def __init__(self, dsap, ssap, nr=None):
-        super(ReceiveReady, self).__init__(0b1101, dsap, ssap, None, nr)
+        super(ReceiveReady, self).__init__(0b1101, dsap, ssap, 0, nr)
 
     @classmethod
     def decode(cls, data, offset, size):
@@ -789,7 +804,7 @@ class ReceiveNotReady(NumberedProtocolDataUnit):
     name = "RNR"
     
     def __init__(self, dsap, ssap, nr):
-        super(ReceiveNotReady, self).__init__(0b1110, dsap, ssap, None, nr)
+        super(ReceiveNotReady, self).__init__(0b1110, dsap, ssap, 0, nr)
 
     @classmethod
     def decode(cls, data, offset, size):
