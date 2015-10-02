@@ -1,6 +1,12 @@
 Changelog for nfcpy
 ===================
 
+0.10.2 (2015-10-02)
+-------------------
+
+* Fixes an initialization issue when PN532 is connected to serial port
+  on Raspberry Pi.
+
 0.10.1 (2015-09-28)
 -------------------
 
