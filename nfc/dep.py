@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2009-2011 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2009-2015 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -152,13 +152,16 @@ class Initiator(DataExchangeProtocol):
 
     def deactivate(self, release=True):
         log.info("stop {0}, packets {1}".format(self, self.stat))
-        REQ, RES = (RLS_REQ, RLS_RES) if release else (DSL_REQ, DSL_RES)
-        try: res = self.send_req_recv_res(REQ(self.did), 0.1)
-        except nfc.clf.CommunicationError: return
-        if type(res) != RES:
-            log.error("received unexpected response for " + req.NAME)
-        if res.did != req.did:
-            log.error("target returned wrong DID in " + res.NAME)
+        try:
+            req = RLS_REQ(self.did) if release else DSL_REQ(self.did)
+            res = self.send_req_recv_res(req, 0.1)
+        except nfc.clf.CommunicationError:
+            return
+        else:
+            if type(res) != (RLS_RES if release else DSL_RES):
+                log.error("received unexpected response for " + req.NAME)
+            if res.did != req.did:
+                log.error("target returned wrong DID in " + res.NAME)
 
     def exchange(self, send_data, timeout):
         def INF(pni, data, more, did, nad):

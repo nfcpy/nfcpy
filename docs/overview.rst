@@ -25,33 +25,34 @@ the :meth:`nfc.clf.ContactlessFrontend.open` method or the
 ``--device`` option that most example programs support. The testbed
 column shows the devices that are regularly tested with *nfcpy*.
 
-============ ======= ========= =============== ======= ========
-Manufacturer Product NFC Chip  Device Path     Testbed Notes
-============ ======= ========= =============== ======= ========
-Sony         RC-S330 RC-S956   usb:054c:02e1   Yes     [#hw1]_
-Sony         RC-S360 RC-S956   usb:054c:02e1   Yes     [#hw1]_
-Sony         RC-S370 RC-S956   usb:054c:02e1   No      [#hw1]_
-Sony         RC-S380 Port100   usb:054c:06c1   Yes     [#hw2]_
-Sony         RC-S380 Port100   usb:054c:06c3   No      [#hw2]_
-Sony         Board   PN531v4.2 usb:054c:0193   Yes     [#hw3]_
-Philips/NXP  Board   PN531v4.2 usb:04cc:0531   Yes     [#hw3]_
-Identive     SCL3710 PN531     usb:04cc:0531   No      [#hw4]_
-ACS          ACR122U PN532v1.4 usb:072f:2200   Yes     [#hw5]_
-ACS          ACR122U PN532v1.6 usb:072f:2200   Yes     [#hw5]_
-Stollmann    Reader  PN532v1.4 tty:USB0:pn532  Yes     [#hw6]_
-Adafruit     Board   PN532v1.6 tty:AMA0:pn532  Yes     [#hw7]_
-Identive     SCL3711 PN533v2.7 usb:04e6:5591   Yes     [#hw8]_
-Identive     SCL3712 PN533     usb:04e6:5593   No      [#hw9]_
-SensorID     StickID PN533v2.7 usb:04cc:2533   Yes     [#hw10]_
-Arygon       ADRA    PN531v4.2 tty:USB0:arygon Yes
-============ ======= ========= =============== ======= ========
+============ ========= ========= =============== ======= ========
+Manufacturer Product   NFC Chip  Device Path     Testbed Notes
+============ ========= ========= =============== ======= ========
+Sony         RC-S330   RC-S956   usb:054c:02e1   Yes     [#hw1]_
+Sony         RC-S360   RC-S956   usb:054c:02e1   Yes     [#hw1]_
+Sony         RC-S370   RC-S956   usb:054c:02e1   No      [#hw1]_
+Sony         RC-S380/S Port100   usb:054c:06c1   Yes     [#hw2]_
+Sony         RC-S380/P Port100   usb:054c:06c3   No      [#hw2]_
+Sony         Board     PN531v4.2 usb:054c:0193   Yes     [#hw3]_
+Philips/NXP  Board     PN531v4.2 usb:04cc:0531   Yes     [#hw3]_
+Identive     SCL3710   PN531     usb:04cc:0531   No      [#hw4]_
+ACS          ACR122U   PN532v1.4 usb:072f:2200   Yes     [#hw5]_
+ACS          ACR122U   PN532v1.6 usb:072f:2200   Yes     [#hw5]_
+Stollmann    Reader    PN532v1.4 tty:USB0:pn532  Yes     [#hw6]_
+Adafruit     Board     PN532v1.6 tty:AMA0:pn532  Yes     [#hw7]_
+Identive     SCL3711   PN533v2.7 usb:04e6:5591   Yes     [#hw8]_
+Identive     SCL3712   PN533     usb:04e6:5593   No      [#hw9]_
+SensorID     StickID   PN533v2.7 usb:04cc:2533   Yes     [#hw10]_
+Arygon       ADRA      PN531v4.2 tty:USB0:arygon Yes
+============ ========= ========= =============== ======= ========
 
 .. [#hw1] The Sony RC-S330, RC-S360, and RC-S370 are in fact identical
    devicess, the difference is only in size and thus antenna.
    
-.. [#hw2] For some unknown reason there exist two identical versions
-   of the RC-S380 with just different USB Product ID.
-   
+.. [#hw2] The only known difference between RC-S380/S and RC-S380/P is
+   that the RC-380/S has the CE and FCC certification marks for sales
+   in Europe and US.
+
 .. [#hw3] This is a reference board that was once designed by Philips
    and Sony and has a hardware switch to select either the Philips or
    Sony USB Vendor/Product ID. The chip can only handle Type A and
