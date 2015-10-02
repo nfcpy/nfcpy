@@ -380,7 +380,7 @@ def init(transport):
         if sys.platform.startswith("linux"):
             stty = 'stty -F %s %%d 2> /dev/null' % transport.port
             for baudrate in (921600, 460800, 230400, 115200):
-                log.debug("trying to set %d baud", baudrate) #continue
+                log.debug("trying to set %d baud", baudrate)
                 if os.system(stty % baudrate) == 0:
                     os.system(stty % 115200)
                     break
