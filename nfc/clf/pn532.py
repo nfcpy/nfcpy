@@ -403,3 +403,5 @@ def init(transport):
 
         chipset = Chipset(transport, logger=log)
         return Device(chipset, logger=log)
+
+    raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
