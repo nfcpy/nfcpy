@@ -395,13 +395,13 @@ class LogicalLinkController(object):
         except IOError:
             self.terminate(reason="input/output error")
             raise SystemExit
-        except sec.KeyError:
+        except sec.KeyAgreementError:
             self.terminate(reason="key agreement error")
             raise SystemExit
-        except sec.DecryptError:
+        except sec.DecryptionError:
             self.terminate(reason="decryption error")
             raise SystemExit
-        except sec.EncryptError:
+        except sec.EncryptionError:
             self.terminate(reason="encryption error")
             raise SystemExit
         finally:
@@ -456,13 +456,13 @@ class LogicalLinkController(object):
         except IOError:
             self.terminate(reason="input/output error")
             raise SystemExit
-        except sec.KeyError:
+        except sec.KeyAgreementError:
             self.terminate(reason="key agreement error")
             raise SystemExit
-        except sec.DecryptError:
+        except sec.DecryptionError:
             self.terminate(reason="decryption error")
             raise SystemExit
-        except sec.EncryptError:
+        except sec.EncryptionError:
             self.terminate(reason="encryption error")
             raise SystemExit
         finally:

@@ -32,9 +32,9 @@ from binascii import hexlify
 OpenSSL = None
 
 class Error(Exception): pass
-class EncryptError(Error): pass
-class DecryptError(Error): pass
-class KeyError(Error): pass
+class EncryptionError(Error): pass
+class DecryptionError(Error): pass
+class KeyAgreementError(Error): pass
 
 def cipher_suite(name):
     if name == "ECDH_anon_WITH_AEAD_AES_128_CCM_4":
@@ -58,22 +58,38 @@ class CipherSuite1:
             self._ec_key = ec_key
 
     def calculate_session_key(self, ecpk, rn_i=None, rn_t=None):
-        assert len(ecpk) == 64, "ecpk must be 64 byte"
-        assert rn_i or rn_t, "one of rn_i or rn_t must be set"
-        rn_i = rn_i if rn_i else self.random_nonce
-        rn_t = rn_t if rn_t else self.random_nonce
-        if rn_i: assert len(rn_i) == 8, "rn_i must be 8 byte"
-        if rn_t: assert len(rn_t) == 8, "rn_t must be 8 byte"
-        ec_key = OpenSSL.EC_KEY.new_by_curve_name(415)
-        ec_key.set_public_key_affine_coordinates(ecpk[:32], ecpk[32:])
+        if ecpk is None:
+            raise KeyAgreementError("remote public key is required")
+        if len(ecpk) != 64:
+            raise KeyAgreementError("remote public key has wrong size")
+        if rn_i is None and rn_t is None:
+            raise KeyAgreementError("remote random nonce is required")
+        if rn_i and len(rn_i) != 8:
+            raise KeyAgreementError("initiator random nonce has wrong size")
+        if rn_t and len(rn_t) != 8:
+            raise KeyAgreementError("target random nonce has wrong size")
+        
+        if rn_i is None:
+            rn_i = self.random_nonce
+        if rn_t is None:
+            rn_t = self.random_nonce
+        
+        ec_key = OpenSSL.EC_KEY.new_by_curve_name(OpenSSL.NID_X9_62_prime256v1)
+        try:
+            ec_key.set_public_key_affine_coordinates(ecpk[:32], ecpk[32:])
+        except AssertionError:
+            raise KeyAgreementError("remote public key is not on curve")
+        
         secret = OpenSSL.ECDH(self._ec_key).compute_key(ec_key.get_public_key())
         cipher = OpenSSL.EVP_aes_128_cbc()
         k_encr = OpenSSL.CMAC(cipher).init(rn_i+rn_t).update(secret).final()
+        
         log.debug("remote ecpk-x %r", hexlify(ecpk[:32]))
         log.debug("remote ecpk-y %r", hexlify(ecpk[32:]))
         log.debug("shared secret %r", hexlify(secret))
         log.debug("shared nonce  %r", hexlify(rn_i+rn_t))
         log.debug("session key   %r", hexlify(k_encr))
+        
         self._pcs = self._pcr = 0
         self._k_encr = k_encr
         return self._k_encr
@@ -87,7 +103,7 @@ class CipherSuite1:
         # and a rightmost 64-bit counter part taken from PC(S).
         nonce = struct.pack('!xxxxxQ', self._pcs)
         if self._pcs < 0xFFFFFFFFFFFFFFFF: self._pcs += 1
-        else: raise EncryptError("send counter out of range")
+        else: raise EncryptionError("send counter out of range")
         
         # The encryption key was computed in calculate_session_key()
         key = self._k_encr
@@ -98,7 +114,7 @@ class CipherSuite1:
             return self._encrypt(bytes(a), bytes(p), key, nonce, self._ccm_t)
         except AssertionError:
             error = "encrypt failed for message %d" % self._pcs
-            log.error(error); raise EncryptError(error)
+            log.error(error); raise EncryptionError(error)
 
     @staticmethod
     def _encrypt(aad, txt, key, nonce, tlen):
@@ -120,7 +136,7 @@ class CipherSuite1:
         # and a rightmost 64-bit counter part taken from PC(R).
         nonce = struct.pack('!xxxxxQ', self._pcr)
         if self._pcr < 0xFFFFFFFFFFFFFFFF: self._pcr += 1
-        else: raise EncryptError("recv counter out of range")
+        else: raise DecryptionError("recv counter out of range")
 
         # The decryption key was computed in calculate_session_key()
         key = self._k_encr
@@ -131,7 +147,7 @@ class CipherSuite1:
             return self._decrypt(bytes(a), bytes(c), key, nonce, self._ccm_t)
         except AssertionError:
             error = "decrypt failed for message %d" % self._pcr
-            log.error(error); raise DecryptError(error)
+            log.error(error); raise DecryptionError(error)
 
     @staticmethod
     def _decrypt(aad, txt, key, nonce, tlen):
@@ -278,29 +294,25 @@ class OpenSSLWrapper:
             if res == 0: log.error("EC_KEY_check_key")
             return bool(res)
 
-        def set_public_key(self, ec_point):
-            # int EC_KEY_set_public_key(EC_KEY *key, const EC_POINT *pub);
-            r = OpenSSL.crypto.EC_KEY_set_public_key(self, ec_point)
-            assert r == 1, "EC_KEY_set_public_key"
-
         def set_public_key_affine_coordinates(self, pubkey_x, pubkey_y):
             # int EC_KEY_set_public_key_affine_coordinates(EC_KEY *key,
             #     BIGNUM *x, BIGNUM *y);
             r = OpenSSL.crypto.EC_KEY_set_public_key_affine_coordinates(
                 self, *map(OpenSSL.BIGNUM.bin2bn, (pubkey_x, pubkey_y)))
-            assert r == 1, "EC_KEY_set_public_key_affine_coordinates"
+            if r != 1:
+                raise AssertionError("EC_KEY_set_public_key_affine_coordinates")
 
         def get_public_key(self):
             # const EC_POINT *EC_KEY_get0_public_key(const EC_KEY *key);
             res = OpenSSL.crypto.EC_KEY_get0_public_key(self)
             if res is None: log.error("EC_KEY_get0_public_key")
-            return OpenSSL.EC_POINT(res)
+            else: return OpenSSL.EC_POINT(res)
 
         def get_group(self):
             # const EC_GROUP *EC_KEY_get0_group(const EC_KEY *key);
             res = OpenSSL.crypto.EC_KEY_get0_group(self)
             if res is None: log.error("EC_KEY_get0_group")
-            return OpenSSL.EC_GROUP(res)
+            else: return OpenSSL.EC_GROUP(res)
 
     class EC_GROUP:
         def __init__(self, ec_group):
@@ -311,24 +323,12 @@ class OpenSSLWrapper:
             return c_void_p(self._ec_group)
 
     class EC_POINT:
-        def __init__(self, ec_point, release=False):
+        def __init__(self, ec_point):
             self._ec_point = ec_point
-            self._release = release
-
-        def __del__(self):
-            if self._release:
-                OpenSSL.crypto.EC_POINT_free(self)
 
         @property
         def _as_parameter_(self):
             return c_void_p(self._ec_point)
-
-        @staticmethod
-        def new(ec_group):
-            # EC_POINT *EC_POINT_new(const EC_GROUP *group);
-            ec_point = OpenSSL.crypto.EC_POINT_new(ec_group)
-            if ec_point is None: log.error("EC_POINT_new")
-            else: return OpenSSL.EC_POINT(ec_point, release=True)
 
         def get_affine_coordinates_GFp(self, ec_group):
             # int EC_POINT_get_affine_coordinates_GFp(const EC_GROUP *group,
@@ -338,15 +338,6 @@ class OpenSSLWrapper:
             res = func(ec_group, self, x, y, None)
             if res == 0: log.error("EC_POINT_get_affine_coordinates_GFp")
             else: return (x.bn2bin(), y.bn2bin())
-
-        def set_affine_coordinates_GFp(ec_group, pubkey_x, pubkey_y):
-            # int EC_POINT_set_affine_coordinates_GFp(const EC_GROUP *group,
-            #     EC_POINT *p, const BIGNUM *x, const BIGNUM *y, BN_CTX *ctx);
-            x = OpenSSL.BIGNUM.bin2bn(pubkey_x)
-            y = OpenSSL.BIGNUM.bin2bn(pubkey_y)
-            r = OpenSSL.crypto.EC_POINT_set_affine_coordinates_GFp(
-                ec_group, self, x, y, None)
-            assert r == 1, "EC_POINT_set_affine_coordinates_GFp"
 
     class ECDH:
         def __init__(self, local_key):
@@ -426,10 +417,6 @@ class OpenSSLWrapper:
             def _as_parameter_(self):
                 return c_void_p(self._ctx)
 
-            def init(self):
-                # void EVP_CIPHER_CTX_init(EVP_CIPHER_CTX *ctx);
-                OpenSSL.crypto.EVP_CIPHER_CTX_init(self)
-
             def ctrl_set(self, op, arg, ptr=None):
                 # int EVP_CIPHER_CTX_ctrl(EVP_CIPHER_CTX *ctx, int type,
                 #                         int arg, void *ptr);
@@ -460,7 +447,7 @@ class OpenSSLWrapper:
                 self._ctx, c_void_p(evp_cipher), None, key, iv)
             if r != 1: raise AssertionError("EVP_EncryptInit_ex")
 
-        def encrypt_update(self, out_len, message, msg_len=None):
+        def encrypt_update(self, out_len, message, msg_len):
             # int EVP_EncryptUpdate(EVP_CIPHER_CTX *ctx, unsigned char *out,
             #     int *outl, unsigned char *in, int inl);
             if out_len is None:
@@ -469,21 +456,9 @@ class OpenSSLWrapper:
             else:
                 out_buf = ctypes.create_string_buffer(out_len)
                 out_len = c_int(out_len)
-            if msg_len is None:
-                msg_len = len(message)
             r = OpenSSL.crypto.EVP_EncryptUpdate(
                 self._ctx, out_buf, ctypes.byref(out_len), message, msg_len)
             if r != 1: raise AssertionError("EVP_EncryptUpdate")
-            return out_buf.raw[0:out_len.value] if out_buf else b''
-        
-        def encrypt_final(self, out_len):
-            # int EVP_EncryptFinal_ex(EVP_CIPHER_CTX *ctx, unsigned char *out,
-            #     int *outl);
-            out_buf = ctypes.create_string_buffer(out_len)
-            out_len = c_int(out_len)
-            r = OpenSSL.crypto.EVP_EncryptFinal(
-                self._ctx, out_buf, ctypes.byref(out_len))
-            if r != 1: raise AssertionError("EVP_EncryptFinal")
             return out_buf.raw[0:out_len.value] if out_buf else b''
         
         def decrypt_init(self, evp_cipher=None, key=None, iv=None):
@@ -494,7 +469,7 @@ class OpenSSLWrapper:
                 self._ctx, c_void_p(evp_cipher), None, key, iv)
             if r != 1: raise AssertionError("EVP_DecryptInit_ex")
 
-        def decrypt_update(self, out_len, message, msg_len=None):
+        def decrypt_update(self, out_len, message, msg_len):
             # int EVP_DecryptUpdate(EVP_CIPHER_CTX *ctx, unsigned char *out,
             #     int *outl, unsigned char *in, int inl);
             if out_len is None:
@@ -503,46 +478,12 @@ class OpenSSLWrapper:
             else:
                 out_buf = ctypes.create_string_buffer(out_len)
                 out_len = c_int(out_len)
-            if msg_len is None:
-                msg_len = len(message)
             r = OpenSSL.crypto.EVP_EncryptUpdate(
                 self._ctx, out_buf, ctypes.byref(out_len), message, msg_len)
             if r != 1: raise AssertionError("EVP_DecryptUpdate")
             return out_buf.raw[0:out_len.value] if out_buf else b''
         
-        def decrypt_final(self, out_len):
-            # int EVP_DecryptFinal_ex(EVP_CIPHER_CTX *ctx, unsigned char *out,
-            #     int *outl);
-            out_buf = ctypes.create_string_buffer(out_len)
-            out_len = c_int(out_len)
-            r = OpenSSL.crypto.EVP_DecryptFinal(
-                self._ctx, out_buf, ctypes.byref(out_len))
-            if r != 1: raise AssertionError("EVP_DecryptFinal")
-            return out_buf.raw[0:out_len.value] if out_buf else b''
-        
 libcrypto = ctypes.util.find_library('crypto')
 if libcrypto is not None:
     OpenSSL = OpenSSLWrapper(libcrypto)
-
-if __name__ == "__main__":
-    if OpenSSL:
-        K = bytearray.fromhex("40414243 44454647 48494a4b 4c4d4e4f")
-        N = bytearray.fromhex("10111213 141516")
-        A = bytearray.fromhex("00010203 04050607")
-        P = bytearray.fromhex("20212223")
-        C = bytearray.fromhex("7162015b 4dac255d")
-
-        aad = bytes(A)
-        key = bytes(K)
-        nonce = bytes(N)
-        
-        if C == CipherSuite1._encrypt(aad, bytes(P), key, nonce, 4):
-            print("NIST SP800-38C Example Vector 1 passed encrypt")
-        
-        if P == CipherSuite1._decrypt(aad, bytes(C), key, nonce, 4):
-            print("NIST SP800-38C Example Vector 1 passed decrypt")
-
-        c = CipherSuite1._encrypt(aad, b'', key, nonce, 4)
-        if b'' == CipherSuite1._decrypt(aad, c, key, nonce, 4):
-            print("Zero-length plaintext passed encrypt/decrypt")
 
