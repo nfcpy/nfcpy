@@ -70,7 +70,19 @@ class TestProgram(CommandLineInterface):
             parser, groups="test llcp dbg clf")
 
     def on_llcp_startup(self, llc):
+        self.on_llc_exchange_call = None
+        self.on_llc_exchange_exit = None
+        self.wrapped_llc_exchange = llc.exchange
+        llc.exchange = self.llc_exchange_wrapper
         return super(TestProgram, self).on_llcp_startup(llc)
+
+    def llc_exchange_wrapper(self, send_pdu, timeout):
+        if self.on_llc_exchange_call:
+            send_pdu = self.on_llc_exchange_call(send_pdu, timeout)
+        rcvd_pdu = self.wrapped_llc_exchange(send_pdu, timeout)
+        if self.on_llc_exchange_exit:
+            rcvd_pdu = self.on_llc_exchange_call(rcvd_pdu)
+        return rcvd_pdu
         
     def test_01(self, llc):
         """Link activation, symmetry and deactivation
@@ -849,7 +861,8 @@ class TestProgram(CommandLineInterface):
             info("step2: send one datagram with invalid packet send counter")
             llc.sec._pcs += 1
             socket.sendto(sdu2, cl_echo_server)
-            socket.poll("recv", timeout=5)
+            if socket.poll("recv", timeout=5):
+                raise TestError("received data but link should be terminated")
             try:
                 socket.sendto(b'should fail', cl_echo_server)
             except nfc.llcp.Error as error:
@@ -859,6 +872,77 @@ class TestProgram(CommandLineInterface):
             
         finally:
             socket.close()
+
+    def test_16(self, llc):
+        """Invalid PDU header in secure data transfer mode
+
+        Verify that the remote peer detects an invalid PDU header when
+        the LLCP Link is established in secure data transport mode. The
+        PDU header is protected as additional authenticated data and
+        any modifications must fail decryption-verification.
+
+        1. Send one service data unit of 50 octets length to the
+           connection-less mode echo service and wait up to 5 seconds
+           to receive the same data back.
+
+        2. Send another service data unit but change the SSAP value of
+           the encrypted UI PDU before sending. Verify that the LLCP
+           Link is terminated.
+
+        """
+        if llc.secure_data_transfer is False:
+            raise TestError("secure data transfer is not enabled")
+        if self.options.test.index(16) != len(self.options.test) - 1:
+            log.warn("Test 16 causes link termination, further tests skipped")
+            del self.options.test[self.options.test.index(16)+1:]
+        
+        socket1 = nfc.llcp.Socket(llc, nfc.llcp.LOGICAL_DATA_LINK)
+        socket2 = nfc.llcp.Socket(llc, nfc.llcp.LOGICAL_DATA_LINK)
+        socket1.bind()
+        socket2.bind()
+        socket1_sap = socket1.getsockname()
+        socket2_sap = socket2.getsockname()
+
+        def on_llc_exchange_call(send_pdu, timeout):
+            if send_pdu and send_pdu.name=="UI" and send_pdu.ssap==socket1_sap:
+                send_pdu.ssap = socket2_sap
+            return send_pdu
+
+        try:
+            cl_echo_server = self.options.cl_echo_sap
+            if not cl_echo_server:
+                cl_echo_server = llc.resolve("urn:nfc:sn:cl-echo")
+            if not cl_echo_server:
+                raise TestError("connection-less echo server not available")
+            info("connection-less echo server on sap %d" % cl_echo_server)
+            
+            sdu1 = 50 * b'\x01'
+            sdu2 = 50 * b'\x02'
+
+            info("step 1: send one datagram to verify secure data transfer")
+            socket1.sendto(sdu1, cl_echo_server)
+            if not socket1.poll("recv", timeout=5):
+                raise TestError("did not receive first message within 5 sec")
+            if not socket1.recv() == sdu1:
+                raise TestError("first message came back wrong")
+            info("received first message")
+
+            self.on_llc_exchange_call = on_llc_exchange_call
+
+            info("step2: send one datagram with invalid pdu header ssap")
+            socket1.sendto(sdu2, cl_echo_server)
+            if socket2.poll("recv", timeout=5):
+                raise TestError("received data but link should be terminated")
+            try:
+                socket1.sendto(b'should fail', cl_echo_server)
+            except nfc.llcp.Error as error:
+                if not error.errno == errno.ESHUTDOWN:
+                    raise TestError("link not terminated")
+            info("link terminated after invalid send counter")
+            
+        finally:
+            socket1.close()
+            socket2.close()
 
 if __name__ == '__main__':
     TestProgram().run()
