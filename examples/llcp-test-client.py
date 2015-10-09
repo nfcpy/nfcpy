@@ -81,7 +81,7 @@ class TestProgram(CommandLineInterface):
             send_pdu = self.on_llc_exchange_call(send_pdu, timeout)
         rcvd_pdu = self.wrapped_llc_exchange(send_pdu, timeout)
         if self.on_llc_exchange_exit:
-            rcvd_pdu = self.on_llc_exchange_call(rcvd_pdu)
+            rcvd_pdu = self.on_llc_exchange_exit(rcvd_pdu)
         return rcvd_pdu
         
     def test_01(self, llc):
