@@ -618,8 +618,7 @@ class LogicalLinkController(object):
 
     def _bind_by_name(self, socket, name):
         if not (name.startswith("urn:nfc:sn") or
-                name.startswith("urn:nfc:xsn") or
-                name == "com.android.npp"): # invalid name but legacy
+                name.startswith("urn:nfc:xsn")):
             raise err.Error(errno.EFAULT)
         with self.lock:
             if self.snl.get(name) != None:
