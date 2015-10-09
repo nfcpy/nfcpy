@@ -170,7 +170,7 @@ class CommandLineInterface(object):
         if "test" in self.groups and self.options.test_all:
             self.options.test = []
             for test_name in [m for m in dir(self) if m.startswith("test_")]:
-                self.options.test.append(int(test_name.split('_')[1]))
+                self.options.test.append(test_name.lstrip('test_'))
         
     def add_dbg_options(self, argument_parser):
         group = argument_parser.add_argument_group(
@@ -267,8 +267,8 @@ class CommandLineInterface(object):
         group = argument_parser.add_argument_group(
             title="Test options")
         group.add_argument(
-            "-t", "--test", type=int, default=[], action="append",
-            metavar="N", help="run test number <N>")
+            "-t", "--test", default=[], action="append",
+            metavar="T", help="run test <T>")
         group.add_argument(
             "-T", "--test-all", action="store_true",
             help="run all available tests")
@@ -276,8 +276,8 @@ class CommandLineInterface(object):
         for test_name in [m for m in dir(self) if m.startswith("test_")]:
             test_func = eval("self."+test_name)
             test_info = test_func.__doc__.splitlines()[0]
-            argument_parser.description += "  {0:2d} - {1}\n".format(
-                int(test_name.split('_')[1]), test_info)
+            argument_parser.description += "  {0} - {1}\n".format(
+                test_name.lstrip('test_'), test_info)
         
     def on_rdwr_startup(self, targets):
         return targets
@@ -321,23 +321,24 @@ class CommandLineInterface(object):
     def run_tests(self, *args):
         if len(self.options.test) > 1:
             log.info("run tests: {0}".format(self.options.test))
-        for test in self.options.test:
-            test_name = "test_{0:02d}".format(test)
+        for index, test in enumerate(self.options.test):
+            test_name = "test_{0}".format(test)
             try:
                 test_func = eval("self." + test_name)
             except AttributeError:
-                log.error("invalid test number '{0}'".format(test))
+                log.error("invalid test '{0}'".format(test))
                 continue
             test_info = test_func.__doc__.splitlines()[0]
-            test_name = test_name.capitalize().replace('_', ' ')
+            try: test_name = "Test {0:02d}".format(test)
+            except ValueError: test_name = test
             print("{0}: {1}".format(test_name, test_info))
             try:
                 test_func(*args)
             except TestError as error:
-                print("Test {N:02d}: FAIL ({E})".format(N=test, E=error))
+                print("{0}: FAIL ({1})".format(test_name, error))
             else:
                 print("{0}: PASS".format(test_name))
-            if self.options.test.index(test) < len(self.options.test) - 1:
+            if index < len(self.options.test) - 1:
                 time.sleep(1)
         self.test_completed = True
 
