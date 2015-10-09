@@ -109,16 +109,21 @@ class ServiceAccessPoint(object):
                 for socket in self.sock_list:
                     if socket.state.LISTEN:
                         socket.enqueue(rcvd_pdu)
-                        return
+                        break
+                else:
+                    args = (rcvd_pdu.ssap, rcvd_pdu.dsap, 0x02)
+                    self.send(pdu.DisconnectedMode(*args))
             else:
                 for socket in self.sock_list:
                     if rcvd_pdu.ssap == socket.peer or socket.peer is None:
                         socket.enqueue(rcvd_pdu)
-                        return
-                    
-            if rcvd_pdu.name in tco.DataLinkConnection.DLC_PDU_NAMES:
-                dm = pdu.DisconnectedMode(rcvd_pdu.ssap,rcvd_pdu.dsap,reason=1)
-                self.send(dm)
+                        break
+                else:
+                    if rcvd_pdu.name in tco.DataLinkConnection.DLC_PDU_NAMES:
+                        args = (rcvd_pdu.ssap, rcvd_pdu.dsap, 0x01)
+                        self.send(pdu.DisconnectedMode(*args))
+                    else:
+                        log.debug("%s discard PDU %s", self, rcvd_pdu)
 
     def dequeue(self, max_size):
         with self.llc.lock:
@@ -547,7 +552,7 @@ class LogicalLinkController(object):
         with self.lock:
             sap = self.sap[rcvd_pdu.dsap]
             if sap: sap.enqueue(rcvd_pdu)
-            else: log.debug("discard PDU %s", rcvd_pdu)
+            else: log.debug("can't dispatch PDU %s", rcvd_pdu)
 
     def resolve(self, name):
         return self.sap[1].resolve(name)
