@@ -534,10 +534,10 @@ class LogicalLinkController(object):
             # connect-by-name
             addr = self.snl.get(rcvd_pdu.sn)
             if not addr or self.sap[addr] is None:
-                log.debug("no service named '{0}'".format(rcvd_pdu.sn))
-                # no such service -> schedule a DM PDU
-                self.sap[1].dmpdu.append(
-                    pdu.DisconnectedMode(rcvd_pdu.ssap, 1, reason=2))
+                dm_reason = 0x10 if rcvd_pdu.sn is None else 0x02
+                dm_pdu = pdu.DisconnectedMode(rcvd_pdu.ssap, 1, dm_reason)
+                self.sap[1].dmpdu.append(dm_pdu)
+                log.debug("could not find service %r", rcvd_pdu.sn)
                 return
             # service found, rewrite CONNECT PDU to its DSAP
             rcvd_pdu = pdu.Connect(dsap=addr, ssap=rcvd_pdu.ssap,

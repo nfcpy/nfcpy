@@ -461,7 +461,7 @@ class UnnumberedInformation(ProtocolDataUnit):
 class Connect(ProtocolDataUnit):
     name = "CONNECT"
     
-    def __init__(self, dsap, ssap, miu=128, rw=1, sn=""):
+    def __init__(self, dsap, ssap, miu=128, rw=1, sn=None):
         super(Connect, self).__init__(0b0100, dsap, ssap)
         self.miu = miu
         self.rw = rw
@@ -498,9 +498,8 @@ class Connect(ProtocolDataUnit):
                 (2 + len(self.sn) if self.sn else 0))
 
     def __str__(self):
-        s  = " MIU={conn.miu} RW={conn.rw}".format(conn=self)
-        s += " SN={conn.sn}".format(conn=self) if self.sn else ""
-        return super(Connect, self).__str__() + s
+        s  = " MIU={conn.miu} RW={conn.rw} SN={conn.sn}"
+        return super(Connect, self).__str__() + s.format(conn=self)
 
 # -----------------------------------------------------------------------------
 #                                                                Disconnect PDU
