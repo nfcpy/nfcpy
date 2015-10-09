@@ -607,14 +607,18 @@ class LogicalLinkController(object):
                 self.sap[addr].insert_socket(socket)
 
     def _bind_by_addr(self, socket, addr):
+        if addr < 0 or addr > 63:
+            raise err.Error(errno.EFAULT)
         with self.lock:
-            if addr in range(32, 64):
+            if addr in range(32, 64) or isinstance(socket, tco.RawAccessPoint):
                 if self.sap[addr] is None:
                     socket.bind(addr)
                     self.sap[addr] = ServiceAccessPoint(addr, self)
                     self.sap[addr].insert_socket(socket)
-                else: raise err.Error(errno.EADDRINUSE)
-            else: raise err.Error(errno.EACCES)
+                else:
+                    raise err.Error(errno.EADDRINUSE)
+            else:
+                raise err.Error(errno.EACCES)
 
     def _bind_by_name(self, socket, name):
         if not (name.startswith("urn:nfc:sn") or
