@@ -393,7 +393,7 @@ class Device(nfc.clf.device.Device):
                     target = nfc.clf.LocalTarget(
                         brty, atr_res=target.atr_res, atr_req=data[1:])
 
-            if target.atr_req:
+            if target and target.atr_req:
                 target.atr_res = atr_res
                 log.debug("rcvd ATR_REQ %s", hexlify(target.atr_req))
                 log.debug("send ATR_RES %s", hexlify(target.atr_res))
