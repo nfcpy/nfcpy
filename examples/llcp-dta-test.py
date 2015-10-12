@@ -76,6 +76,10 @@ class TestProgram(CommandLineInterface):
                 test_list = ['0_0_00_PREPARE'] + test_list
             for test in test_list:
                 log.info("*** START ***")
+                if '_INI_' in test:
+                    self.options.mode = 'initiator'
+                elif '_TAR_' in test:
+                    self.options.mode = 'target'
                 self.options.test = [test]
                 self.run_once()
                 time.sleep(1)
@@ -426,7 +430,7 @@ class TestProgram(CommandLineInterface):
                 raise TestError("no response within 1 second")
             pdu = send_socket.recv()
             if not pdu.name == "DM":
-                raise TestError("expected DM PDU but got %s" % pdu.name)
+                raise TestError("expected DM PDU not %s" % pdu.name)
             if not pdu.reason in {1: (2,), 2: (2,), 3: (2,), 4: (3, 16)}[x]:
                 raise TestError("disconnected mode reason %d" % pdu.reason)
         except nfc.llcp.Error as error:
@@ -463,27 +467,25 @@ class TestProgram(CommandLineInterface):
         self.exec_3_1_06_TC_CTO_TAR_BI_03_x(llc, x=4)
     
     def exec_3_1_06_TC_CTO_TAR_BI_03_x(self, llc, x):
-        send_socket = nfc.llcp.Socket(llc, nfc.llcp.llc.RAW_ACCESS_POINT)
-        tid = ord(os.urandom(1))
         payload = {
-            1: struct.pack('!BBB14s', 8, 15, tid, b'urn:nfc:void\x0d\x0a'),
-            2: struct.pack('!BBB11s', 8, 12, tid, b'urn:nfc:sn:'),
-            3: struct.pack('!BBB', 8, 1, tid),
+            1: struct.pack('!BBB14s', 8, 15, 1, b'urn:nfc:void\x0d\x0a'),
+            2: struct.pack('!BBB11s', 8, 12, 1, b'urn:nfc:sn:'),
+            3: struct.pack('!BBB', 8, 1, 1),
             4: b''
         }
+        send_pdu = nfc.llcp.pdu.UnknownProtocolDataUnit(9, 1, 1, payload[x])
         try:
-            pdu = nfc.llcp.pdu.UnknownProtocolDataUnit(9, 1, 1, payload[x])
-            send_socket.bind(pdu.ssap)
-            send_socket.send(pdu)
+            send_socket = nfc.llcp.Socket(llc, nfc.llcp.llc.RAW_ACCESS_POINT)
+            send_socket.bind(send_pdu.ssap)
+            send_socket.send(send_pdu)
             if not send_socket.poll('recv', timeout=1):
                 if x == 4: return
                 raise TestError("no response within 1 second")
-            pdu = send_socket.recv()
-            if not pdu.name == "SNL":
-                raise TestError("expected SNL PDU but got %s" % pdu.name)
-            if not pdu.sdres == [(tid, 0)]:
-                errstr = "expected SDRES[({tid}, 0)] but got {sdres}"
-                raise TestError(errstr.format(tid=tid, sdres=pdu.sdres))
+            rcvd_pdu = send_socket.recv()
+            if not rcvd_pdu.name == "SNL":
+                raise TestError("expected SNL PDU not %s" % rcvd_pdu.name)
+            if not pdu.sdres == [(1, 0)]:
+                raise TestError("expected SDRES[(1, 0)] not %r"%rcvd_pdu.sdres)
         except nfc.llcp.Error as error:
             raise TestError(repr(error))
         finally:
