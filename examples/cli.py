@@ -372,9 +372,9 @@ class CommandLineInterface(object):
                 }
             if self.options.technology:
                 rdwr_options["targets"] = {
-                    "A": [nfc.clf.RemoteTarget("106A")],
-                    "B": [nfc.clf.RemoteTarget("106B")],
-                    "F": [nfc.clf.RemoteTarget("212F")],
+                    "A": ["106A"],
+                    "B": ["106B"],
+                    "F": ["212F"],
                 }[self.options.technology.upper()]
         else:
             rdwr_options = None
