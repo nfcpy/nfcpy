@@ -735,7 +735,7 @@ class Device(device.Device):
         activation_params = nfca_params if brty=='106A' else nfcf_params
         
         def send_res_recv_req(brty, data, timeout):
-            if data: data = ("", "\xF0")[brty=="106A"] + chr(len(data)) + data
+            if data: data = ("", "\xF0")[brty=="106A"] + chr(len(data)+1)+data
             args = {'transmit_data': data, 'recv_timeout': timeout}
             data = self.chipset.tg_comm_rf(**args)[7:]
             if timeout > 0:
