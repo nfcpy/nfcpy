@@ -810,8 +810,8 @@ class TestProgram(CommandLineInterface):
                     service_name, e.reason))
             if not e.reason in (0x02, 0x10, 0x11):
                 raise TestError("invalid DM reason code {0}".format(e.reason))
-        except nfc.llcp.Error as e:
-            info(str(e))
+        except nfc.llcp.Error as error:
+            raise TestError(str(error))
         finally:
             socket.close()
 
@@ -863,12 +863,9 @@ class TestProgram(CommandLineInterface):
             socket.sendto(sdu2, cl_echo_server)
             if socket.poll("recv", timeout=5):
                 raise TestError("received data but link should be terminated")
-            try:
-                socket.sendto(b'should fail', cl_echo_server)
-            except nfc.llcp.Error as error:
-                if not error.errno == errno.ESHUTDOWN:
-                    raise TestError("link not terminated")
-            info("link terminated after invalid send counter")
+            if not llc.link.SHUTDOWN:
+                raise TestError("link not terminated")
+            info("link terminated as required")
             
         finally:
             socket.close()
@@ -933,12 +930,9 @@ class TestProgram(CommandLineInterface):
             socket1.sendto(sdu2, cl_echo_server)
             if socket2.poll("recv", timeout=5):
                 raise TestError("received data but link should be terminated")
-            try:
-                socket1.sendto(b'should fail', cl_echo_server)
-            except nfc.llcp.Error as error:
-                if not error.errno == errno.ESHUTDOWN:
-                    raise TestError("link not terminated")
-            info("link terminated after invalid send counter")
+            if not llc.link.SHUTDOWN:
+                raise TestError("link not terminated")
+            info("link terminated as required")
             
         finally:
             socket1.close()
@@ -979,7 +973,7 @@ class TestProgram(CommandLineInterface):
             sdu1 = 50 * b'\x01'
             sdu2 = 50 * b'\x02'
 
-            info("step 1: send one datagram to verify secure data transfer")
+            info("step 1: send one message to verify secure data transfer")
             socket.send(sdu1)
             if not socket.poll("recv", timeout=5):
                 raise TestError("did not receive first message within 5 sec")
@@ -987,17 +981,14 @@ class TestProgram(CommandLineInterface):
                 raise TestError("first message came back wrong")
             info("received first message")
 
-            info("step2: send one datagram with invalid packet send counter")
+            info("step2: send one message with invalid packet send counter")
             llc.sec._pcs += 1
             socket.send(sdu2)
             if socket.poll("recv", timeout=5):
                 raise TestError("received data but link should be terminated")
-            try:
-                socket.send(b'should fail')
-            except nfc.llcp.Error as error:
-                if not error.errno == errno.ESHUTDOWN:
-                    raise TestError("link not terminated")
-            info("link terminated after invalid send counter")
+            if not llc.link.SHUTDOWN:
+                raise TestError("link not terminated")
+            info("link terminated as required")
             
         finally:
             socket.close()
@@ -1063,12 +1054,9 @@ class TestProgram(CommandLineInterface):
             socket1.send(sdu2)
             if socket1.poll("recv", timeout=5):
                 raise TestError("received data but link should be terminated")
-            try:
-                socket1.send(b'should fail')
-            except nfc.llcp.Error as error:
-                if not error.errno == errno.ESHUTDOWN:
-                    raise TestError("link not terminated")
-            info("link terminated after invalid send counter")
+            if not llc.link.SHUTDOWN:
+                raise TestError("link not terminated")
+            info("link terminated as required")
             
         finally:
             socket1.close()
