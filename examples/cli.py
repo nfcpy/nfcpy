@@ -121,7 +121,13 @@ def log_usb_device_found_busy(path):
                       "to see which process is using the device"
                 log.info(msg.format(bus, dev))
 
-class TestError(Exception):
+class TestFail(Exception):
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return str(self.value)
+
+class TestSkip(Exception):
     def __init__(self, value):
         self.value = value
     def __str__(self):
@@ -334,8 +340,10 @@ class CommandLineInterface(object):
             print("{0}: {1}".format(test_name, test_info))
             try:
                 test_func(*args)
-            except TestError as error:
+            except TestFail as error:
                 print("{0}: FAIL ({1})".format(test_name, error))
+            except TestSkip as error:
+                print("{0}: SKIP ({1})".format(test_name, error))
             else:
                 print("{0}: PASS".format(test_name))
             if index < len(self.options.test) - 1:
