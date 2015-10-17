@@ -43,6 +43,7 @@ from cli import CommandLineInterface, TestError
 
 import nfc
 import nfc.llcp
+import nfc.llcp.pdu
 
 default_miu = 128
 
@@ -53,6 +54,31 @@ description = """
 Execute some Logical Link Control Protocol (LLCP) tests. The peer
 device must have the LLCP validation test servers running.
 """
+
+def get_connection_mode_echo_server_sap(llc, options):
+    co_echo_server = options.co_echo_sap
+    if not co_echo_server:
+        co_echo_server = llc.resolve("urn:nfc:sn:co-echo")
+    if not co_echo_server:
+        raise TestError("no connection-mode echo server on peer device")
+    info("connection-mode echo server addr is {0}".format(co_echo_server))
+    return co_echo_server
+
+def get_data_link_connection(socket, dsap, ssap, miu, rw, sn=None):
+    try:
+        socket.bind(ssap)
+        pdu = nfc.llcp.pdu.Connect(dsap, ssap, miu, rw, sn)
+        socket.send(pdu)
+        if not socket.poll("recv", timeout=5):
+            raise TestError("no response to connect within 5 seconds")
+        pdu = socket.recv()
+        if not pdu.name == "CC":
+            raise TestError("expected CC PDU not {0}".format(pdu.name))
+        info("connected with SAP {0}".format(pdu.ssap))
+        return pdu
+    except nfc.llcp.Error as error:
+        socket.close()
+        raise TestError(str(error))
 
 class TestProgram(CommandLineInterface):
     def __init__(self):
@@ -675,57 +701,42 @@ class TestProgram(CommandLineInterface):
 
     def test_10(self, llc):
         """Send more data than allowed"""
-        import nfc.llcp.pdu
-        co_echo_server = self.options.co_echo_sap
-        if not co_echo_server:
-            co_echo_server = llc.resolve("urn:nfc:sn:co-echo")
-        if not co_echo_server:
-            raise TestError("no connection-mode echo server on peer device")
-        info("connection-mode echo server on sap {0}".format(co_echo_server))
-        dlc_socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
-        raw_socket = nfc.llcp.Socket(llc, nfc.llcp.llc.RAW_ACCESS_POINT)
+        socket = nfc.llcp.Socket(llc, nfc.llcp.llc.RAW_ACCESS_POINT)
+        sap = get_connection_mode_echo_server_sap(llc, self.options)
+        pdu = get_data_link_connection(socket, sap, 63, 128, 1)
+        sdu = os.urandom(pdu.miu + 1)
+        pdu = nfc.llcp.pdu.Information(pdu.ssap, pdu.dsap, 0, 0, sdu)
+        info("remote MIU is {0} octet, sending 1 more".format(len(sdu)-1))
         try:
-            dlc_socket.connect(co_echo_server)
-            addr = dlc_socket.getsockname()
-            peer = dlc_socket.getpeername()
-            info("connected with sap {0}".format(peer))
-            send_miu = dlc_socket.getsockopt(nfc.llcp.SO_SNDMIU)
-            info("the peers receive MIU is {0} octets".format(send_miu))
-            sdu = (send_miu + 1) * b'\x00'
-            pdu = nfc.llcp.pdu.Information(peer, addr, 0, 0, sdu)
-            pdu.ns, pdu.nr = 0, 0
-            raw_socket.send(pdu)
-            dlc_socket.recv()
-        except nfc.llcp.Error as e:
-            info(str(e))
+            socket.send(pdu)
+            assert socket.poll("recv", 5), "no response in 5 seconds"
+            pdu = socket.recv()
+            assert pdu.name == "FRMR",  "expected FRMR PDU not %s" % pdu.name
+            assert pdu.rej_flags == 4,  "expected FRMR FLAGS == 0100b"
+            assert pdu.rej_ptype == 12, "expected FRMR PTYPE == 1100b"
+        except (AssertionError, nfc.llcp.Error) as error:
+            raise TestError(str(error))
         finally:
-            dlc_socket.close()
-            raw_socket.close()
+            socket.close()
 
     def test_11(self, llc):
         """Use invalid send sequence number"""
-        import nfc.llcp.pdu
-        co_echo_server = self.options.co_echo_sap
-        if not co_echo_server:
-            co_echo_server = llc.resolve("urn:nfc:sn:co-echo")
-        if not co_echo_server:
-            raise TestError("no connection-mode echo server on peer device")
-        info("connection-mode echo server on sap {0}".format(co_echo_server))
-        dlc_socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
-        raw_socket = nfc.llcp.Socket(llc, nfc.llcp.llc.RAW_ACCESS_POINT)
+        socket = nfc.llcp.Socket(llc, nfc.llcp.llc.RAW_ACCESS_POINT)
+        sap = get_connection_mode_echo_server_sap(llc, self.options)
+        pdu = get_data_link_connection(socket, sap, 63, 128, 1)
+        pdu = nfc.llcp.pdu.Information(pdu.ssap, pdu.dsap, 13, 8, b'wrong seq')
+        info("sending N(S)={pdu.ns} and N(R)={pdu.nr}".format(pdu=pdu))
         try:
-            dlc_socket.connect(co_echo_server)
-            addr = dlc_socket.getsockname()
-            peer = dlc_socket.getpeername()
-            info("connected with sap {0}".format(peer))
-            pdu = nfc.llcp.pdu.Information(peer, addr, 15, 0, "wrong N(S)")
-            raw_socket.send(pdu)
-            dlc_socket.recv()
-        except nfc.llcp.Error as e:
-            info(str(e))
+            socket.send(pdu)
+            assert socket.poll("recv", 5), "no response in 5 seconds"
+            pdu = socket.recv()
+            assert pdu.name == "FRMR",  "expected FRMR PDU not %s" % pdu.name
+            assert pdu.rej_flags == 1,  "expected FRMR FLAGS == 0001b"
+            assert pdu.rej_ptype == 12, "expected FRMR PTYPE == 1100b"
+        except (AssertionError, nfc.llcp.Error) as error:
+            raise TestError(str(error))
         finally:
-            dlc_socket.close()
-            raw_socket.close()
+            socket.close()
 
     def test_12(self, llc):
         """Use maximum data size on data link connection"""
