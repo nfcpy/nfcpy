@@ -691,8 +691,8 @@ class TestProgram(CommandLineInterface):
             info("connected with sap {0}".format(peer))
             send_miu = dlc_socket.getsockopt(nfc.llcp.SO_SNDMIU)
             info("the peers receive MIU is {0} octets".format(send_miu))
-            sdu = (send_miu + 1) * '\x00'
-            pdu = nfc.llcp.pdu.Information(peer, addr, sdu)
+            sdu = (send_miu + 1) * b'\x00'
+            pdu = nfc.llcp.pdu.Information(peer, addr, 0, 0, sdu)
             pdu.ns, pdu.nr = 0, 0
             raw_socket.send(pdu)
             dlc_socket.recv()
