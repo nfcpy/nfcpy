@@ -47,8 +47,8 @@ import nfc.llcp.pdu
 
 default_miu = 128
 
-def info(message, prefix="  "):
-    log.info(prefix + message)
+def info(message, *args, **kwargs):
+    log.info("  " + message, *args, **kwargs)
 
 description = """
 Execute some Logical Link Control Protocol (LLCP) tests. The peer
@@ -128,17 +128,15 @@ class TestProgram(CommandLineInterface):
            the remote Link Management component. Verify that SYMM PDUs
            are no longer exchanged.
         """
-        socket = nfc.llcp.Socket(llc, nfc.llcp.LOGICAL_DATA_LINK)
-        socket.bind()
         try:
             for i in range(5):
-                socket.poll("recv", timeout=1)
-                info("connected seconds: {0}".format(i+1))
-        except nfc.llcp.Error:
-            raise TestFail("connection lost before test completion")
-        finally:
-            socket.close()
-
+                info('after %d second: %s', i, ' -> '.join(llc.link.cycle))
+                time.sleep(1)
+                assert llc.link.ESTABLISHED, "llcp terminated before 5 seconds"
+            info('after %d second: %s', i, ' -> '.join(llc.link.cycle))
+        except AssertionError as error:
+            raise TestFail(str(error))
+            
     def test_02(self, llc):
         """Connection-less information transfer
 
@@ -184,7 +182,7 @@ class TestProgram(CommandLineInterface):
             try:
                 for i in range(1, send_count + 1):
                     data, addr = packet_length * chr(i), cl_server
-                    info("send message {0}".format(i), prefix="    ")
+                    info("  send message {0}".format(i))
                     socket.sendto(data, addr)
                     test_data.send.append((data, addr, time.time()))
                     time.sleep(0.5)
@@ -291,11 +289,11 @@ class TestProgram(CommandLineInterface):
         info("connection-less echo server on sap {0}".format(cl_echo_server))
         socket.connect(cl_echo_server)
         try:
-            if run_step_1(socket): info("PASS", prefix="    ")
-            if run_step_2(socket): info("PASS", prefix="    ")
-            if run_step_3(socket): info("PASS", prefix="    ")
-            if run_step_4(socket): info("PASS", prefix="    ")
-            if run_step_5(socket): info("PASS", prefix="    ")
+            if run_step_1(socket): info("  PASS")
+            if run_step_2(socket): info("  PASS")
+            if run_step_3(socket): info("  PASS")
+            if run_step_4(socket): info("  PASS")
+            if run_step_5(socket): info("  PASS")
         finally:
             socket.close()
             
