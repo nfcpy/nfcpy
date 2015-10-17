@@ -139,20 +139,43 @@ class TransmissionControlObject(object):
     def enqueue(self, rcvd_pdu):
         with self.lock:
             if len(self.recv_queue) < self.recv_buf:
+                log.debug("enqueue {0}".format(rcvd_pdu))
                 self.recv_queue.append(rcvd_pdu)
                 self.recv_ready.notify()
                 return True
-            else: log.warn("lost data on busy recv queue")
-            return False
+            else:
+                log.warn("discard {0}".format(rcvd_pdu))
+                return False
 
-    def dequeue(self, maxlen, notify=True):
+    def dequeue(self, miu_size, icv_size, notify=True):
+        # Return the first pending outbound PDU if it's information
+        # field size (total size - header size) does not exceed the
+        # given miu_size value. For UI and I PDUs do also consider the
+        # icv_size value (this is set to non-zero by the packet
+        # collector when aggregating). Re-insert the PDU at the
+        # beginning of the send queue if it exceeds the miu_size.
+        # Skip the length check if miu_size is None.
         with self.lock:
-            send_pdu = self.send_queue.popleft()
-            if len(send_pdu) <= maxlen:
-                if notify == True:
-                    self.send_ready.notify()
-                return send_pdu
-            else: self.send_queue.appendleft(send_pdu)
+            try:
+                send_pdu = self.send_queue.popleft()
+                log.debug("dequeue {0}".format(send_pdu))
+            except IndexError:
+                return None
+
+            if send_pdu.name in ("UI", "I"):
+                pdu_size = len(send_pdu) + icv_size
+            else:
+                pdu_size = len(send_pdu)
+                
+            if miu_size != None and pdu_size - send_pdu.header_size > miu_size:
+                log.debug("requeue {0}".format(send_pdu))
+                self.send_queue.appendleft(send_pdu)
+                return None
+            
+            if notify == True:
+                self.send_ready.notify()
+                
+            return send_pdu
 
 class RawAccessPoint(TransmissionControlObject):
     """
@@ -209,12 +232,8 @@ class RawAccessPoint(TransmissionControlObject):
     def enqueue(self, rcvd_pdu):
         return super(RawAccessPoint, self).enqueue(rcvd_pdu)
 
-    def dequeue(self, maxlen):
-        try:
-            send_pdu = super(RawAccessPoint, self).dequeue(3 + 2048 + 128)
-        except IndexError:
-            send_pdu = None
-        return send_pdu
+    def dequeue(self, miu_size, icv_size):
+        return super(RawAccessPoint, self).dequeue(miu_size=None, icv_size=0)
 
 
 class LogicalDataLink(TransmissionControlObject):
@@ -292,12 +311,8 @@ class LogicalDataLink(TransmissionControlObject):
             return False
         return super(LogicalDataLink, self).enqueue(rcvd_pdu)
 
-    def dequeue(self, maxlen):
-        try:
-            send_pdu = super(LogicalDataLink, self).dequeue(maxlen)
-        except IndexError:
-            send_pdu = None
-        return send_pdu
+    def dequeue(self, miu_size, icv_size):
+        return super(LogicalDataLink, self).dequeue(miu_size, icv_size)
 
 
 class DataLinkConnection(TransmissionControlObject):
@@ -475,7 +490,7 @@ class DataLinkConnection(TransmissionControlObject):
                     raise err.Error(errno.WOULDBLOCK)
                 self.log("waiting on busy send window")
                 self.send_token.wait()
-            self.log("send() {0}".format(str(self)))
+            self.log("send {0} byte on {1}".format(len(message), str(self)))
             if self.state.ESTABLISHED:
                 send_pdu = pdu.Information(self.peer, self.addr, data=message)
                 send_pdu.ns = self.send_cnt
@@ -632,7 +647,7 @@ class DataLinkConnection(TransmissionControlObject):
                 self.recv_cnt = (self.recv_cnt + 1) % 16
             super(DataLinkConnection, self).enqueue(rcvd_pdu)
 
-    def dequeue(self, maxlen):
+    def dequeue(self, miu_size, icv_size):
         with self.lock:
             if self.state.ESTABLISHED:
                 if self.mode.RECV_BUSY_SENT != self.mode.RECV_BUSY:
@@ -640,11 +655,8 @@ class DataLinkConnection(TransmissionControlObject):
                     ACK = RNR_PDU if self.mode.RECV_BUSY else RR_PDU
                     return ACK(self.peer, self.addr, self.recv_ack)
 
-            try:
-                send_pdu = (super(DataLinkConnection, self)
-                            .dequeue(maxlen, notify=False))
-            except IndexError:
-                send_pdu = None # no pdu available
+            send_pdu = super(DataLinkConnection, self).dequeue(
+                miu_size, icv_size, notify=False)
             
             if send_pdu:
                 self.log("dequeue {0} PDU".format(send_pdu.name))
@@ -669,7 +681,7 @@ class DataLinkConnection(TransmissionControlObject):
             
             else:
                 if (self.state.ESTABLISHED and self.recv_confs
-                    and maxlen >= 3 and self.recv_window_slots == 0):
+                    and self.recv_window_slots == 0):
                     # must send acknowledgement to keep going
                     self.log("necessary ack " + str(self))
                     self.recv_ack = (self.recv_ack + self.recv_confs) % 16
@@ -679,11 +691,10 @@ class DataLinkConnection(TransmissionControlObject):
             
             return send_pdu
 
-    def sendack(self, maxlen):
+    def sendack(self):
         if self.state.ESTABLISHED:
             with self.lock:
-                if (self.recv_confs and maxlen >= 3 and
-                    self.recv_cnt != self.recv_ack):
+                if self.recv_confs and self.recv_cnt != self.recv_ack:
                     self.log("voluntary ack " + str(self))
                     self.recv_ack = (self.recv_ack + self.recv_confs) % 16
                     self.recv_confs = 0

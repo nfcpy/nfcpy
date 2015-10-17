@@ -125,19 +125,19 @@ class ServiceAccessPoint(object):
                     else:
                         log.debug("%s discard PDU %s", self, rcvd_pdu)
 
-    def dequeue(self, max_size):
+    def dequeue(self, miu_size, icv_size):
         with self.llc.lock:
             for socket in self.sock_list:
-                send_pdu = socket.dequeue(max_size)
+                send_pdu = socket.dequeue(miu_size, icv_size)
                 if send_pdu: return send_pdu
             else:
                 try: return self.send_list.popleft()
                 except IndexError: pass
 
-    def sendack(self, max_size):
+    def sendack(self):
         with self.llc.lock:
             for socket in self.sock_list:
-                send_pdu = socket.sendack(max_size)
+                send_pdu = socket.sendack()
                 if send_pdu: return send_pdu
 
 class ServiceDiscovery(object):
@@ -192,25 +192,28 @@ class ServiceDiscovery(object):
                     except KeyError: sap = 0
                     self.sdres.append((tid, sap))
 
-    def dequeue(self, max_size):
-        if max_size < 2:
-            return None
+    def dequeue(self, miu_size, icv_size):
         with self.llc.lock:
             if len(self.sdres) > 0 or len(self.sdreq) > 0:
                 send_pdu = pdu.ServiceNameLookup(dsap=1, ssap=1)
-                max_size -= len(send_pdu)
-                while max_size > 0:
-                    try: send_pdu.sdres.append(self.sdres.popleft())
-                    except IndexError: break
+                # add service discovery responses
+                while miu_size > 0:
+                    try:
+                        send_pdu.sdres.append(self.sdres.popleft())
+                        miu_size -= 4
+                    except IndexError:
+                        break
+                # add service discovery requests
                 for i in range(len(self.sdreq)):
                     tid, name = self.sdreq[0]
-                    if 1 + len(name) > max_size:
+                    if 3 + len(name) > miu_size:
                         self.sdreq.rotate(-1)
                     else:
                         send_pdu.sdreq.append(self.sdreq.popleft())
                         self.sent[tid] = name
+                        miu_size -= 3 + len(name)
                 return send_pdu
-            if len(self.dmpdu) > 0 and max_size >= 2:
+            if len(self.dmpdu) > 0 and miu_size > 0:
                 return self.dmpdu.popleft()
 
     def shutdown(self):
@@ -219,7 +222,24 @@ class ServiceDiscovery(object):
             self.resp.notify_all()
 
 class LogicalLinkController(object):
+    class LinkState(object):
+        def __init__(self):
+            self.names = ("SHUTDOWN", "LISTEN", "CONNECT", "CONNECTED",
+                          "ESTABLISHED", "DISCONNECT", "CLOSED")
+            self.value = self.names.index("SHUTDOWN")
+            self.cycle = list()
+        def __str__(self):
+            return self.names[self.value]
+        def __getattr__(self, name):
+            return self.value == self.names.index(name)
+        def __setattr__(self, name, value):
+            if not name in ("names", "value", "cycle"):
+                self.cycle.append(name)
+                value, name = self.names.index(name), "value"
+            super(LogicalLinkController.LinkState,self).__setattr__(name,value)
+
     def __init__(self, **options):
+        self.link = LogicalLinkController.LinkState()
         self.lock = threading.RLock()
         self.cfg = dict()
         self.cfg['recv-miu'] = options.get('miu', 248)
@@ -264,9 +284,11 @@ class LogicalLinkController(object):
 
         gb = b'Ffm' + pdu.encode(send_pax)[2:]
         if isinstance(mac, nfc.dep.Initiator):
+            self.link.CONNECT = True
             gb = mac.activate(gbi=gb, **options)
             self.run = self.run_as_initiator
         elif isinstance(mac, nfc.dep.Target):
+            self.link.LISTEN = True
             gb = mac.activate(gbt=gb, **options)
             self.run = self.run_as_target
         else: gb = None
@@ -315,13 +337,14 @@ class LogicalLinkController(object):
                     log.warning(msg.format(mac.rwt, max_rwt))
 
             self.mac = mac
+            self.link.CONNECTED = True
 
         return bool(self.mac)
 
     def terminate(self, reason):
         log.debug("llcp link termination caused by {0}".format(reason))
         if type(self.mac) == nfc.dep.Initiator:
-            if reason == "local choice":
+            if self.link.DISCONNECT is True:
                 self.exchange(pdu.Disconnect(0, 0), timeout=0.5)
             self.mac.deactivate(release=True)
         if type(self.mac) == nfc.dep.Target:
@@ -332,6 +355,7 @@ class LogicalLinkController(object):
                 log.debug("closing service access point %d" % i)
                 self.sap[i].shutdown()
                 self.sap[i] = None
+        self.link.SHUTDOWN = True
         
     def exchange(self, send_pdu, timeout):
         # Send and receive one protocol data unit. The send_pdu is
@@ -377,14 +401,16 @@ class LogicalLinkController(object):
                     return self.terminate(reason="key agreement error")
                 cipher.calculate_session_key(rcvd_dps.ecpk, rn_t=rcvd_dps.rn)
                 self.sec = cipher
-        
+
             send_pdu = self.collect(delay=0.01)
+            self.link.ESTABLISHED = True
             while not terminate():
                 if send_pdu is None: send_pdu = pdu.Symmetry()
                 rcvd_pdu = self.exchange(send_pdu, recv_timeout)
                 if rcvd_pdu is None:
                     return self.terminate(reason="link disruption")
                 if rcvd_pdu == pdu.Disconnect(0, 0):
+                    self.link.CLOSED = True
                     return self.terminate(reason="remote choice")
                 symm += 1 if rcvd_pdu.name == "SYMM" else 0
                 self.dispatch(rcvd_pdu)
@@ -392,9 +418,11 @@ class LogicalLinkController(object):
                 if send_pdu is None and symm >= 10:
                     send_pdu = self.collect(delay=0.05)
             else:
+                self.link.DISCONNECT = True
                 self.terminate(reason="local choice")
         except KeyboardInterrupt:
             print() # move to new line
+            self.link.DISCONNECT = True
             self.terminate(reason="local choice")
             raise KeyboardInterrupt
         except IOError:
@@ -440,10 +468,12 @@ class LogicalLinkController(object):
             else:
                 rcvd_pdu = self.exchange(None, recv_timeout)
 
+            self.link.ESTABLISHED = True
             while not terminate():
                 if rcvd_pdu is None:
                     return self.terminate(reason="link disruption")
                 if rcvd_pdu == pdu.Disconnect(0, 0):
+                    self.link.CLOSED = True
                     return self.terminate(reason="remote choice")
                 symm += 1 if isinstance(rcvd_pdu, pdu.Symmetry) else 0
                 self.dispatch(rcvd_pdu)
@@ -453,9 +483,11 @@ class LogicalLinkController(object):
                 if send_pdu is None: send_pdu = pdu.Symmetry()
                 rcvd_pdu = self.exchange(send_pdu, recv_timeout)
             else:
+                self.link.DISCONNECT = True
                 self.terminate(reason="local choice")
         except KeyboardInterrupt:
             print() # move to new line
+            self.link.DISCONNECT = True
             self.terminate(reason="local choice")
             raise KeyboardInterrupt
         except IOError:
@@ -474,49 +506,86 @@ class LogicalLinkController(object):
             log.debug("llc run loop terminated on target")
 
     def collect(self, delay=None):
-        #log.debug("start pdu collect after %f seconds", delay if delay else 0)
-        if delay: time.sleep(delay)
-        max_size = self.cfg["send-miu"] + 2
-        pdu_list = list()
+        # Collect a single PDU or multiple PDUs if aggregation is enabled.
+        if delay:
+            time.sleep(delay)
+        
+        def encrypt(send_pdu):
+            pdu_type = type(send_pdu)
+            a = send_pdu.encode_header()
+            c = self.sec.encrypt(a, send_pdu.data)
+            return pdu_type(*pdu_type.decode_header(a), data=c)
+        
+        is_sap = lambda sap: sap is not None
+        is_raw = lambda sap: sap and sap.mode == RAW_ACCESS_POINT
+        is_ldl = lambda sap: sap and sap.mode == LOGICAL_DATA_LINK
+        is_dlc = lambda sap: sap and sap.mode == DATA_LINK_CONNECTION
+
+        miu_size = self.cfg["send-miu"]
+        icv_size = self.sec.icv_size if self.sec else 0
+        send_pdu = None
         
         with self.lock:
-            active_sap_list = [sap for sap in self.sap if sap is not None]
-            stop_dequeue = False
-            while not stop_dequeue:
-                stop_dequeue = True
-                for sap in active_sap_list:
-                    #log.debug("query sap %s, max_size=%d", sap, max_size)
-                    send_pdu = sap.dequeue(max_size)
+            # Dequeue from the list of active SAP until the first one
+            # that returns a PDU. Return the PDU if it consumes the
+            # Link MIU, otherwise break from the loop. The sap.dequeue
+            # method is called with icv_size=0 because for a single
+            # UI/I PDU we do not need to account for this value.
+            for sap in filter(is_sap, self.sap):
+                send_pdu = sap.dequeue(miu_size, icv_size=0)
+                if send_pdu:
+                    if self.sec and send_pdu.name in ("UI", "I"):
+                        send_pdu = encrypt(send_pdu)
+                    if len(send_pdu) - send_pdu.header_size >= miu_size:
+                        return send_pdu
+                    break
+
+            # Data Link Connection endpoints do not dequeue RR/RNR PDUs until
+            # the receive window is exhausted. If there is not yet a PDU to
+            # send, this loop allows voluntary acknowledgement.
+            if send_pdu is None:
+                for sap in filter(is_dlc, self.sap):
+                    send_pdu = sap.sendack()
                     if send_pdu:
+                        break
+
+            # Finish if either there is either no PDU to send or if PDU
+            # aggregation is disabled.
+            if send_pdu is None or self.cfg['send-agf'] is False:
+                return send_pdu
+
+            # We have one PDU to send and aggregation is enabled. We'll see if
+            # there are more outbound PDUs and collect them into an AGF PDU.
+            agf_pdu = pdu.AggregatedFrame(0, 0, [send_pdu])
+            miu_size = self.cfg["send-miu"] - len(agf_pdu) - 3
+            while True:
+                # The first loop will dequeue PDUs until the reamining miu_size
+                # is exhausted or all active SAP did not return a PDU.
+                deq_none = True
+                for sap in filter(is_sap, self.sap):
+                    send_pdu = sap.dequeue(miu_size, icv_size)
+                    if send_pdu:
+                        deq_none = False
                         if self.sec and send_pdu.name in ("UI", "I"):
-                            pdu_type = type(send_pdu)
-                            a = send_pdu.encode_header()
-                            c = self.sec.encrypt(a, send_pdu.data)
-                            pdu_args = pdu_type.decode_header(a) + (c,)
-                            send_pdu = pdu_type(*pdu_args)
-                        pdu_list.append(send_pdu)
-                        max_size -= 2 + len(send_pdu)
-                        required = 4 + self.sec.icv_size if self.sec else 4
-                        if max_size >= required and self.cfg['send-agf']:
-                            stop_dequeue = False
-                        else:
+                            send_pdu = encrypt(send_pdu)
+                        agf_pdu.append(send_pdu)
+                        miu_size = self.cfg["send-miu"] - len(agf_pdu) - 3
+                        if miu_size < 0:
+                            break
+                if miu_size < 0 or deq_none:
+                    break
+            # If the miu_size is not yet exhausted we query all data link
+            # connection endpoints once for voluntary acknowledgements.
+            if miu_size >= 0:
+                for sap in filter(is_dlc, self.sap):
+                    send_pdu = sap.sendack()
+                    if send_pdu:
+                        agf_pdu.append(send_pdu)
+                        miu_size = self.cfg["send-miu"] - len(agf_pdu) - 3
+                        if miu_size < 0:
                             break
             
-            if max_size >= 5 and (self.cfg['send-agf'] or len(pdu_list) == 0):
-                for sap in active_sap_list:
-                    if sap.mode == DATA_LINK_CONNECTION:
-                        send_pdu = sap.sendack(max_size)
-                        if send_pdu:
-                            pdu_list.append(send_pdu)
-                            max_size -= 2 + len(send_pdu)
-                            if not (max_size >= 5 and self.cfg['send-agf']):
-                                break
-
-        if len(pdu_list) > 1:
-            return pdu.AggregatedFrame(0, 0, pdu_list)
-        if len(pdu_list) == 1:
-            return pdu_list[0]
-        return None
+            return agf_pdu if agf_pdu.count > 1 else agf_pdu.first
 
     def dispatch(self, rcvd_pdu):
         if rcvd_pdu is None or rcvd_pdu.name == "SYMM":
@@ -643,6 +712,9 @@ class LogicalLinkController(object):
             self.bind(socket)
         socket.connect(dest)
         log.debug("connected ({0} ===> {1})".format(socket.addr, socket.peer))
+        if socket.send_miu > self.cfg['send-miu']:
+            log.warn("reducing outbound miu to not exceed the link miu")
+            socket.send_miu = self.cfg['send-miu']
 
     def listen(self, socket, backlog):
         if not isinstance(socket, tco.TransmissionControlObject):
@@ -670,6 +742,9 @@ class LogicalLinkController(object):
             if self.sap[client.addr].insert_socket(client):
                 log.debug("new data link connection ({0} <=== {1})"
                           .format(client.addr, client.peer))
+                if client.send_miu > self.cfg['send-miu']:
+                    log.warn("reducing outbound miu to not exceed the link miu")
+                    client.send_miu = self.cfg['send-miu']
                 return client
             else:
                 dm = pdu.DisconnectedMode(client.peer, socket.addr, reason=0x20)

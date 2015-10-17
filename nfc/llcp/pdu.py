@@ -135,6 +135,8 @@ class Parameter:
 #                                                   ProtocolDataUnit Base Class
 # -----------------------------------------------------------------------------
 class ProtocolDataUnit(object):
+    header_size = 2
+    
     def __init__(self, ptype, dsap, ssap):
         self.ptype = ptype
         self.dsap = dsap
@@ -167,6 +169,8 @@ class ProtocolDataUnit(object):
 #                                           NumberedProtocolDataUnit Base Class
 # -----------------------------------------------------------------------------
 class NumberedProtocolDataUnit(ProtocolDataUnit):
+    header_size = 3
+    
     def __init__(self, ptype, dsap, ssap, ns, nr):
         super(NumberedProtocolDataUnit, self).__init__(ptype, dsap, ssap)
         self.ns, self.nr = ns, nr
@@ -403,6 +407,14 @@ class AggregatedFrame(ProtocolDataUnit):
         
     def append(self, pdu):
         self._aggregate.append(pdu)
+
+    @property
+    def count(self):
+        return len(self._aggregate)
+
+    @property
+    def first(self):
+        return self._aggregate[0]
 
     def __len__(self):
         return 2 + sum([2+len(pdu) for pdu in self._aggregate])
@@ -657,7 +669,7 @@ class FrameReject(ProtocolDataUnit):
 
     def __str__(self):
         return super(FrameReject, self).__str__() +\
-            " FLAGS={frmr.rej_flags:04b} PTYPE={frmr.rej_ptype}"\
+            " FLAGS={frmr.rej_flags:04b} PTYPE={frmr.rej_ptype:04b}"\
             " N(S)={frmr.ns} N(R)={frmr.nr}"\
             " V(S)={frmr.vs} V(R)={frmr.vr}"\
             " V(SA)={frmr.vsa} V(RA)={frmr.vra}"\
