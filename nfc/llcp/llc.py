@@ -25,10 +25,10 @@ log = logging.getLogger(__name__)
 
 import time
 import errno
-from types import *
+import types
+import random
 import threading
 import collections
-import random
 
 import nfc.clf
 import nfc.dep
@@ -44,9 +44,8 @@ RAW_ACCESS_POINT, LOGICAL_DATA_LINK, DATA_LINK_CONNECTION = range(3)
 
 wks_map = {
     "urn:nfc:sn:sdp" : 1,
-    "urn:nfc:sn:ip"  : 2,
-    "urn:nfc:sn:obex": 3,
-    "urn:nfc:sn:snep": 4}
+    "urn:nfc:sn:snep": 4,
+}
 
 class ServiceAccessPoint(object):
     def __init__(self, addr, llc):
@@ -676,9 +675,9 @@ class LogicalLinkController(object):
             raise err.Error(errno.EINVAL)
         if addr_or_name is None:
             self._bind_by_none(socket)
-        elif type(addr_or_name) is IntType:
+        elif type(addr_or_name) is types.IntType:
             self._bind_by_addr(socket, addr_or_name)
-        elif type(addr_or_name) is StringType:
+        elif type(addr_or_name) is types.StringType:
             self._bind_by_name(socket, addr_or_name)
         else: raise err.Error(errno.EFAULT)
 
@@ -737,7 +736,7 @@ class LogicalLinkController(object):
             raise err.Error(errno.ENOTSOCK)
         if not isinstance(socket, tco.DataLinkConnection):
             raise err.Error(errno.EOPNOTSUPP)
-        if not type(backlog) == IntType:
+        if not type(backlog) == types.IntType:
             raise TypeError("backlog must be integer")
         if backlog < 0:
             raise ValueError("backlog mmust not be negative")
@@ -780,7 +779,7 @@ class LogicalLinkController(object):
             # FIXME: set socket send miu when activated
             socket.send_miu = self.cfg['send-miu']
             return socket.send(message, flags)
-        if not type(message) == StringType:
+        if not type(message) == types.StringType:
             raise TypeError("sendto() argument *message* must be a string")
         if isinstance(socket, tco.LogicalDataLink):
             if dest is None:
