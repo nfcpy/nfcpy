@@ -130,11 +130,10 @@ class TestProgram(CommandLineInterface):
            are no longer exchanged.
         """
         try:
-            for i in range(5):
-                info('after %d second: %s', i, ' -> '.join(llc.link.cycle))
+            for i in range(1, 6):
                 time.sleep(1)
                 assert llc.link.ESTABLISHED, "llcp terminated before 5 seconds"
-            info('after %d second: %s', i, ' -> '.join(llc.link.cycle))
+                info('llcp link established for %d second', i)
         except AssertionError as error:
             raise TestFail(str(error))
             

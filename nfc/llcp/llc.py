@@ -227,14 +227,12 @@ class LogicalLinkController(object):
             self.names = ("SHUTDOWN", "LISTEN", "CONNECT", "CONNECTED",
                           "ESTABLISHED", "DISCONNECT", "CLOSED")
             self.value = self.names.index("SHUTDOWN")
-            self.cycle = list()
         def __str__(self):
             return self.names[self.value]
         def __getattr__(self, name):
             return self.value == self.names.index(name)
         def __setattr__(self, name, value):
-            if not name in ("names", "value", "cycle"):
-                self.cycle.append(name)
+            if not name in ("names", "value"):
                 value, name = self.names.index(name), "value"
             super(LogicalLinkController.LinkState,self).__setattr__(name,value)
 
