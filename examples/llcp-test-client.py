@@ -33,6 +33,7 @@ import os
 import sys
 import time
 import errno
+import datetime
 import argparse
 import itertools
 import collections
@@ -177,18 +178,19 @@ class TestProgram(CommandLineInterface):
         TestData = collections.namedtuple("TestData", "send recv")
 
         def send_and_receive(socket, send_count, packet_length):
+            timestamp = lambda: datetime.datetime.fromtimestamp(time.time())
             test_data = TestData(send=[], recv=[])
             cl_server = socket.getpeername()
             try:
                 for i in range(1, send_count + 1):
                     data, addr = packet_length * chr(i), cl_server
-                    info("  send message {0}".format(i))
+                    info("  send message %d", i)
                     socket.sendto(data, addr)
-                    test_data.send.append((data, addr, time.time()))
+                    test_data.send.append((data, addr, timestamp()))
                     time.sleep(0.5)
                 while socket.poll("recv", timeout=5):
                     data, addr = socket.recvfrom()
-                    test_data.recv.append((data, addr, time.time()))
+                    test_data.recv.append((data, addr, timestamp()))
             except nfc.llcp.Error as error:
                 raise TestFail(error)
             if len(test_data.recv) == 0:
@@ -207,8 +209,8 @@ class TestProgram(CommandLineInterface):
                     raise TestFail("received data from different port")
                 if recv_data != send_data:
                     raise TestFail("received data does not match sent data")
-                info("rcvd message {0} after {1} ms"
-                     .format(i+1, int((recv_time - send_time) * 1000)), "    ")
+                info("  message %d received at %s (%.3f seconds after send)",
+                     i+1,recv_time.time(),(recv_time-send_time).total_seconds())
             return True
 
         def run_step_2(socket):
@@ -223,8 +225,8 @@ class TestProgram(CommandLineInterface):
                     raise TestFail("received data from different port")
                 if recv_data != send_data:
                     raise TestFail("received data does not match sent data")
-                info("rcvd message {0} after {1} ms"
-                     .format(i+1, int((recv_time - send_time) * 1000)), "    ")
+                info("  message %d received at %s (%.3f seconds after send)",
+                     i+1,recv_time.time(),(recv_time-send_time).total_seconds())
             return True
 
         def run_step_3(socket):
@@ -239,8 +241,8 @@ class TestProgram(CommandLineInterface):
                     raise TestFail("received data from different port")
                 if recv_data != send_data:
                     raise TestFail("received data does not match sent data")
-                info("rcvd message {0} after {1} ms"
-                     .format(i+1, int((recv_time - send_time) * 1000)), "    ")
+                info("  message %d received at %s (%.3f seconds after send)",
+                     i+1,recv_time.time(),(recv_time-send_time).total_seconds())
             return True
 
         def run_step_4(socket):
@@ -255,8 +257,8 @@ class TestProgram(CommandLineInterface):
                     raise TestFail("received data from different port")
                 if recv_data != send_data:
                     raise TestFail("received data does not match sent data")
-                info("rcvd message {0} after {1} ms"
-                     .format(i+1, int((recv_time - send_time) * 1000)), "    ")
+                info("  message %d received at %s (%.3f seconds after send)",
+                     i+1,recv_time.time(),(recv_time-send_time).total_seconds())
             return True
 
         def run_step_5(socket):
@@ -272,8 +274,8 @@ class TestProgram(CommandLineInterface):
                     raise TestFail("received data from different port")
                 if recv_data != send_data:
                     raise TestFail("received data does not match sent data")
-                info("rcvd message {0} after {1} ms"
-                     .format(i+1, int((recv_time - send_time) * 1000)), "    ")
+                info("  message %d received at %s (%.3f seconds after send)",
+                     i+1,recv_time.time(),(recv_time-send_time).total_seconds())
             return True
 
         socket = nfc.llcp.Socket(llc, nfc.llcp.LOGICAL_DATA_LINK)
