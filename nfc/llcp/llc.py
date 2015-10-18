@@ -541,12 +541,16 @@ class LogicalLinkController(object):
         send_pdu = None
         
         with self.lock:
-            # Dequeue from the list of active SAP until the first one
-            # that returns a PDU. Return the PDU if it consumes the
-            # Link MIU, otherwise break from the loop. The sap.dequeue
-            # method is called with icv_size=0 because for a single
-            # UI/I PDU we do not need to account for this value.
-            for sap in filter(is_sap, self.sap):
+            # Dequeue from the list of active SAP until a first PDU is
+            # returned. The list is sorted to first iterate the raw
+            # SAPs (raw SAPs do not respect the miu_size value and we
+            # must avoid them to return PDUs in aggregation). The PDU
+            # is returned straight if it fills or exceeds the Link
+            # MIU. Otherwise the loop terminates at this point. The
+            # sap.dequeue method is called with icv_size=0 because for
+            # encrypted but not aggregated UI and I PDUs the receiver
+            # must accept them with complete MIU plus ICV size.
+            for sap in sorted(filter(is_sap, self.sap), key=is_raw, reverse=1):
                 send_pdu = sap.dequeue(miu_size, icv_size=0)
                 if send_pdu:
                     if self.sec and send_pdu.name in ("UI", "I"):
