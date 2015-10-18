@@ -90,25 +90,28 @@ class SnepClient(object):
             self.socket.close()
             self.socket = None
 
-    def get(self, ndef_message=None, timeout=1.0):
+    def get(self, request=None, timeout=1.0):
         """Get an NDEF message from the server. Temporarily connects
         to the default SNEP server if the client is not yet connected.
         """
-        if ndef_message is None:
-            ndef_message = nfc.ndef.Message(nfc.ndef.Record())
-        ndef_message_data = self._get(ndef_message, timeout)
-        try:
-            return nfc.ndef.Message(ndef_message_data)
-        except Exception as err:
-            log.error(repr(err))
+        if request is None:
+            request = nfc.ndef.Message(nfc.ndef.Record())
+        if not isinstance(request, nfc.ndef.Message):
+            raise TypeError("request type must be nfc.ndef.Message")
+        response_data = self._get(request, timeout)
+        if response_data is not None:
+            try: response = nfc.ndef.Message(response_data)
+            except Exception as error: log.error(repr(error))
+            else: return response
         
     def _get(self, ndef_message, timeout=1.0):
         """Get an NDEF message from the server. Temporarily connects
         to the default SNEP server if the client is not yet connected.
         """
         if not self.socket:
-            self.connect('urn:nfc:sn:snep')
-            self.release_connection = True
+            try: self.connect('urn:nfc:sn:snep')
+            except nfc.llcp.ConnectRefused: return None
+            else: self.release_connection = True
         else:
             self.release_connection = False
         try:
@@ -133,8 +136,9 @@ class SnepClient(object):
         the default SNEP server if the client is not yet connected.
         """
         if not self.socket:
-            self.connect('urn:nfc:sn:snep')
-            self.release_connection = True
+            try: self.connect('urn:nfc:sn:snep')
+            except nfc.llcp.ConnectRefused: return False
+            else: self.release_connection = True
         else:
             self.release_connection = False
         try:
