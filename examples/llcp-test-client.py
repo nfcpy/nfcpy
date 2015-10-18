@@ -133,7 +133,7 @@ class TestProgram(CommandLineInterface):
             for i in range(1, 6):
                 time.sleep(1)
                 assert llc.link.ESTABLISHED, "llcp terminated before 5 seconds"
-                info('llcp link established for %d second', i)
+                info('link running for %d second, %s', i, llc.pcnt)
         except AssertionError as error:
             raise TestFail(str(error))
             
