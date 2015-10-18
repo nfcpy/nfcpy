@@ -236,7 +236,20 @@ class LogicalLinkController(object):
                 value, name = self.names.index(name), "value"
             super(LogicalLinkController.LinkState,self).__setattr__(name,value)
 
+    class Counter(object):
+        def __init__(self):
+            self.sent = collections.defaultdict(lambda: 0)
+            self.rcvd = collections.defaultdict(lambda: 0)
+
+        def __str__(self):
+            s = "sent/rcvd"
+            for name in sorted(self.sent):
+                s += " {name} {sent}/{rcvd}".format(
+                    name=name[:3], sent=self.sent[name], rcvd=self.rcvd[name])
+            return s
+
     def __init__(self, **options):
+        self.pcnt = LogicalLinkController.Counter()
         self.link = LogicalLinkController.LinkState()
         self.lock = threading.RLock()
         self.cfg = dict()
@@ -363,14 +376,19 @@ class LogicalLinkController(object):
         # it must be explicitely enabled. The return value is either a
         # PDU instance or None.
         try:
-            loglevel = logging.DEBUG - int(isinstance(send_pdu, pdu.Symmetry))
-            log.log(loglevel, "SEND {0}".format(send_pdu))
-            send_data = pdu.encode(send_pdu) if send_pdu else None
-            rcvd_data = self.mac.exchange(send_data, timeout)
+            if send_pdu:
+                loglevel = logging.DEBUG - bool(send_pdu.name == "SYMM")
+                log.log(loglevel, "SEND %s", send_pdu)
+                send_data = pdu.encode(send_pdu)
+                self.pcnt.sent[send_pdu.name] += 1
+                rcvd_data = self.mac.exchange(send_data, timeout)
+            else:
+                rcvd_data = self.mac.exchange(None, timeout)
             if rcvd_data is not None:
                 rcvd_pdu = pdu.decode(rcvd_data)
-                loglevel = logging.DEBUG-int(isinstance(rcvd_pdu,pdu.Symmetry))
-                log.log(loglevel, "RECV {0}".format(rcvd_pdu))
+                self.pcnt.rcvd[rcvd_pdu.name] += 1
+                loglevel = logging.DEBUG - bool(rcvd_pdu.name == "SYMM")
+                log.log(loglevel, "RECV %s", rcvd_pdu)
                 return rcvd_pdu
         except (nfc.clf.CommunicationError, pdu.Error) as error:
             log.warning("{0!r}".format(error))
