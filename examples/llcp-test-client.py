@@ -56,6 +56,15 @@ Execute some Logical Link Control Protocol (LLCP) tests. The peer
 device must have the LLCP validation test servers running.
 """
 
+def get_connection_less_echo_server_sap(llc, options):
+    cl_echo_server = options.cl_echo_sap
+    if not cl_echo_server:
+        cl_echo_server = llc.resolve("urn:nfc:sn:cl-echo")
+    if not cl_echo_server:
+        raise TestFail("no connection-less echo server on peer device")
+    info("connection-less echo server on sap {0}".format(cl_echo_server))
+    return cl_echo_server
+
 def get_connection_mode_echo_server_sap(llc, options):
     co_echo_server = options.co_echo_sap
     if not co_echo_server:
@@ -174,120 +183,117 @@ class TestProgram(CommandLineInterface):
            length here must be the smaller value of both implementations
            Link MIU.
         """
-        TestData = collections.namedtuple("TestData", "send recv")
+        TestData = collections.namedtuple("TestData", "sent rcvd")
 
         def send_and_receive(socket, send_count, packet_length):
             timestamp = lambda: datetime.datetime.fromtimestamp(time.time())
-            test_data = TestData(send=[], recv=[])
+            test_data = TestData(sent=[], rcvd=[])
             cl_server = socket.getpeername()
+            info_text = "  %s message %d at %s"
             try:
                 for i in range(1, send_count + 1):
                     data, addr = packet_length * chr(i), cl_server
-                    info("  send message %d", i)
-                    socket.sendto(data, addr)
-                    test_data.send.append((data, addr, timestamp()))
+                    assert socket.sendto(data, addr), "message send failed"
+                    test_data.sent.append((data, addr, timestamp()))
+                    info(info_text, "sent", i, test_data.sent[-1][2].time())
                     time.sleep(0.5)
-                while socket.poll("recv", timeout=5):
-                    data, addr = socket.recvfrom()
-                    test_data.recv.append((data, addr, timestamp()))
-            except nfc.llcp.Error as error:
+                for i in range(1, send_count + 1):
+                    if socket.poll("recv", timeout=5.0):
+                        data, addr = socket.recvfrom()
+                        test_data.rcvd.append((data, addr, timestamp()))
+                        info(info_text, "rcvd", i, test_data.rcvd[-1][2].time())
+            except (AssertionError, nfc.llcp.Error) as error:
                 raise TestFail(error)
-            if len(test_data.recv) == 0:
+            if len(test_data.rcvd) == 0:
                 raise TestFail("did not receive any data within 5 seconds")
             return test_data
 
         def run_step_1(socket):
             info("Step 1: Send one default size datagram")
             test_data = send_and_receive(socket, 1, default_miu)
-            if not len(test_data.recv) == len(test_data.send):
+            if not len(test_data.rcvd) == len(test_data.sent):
                 raise TestFail("received wrong number of datagrams")
-            for i in range(len(test_data.recv)):
-                send_data, send_addr, send_time = test_data.send[i]
-                recv_data, recv_addr, recv_time = test_data.recv[i]
-                if recv_addr != send_addr:
+            for i in range(len(test_data.rcvd)):
+                sent_data, sent_addr, sent_time = test_data.sent[i]
+                rcvd_data, rcvd_addr, rcvd_time = test_data.rcvd[i]
+                if rcvd_addr != sent_addr:
                     raise TestFail("received data from different port")
-                if recv_data != send_data:
+                if rcvd_data != sent_data:
                     raise TestFail("received data does not match sent data")
-                info("  message %d received at %s (%.3f seconds after send)",
-                     i+1,recv_time.time(),(recv_time-send_time).total_seconds())
+                info("  message %d rcvd %.3f s after sent",
+                     i+1, (rcvd_time-sent_time).total_seconds())
             return True
 
         def run_step_2(socket):
             info("Step 2: Send two default size datagrams")
             test_data = send_and_receive(socket, 2, default_miu)
-            if not len(test_data.recv) == len(test_data.send):
+            if not len(test_data.rcvd) == len(test_data.sent):
                 raise TestFail("received wrong number of datagrams")
-            for i in range(len(test_data.recv)):
-                send_data, send_addr, send_time = test_data.send[i]
-                recv_data, recv_addr, recv_time = test_data.recv[i]
-                if recv_addr != send_addr:
+            for i in range(len(test_data.rcvd)):
+                sent_data, sent_addr, sent_time = test_data.sent[i]
+                rcvd_data, rcvd_addr, rcvd_time = test_data.rcvd[i]
+                if rcvd_addr != sent_addr:
                     raise TestFail("received data from different port")
-                if recv_data != send_data:
+                if rcvd_data != sent_data:
                     raise TestFail("received data does not match sent data")
-                info("  message %d received at %s (%.3f seconds after send)",
-                     i+1,recv_time.time(),(recv_time-send_time).total_seconds())
+                info("  message %d rcvd %.3f s after sent",
+                     i+1, (rcvd_time-sent_time).total_seconds())
             return True
 
         def run_step_3(socket):
             info("Step 3: Send three default size datagrams")
             test_data = send_and_receive(socket, 3, default_miu)
-            if not len(test_data.recv) == len(test_data.send) - 1:
+            if not len(test_data.rcvd) == len(test_data.sent) - 1:
                 raise TestFail("received wrong number of datagrams")
-            for i in range(len(test_data.recv)):
-                send_data, send_addr, send_time = test_data.send[i]
-                recv_data, recv_addr, recv_time = test_data.recv[i]
-                if recv_addr != send_addr:
+            for i in range(len(test_data.rcvd)):
+                sent_data, sent_addr, sent_time = test_data.sent[i]
+                rcvd_data, rcvd_addr, rcvd_time = test_data.rcvd[i]
+                if rcvd_addr != sent_addr:
                     raise TestFail("received data from different port")
-                if recv_data != send_data:
+                if rcvd_data != sent_data:
                     raise TestFail("received data does not match sent data")
-                info("  message %d received at %s (%.3f seconds after send)",
-                     i+1,recv_time.time(),(recv_time-send_time).total_seconds())
+                info("  message %d rcvd %.3f s after sent",
+                     i+1, (rcvd_time-sent_time).total_seconds())
             return True
 
         def run_step_4(socket):
             info("Step 4: Send one zero-length datagram")
             test_data = send_and_receive(socket, 1, packet_length=0)
-            if not len(test_data.recv) == len(test_data.send):
+            if not len(test_data.rcvd) == len(test_data.sent):
                 raise TestFail("received wrong number of datagrams")
-            for i in range(len(test_data.recv)):
-                send_data, send_addr, send_time = test_data.send[i]
-                recv_data, recv_addr, recv_time = test_data.recv[i]
-                if recv_addr != send_addr:
+            for i in range(len(test_data.rcvd)):
+                sent_data, sent_addr, sent_time = test_data.sent[i]
+                rcvd_data, rcvd_addr, rcvd_time = test_data.rcvd[i]
+                if rcvd_addr != sent_addr:
                     raise TestFail("received data from different port")
-                if recv_data != send_data:
+                if rcvd_data != sent_data:
                     raise TestFail("received data does not match sent data")
-                info("  message %d received at %s (%.3f seconds after send)",
-                     i+1,recv_time.time(),(recv_time-send_time).total_seconds())
+                info("  message %d rcvd %.3f s after sent",
+                     i+1, (rcvd_time-sent_time).total_seconds())
             return True
 
         def run_step_5(socket):
             info("Step 5: Send one maximum length packet")
             miu = socket.getsockopt(nfc.llcp.SO_SNDMIU)
             test_data = send_and_receive(socket, 1, packet_length=miu)
-            if not len(test_data.recv) == len(test_data.send):
+            if not len(test_data.rcvd) == len(test_data.sent):
                 raise TestFail("received wrong number of datagrams")
-            for i in range(len(test_data.recv)):
-                send_data, send_addr, send_time = test_data.send[i]
-                recv_data, recv_addr, recv_time = test_data.recv[i]
-                if recv_addr != send_addr:
+            for i in range(len(test_data.rcvd)):
+                sent_data, sent_addr, sent_time = test_data.sent[i]
+                rcvd_data, rcvd_addr, rcvd_time = test_data.rcvd[i]
+                if rcvd_addr != sent_addr:
                     raise TestFail("received data from different port")
-                if recv_data != send_data:
+                if rcvd_data != sent_data:
                     raise TestFail("received data does not match sent data")
-                info("  message %d received at %s (%.3f seconds after send)",
-                     i+1,recv_time.time(),(recv_time-send_time).total_seconds())
+                info("  message %d rcvd %.3f s after sent",
+                     i+1, (rcvd_time-sent_time).total_seconds())
             return True
 
+        cl_echo_server = get_connection_less_echo_server_sap(llc, self.options)
         socket = nfc.llcp.Socket(llc, nfc.llcp.LOGICAL_DATA_LINK)
         socket.setsockopt(nfc.llcp.SO_RCVBUF, 10)
-        if socket.getsockopt(nfc.llcp.SO_RCVBUF) == 10:
-            info("socket recv buffer set to 10")
-        else: raise TestFail("could not set the socket recv buffer")
-        cl_echo_server = self.options.cl_echo_sap
-        if not cl_echo_server:
-            cl_echo_server = llc.resolve("urn:nfc:sn:cl-echo")
-        if not cl_echo_server:
-            raise TestFail("no connection-less echo server on peer device")
-        info("connection-less echo server on sap {0}".format(cl_echo_server))
+        assert socket.getsockopt(nfc.llcp.SO_RCVBUF) == 10
+        info("socket recv buffer set to 10")
         socket.connect(cl_echo_server)
         try:
             if run_step_1(socket): info("  PASS")
