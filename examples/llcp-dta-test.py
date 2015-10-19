@@ -38,7 +38,7 @@ import argparse
 from threading import Thread
 
 sys.path.insert(1, os.path.split(sys.path[0])[0])
-from cli import CommandLineInterface, TestError
+from cli import CommandLineInterface, TestFail, TestSkip
 
 import nfc
 import nfc.llcp
@@ -153,14 +153,14 @@ class TestProgram(CommandLineInterface):
             socket.sendto(b'SOT', dta_cl_echo_in)
             socket.sendto(b'\x00' * (self.iut_miu - 1), dta_cl_echo_in)
             if not self.dta_cl_echo_out.poll("recv", timeout=5):
-                raise TestError("expected but got no data within 5 seconds")
+                raise TestFail("expected but got no data within 5 seconds")
             data, addr = self.dta_cl_echo_out.recvfrom()
             log.info("received %d byte from sap %d", len(data), addr)
             socket.sendto(b'\x00' * self.iut_miu, dta_cl_echo_in)
             if self.dta_cl_echo_out.poll("recv", timeout=5):
-                raise TestError("expected none but got data within 5 seconds")
+                raise TestFail("expected none but got data within 5 seconds")
         except nfc.llcp.Error as error:
-            raise TestError(repr(error))
+            raise TestFail(repr(error))
         finally:
             socket.close()
 
@@ -181,14 +181,14 @@ class TestProgram(CommandLineInterface):
             socket.sendto(b'SOT', dta_cl_echo_in)
             socket.sendto(b'\x00' * self.iut_miu, dta_cl_echo_in)
             if not self.dta_cl_echo_out.poll("recv", timeout=5):
-                raise TestError("expected but got no data within 5 seconds")
+                raise TestFail("expected but got no data within 5 seconds")
             data, addr = self.dta_cl_echo_out.recvfrom()
             log.info("received %d byte from sap %d", len(data), addr)
             socket.sendto(b'\x00' * (self.iut_miu + 1), dta_cl_echo_in)
             if self.dta_cl_echo_out.poll("recv", timeout=5):
-                raise TestError("expected none but got data within 5 seconds")
+                raise TestFail("expected none but got data within 5 seconds")
         except nfc.llcp.Error as error:
-            raise TestError(repr(error))
+            raise TestFail(repr(error))
         finally:
             socket.close()
 
@@ -205,15 +205,15 @@ class TestProgram(CommandLineInterface):
             socket.sendto(b'SOT', dta_cl_echo_in)
             socket.sendto(b'\x00' * self.iut_miu, dta_cl_echo_in)
             if socket.poll("recv", timeout=5):
-                raise TestError("received data on SAP[LT,CL-IN-SRC]")
+                raise TestFail("received data on SAP[LT,CL-IN-SRC]")
             if not self.dta_cl_echo_out.poll("recv", timeout=0):
-                raise TestError("received no data on SAP[LT,CL-OUT-DEST]")
+                raise TestFail("received no data on SAP[LT,CL-OUT-DEST]")
             data, addr = self.dta_cl_echo_out.recvfrom()
             log.info("received %d byte from sap %d", len(data), addr)
             if data != b'\x00' * self.iut_miu:
-                raise TestError("received wrong data on SAP[LT,CL-OUT-DEST]")
+                raise TestFail("received wrong data on SAP[LT,CL-OUT-DEST]")
         except nfc.llcp.Error as error:
-            raise TestError(repr(error))
+            raise TestFail(repr(error))
         finally:
             socket.close()
     
@@ -238,9 +238,9 @@ class TestProgram(CommandLineInterface):
             socket.sendto(b'\x00' * (self.iut_miu + 1), dta_cl_echo_in)
             log.info("wait 5 seconds to not receive UI PDU response")
             if self.dta_cl_echo_out.poll("recv", timeout=5):
-                raise TestError("expected none but got data within 5 seconds")
+                raise TestFail("expected none but got data within 5 seconds")
         except nfc.llcp.Error as error:
-            raise TestError(repr(error))
+            raise TestFail(repr(error))
         finally:
             socket.close()
 
@@ -251,9 +251,9 @@ class TestProgram(CommandLineInterface):
             log.info("wait 5 seconds to not receive SNL PDU response")
             time.sleep(5)
             if not self.llc_exchange_rcvd.get("SNL", 0) == rcvd_snl_count:
-                raise TestError("received SNL PDU response")
+                raise TestFail("received SNL PDU response")
         except nfc.llcp.Error as error:
-            raise TestError(repr(error))
+            raise TestFail(repr(error))
         finally:
             self.on_llc_exchange_exit = None
             socket.close()
@@ -305,17 +305,17 @@ class TestProgram(CommandLineInterface):
             send_socket.send(pdu)
             pdu = send_socket.recv()
             if not pdu.name == "CC":
-                raise TestError("expected CC PDU but got %s" % pdu.name)
+                raise TestFail("expected CC PDU but got %s" % pdu.name)
             recv_socket = self.dta_co_echo_out.accept()
             time.sleep(1)
             pdu = nfc.llcp.pdu.Disconnect(self.iut_sap_co_in_dest, 0x20)
             send_socket.send(pdu)
             pdu = send_socket.recv()
             if not pdu.name == "DM":
-                raise TestError("expected DM PDU but got %s" % pdu.name)
+                raise TestFail("expected DM PDU but got %s" % pdu.name)
             recv_socket.poll("recv", 5)
         except nfc.llcp.Error as error:
-            raise TestError(repr(error))
+            raise TestFail(repr(error))
         finally:
             if send_socket: send_socket.close()
             if recv_socket: recv_socket.close()
@@ -331,20 +331,20 @@ class TestProgram(CommandLineInterface):
             send_socket.send(pdu)
             pdu = send_socket.recv()
             if not pdu.name == "CC":
-                raise TestError("expected CC PDU but got %s" % pdu.name)
+                raise TestFail("expected CC PDU but got %s" % pdu.name)
             if not pdu.ssap == self.iut_sap_co_in_dest:
                 errstr = "expected CC SSAP=%d and not %ds"
-                raise TestError(errstr % (self.iut_sap_co_in_dest, pdu.ssap))
+                raise TestFail(errstr % (self.iut_sap_co_in_dest, pdu.ssap))
             recv_socket = self.dta_co_echo_out.accept()
             time.sleep(1)
             pdu = nfc.llcp.pdu.Disconnect(self.iut_sap_co_in_dest, 32)
             send_socket.send(pdu)
             pdu = send_socket.recv()
             if not pdu.name == "DM":
-                raise TestError("expected DM PDU but got %s" % pdu.name)
+                raise TestFail("expected DM PDU but got %s" % pdu.name)
             recv_socket.poll("recv", 5)
         except nfc.llcp.Error as error:
-            raise TestError(repr(error))
+            raise TestFail(repr(error))
         finally:
             if send_socket: send_socket.close()
             if recv_socket: recv_socket.close()
@@ -358,25 +358,25 @@ class TestProgram(CommandLineInterface):
             dsap = llc.resolve('urn:nfc:sn:dta-co-echo-in')
             if not dsap == self.iut_sap_co_in_dest:
                 errstr = "expected 'dta-co-echo-in' DSAP=%d and not %ds"
-                raise TestError(errstr % (self.iut_sap_co_in_dest, dsap))
+                raise TestFail(errstr % (self.iut_sap_co_in_dest, dsap))
             pdu = nfc.llcp.pdu.UnknownProtocolDataUnit(4, dsap, 32, b'')
             send_socket.send(pdu)
             pdu = send_socket.recv()
             if not pdu.name == "CC":
-                raise TestError("expected CC PDU but got %s" % pdu.name)
+                raise TestFail("expected CC PDU but got %s" % pdu.name)
             if not pdu.ssap == self.iut_sap_co_in_dest:
                 errstr = "expected CC SSAP=%d and not %ds"
-                raise TestError(errstr % (self.iut_sap_co_in_dest, pdu.ssap))
+                raise TestFail(errstr % (self.iut_sap_co_in_dest, pdu.ssap))
             recv_socket = self.dta_co_echo_out.accept()
             time.sleep(1)
             pdu = nfc.llcp.pdu.Disconnect(self.iut_sap_co_in_dest, 32)
             send_socket.send(pdu)
             pdu = send_socket.recv()
             if not pdu.name == "DM":
-                raise TestError("expected DM PDU but got %s" % pdu.name)
+                raise TestFail("expected DM PDU but got %s" % pdu.name)
             recv_socket.poll("recv", 5)
         except nfc.llcp.Error as error:
-            raise TestError(repr(error))
+            raise TestFail(repr(error))
         finally:
             if send_socket: send_socket.close()
             if recv_socket: recv_socket.close()
@@ -389,12 +389,12 @@ class TestProgram(CommandLineInterface):
             send_socket.bind(pdu.ssap)
             send_socket.send(pdu)
             if not send_socket.poll('recv', timeout=5):
-                raise TestError("no response within 5 seconds")
+                raise TestFail("no response within 5 seconds")
             pdu = send_socket.recv()
             if not pdu.name == "DM":
-                raise TestError("expected DM PDU but got %s" % pdu.name)
+                raise TestFail("expected DM PDU but got %s" % pdu.name)
         except nfc.llcp.Error as error:
-            raise TestError(repr(error))
+            raise TestFail(repr(error))
         finally:
             if send_socket: send_socket.close()
     
@@ -427,14 +427,14 @@ class TestProgram(CommandLineInterface):
             send_socket.bind(pdu.ssap)
             send_socket.send(pdu)
             if not send_socket.poll('recv', timeout=1):
-                raise TestError("no response within 1 second")
+                raise TestFail("no response within 1 second")
             pdu = send_socket.recv()
             if not pdu.name == "DM":
-                raise TestError("expected DM PDU not %s" % pdu.name)
+                raise TestFail("expected DM PDU not %s" % pdu.name)
             if not pdu.reason in {1: (2,), 2: (2,), 3: (2,), 4: (3, 16)}[x]:
-                raise TestError("disconnected mode reason %d" % pdu.reason)
+                raise TestFail("disconnected mode reason %d" % pdu.reason)
         except nfc.llcp.Error as error:
-            raise TestError(repr(error))
+            raise TestFail(repr(error))
         finally:
             if send_socket: send_socket.close()
 
@@ -480,14 +480,14 @@ class TestProgram(CommandLineInterface):
             send_socket.send(send_pdu)
             if not send_socket.poll('recv', timeout=1):
                 if x == 4: return
-                raise TestError("no response within 1 second")
+                raise TestFail("no response within 1 second")
             rcvd_pdu = send_socket.recv()
             if not rcvd_pdu.name == "SNL":
-                raise TestError("expected SNL PDU not %s" % rcvd_pdu.name)
-            if not pdu.sdres == [(1, 0)]:
-                raise TestError("expected SDRES[(1, 0)] not %r"%rcvd_pdu.sdres)
+                raise TestFail("expected SNL PDU not %s" % rcvd_pdu.name)
+            if not rcvd_pdu.sdres == [(1, 0)]:
+                raise TestFail("expected SDRES[(1, 0)] not %r"%rcvd_pdu.sdres)
         except nfc.llcp.Error as error:
-            raise TestError(repr(error))
+            raise TestFail(repr(error))
         finally:
             if send_socket: send_socket.close()
     
