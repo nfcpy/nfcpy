@@ -23,6 +23,7 @@ import logging
 log = logging.getLogger('main')
 
 import os
+import re
 import sys
 import errno
 import time
@@ -189,14 +190,16 @@ class CommandLineInterface(object):
         
         log.debug(self.options)
         
-        if "test" in self.groups and self.options.test_all:
-            test_methods = list()
-            for name, func in inspect.getmembers(self, inspect.ismethod):
-                if name.startswith("test_"):
-                    line = inspect.getsourcelines(func)[1]
-                    test_methods.append((line, name.lstrip("test_")))
-            line, name = itemgetter(0), itemgetter(1)
-            self.options.test = map(name, sorted(test_methods, key=line))
+        if "test" in self.groups:
+            if self.options.test_all:
+                # get_test_method() yields a list of (line, name, docstr) tuples
+                test_methods = sorted(get_test_methods(self), key=itemgetter(0))
+                self.options.test = map(itemgetter(1), test_methods)
+                for test in self.options.test: print test
+
+            if len(self.options.test) > 0 and self.options.select:
+                match = lambda name: re.match(self.options.select, name)
+                self.options.test = filter(match, self.options.test)
         
     def add_dbg_options(self, argument_parser):
         group = argument_parser.add_argument_group(
@@ -294,10 +297,13 @@ class CommandLineInterface(object):
             title="Test options")
         group.add_argument(
             "-t", "--test", default=[], action="append",
-            metavar="T", help="run test <T>")
+            metavar="T", help="add test name <T> to test schedule")
         group.add_argument(
             "-T", "--test-all", action="store_true",
-            help="run all available tests")
+            help="add all available tests to schedule")
+        group.add_argument(
+            "--select", metavar="REGEX",
+            help="from schedule select tests matching REGEX")
         
         test_name_and_text, max_name_length = list(), 0
         for line,name,text in sorted(get_test_methods(self), key=itemgetter(0)):
