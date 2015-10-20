@@ -22,8 +22,15 @@
 import logging
 log = logging.getLogger('main')
 
-import os, sys, errno, time, argparse
-from threading import Thread
+import os
+import sys
+import errno
+import time
+import inspect
+import argparse
+import threading
+from operator import itemgetter
+
 import nfc
 
 def log_device_access_denied(path):
@@ -121,6 +128,15 @@ def log_usb_device_found_busy(path):
                       "to see which process is using the device"
                 log.info(msg.format(bus, dev))
 
+def get_test_methods(object):
+    test_methods = list()
+    for name, func in inspect.getmembers(object, inspect.ismethod):
+        if name.startswith("test_"):
+            line = inspect.getsourcelines(func)[1]
+            text = inspect.getdoc(func)
+            test_methods.append((line, name.lstrip("test_"), text))
+    return test_methods
+
 class TestFail(Exception):
     def __init__(self, value):
         self.value = value
@@ -174,9 +190,13 @@ class CommandLineInterface(object):
         log.debug(self.options)
         
         if "test" in self.groups and self.options.test_all:
-            self.options.test = []
-            for test_name in [m for m in dir(self) if m.startswith("test_")]:
-                self.options.test.append(test_name.lstrip('test_'))
+            test_methods = list()
+            for name, func in inspect.getmembers(self, inspect.ismethod):
+                if name.startswith("test_"):
+                    line = inspect.getsourcelines(func)[1]
+                    test_methods.append((line, name.lstrip("test_")))
+            line, name = itemgetter(0), itemgetter(1)
+            self.options.test = map(name, sorted(test_methods, key=line))
         
     def add_dbg_options(self, argument_parser):
         group = argument_parser.add_argument_group(
@@ -278,12 +298,16 @@ class CommandLineInterface(object):
         group.add_argument(
             "-T", "--test-all", action="store_true",
             help="run all available tests")
-        argument_parser.description += "\nTests:\n"
-        for test_name in [m for m in dir(self) if m.startswith("test_")]:
-            test_func = eval("self."+test_name)
-            test_info = test_func.__doc__.splitlines()[0]
-            argument_parser.description += "  {0} - {1}\n".format(
-                test_name.lstrip('test_'), test_info)
+        
+        test_name_and_text, max_name_length = list(), 0
+        for line,name,text in sorted(get_test_methods(self), key=itemgetter(0)):
+            test_name_and_text.append((name, text.splitlines()[0]))
+            max_name_length = max(max_name_length, len(name))
+
+        argument_parser.description += "\nAvailable Tests:\n"
+        for name, text in test_name_and_text:
+            argument_parser.description += '  {0}   {1}\n'.format(
+                name.ljust(max_name_length), text)
         
     def on_rdwr_startup(self, targets):
         return targets
@@ -301,7 +325,7 @@ class CommandLineInterface(object):
     def on_llcp_connect(self, llc):
         if "test" in self.groups:
             self.test_completed = False
-            Thread(target=self.run_tests, args=(llc,)).start()
+            threading.Thread(target=self.run_tests, args=(llc,)).start()
             llc.run(terminate=self.terminate)
             return False
         return True
