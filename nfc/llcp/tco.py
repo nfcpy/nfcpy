@@ -22,11 +22,11 @@
 import logging
 log = logging.getLogger(__name__)
 
-import collections
-import threading
 import time
 import errno
-from types import *
+import types
+import threading
+import collections
 
 # local imports
 from . import pdu
@@ -419,7 +419,7 @@ class DataLinkConnection(TransmissionControlObject):
                 dlc.send_win = rcvd_pdu.rw
                 send_pdu = pdu.ConnectionComplete(dlc.peer, dlc.addr)
                 send_pdu.miu, send_pdu.rw = dlc.recv_miu, dlc.recv_win
-                log.info("accepting CONNECT from SAP %d" % dlc.peer)
+                log.debug("accepting CONNECT from SAP %d" % dlc.peer)
                 dlc.state.ESTABLISHED = True
                 self.send_queue.append(send_pdu)
                 return dlc
@@ -434,10 +434,10 @@ class DataLinkConnection(TransmissionControlObject):
                 if self.state.CONNECT:
                     raise err.Error(errno.EALREADY)
                 raise err.Error(errno.EPIPE)
-            if type(dest) is StringType:
+            if type(dest) is types.StringType:
                 send_pdu = pdu.Connect(1, self.addr, self.recv_miu,
                                        self.recv_win, dest)
-            elif type(dest) is IntType:
+            elif type(dest) is types.IntType:
                 send_pdu = pdu.Connect(dest, self.addr, self.recv_miu,
                                        self.recv_win)
             else:
