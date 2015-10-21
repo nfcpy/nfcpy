@@ -195,7 +195,6 @@ class CommandLineInterface(object):
                 # get_test_method() yields a list of (line, name, docstr) tuples
                 test_methods = sorted(get_test_methods(self), key=itemgetter(0))
                 self.options.test = map(itemgetter(1), test_methods)
-                for test in self.options.test: print test
 
             if len(self.options.test) > 0 and self.options.select:
                 match = lambda name: re.match(self.options.select, name)
