@@ -29,6 +29,7 @@
 import os
 import sys
 import time
+import struct
 import argparse
 import Queue as queue
 from threading import Thread
@@ -42,19 +43,50 @@ from cli import CommandLineInterface
 import nfc
 import nfc.llcp
 
-class ConnectionLessEchoServer(Thread):
+class PatternNumberReceiver(Thread):
+    service_name = 'urn:nfc:sn:dta-pattern-number'
     def __init__(self, llc, options):
+        super(PatternNumberReceiver, self).__init__(name=self.service_name)
         socket = nfc.llcp.Socket(llc, nfc.llcp.LOGICAL_DATA_LINK)
-        socket.bind('urn:nfc:sn:dta-cl-echo-in')
-        log.info("urn:nfc:sn:dta-cl-echo-in addr is %d", socket.getsockname())
-        socket.setsockopt(nfc.llcp.SO_RCVBUF, options.cl_echo_buffer)
-        kwargs = {'target': self.listen, 'args': (socket, llc)}
-        super(ConnectionLessEchoServer, self).__init__(**kwargs)
-        self.name = "ConnectionLessEchoServerThread"
+        socket.bind(self.service_name)
+        log.info("%s bound to sap %d", self.service_name, socket.getsockname())
+        options.pattern_number = 0x1280
         self.options = options
+        self.socket = socket
 
-    def listen(self, recv_socket, llc):
-        send_socket = nfc.llcp.Socket(llc, nfc.llcp.LOGICAL_DATA_LINK)
+    def run(self):
+        try:
+            while self.socket.poll('recv'):
+                data, addr = self.socket.recvfrom()
+                log.debug("received %d byte from sap %d", len(data), addr)
+                if len(data) == 6 and data.startswith(b'\xFF\x00\x00\x00'):
+                    pattern_number = struct.unpack_from('!H', data, 4)[0]
+                    log.info("received pattern number %02Xh", pattern_number)
+                    self.options.pattern_number = pattern_number
+        except nfc.llcp.Error as e:
+            (log.debug if e.errno == nfc.llcp.errno.EPIPE else log.error)(e)
+        finally:
+            self.socket.close()
+
+class ConnectionLessEchoServer(Thread):
+    service_name = 'urn:nfc:sn:dta-cl-echo-in'
+    def __init__(self, llc, options):
+        super(ConnectionLessEchoServer, self).__init__(name=self.service_name)
+
+        socket = nfc.llcp.Socket(llc, nfc.llcp.LOGICAL_DATA_LINK)
+        socket.bind(self.service_name)
+        log.info("%s bound to sap %d", self.service_name, socket.getsockname())
+        
+        socket.setsockopt(nfc.llcp.SO_RCVBUF, options.cl_echo_buffer)
+        #assert socket.getsockopt(nfc.llcp.SO_RCVBUF) == options.cl_echo_buffer
+        
+        self.recv_socket = socket
+        self.options = options
+        self.llc = llc
+
+    def run(self):
+        recv_socket = self.recv_socket
+        send_socket = nfc.llcp.Socket(self.llc, nfc.llcp.LOGICAL_DATA_LINK)
         try:
             while True:
                 log.info("waiting for start-of-test command")
@@ -77,34 +109,63 @@ class ConnectionLessEchoServer(Thread):
             recv_socket.close()
 
 class ConnectionModeEchoServer(Thread):
+    service_name = 'urn:nfc:sn:dta-co-echo-in'
     def __init__(self, llc, options):
+        super(ConnectionModeEchoServer, self).__init__(name=self.service_name)
+        
         socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
-        socket.bind('urn:nfc:sn:dta-co-echo-in')
-        log.info("urn:nfc:sn:dta-co-echo-in addr is %d", socket.getsockname())
+        socket.bind(self.service_name)
+        log.info("%s bound to sap %d", self.service_name, socket.getsockname())
+        
         socket.setsockopt(nfc.llcp.SO_RCVBUF, 2)
-        kwargs = {'target': self.listen, 'args': (socket, llc)}
-        super(ConnectionModeEchoServer, self).__init__(**kwargs)
-        self.name = "ConnectionModeEchoServerThread"
+        assert socket.getsockopt(nfc.llcp.SO_RCVBUF) == 2
+        
+        self.listen_socket = socket
         self.options = options
+        self.llc = llc
 
-    def listen(self, listen_socket, llc):
+    def run(self):
         try:
-            listen_socket.listen(backlog=0)
+            self.listen_socket.listen(backlog=0)
             while True:
-                recv_socket = listen_socket.accept()
-                log.info("accepted data link connection from sap %d",
-                         recv_socket.getpeername())
-                self.recv(recv_socket, llc)
+                socket = self.listen_socket.accept()
+                srcsap = socket.getpeername()
+                log.info("accepted data link connection from sap %d", srcsap)
+                self.recv(socket, socket.llc)
         except nfc.llcp.Error as e:
             (log.debug if e.errno == nfc.llcp.errno.EPIPE else log.error)(e)
         finally:
             log.info("close connection-mode echo server socket")
-            listen_socket.close()
+            self.listen_socket.close()
 
+    @staticmethod
+    def recv_on_inbound_connection(recv_socket, echo_buffer):
+        log.info("receiving from sap %d", recv_socket.getpeername())
+        while recv_socket.poll("recv"):
+            data = recv_socket.recv()
+            if data is None: break
+            log.info("rcvd %d byte", len(data))
+            recv_socket.setsockopt(nfc.llcp.SO_RCVBSY, echo_buffer.full())
+            echo_buffer.put(data)
+        log.info("remote side closed connection")
+        try: echo_buffer.put_nowait(int(0))
+        except queue.Full: pass
+        pass
+
+    @staticmethod
+    def send_on_outbound_connection(send_socket, echo_buffer):
+        pass
+        
     def recv(self, recv_socket, llc):
+        time.sleep(0.1) # delay to accept inbound connection before resolve
         echo_buffer = queue.Queue(self.options.co_echo_buffer)
         send_socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
-        send_socket.connect("urn:nfc:sn:dta-co-echo-out")
+        if self.options.pattern_number == 0x1200:
+            send_socket.connect(self.options.sap_lt_co_out_dest)
+        elif self.options.pattern_number == 0x1240:
+            send_socket.connect("urn:nfc:sn:dta-co-echo-out")
+        elif self.options.pattern_number == 0x1280:
+            send_socket.connect(llc.resolve("urn:nfc:sn:dta-co-echo-out"))
         send_thread = Thread(target=self.send, args=(send_socket, echo_buffer))
         send_thread.start()
         log.info("receiving from sap %d", recv_socket.getpeername())
@@ -122,7 +183,8 @@ class ConnectionModeEchoServer(Thread):
         log.info("recv thread terminated")
 
     def send(self, send_socket, echo_buffer):
-        log.info("sending echos to sap %d", send_socket.getpeername())
+        co_echo_delay = self.options.co_echo_delay
+        log.info("sending back to sap %d", send_socket.getpeername())
         while True:
             data = echo_buffer.get()
             if data == 0:
@@ -130,8 +192,8 @@ class ConnectionModeEchoServer(Thread):
                 send_socket.close()
                 return
             if data != None:
-                log.info("data available, wait %.1f seconds", 3.0)
-                time.sleep(3.0)
+                log.info("data available, wait %.1f seconds", co_echo_delay)
+                time.sleep(co_echo_delay)
             while data != None:
                 try:
                     log.info("send %d byte", len(data))
@@ -175,14 +237,25 @@ class TestProgram(CommandLineInterface):
             help=("maximum wait time for outbound connection "
                   "(default: %(default).1f s)"))
         
+        group.add_argument(
+            "--sap-lt-cl-out-dest", type=int, default=0x11, metavar='',
+            help=("outbound logical data link dest addr "
+                  "(default: %(default)d)"))
+        group.add_argument(
+            "--sap-lt-co-out-dest", type=int, default=0x12, metavar='',
+            help=("outbound data link connection dest addr "
+                  "(default: %(default)d)"))
+        
         super(TestProgram, self).__init__(parser, "llcp dbg clf")
 
     def on_llcp_startup(self, llc):
+        self.pattern_number = PatternNumberReceiver(llc, self.options)
         self.cl_echo_server = ConnectionLessEchoServer(llc, self.options)
         self.cm_echo_server = ConnectionModeEchoServer(llc, self.options)
         return llc
         
     def on_llcp_connect(self, llc):
+        self.pattern_number.start()
         self.cl_echo_server.start()
         self.cm_echo_server.start()
         return True
