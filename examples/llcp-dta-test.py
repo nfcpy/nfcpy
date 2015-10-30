@@ -757,7 +757,6 @@ class TestProgram(CommandLineInterface):
             assert pdu.sdres[0][0] == 1, "wrong transaction identifier"
             assert pdu.sdres[0][1] == 0, "returned SAP is not zero"
 
-        # TODO: need to resolve echo service name here
         payload = struct.pack('!BBB25s', 8, 26, 1, b'urn:nfc:sn:dta-co-echo-in')
         info("send SNL PDU to resolve urn:nfc:sn:dta-co-echo-in")
         pdu = {'ptype': 0b1001, 'dsap': 1, 'ssap': 1, 'payload': payload}
