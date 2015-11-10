@@ -135,8 +135,7 @@ class MifareUltralightC(tt2.Type2Tag):
 
         A Mifare Ultrlight C Tag can be provisioned with a custom
         password (or the default manufacturer key if the password is
-        an empty string or bytearray). Read protection is not
-        supported.
+        an empty string or bytearray).
         
         A non-empty *password* must provide at least 128 bit key
         material, in other words it must be a string or bytearray of

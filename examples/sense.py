@@ -41,6 +41,7 @@ def main(args):
     if args.debug:
         loglevel = logging.DEBUG - (1 if args.verbose else 0)
         logging.getLogger("nfc.clf").setLevel(loglevel)
+        logging.getLogger().setLevel(loglevel)
 
     if args.atr and len(args.atr) < 16:
         print("--atr must supply at least 16 byte")
@@ -60,6 +61,7 @@ def main(args):
                         name, value = map(str.strip, attr.split('='))
                         value = bytearray.fromhex(value)
                         setattr(target, name, value)
+                logging.debug("add to target list: %s", target)
                 targets.append(target)
 
         try:

@@ -228,9 +228,10 @@ class Chipset(object):
                 "type_1_tag_rrdd", "rfca", "guard_time")
         for key, value in kwargs.iteritems():
             data.extend(bytearray([KEYS.index(key), int(value)]))
-        data = self.send_command(0x02, data, 100)
-        if data and data[0] != 0:
-            raise StatusError(data[0])
+        if len(data) > 0:
+            data = self.send_command(0x02, data, 100)
+            if data and data[0] != 0:
+                raise StatusError(data[0])
         
     def in_comm_rf(self, data, timeout):
         to = struct.pack("<H", timeout*10) if timeout <= 6553 else '\xFF\xFF'
@@ -822,10 +823,16 @@ class Device(device.Device):
         timeout_msec = min(int(timeout * 1000), 0xFFFF) if timeout else 0
         self.chipset.in_set_rf(target.brty_send, target.brty_recv)
         self.chipset.in_set_protocol(self.chipset.in_set_protocol_defaults)
-        in_set_protocol_settings = {
-            'add_parity': 1 if target.brty_send.endswith('A') else 0,
-            'check_parity': 1 if target.brty_recv.endswith('A') else 0
-        }
+        in_set_protocol_settings = {}
+        if target.brty_send.endswith('A'):
+            in_set_protocol_settings['add_parity'] = 1
+            in_set_protocol_settings['check_parity'] = 1
+        if target.brty_send.endswith('B'):
+            in_set_protocol_settings['initial_guard_time'] = 20
+            in_set_protocol_settings['add_sof'] = 1
+            in_set_protocol_settings['check_sof'] = 1
+            in_set_protocol_settings['add_eof'] = 1
+            in_set_protocol_settings['check_eof'] = 1
         try:
             if (target.brty == '106A' and target.sel_res and
                 target.sel_res[0] & 0x60 == 0x00):

@@ -68,7 +68,6 @@ class ContactlessFrontend(object):
     def __init__(self, path=None):
         self.device = None
         self.lock = threading.Lock()
-        self.sensed_target = None
         if path and not self.open(path):
             raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
         
