@@ -770,6 +770,38 @@ class TestProgram(CommandLineInterface):
         assert pdu.sdres[0][0] == 1, "wrong transaction identifier"
         assert pdu.sdres[0][1] != 0, "returned SAP is zero (service not found)"
         assert pdu.sdres[0][1] > 15, "returned SAP is in well-known range"
+
+    def test_TC_CTO_INI_BV_02(self, llc):
+        """IUT connection establishment with parameters in CONNECT
+        """
+        iut_co_in_sap, lt_co_in_sap = self.iut_co_in_sap, self.lt_co_in_sap
+        send_socket = nfc.llcp.Socket(llc, nfc.llcp.llc.RAW_ACCESS_POINT)
+        send_socket.bind(lt_co_in_sap)
+
+        self.dta_co_echo_out.listen(backlog=1)
+
+        info("connect to echo server at sap %d", iut_co_in_sap)
+        pdu = nfc.llcp.pdu.Connect(dsap=iut_co_in_sap, ssap=lt_co_in_sap)
+        send_socket.send(pdu)
+
+        pdu = raw_access_point_wait_recv(send_socket, timeout=5.0)
+        assert pdu.name == "CC", "expected CC PDU but got %s" % pdu.name
+
+        recv_socket = self.dta_co_echo_out.accept()
+        data_link_connection_wait_no_recv(recv_socket, timeout=1.0)
+
+        pdu = nfc.llcp.pdu.Disconnect(dsap=iut_co_in_sap, ssap=lt_co_in_sap)
+        send_socket.send(pdu)
+
+        pdu = raw_access_point_wait_recv(send_socket, timeout=5.0)
+        assert pdu.name == "DM", "expected DM PDU but got %s" % pdu.name
+
+        recv_socket.poll("recv", 5)
+        assert recv_socket._tco.state.SHUTDOWN, "outbound connection not closed"
+        
+        info("test completed")
+        send_socket.close()
+        recv_socket.close()
     
 if __name__ == '__main__':
     TestProgram().run()
