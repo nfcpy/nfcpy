@@ -369,7 +369,7 @@ class CommandLineInterface(object):
             print("{0}: {1}".format(test_name, test_info))
             try:
                 test_func(*args)
-            except TestFail as error:
+            except (TestFail, AssertionError) as error:
                 print("{0}: FAIL ({1})".format(test_name, error))
             except TestSkip as error:
                 print("{0}: SKIP ({1})".format(test_name, error))
