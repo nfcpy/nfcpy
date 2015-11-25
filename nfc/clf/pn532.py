@@ -215,7 +215,6 @@ class Device(pn53x.Device):
         if self.chipset.transport.TYPE == "TTY":
             self.chipset.set_serial_baudrate(115200)
             self.chipset.transport.baudrate = 115200
-            time.sleep(0.001)
         
         self.chipset.power_down(wakeup_enable=("I2C", "SPI", "HSU"))
         super(Device, self).close()
