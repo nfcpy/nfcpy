@@ -243,9 +243,11 @@ class OpenSSLWrapper:
         def num_bytes(self):
             return (self.num_bits() + 7) // 8
             
-        def bn2bin(self):
+        def bn2bin(self, num_bytes=None):
             # int BN_bn2bin(const BIGNUM *a, unsigned char *to);
-            strbuf = ctypes.create_string_buffer(self.num_bytes())
+            if num_bytes is None: num_bytes = self.num_bytes()
+            else: assert num_bytes >= self.num_bytes(), "bn2bin num bytes"
+            strbuf = ctypes.create_string_buffer(num_bytes)
             OpenSSL.crypto.BN_bn2bin(self, strbuf)
             return strbuf.raw
 
@@ -337,7 +339,7 @@ class OpenSSLWrapper:
             func = OpenSSL.crypto.EC_POINT_get_affine_coordinates_GFp
             res = func(ec_group, self, x, y, None)
             if res == 0: log.error("EC_POINT_get_affine_coordinates_GFp")
-            else: return (x.bn2bin(), y.bn2bin())
+            else: return (x.bn2bin(32), y.bn2bin(32))
 
     class ECDH:
         def __init__(self, local_key):
