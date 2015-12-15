@@ -183,6 +183,7 @@ class TestProgram(CommandLineInterface):
     def prep_TC_CTL_UND_BV_01(self, llc):
         llc.cfg['recv-miu'] = self.iut_miu - 1 # MIUX(LT) = MIUX(IUT) - 1
         llc.cfg['send-lto'] = 1000
+        llc.cfg['send-agf'] = False
         return llc
 
     def test_TC_CTL_UND_BV_01(self, llc):
@@ -226,6 +227,7 @@ class TestProgram(CommandLineInterface):
     def prep_TC_CTL_UND_BI_01(self, llc):
         llc.cfg['recv-miu'] = self.iut_miu # MIUX(LT) = MIUX(IUT)
         llc.cfg['send-lto'] = 1000
+        llc.cfg['send-agf'] = False
         return llc
 
     def test_TC_CTL_UND_BI_01(self, llc):
@@ -266,6 +268,7 @@ class TestProgram(CommandLineInterface):
     def prep_TC_CTL_UND_BV_02(self, llc):
         llc.cfg['recv-miu'] = self.iut_miu # MIUX(LT) = MIUX(IUT)
         llc.cfg['send-lto'] = 1000
+        llc.cfg['send-agf'] = False
         return llc
     
     def test_TC_CTL_UND_BV_02(self, llc):
@@ -303,6 +306,7 @@ class TestProgram(CommandLineInterface):
     def prep_TC_CTL_UND_BI_02(self, llc):
         llc.cfg['recv-miu'] = self.iut_miu + 1 # MIUX(LT) = MIUX(IUT) + 1
         llc.cfg['send-lto'] = 1000
+        llc.cfg['send-agf'] = False
         return llc
 
     def test_TC_CTL_UND_BI_02(self, llc):
@@ -311,7 +315,7 @@ class TestProgram(CommandLineInterface):
         Send a UI PDU with an Information field that is one octet
         larger than the IUT's Link MIU (which must be at least one
         octet less than the maximum possible value). The IUT is
-        expected to discared the UI PDU and not send it back (the
+        expected to discard the UI PDU and not send it back (the
         return path would allow sending).
 
         """
@@ -326,24 +330,22 @@ class TestProgram(CommandLineInterface):
         info("send the start of test command")
         assert socket.send(pdu), "error sending start of test command"
 
-        log.info("send UI PDU with %d+1 octet information", self.iut_miu)
+        log.info("send UI PDU with %d+1 octet information field", self.iut_miu)
         pdu.data = b'\xA5' * (self.iut_miu + 1)
         assert socket.send(pdu), "error sending UI PDU with excess SDU"
         logical_data_link_wait_no_recv(self.dta_cl_echo_out, 5.0)
 
-        # TC Note: This part of the test case does not make sense. An
-        # empty SNL PDU is not an invalid PDU. The test would succeed
-        # only because an empty SNL PDU does not cause any answer to
-        # be returned (becaus nothing was asked for).
-        info("skip sending empty SNL PDU (is not an invalid PDU)")
-        """
+        # TC Note: This part of the test case does not really make
+        # sense. An empty SNL PDU is not an invalid PDU. The test
+        # succeeds just because an empty SNL PDU does not cause any
+        # answer to be returned (there was nothing asked for).
+        info("send SNL PDU with no content")
         rcvd_snl_count = llc.pcnt.rcvd["SNL"]
         socket.send(nfc.llcp.pdu.ServiceNameLookup(1, 1))
-        log.info("wait 5 seconds to not receive SNL PDU response")
+        log.info("- wait 5 seconds to not receive an SNL PDU")
         time.sleep(5)
         if not llc.pcnt.rcvd["SNL"] == rcvd_snl_count:
             raise TestFail("received SNL PDU response")
-        """
 
         info("test completed")
         socket.close()
