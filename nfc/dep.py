@@ -23,10 +23,9 @@
 import logging
 log = logging.getLogger(__name__)
 
-from os import urandom
-from time import time
-from collections import namedtuple
-from binascii import hexlify
+import os
+import time
+import collections
 
 import nfc.clf
 
@@ -98,7 +97,7 @@ class Initiator(DataExchangeProtocol):
 
         ppi = (self.lri << 4) | (bool(self.gbi) << 1) | int(bool(self.nad))
         did = 0 if self.did is None else self.did
-        atr_req = ATR_REQ(urandom(10), did, 0, 0, ppi, self.gbi)
+        atr_req = ATR_REQ(os.urandom(10), did, 0, 0, ppi, self.gbi)
         psl_req = PSL_REQ(did, (0, 9, 18)[self.brs], self.lri)
         atr_res = psl_res = None
         self.target = target
@@ -258,7 +257,7 @@ class Initiator(DataExchangeProtocol):
         def request_attention(self, n_retry_atn, rwt, deadline):
             req = ATN()
             for i in range(n_retry_atn):
-                timeout = min(rwt, deadline - time())
+                timeout = min(rwt, deadline - time.time())
                 if timeout <= 0: raise nfc.clf.TimeoutError
                 try:
                     res = self.send_req_recv_res(req, timeout)
@@ -279,7 +278,7 @@ class Initiator(DataExchangeProtocol):
         def request_retransmission(self, n_retry_nak, rwt, deadline):
             req = NAK(self.pni, self.did, self.nad)
             for i in range(n_retry_nak):
-                timeout = min(rwt, deadline - time())
+                timeout = min(rwt, deadline - time.time())
                 if timeout <= 0: raise nfc.clf.TimeoutError
                 try:
                     res = self.send_req_recv_res(req, timeout)
@@ -301,9 +300,9 @@ class Initiator(DataExchangeProtocol):
             text = "response waiting time %.3f exceeds the timeout of %.3f sec"
             log.warn(text, rwt, timeout)
         
-        deadline = time() + timeout
+        deadline = time.time() + timeout
         while True:
-            timeout = min(rwt, deadline - time())
+            timeout = min(rwt, deadline - time.time())
             if timeout <= 0: raise nfc.clf.TimeoutError()
             try:
                 res = self.send_req_recv_res(req, timeout)
@@ -378,13 +377,13 @@ class Target(DataExchangeProtocol):
         rwt = min(max(0, options.get('rwt', 8)), 14)
 
         pp = (lrt << 4) | (bool(gbt) << 1) | int(bool(self.nad))
-        nfcid3t = bytearray.fromhex("01FE") + urandom(6) + "ST"
+        nfcid3t = bytearray.fromhex("01FE") + os.urandom(6) + "ST"
         atr_res = ATR_RES(nfcid3t, 0, 0, 0, rwt, pp, gbt)
         atr_res = atr_res.encode()
         
         target = nfc.clf.LocalTarget(atr_res=atr_res)
         target.sens_res = bytearray.fromhex("0101")
-        target.sdd_res = bytearray.fromhex("08") + urandom(3)
+        target.sdd_res = bytearray.fromhex("08") + os.urandom(3)
         target.sel_res = bytearray.fromhex("40")
         target.sensf_res = bytearray.fromhex("01") + nfcid3t[0:8]
         target.sensf_res += bytearray.fromhex("00000000 00000000 FFFF")
@@ -422,8 +421,8 @@ class Target(DataExchangeProtocol):
         log.info("stop {0}, packets {1}".format(self, self.stat))
 
         res = None
-        deadline = time() + 1.0
-        while time() < deadline:
+        deadline = time.time() + 1.0
+        while time.time() < deadline:
             try: req = self.send_res_recv_req(res, deadline)
             except nfc.clf.CommunicationError: return
             if req is None: return
@@ -453,7 +452,7 @@ class Target(DataExchangeProtocol):
         if send_data is not None and len(send_data) == 0:
             raise ValueError("send_data must not be empty")
 
-        deadline = time() + timeout
+        deadline = time.time() + timeout
         
         if self.cmd is not None:
             # first command frame received in activate is injected in
@@ -503,7 +502,7 @@ class Target(DataExchangeProtocol):
             return DEP_RES(pfb, did, nad, data=bytearray([rtox]))
         
         res = RTOX(rtox, self.did, self.nad)
-        req = self.send_dep_res_recv_dep_req(res, deadline=time()+1)
+        req = self.send_dep_res_recv_dep_req(res, deadline=time.time()+1)
         if type(req) == DEP_REQ and req.pfb.type == DEP_REQ.TimeoutExtension:
             return req.data[0] & 0x3F
     
@@ -548,7 +547,7 @@ class Target(DataExchangeProtocol):
 
         frame = self.encode_frame(res) if res is not None else None
         while True:
-            timeout = deadline - time() if deadline > time() else 0
+            timeout = deadline - time.time() if deadline > time.time() else 0
             try:
                 frame = self.clf.exchange(frame, timeout=timeout)
                 return self.decode_frame(frame) if frame else None
@@ -697,7 +696,7 @@ class DEP_REQ_RES(object):
     PDU_SHOW = "{self.PDU_NAME} {self.pfb} DID={self.did} "\
         "NAD={self.nad} DATA={data}"
     
-    PFB = namedtuple("PFB", "type, nad, did, pni")
+    PFB = collections.namedtuple("PFB", "type, nad, did, pni")
     LastInformation, MoreInformation, PositiveAck, NegativeAck,\
         Attention, TimeoutExtension = (0, 1, 4, 5, 8, 9)
 
