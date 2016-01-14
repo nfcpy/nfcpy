@@ -237,12 +237,20 @@ class LogicalLinkController(object):
 
     class Counter(object):
         def __init__(self):
-            self.sent = collections.defaultdict(lambda: 0)
-            self.rcvd = collections.defaultdict(lambda: 0)
+            self.sent = collections.defaultdict(int)
+            self.rcvd = collections.defaultdict(int)
 
+        @property
+        def sent_count(self):
+            return sum(self.sent.values())
+        
+        @property
+        def rcvd_count(self):
+            return sum(self.rcvd.values())
+        
         def __str__(self):
-            s = "sent/rcvd {0}/{1}".format(self.sent['PDU'], self.rcvd['PDU'])
-            for name in set(self.sent).union(self.rcvd).difference(['PDU']):
+            s = "sent/rcvd {0}/{1}".format(self.sent_count, self.rcvd_count)
+            for name in set(self.sent.keys() + self.rcvd.keys()):
                 s += " {name} {sent}/{rcvd}".format(
                     name=name, sent=self.sent[name], rcvd=self.rcvd[name])
             return s
@@ -380,14 +388,12 @@ class LogicalLinkController(object):
                 log.log(loglevel, "SEND %s", send_pdu)
                 send_data = pdu.encode(send_pdu)
                 self.pcnt.sent[send_pdu.name] += 1
-                self.pcnt.sent['PDU'] += 1
                 rcvd_data = self.mac.exchange(send_data, timeout)
             else:
                 rcvd_data = self.mac.exchange(None, timeout)
             if rcvd_data is not None:
                 rcvd_pdu = pdu.decode(rcvd_data)
                 self.pcnt.rcvd[rcvd_pdu.name] += 1
-                self.pcnt.rcvd['PDU'] += 1
                 loglevel = logging.DEBUG - bool(rcvd_pdu.name == "SYMM")
                 log.log(loglevel, "RECV %s", rcvd_pdu)
                 return rcvd_pdu
