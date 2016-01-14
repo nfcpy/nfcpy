@@ -136,9 +136,9 @@ class TestProgram(CommandLineInterface):
             for test in test_list:
                 info("*** START ***")
                 if '_INI_' in test:
-                    self.options.mode = 'initiator'
-                if '_TAR_' in test:
                     self.options.mode = 'target'
+                if '_TAR_' in test:
+                    self.options.mode = 'initiator'
                 self.options.test = [test]
                 try:
                     if self.run_once() is False: break
@@ -167,7 +167,10 @@ class TestProgram(CommandLineInterface):
         try: on_connect = eval("self." + func_name)
         except AttributeError: pass
         else: llc = on_connect(llc)
-        return super(TestProgram, self).on_llcp_connect(llc)
+        super(TestProgram, self).on_llcp_connect(llc)
+        info("LLC %s", llc.pcnt)
+        info("DEP %s", llc.mac.pcnt)
+        return False
 
     def test_PREPARE(self, llc):
         """Determine Parameters of Implementation Under Test"""
@@ -179,6 +182,48 @@ class TestProgram(CommandLineInterface):
         info("IUT LTO = %d", self.iut_lto)
         info("CL ADDR = %d", self.iut_cl_in_sap)
         info("CO ADDR = %d", self.iut_co_in_sap)
+    
+    def test_TC_LLC_INI_BV_04(self, llc):
+        """Symmetry Procedure as NFC-DEP Initiator
+        
+        After LLCP Link activation respond to any received PDU with a
+        SYMM PDU until 10 SYMM PDUs have been sent. Then deactivate
+        the LLCP Link.
+
+        """
+        info("send SYMM PDU for 10 times and measure response")
+        for i in range(10):
+            sent_symm = llc.pcnt.sent['SYMM']
+            while llc.pcnt.sent['SYMM'] == sent_symm:
+                time.sleep(0.001)
+            sent_time = time.time()
+            rcvd_pdu_count = llc.pcnt.rcvd_count
+            while llc.pcnt.rcvd_count == rcvd_pdu_count:
+                time.sleep(0.001)
+            elapsed = time.time() - sent_time
+            info("- received an LLC PDU after %.3f sec", elapsed)
+            assert elapsed <= llc.cfg['recv-lto'], "symmetry timeout"
+    
+    def test_TC_LLC_TAR_BV_04(self, llc):
+        """Symmetry Procedure as NFC-DEP Target
+        
+        After LLCP Link activation respond to any received PDU with a
+        SYMM PDU until 10 SYMM PDUs have been sent. Then deactivate
+        the LLCP Link.
+
+        """
+        info("send SYMM PDU for 10 times and measure response")
+        for i in range(10):
+            sent_symm = llc.pcnt.sent['SYMM']
+            while llc.pcnt.sent['SYMM'] == sent_symm:
+                time.sleep(0.001)
+            sent_time = time.time()
+            rcvd_pdu_count = llc.pcnt.rcvd_count
+            while llc.pcnt.rcvd_count == rcvd_pdu_count:
+                time.sleep(0.001)
+            elapsed = time.time() - sent_time
+            info("- received an LLC PDU after %.3f sec", elapsed)
+            assert elapsed <= llc.cfg['recv-lto'], "symmetry timeout"
     
     def prep_TC_CTL_UND_BV_01(self, llc):
         llc.cfg['recv-miu'] = self.iut_miu - 1 # MIUX(LT) = MIUX(IUT) - 1
@@ -340,12 +385,11 @@ class TestProgram(CommandLineInterface):
         # succeeds just because an empty SNL PDU does not cause any
         # answer to be returned (there was nothing asked for).
         info("send SNL PDU with no content")
-        rcvd_snl_count = llc.pcnt.rcvd["SNL"]
+        snl_count = llc.pcnt.rcvd["SNL"]
         socket.send(nfc.llcp.pdu.ServiceNameLookup(1, 1))
         log.info("- wait 5 seconds to not receive an SNL PDU")
         time.sleep(5)
-        if not llc.pcnt.rcvd["SNL"] == rcvd_snl_count:
-            raise TestFail("received SNL PDU response")
+        assert llc.pcnt.rcvd["SNL"] == snl_count, "received SNL PDU response"
 
         info("test completed")
         socket.close()
