@@ -820,7 +820,7 @@ class Device(device.Device):
         return 290
 
     def send_cmd_recv_rsp(self, target, data, timeout):
-        timeout_msec = min(int(timeout * 1000), 0xFFFF) if timeout else 0
+        timeout_msec = max(min(int(timeout * 1000), 0xFFFF),1) if timeout else 0
         self.chipset.in_set_rf(target.brty_send, target.brty_recv)
         self.chipset.in_set_protocol(self.chipset.in_set_protocol_defaults)
         in_set_protocol_settings = {}
