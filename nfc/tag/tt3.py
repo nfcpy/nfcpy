@@ -497,7 +497,7 @@ class Type3Tag(nfc.tag.Tag):
 
         """
         a, b, e = self.pmm[5] & 7, self.pmm[5]>>3 & 7, self.pmm[5]>>6
-        timeout = 302E-6 * ((b + 1) * len(block_list) + a + 1) * 4**e
+        timeout = 302.1E-6 * ((b + 1) * len(block_list) + a + 1) * 4**e
         
         data = (chr(len(service_list))
                 + ''.join([sc.pack() for sc in service_list])
@@ -578,7 +578,7 @@ class Type3Tag(nfc.tag.Tag):
 
         """
         a, b, e = self.pmm[6] & 7, self.pmm[6]>>3 & 7, self.pmm[6]>>6
-        timeout = 302E-6 * ((b + 1) * len(block_list) + a + 1) * 4**e
+        timeout = 302.1E-6 * ((b + 1) * len(block_list) + a + 1) * 4**e
         
         data = (chr(len(service_list))
                 + ''.join([sc.pack() for sc in service_list])
