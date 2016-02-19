@@ -312,51 +312,42 @@ class USB(object):
         self.manufacturer_name_id = self.usb_dev.iManufacturer
         self.product_name_id = self.usb_dev.iProduct
         
-    def _PYUSB0_read(self, timeout=None):
+    def _PYUSB0_read(self, timeout):
         if self.usb_inp is not None:
-            while timeout is None or timeout > 0:
-                try:
-                    poll_wait = 444 if timeout is None else min(500, timeout)
-                    frame = self.usb_dev.bulkRead(self.usb_inp, 300, poll_wait)
-                except self.usb.USBError as error:
-                    if str(error) != "Connection timed out":
-                        log.error("%r", error)
-                        raise IOError(errno.EIO, os.strerror(errno.EIO))
-                    if timeout is not None:
-                        timeout -= poll_wait
-                else:
-                    if not frame:
-                        log.error("bulk read returned without data")
-                        raise IOError(errno.EIO, os.strerror(errno.EIO))
-                    else:
-                        frame = bytearray(frame)
-                        log.log(logging.DEBUG-1, "<<< %s", hexlify(frame))
-                        return frame
-            else:
+            assert timeout is not None, "changed that timeout may not be none"
+            try:
+                frame = self.usb_dev.bulkRead(self.usb_inp, 300, timeout)
+            except self.usb.USBError as error:
+                if str(error) != "Connection timed out":
+                    log.error("%r", error)
+                    raise IOError(errno.EIO, os.strerror(errno.EIO))
                 raise IOError(errno.ETIMEDOUT, os.strerror(errno.ETIMEDOUT))
+            else:
+                if not frame:
+                    log.error("bulk read returned without data")
+                    raise IOError(errno.EIO, os.strerror(errno.EIO))
+                else:
+                    frame = bytearray(frame)
+                    log.log(logging.DEBUG-1, "<<< %s", hexlify(frame))
+                    return frame
     
-    def _PYUSB1_read(self, timeout=None):
+    def _PYUSB1_read(self, timeout):
         if self.usb_inp is not None:
-            while timeout is None or timeout > 0:
-                try:
-                    poll_wait = 500 if timeout is None else min(500, timeout)
-                    frame = self.usb_inp.read(300, poll_wait)
-                except self.usb_core.USBError as error:
-                    if error.errno != errno.ETIMEDOUT:
-                        log.error("%r", error)
-                        raise IOError(error.errno, error.strerror)
-                    if timeout is not None:
-                        timeout -= poll_wait
-                else:
-                    if not frame:
-                        log.error("bulk read returned without data")
-                        raise IOError(errno.EIO, os.strerror(errno.EIO))
-                    else:
-                        frame = bytearray(frame)
-                        log.log(logging.DEBUG-1, "<<< %s", hexlify(frame))
-                        return frame
+            assert timeout is not None, "changed that timeout may not be none"
+            try:
+                frame = self.usb_inp.read(300, timeout)
+            except self.usb_core.USBError as error:
+                if error.errno != errno.ETIMEDOUT:
+                    log.error("%r", error)
+                raise IOError(error.errno, error.strerror)
             else:
-                raise IOError(errno.ETIMEDOUT, os.strerror(errno.ETIMEDOUT))
+                if not frame:
+                    log.error("bulk read returned without data")
+                    raise IOError(errno.EIO, os.strerror(errno.EIO))
+                else:
+                    frame = bytearray(frame)
+                    log.log(logging.DEBUG-1, "<<< %s", hexlify(frame))
+                    return frame
 
     def _PYUSB0_write(self, frame):
         if self.usb_out is not None:
