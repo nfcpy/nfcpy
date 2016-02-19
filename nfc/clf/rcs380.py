@@ -289,7 +289,7 @@ class Chipset(object):
         if transmit_data:
             data = data + str(transmit_data)
             
-        data = self.send_command(0x48, data, timeout=None)
+        data = self.send_command(0x48, data, timeout=recv_timeout+100)
         
         if data and tuple(data[3:7]) != (0, 0, 0, 0):
             raise CommunicationError(data[3:7])
