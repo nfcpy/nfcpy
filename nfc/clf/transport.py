@@ -35,6 +35,9 @@ class TTY(object):
     
     @classmethod
     def find(cls, path):
+        if not (path.startswith("tty") or path.startswith("com")):
+            return
+        
         try:
             cls.serial = importlib.import_module("serial")
         except ImportError:
@@ -242,6 +245,9 @@ class USB(object):
         if not (self.usb_inp and self.usb_out):
             log.error("no bulk endpoints for read and write")
             raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
+
+        self._manufacturer_name = dev.getManufacturer()
+        self._product_name = dev.getProduct()
         
         try:
             self.usb_dev = dev.open()
@@ -259,11 +265,11 @@ class USB(object):
 
     @property
     def manufacturer_name(self):
-        return self.usb_dev.getDevice().getManufacturer()
+        return self._manufacturer_name
         
     @property
     def product_name(self):
-        return self.usb_dev.getDevice().getProduct()
+        return self._product_name
 
     def read(self, timeout=0):
         if self.usb_inp is not None:
