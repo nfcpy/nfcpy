@@ -25,8 +25,18 @@
 import logging
 log = logging.getLogger(__name__)
 
-import os, sys, re, errno, importlib
+import os, re, errno
 from binascii import hexlify
+
+try:
+    import usb1 as libusb
+except ImportError:
+    raise ImportError("missing usb1 module, try 'pip install libusb1'")
+
+try:
+    import serial
+except ImportError:
+    raise ImportError("missing serial module, try 'pip install pyserial'")
 
 PATH = re.compile(r'^([a-z]+)(?::|)([a-zA-Z0-9]+|)(?::|)([a-zA-Z0-9]+|)$')
 
@@ -37,12 +47,6 @@ class TTY(object):
     def find(cls, path):
         if not (path.startswith("tty") or path.startswith("com")):
             return
-        
-        try:
-            cls.serial = importlib.import_module("serial")
-        except ImportError:
-            log.error("python serial library not found")
-            return None
         
         match = PATH.match(path)
         
@@ -107,7 +111,7 @@ class TTY(object):
 
     def open(self, port, baudrate=115200):
         self.close()
-        self.tty = self.serial.Serial(port, baudrate, timeout=0.05)
+        self.tty = serial.Serial(port, baudrate, timeout=0.05)
 
     @property
     def port(self):
@@ -136,16 +140,16 @@ class TTY(object):
                 frame += self.tty.read(3)
                 LEN = frame[5]<<8 | frame[6]
             frame += self.tty.read(LEN + 1)
-            log.log(logging.DEBUG-1, "<<< %s", str(frame).encode("hex"))
+            log.log(logging.DEBUG-1, "<<< %s", hexlify(frame))
             return frame
 
     def write(self, frame):
         if self.tty is not None:
-            log.log(logging.DEBUG-1, ">>> %s", str(frame).encode("hex"))
+            log.log(logging.DEBUG-1, ">>> %s", hexlify(frame))
             self.tty.flushInput()
             try:
                 self.tty.write(str(frame))
-            except self.serial.SerialTimeoutException:
+            except serial.SerialTimeoutException:
                 raise IOError(errno.EIO, os.strerror(errno.EIO))
 
     def close(self):
@@ -161,15 +165,8 @@ class USB(object):
     def find(cls, path):
         if not path.startswith("usb"):
             return
-        
-        try:
-            cls.libusb = importlib.import_module("usb1")
-        except ImportError:
-            log.error("no usb lib, try 'pip install python-libusb1'")
-            return None
-        
-        log.debug("using python-libusb1 wrapper on libusb-{0}.{1}.{2}"
-                  .format(*cls.libusb.getVersion()[0:3]))
+
+        log.debug("using libusb-{0}.{1}.{2}".format(*libusb.getVersion()[0:3]))
         
         usb_or_none = re.compile(r'^(usb|)$')
         usb_vid_pid = re.compile(r'^usb(:[0-9a-fA-F]{4})(:[0-9a-fA-F]{4})?$')
@@ -192,7 +189,7 @@ class USB(object):
         else:
             return None
 
-        context = cls.libusb.USBContext()
+        context = libusb.USBContext()
         try:
             devices = context.getDeviceList(skip_on_error=True)
             vid, pid = match.get('vid'), match.get('pid')
@@ -211,7 +208,7 @@ class USB(object):
             context.exit()
 
     def __init__(self, usb_bus, dev_adr):
-        self.context = self.libusb.USBContext()
+        self.context = libusb.USBContext()
         self.open(usb_bus, dev_adr)
 
     def __del__(self):
@@ -232,14 +229,14 @@ class USB(object):
             log.error("no device {0} on bus {1}".format(dev_adr, usb_bus))
             raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
         
-        transfer_type = lambda x: x & self.libusb.TRANSFER_TYPE_MASK
-        endpoint_dir = lambda x: x & self.libusb.ENDPOINT_DIR_MASK
+        transfer_type = lambda x: x & libusb.TRANSFER_TYPE_MASK
+        endpoint_dir = lambda x: x & libusb.ENDPOINT_DIR_MASK
         for endpoint in dev.iterSettings().next().iterEndpoints():
             ep_addr, ep_attr = endpoint.getAddress(), endpoint.getAttributes()
-            if transfer_type(ep_attr) == self.libusb.TRANSFER_TYPE_BULK:
-                if endpoint_dir(ep_addr) == self.libusb.ENDPOINT_IN:
+            if transfer_type(ep_attr) == libusb.TRANSFER_TYPE_BULK:
+                if endpoint_dir(ep_addr) == libusb.ENDPOINT_IN:
                     if not self.usb_inp: self.usb_inp = endpoint
-                if endpoint_dir(ep_addr) == self.libusb.ENDPOINT_OUT:
+                if endpoint_dir(ep_addr) == libusb.ENDPOINT_OUT:
                     if not self.usb_out: self.usb_out = endpoint
 
         if not (self.usb_inp and self.usb_out):
@@ -252,11 +249,11 @@ class USB(object):
         try:
             self.usb_dev = dev.open()
             self.usb_dev.claimInterface(0)
-        except self.libusb.USBErrorAccess:
+        except libusb.USBErrorAccess:
             raise IOError(errno.EACCESS, os.strerror(errno.EACCESS))
-        except self.libusb.USBErrorBusy:
+        except libusb.USBErrorBusy:
             raise IOError(errno.EBUSY, os.strerror(errno.EBUSY))
-        except self.libusb.USBErrorNoDevice:
+        except libusb.USBErrorNoDevice:
             raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
         
     def close(self):
@@ -276,11 +273,11 @@ class USB(object):
             try:
                 ep_addr = self.usb_inp.getAddress()
                 frame = self.usb_dev.bulkRead(ep_addr, 300, timeout)
-            except self.libusb.USBErrorTimeout:
+            except libusb.USBErrorTimeout:
                 raise IOError(errno.ETIMEDOUT, os.strerror(errno.ETIMEDOUT))
-            except self.libusb.USBErrorNoDevice:
+            except libusb.USBErrorNoDevice:
                 raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
-            except self.libusb.USBError as error:
+            except libusb.USBError as error:
                 log.error("%r", error)
                 raise IOError(errno.EIO, os.strerror(errno.EIO))
             
@@ -300,10 +297,10 @@ class USB(object):
                 self.usb_dev.bulkWrite(ep_addr, bytes(frame), timeout)
                 if len(frame) % self.usb_out.getMaxPacketSize() == 0:
                     self.usb_dev.bulkWrite(ep_addr, b'', timeout)
-            except self.libusb.USBErrorTimeout:
+            except libusb.USBErrorTimeout:
                 raise IOError(errno.ETIMEDOUT, os.strerror(errno.ETIMEDOUT))
-            except self.libusb.USBErrorNoDevice:
+            except libusb.USBErrorNoDevice:
                 raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
-            except self.libusb.USBError as error:
+            except libusb.USBError as error:
                 log.error("%r", error)
                 raise IOError(errno.EIO, os.strerror(errno.EIO))
