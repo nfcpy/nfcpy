@@ -188,14 +188,14 @@ class Chipset(object):
         self.transport.close()
         self.transport = None
 
-    def send_command(self, cmd_code, cmd_data, timeout):
+    def send_command(self, cmd_code, cmd_data):
         cmd_data = bytearray(cmd_data)
         log.log(logging.DEBUG-1, self.CMD[cmd_code]+" "+hexlify(cmd_data))
         if self.transport is not None:
             cmd = bytearray([0xD6, cmd_code]) + cmd_data
             self.transport.write(str(Frame(cmd)))
-            if Frame(self.transport.read(timeout=100)).type == "ack":
-                rsp = Frame(self.transport.read(timeout)).data
+            if Frame(self.transport.read()).type == "ack":
+                rsp = Frame(self.transport.read()).data
                 if rsp and rsp[0] == 0xD7 and rsp[1] == cmd_code + 1:
                     return rsp[2:]
         else:
@@ -210,7 +210,7 @@ class Chipset(object):
         }
         if brty_recv is None: brty_recv = brty_send
         data = settings[brty_send][0:2] + settings[brty_recv][2:4]
-        data = self.send_command(0x00, data, 100)
+        data = self.send_command(0x00, data)
         if data and data[0] != 0:
             raise StatusError(data[0])
         
@@ -229,20 +229,20 @@ class Chipset(object):
         for key, value in kwargs.iteritems():
             data.extend(bytearray([KEYS.index(key), int(value)]))
         if len(data) > 0:
-            data = self.send_command(0x02, data, 100)
+            data = self.send_command(0x02, data)
             if data and data[0] != 0:
                 raise StatusError(data[0])
         
     def in_comm_rf(self, data, timeout):
         to = struct.pack("<H", timeout*10) if timeout <= 6553 else '\xFF\xFF'
-        data = self.send_command(0x04, to + str(data), timeout+500)
+        data = self.send_command(0x04, to + str(data))
         if data and tuple(data[0:4]) != (0, 0, 0, 0):
             raise CommunicationError(data[0:4])
         return data[5:] if data else None
         
     def switch_rf(self, switch):
         switch = ("off", "on").index(switch)
-        data = self.send_command(0x06, [switch], 100)
+        data = self.send_command(0x06, [switch])
         if data and data[0] != 0:
             raise StatusError(data[0])
         
@@ -251,7 +251,7 @@ class Chipset(object):
                         "212A": (8, 14), "424A": (8, 15)}
         
         comm_type = tg_comm_type[comm_type]
-        data = self.send_command(0x40, comm_type, 100)
+        data = self.send_command(0x40, comm_type)
         if data and data[0] != 0:
             raise StatusError(data[0])
         
@@ -263,12 +263,12 @@ class Chipset(object):
                 "continuous_receive_mode")
         for key, value in kwargs.iteritems():
             data.extend(bytearray([KEYS.index(key), int(value)]))
-        data = self.send_command(0x42, bytearray(data), 100)
+        data = self.send_command(0x42, bytearray(data))
         if data and data[0] != 0:
             raise StatusError(data[0])
         
     def tg_set_auto(self, data):
-        data = self.send_command(0x44, data, 100)
+        data = self.send_command(0x44, data)
         if data and data[0] != 0:
             raise StatusError(data[0])
         
@@ -289,7 +289,7 @@ class Chipset(object):
         if transmit_data:
             data = data + str(transmit_data)
             
-        data = self.send_command(0x48, data, timeout=None)
+        data = self.send_command(0x48, data)
         
         if data and tuple(data[3:7]) != (0, 0, 0, 0):
             raise CommunicationError(data[3:7])
@@ -297,26 +297,26 @@ class Chipset(object):
         return data
 
     def reset_device(self, startup_delay=0):
-        self.send_command(0x12, struct.pack("<H", startup_delay), 100)
+        self.send_command(0x12, struct.pack("<H", startup_delay))
         self.transport.write(Chipset.ACK)
         time.sleep(float(startup_delay + 500)/1000)
 
     def get_firmware_version(self, option=None):
         assert option in (None, 0x60, 0x61, 0x80)
-        data = self.send_command(0x20, [option] if option else [], 100)
+        data = self.send_command(0x20, [option] if option else [])
         log.debug("firmware version {1:x}.{0:02x}".format(*data))
         return data
         
     def get_pd_data_version(self):
-        data = self.send_command(0x22, [], 100)
+        data = self.send_command(0x22, [])
         log.debug("package data format {1:x}.{0:02x}".format(*data))
 
     def get_command_type(self):
-        data = self.send_command(0x28, [], 100)
+        data = self.send_command(0x28, [])
         return struct.unpack(">Q", str(data[0:8]))
     
     def set_command_type(self, command_type):
-        data = self.send_command(0x2A, [command_type], 100)
+        data = self.send_command(0x2A, [command_type])
         if data and data[0] != 0:
             raise StatusError(data[0])
 

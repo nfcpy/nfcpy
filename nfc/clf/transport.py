@@ -25,8 +25,18 @@
 import logging
 log = logging.getLogger(__name__)
 
-import os, sys, re, errno, importlib
+import os, re, errno
 from binascii import hexlify
+
+try:
+    import usb1 as libusb
+except ImportError:
+    raise ImportError("missing usb1 module, try 'pip install libusb1'")
+
+try:
+    import serial
+except ImportError:
+    raise ImportError("missing serial module, try 'pip install pyserial'")
 
 PATH = re.compile(r'^([a-z]+)(?::|)([a-zA-Z0-9]+|)(?::|)([a-zA-Z0-9]+|)$')
 
@@ -35,11 +45,8 @@ class TTY(object):
     
     @classmethod
     def find(cls, path):
-        try:
-            cls.serial = importlib.import_module("serial")
-        except ImportError:
-            log.error("python serial library not found")
-            return None
+        if not (path.startswith("tty") or path.startswith("com")):
+            return
         
         match = PATH.match(path)
         
@@ -104,7 +111,7 @@ class TTY(object):
 
     def open(self, port, baudrate=115200):
         self.close()
-        self.tty = self.serial.Serial(port, baudrate, timeout=0.05)
+        self.tty = serial.Serial(port, baudrate, timeout=0.05)
 
     @property
     def port(self):
@@ -133,16 +140,16 @@ class TTY(object):
                 frame += self.tty.read(3)
                 LEN = frame[5]<<8 | frame[6]
             frame += self.tty.read(LEN + 1)
-            log.log(logging.DEBUG-1, "<<< %s", str(frame).encode("hex"))
+            log.log(logging.DEBUG-1, "<<< %s", hexlify(frame))
             return frame
 
     def write(self, frame):
         if self.tty is not None:
-            log.log(logging.DEBUG-1, ">>> %s", str(frame).encode("hex"))
+            log.log(logging.DEBUG-1, ">>> %s", hexlify(frame))
             self.tty.flushInput()
             try:
                 self.tty.write(str(frame))
-            except self.serial.SerialTimeoutException:
+            except serial.SerialTimeoutException:
                 raise IOError(errno.EIO, os.strerror(errno.EIO))
 
     def close(self):
@@ -158,26 +165,8 @@ class USB(object):
     def find(cls, path):
         if not path.startswith("usb"):
             return
-        
-        cls.pyusb_version = None
 
-        try:
-            cls.usb_core = importlib.import_module("usb.core")
-            cls.usb_util = importlib.import_module("usb.util")
-            cls.pyusb_version = 1
-        except ImportError: pass
-        
-        if cls.pyusb_version is None:
-            try: 
-                cls.usb = importlib.import_module("usb")
-                cls.pyusb_version = 0
-            except ImportError: pass
-
-        if cls.pyusb_version is None:
-            log.error("python usb library not found")
-            return None
-        
-        log.debug("using pyusb version {0}.x".format(cls.pyusb_version))
+        log.debug("using libusb-{0}.{1}.{2}".format(*libusb.getVersion()[0:3]))
         
         usb_or_none = re.compile(r'^(usb|)$')
         usb_vid_pid = re.compile(r'^usb(:[0-9a-fA-F]{4})(:[0-9a-fA-F]{4})?$')
@@ -190,208 +179,128 @@ class USB(object):
                 log.debug("path matches {0!r}".format(regex.pattern))
                 if regex is usb_vid_pid:
                     match = [int(s.strip(':'), 16) for s in m.groups() if s]
-                    match = dict(zip(['idVendor', 'idProduct'], match))
+                    match = dict(zip(['vid', 'pid'], match))
                 if regex is usb_bus_dev:
                     match = [int(s.strip(':'), 10) for s in m.groups() if s]
-                    match = dict(zip(['bus', 'address'], match))
+                    match = dict(zip(['bus', 'adr'], match))
                 if regex is usb_or_none:
                     match = dict()
                 break
-        else: return None
+        else:
+            return None
 
-        if cls.pyusb_version == 1:
-            return [(d.idVendor, d.idProduct, d.bus, d.address)
-                    for d in cls.usb_core.find(find_all=True, **match)]
-
-        if cls.pyusb_version == 0:
-            # get all devices for all busses first, then filter
-            devices = [(d, b) for b in cls.usb.busses() for d in b.devices]
-            vid, pid = match.get('idVendor'), match.get('idProduct')
-            bus, dev = match.get('bus'), match.get('address')
+        context = libusb.USBContext()
+        try:
+            devices = context.getDeviceList(skip_on_error=True)
+            vid, pid = match.get('vid'), match.get('pid')
+            bus, dev = match.get('bus'), match.get('adr')
             if vid is not None:
-                devices = [d for d in devices if d[0].idVendor == vid]
+                devices = [d for d in devices if d.getVendorID() == vid]
             if pid is not None:
-                devices = [d for d in devices if d[0].idProduct == pid]
+                devices = [d for d in devices if d.getProductID() == pid]
             if bus is not None:
-                devices = [d for d in devices if int(d[1].dirname) == bus]
+                devices = [d for d in devices if d.getBusNumber() == bus]
             if dev is not None:
-                devices = [d for d in devices if int(d[0].filename) == dev]
-            return [(d[0].idVendor, d[0].idProduct, d[1].dirname,
-                     d[0].filename) for d in devices]
+                devices = [d for d in devices if d.getDeviceAddress() == dev]
+            return [(d.getVendorID(), d.getProductID(), d.getBusNumber(),
+                     d.getDeviceAddress()) for d in devices]
+        finally:
+            context.exit()
 
-    def __init__(self, bus_id, dev_id):
+    def __init__(self, usb_bus, dev_adr):
+        self.context = libusb.USBContext()
+        self.open(usb_bus, dev_adr)
+
+    def __del__(self):
+        self.close()
+        if self.context:
+            self.context.exit()
+
+    def open(self, usb_bus, dev_adr):
+        self.usb_dev = None
         self.usb_out = None
         self.usb_inp = None
         
-        if self.pyusb_version == 0:
-            self.open  = self._PYUSB0_open
-            self.read  = self._PYUSB0_read
-            self.write = self._PYUSB0_write
-            self.close = self._PYUSB0_close
-            self.get_string = self._PYUSB0_get_string
-        elif self.pyusb_version == 1:
-            self.open  = self._PYUSB1_open
-            self.read  = self._PYUSB1_read
-            self.write = self._PYUSB1_write
-            self.close = self._PYUSB1_close
-            self.get_string = self._PYUSB1_get_string
+        for dev in self.context.getDeviceList(skip_on_error=True):
+            if (dev.getBusNumber() == usb_bus and
+                dev.getDeviceAddress() == dev_adr):
+                break
         else:
-            log.error("unexpected pyusb version")
-            raise SystemExit
+            log.error("no device {0} on bus {1}".format(dev_adr, usb_bus))
+            raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
+        
+        transfer_type = lambda x: x & libusb.TRANSFER_TYPE_MASK
+        endpoint_dir = lambda x: x & libusb.ENDPOINT_DIR_MASK
+        for endpoint in dev.iterSettings().next().iterEndpoints():
+            ep_addr, ep_attr = endpoint.getAddress(), endpoint.getAttributes()
+            if transfer_type(ep_attr) == libusb.TRANSFER_TYPE_BULK:
+                if endpoint_dir(ep_addr) == libusb.ENDPOINT_IN:
+                    if not self.usb_inp: self.usb_inp = endpoint
+                if endpoint_dir(ep_addr) == libusb.ENDPOINT_OUT:
+                    if not self.usb_out: self.usb_out = endpoint
 
-        self.open(bus_id, dev_id)
+        if not (self.usb_inp and self.usb_out):
+            log.error("no bulk endpoints for read and write")
+            raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
+
+        self._manufacturer_name = dev.getManufacturer()
+        self._product_name = dev.getProduct()
+        
+        try:
+            self.usb_dev = dev.open()
+            self.usb_dev.claimInterface(0)
+        except libusb.USBErrorAccess:
+            raise IOError(errno.EACCESS, os.strerror(errno.EACCESS))
+        except libusb.USBErrorBusy:
+            raise IOError(errno.EBUSY, os.strerror(errno.EBUSY))
+        except libusb.USBErrorNoDevice:
+            raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
+        
+    def close(self):
+        if self.usb_dev: self.usb_dev.close()
+        self.usb_dev = self.usb_out = self.usb_inp = None
 
     @property
     def manufacturer_name(self):
-        if self.manufacturer_name_id:
-            return self.get_string(self.manufacturer_name_id)
+        return self._manufacturer_name
         
     @property
     def product_name(self):
-        if self.product_name_id:
-            return self.get_string(self.product_name_id)
+        return self._product_name
 
-    def _PYUSB0_get_string(self, index, langid=-1):
-        return self.usb_dev.getString(index, 126, langid)
-        
-    def _PYUSB1_get_string(self, index, langid=None):
-        # Prior to version 1.0.0b2 pyusb's' util.get_string() needed a
-        # length parameter which has since been removed. The try/except
-        # clause helps support older versions until pyusb 1.0.0 is
-        # finally released and sufficiently spread.
-        try:
-            return self.usb_util.get_string(self.usb_dev, index, langid)
-        except TypeError:
-            return self.usb_util.get_string(self.usb_dev, 126, index, langid)
-        
-    def _PYUSB0_open(self, bus_id, dev_id):
-        bus = [b for b in self.usb.busses() if b.dirname == bus_id][0]
-        dev = [d for d in bus.devices if d.filename == dev_id][0]
-        self.usb_dev = dev.open()
-        if sys.platform.startswith("darwin"):
-            self.usb_dev.setConfiguration(dev.configurations[0])
-        try:
-            self.usb_dev.claimInterface(0)
-        except self.usb.USBError:
-            raise IOError(errno.EBUSY, os.strerror(errno.EBUSY))
-        interface = dev.configurations[0].interfaces[0]
-        endpoints = interface[0].endpoints
-        bulk_inp = lambda ep: (\
-            (ep.type == self.usb.ENDPOINT_TYPE_BULK) and
-            (ep.address & self.usb.ENDPOINT_DIR_MASK == self.usb.ENDPOINT_IN))
-        bulk_out = lambda ep: (\
-            (ep.type == self.usb.ENDPOINT_TYPE_BULK) and
-            (ep.address & self.usb.ENDPOINT_DIR_MASK == self.usb.ENDPOINT_OUT))
-        self.usb_out = [ep for ep in endpoints if bulk_out(ep)].pop().address
-        self.usb_inp = [ep for ep in endpoints if bulk_inp(ep)].pop().address
-        self.manufacturer_name_id = dev.iManufacturer
-        self.product_name_id = dev.iProduct
-    
-    def _PYUSB1_open(self, bus_id, dev_id):
-        self.usb_dev = self.usb_core.find(bus=bus_id, address=dev_id)
-        if sys.platform.startswith("darwin"):
-            self.usb_dev.set_configuration()
-        interface = self.usb_util.find_descriptor(self.usb_dev[0])
-        bulk_inp = lambda ep: (\
-            (self.usb_util.endpoint_type(ep.bmAttributes) ==
-             self.usb_util.ENDPOINT_TYPE_BULK) and
-            (self.usb_util.endpoint_direction(ep.bEndpointAddress) ==
-             self.usb_util.ENDPOINT_IN))
-        bulk_out = lambda ep: (\
-            (self.usb_util.endpoint_type(ep.bmAttributes) ==
-             self.usb_util.ENDPOINT_TYPE_BULK) and
-            (self.usb_util.endpoint_direction(ep.bEndpointAddress) ==
-             self.usb_util.ENDPOINT_OUT))
-        self.usb_out = [ep for ep in interface if bulk_out(ep)].pop()
-        self.usb_inp = [ep for ep in interface if bulk_inp(ep)].pop()
-        try:
-            # implicitely claim interface
-            self.usb_out.write('')
-        except self.usb_core.USBError:
-            raise IOError(errno.EBUSY, os.strerror(errno.EBUSY))
-        self.manufacturer_name_id = self.usb_dev.iManufacturer
-        self.product_name_id = self.usb_dev.iProduct
-        
-    def _PYUSB0_read(self, timeout=None):
+    def read(self, timeout=0):
         if self.usb_inp is not None:
-            while timeout is None or timeout > 0:
-                try:
-                    poll_wait = 444 if timeout is None else min(500, timeout)
-                    frame = self.usb_dev.bulkRead(self.usb_inp, 300, poll_wait)
-                except self.usb.USBError as error:
-                    if str(error) != "Connection timed out":
-                        log.error("%r", error)
-                        raise IOError(errno.EIO, os.strerror(errno.EIO))
-                    if timeout is not None:
-                        timeout -= poll_wait
-                else:
-                    if not frame:
-                        log.error("bulk read returned without data")
-                        raise IOError(errno.EIO, os.strerror(errno.EIO))
-                    else:
-                        frame = bytearray(frame)
-                        log.log(logging.DEBUG-1, "<<< %s", hexlify(frame))
-                        return frame
-            else:
+            try:
+                ep_addr = self.usb_inp.getAddress()
+                frame = self.usb_dev.bulkRead(ep_addr, 300, timeout)
+            except libusb.USBErrorTimeout:
                 raise IOError(errno.ETIMEDOUT, os.strerror(errno.ETIMEDOUT))
+            except libusb.USBErrorNoDevice:
+                raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
+            except libusb.USBError as error:
+                log.error("%r", error)
+                raise IOError(errno.EIO, os.strerror(errno.EIO))
+            
+            if len(frame) == 0:
+                log.error("bulk read returned zero data")
+                raise IOError(errno.EIO, os.strerror(errno.EIO))
+            
+            frame = bytearray(frame)
+            log.log(logging.DEBUG-1, "<<< %s", hexlify(frame))
+            return frame
     
-    def _PYUSB1_read(self, timeout=None):
-        if self.usb_inp is not None:
-            while timeout is None or timeout > 0:
-                try:
-                    poll_wait = 500 if timeout is None else min(500, timeout)
-                    frame = self.usb_inp.read(300, poll_wait)
-                except self.usb_core.USBError as error:
-                    if error.errno != errno.ETIMEDOUT:
-                        log.error("%r", error)
-                        raise IOError(error.errno, error.strerror)
-                    if timeout is not None:
-                        timeout -= poll_wait
-                else:
-                    if not frame:
-                        log.error("bulk read returned without data")
-                        raise IOError(errno.EIO, os.strerror(errno.EIO))
-                    else:
-                        frame = bytearray(frame)
-                        log.log(logging.DEBUG-1, "<<< %s", hexlify(frame))
-                        return frame
-            else:
-                raise IOError(errno.ETIMEDOUT, os.strerror(errno.ETIMEDOUT))
-
-    def _PYUSB0_write(self, frame):
+    def write(self, frame, timeout=0):
         if self.usb_out is not None:
             log.log(logging.DEBUG-1, ">>> %s", hexlify(frame))
             try:
-                self.usb_dev.bulkWrite(self.usb_out, frame)
-                if len(frame) % 64 == 0: # end bulk transfer
-                    self.usb_dev.bulkWrite(self.usb_out, '')
-            except self.usb.USBError as error:
-                if error.message == "Connection timed out":
-                    ETIMEDOUT = errno.ETIMEDOUT
-                    raise IOError(ETIMEDOUT, os.strerror(ETIMEDOUT))
-                else:
-                    log.error("%r", error)
-                    raise IOError(errno.EIO, os.strerror(errno.EIO))
-        
-    def _PYUSB1_write(self, frame):
-        if self.usb_out is not None:
-            log.log(logging.DEBUG-1, ">>> %s", hexlify(frame))
-            try:
-                self.usb_out.write(frame)
-                if len(frame) % self.usb_out.wMaxPacketSize == 0:
-                    self.usb_out.write('') # end bulk transfer
-            except self.usb_core.USBError as error:
-                if error.errno != errno.ETIMEDOUT:
-                    log.error("%r", error)
-                raise IOError(error.errno, error.strerror)
-        
-    def _PYUSB0_close(self):
-        if self.usb_dev is not None:
-            self.usb_dev.releaseInterface()
-        self.usb_dev = self.usb_out = self.usb_inp = None
-
-    def _PYUSB1_close(self):
-        if self.usb_dev is not None:
-            self.usb_util.dispose_resources(self.usb_dev)
-        self.usb_dev = self.usb_out = self.usb_inp = None
-
+                ep_addr = self.usb_out.getAddress()
+                self.usb_dev.bulkWrite(ep_addr, bytes(frame), timeout)
+                if len(frame) % self.usb_out.getMaxPacketSize() == 0:
+                    self.usb_dev.bulkWrite(ep_addr, b'', timeout)
+            except libusb.USBErrorTimeout:
+                raise IOError(errno.ETIMEDOUT, os.strerror(errno.ETIMEDOUT))
+            except libusb.USBErrorNoDevice:
+                raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
+            except libusb.USBError as error:
+                log.error("%r", error)
+                raise IOError(errno.EIO, os.strerror(errno.EIO))
