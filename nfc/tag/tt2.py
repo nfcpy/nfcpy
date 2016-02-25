@@ -511,11 +511,15 @@ class Type2Tag(Tag):
             log.debug("select sector {0} (pages {1} to {2})".format(
                 sector, sector<<10, ((sector+1)<<8)-1))
 
-            rsp = self.transceive("\xC2\xFF")
+            sector_select_1 = b'\xC2\xFF'
+            sector_select_2 = pack('Bxxx', sector)
+            
+            rsp = self.transceive(sector_select_1)
             if len(rsp) == 1 and rsp[0] == 0x0A:
                 try:
                     # command is passively ack'd, i.e. there's no response
-                    self.transceive(chr(sector)+"\0\0\0", timeout=0.001)
+                    # and we must make sure there's no retries attempted
+                    self.transceive(sector_select_2, timeout=0.001, retries=0)
                 except Type2TagCommandError as error:
                     assert int(error) == TIMEOUT_ERROR # passive ack
                 else:
@@ -529,7 +533,7 @@ class Type2Tag(Tag):
             self._current_sector = sector
         return self._current_sector
 
-    def transceive(self, data, timeout=0.1):
+    def transceive(self, data, timeout=0.1, retries=2):
         """Send a Type 2 Tag command and receive the response.
         
         :meth:`transceive` is a type 2 tag specific wrapper around the
@@ -546,7 +550,7 @@ class Type2Tag(Tag):
         log.debug(">> {0} ({1:f}s)".format(hexlify(data), timeout))
         
         started = time.time()
-        for retry in range(3):
+        for retry in range(1 + retries):
             try:
                 data = self.clf.exchange(data, timeout)
                 break
