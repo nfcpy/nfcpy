@@ -29,58 +29,6 @@ from binascii import hexlify
 import nfc.clf
 from . import tt2
 
-def activate(clf, target):
-    try:
-        log.debug("check if authenticate command is available")
-        rsp = clf.exchange('\x1A\x00', timeout=0.01)
-        if clf.sense(target) is None: return None
-        if rsp.startswith("\xAF"):
-            return MifareUltralightC(clf, target)
-        if rsp == "\x00":
-            return NTAG203(clf, target)
-    except nfc.clf.TimeoutError:
-        log.debug("nope, authenticate command is not supported")
-        if clf.sense(target) is None: return None
-    except nfc.clf.CommunicationError as error:
-        log.debug(repr(error))
-        return
-    
-    try:
-        log.debug("check if version command is available")
-        version = clf.exchange('\x60', timeout=0.01)
-    except nfc.clf.TimeoutError:
-        log.debug("nope, version command is not supported")
-        if clf.sense(target) is None: return None
-        version = None
-    except nfc.clf.CommunicationError as error:
-        log.debug(repr(error))
-        return
-    
-    if version is not None:
-        log.debug("version = " + ' '.join(["%02X" % x for x in version]))
-        if version == "\x00\x04\x03\x01\x01\x00\x0B\x03":
-            return MifareUltralightEV1(clf, target, "MF0UL11", 16)
-        if version == "\x00\x04\x03\x02\x01\x00\x0B\x03":
-            return MifareUltralightEV1(clf, target, "MF0ULH11", 16)
-        if version == "\x00\x04\x03\x01\x01\x00\x0E\x03":
-            return MifareUltralightEV1(clf, target, "MF0UL21", 37)
-        if version == "\x00\x04\x03\x02\x01\x00\x0E\x03":
-            return MifareUltralightEV1(clf, target, "MF0ULH21", 37)
-        if version == "\x00\x04\x04\x01\x01\x00\x0B\x03":
-            return NTAG210(clf, target)
-        if version == "\x00\x04\x04\x01\x01\x00\x0E\x03":
-            return NTAG212(clf, target)
-        if version == "\x00\x04\x04\x02\x01\x00\x0F\x03":
-            return NTAG213(clf, target)
-        if version == "\x00\x04\x04\x02\x01\x00\x11\x03":
-            return NTAG215(clf, target)
-        if version == "\x00\x04\x04\x02\x01\x00\x13\x03":
-            return NTAG216(clf, target)
-        log.debug("no match for this version number")
-        return
-    else:
-        return MifareUltralight(clf, target)
-
 class MifareUltralight(tt2.Type2Tag):
     """Mifare Ultralight is a simple type 2 tag with no specific
     features. It can store up to 46 byte NDEF message data. This class
@@ -116,19 +64,19 @@ class MifareUltralightC(tt2.Type2Tag):
         self._product = "Mifare Ultralight C (MF01CU2)"
         
     def dump(self):
-        oprint = lambda o: ' '.join(['??' if x < 0 else '%02x'%x for x in o])
-        s = super(MifareUltralightC, self)._dump(stop=40)
+        lines = super(MifareUltralightC, self)._dump(stop=40)
         
         footer = dict(zip(range(40, 44), (
             "LOCK2-LOCK3", "CTR0-CTR1", "AUTH0", "AUTH1")))
         
         for i in sorted(footer.keys()):
-            try: data = self.read(i)[0:4]
+            try:
+                data = self.read(i)[0:4]
             except tt2.Type2TagCommandError:
                 data = [None, None, None, None]
-            s.append("{0:3}: {1} ({2})".format(i, oprint(data), footer[i]))
+            lines.append(tt2.pagedump(i, data, footer[i]))
 
-        return s
+        return lines
 
     def protect(self, password=None, read_protect=False, protect_from=0):
         """Protect a Mifare Ultralight C Tag.
@@ -303,8 +251,7 @@ class NTAG203(tt2.Type2Tag):
         self._product = "NXP NTAG203"
         
     def dump(self):
-        oprint = lambda o: ' '.join(['??' if x < 0 else '%02x'%x for x in o])
-        s = super(NTAG203, self)._dump(40)
+        lines = super(NTAG203, self)._dump(40)
 
         footer = dict(zip(range(40, 42), ("LOCK2-LOCK3", "CNTR0-CNTR1")))
         
@@ -313,9 +260,9 @@ class NTAG203(tt2.Type2Tag):
                 data = self.read(i)[0:4]
             except tt2.Type2TagCommandError:
                 data = [None, None, None, None]
-            s.append("{0:3}: {1} ({2})".format(i, oprint(data), footer[i]))
+            lines.append(tt2.pagedump(i, data, footer[i]))
 
-        return s
+        return lines
     
     def protect(self, password=None, read_protect=False, protect_from=0):
         """Set lock bits to disable future memory modifications.
@@ -518,15 +465,14 @@ class NTAG21x(tt2.Type2Tag):
             return False
 
     def _dump(self, stop, footer):
-        oprint = lambda o: ' '.join(['??' if x < 0 else '%02x'%x for x in o])
-        s = super(NTAG21x, self)._dump(stop)
+        lines = super(NTAG21x, self)._dump(stop)
         for i in sorted(footer.keys()):
             try:
                 data = self.read(i)[0:4]
             except tt2.Type2TagCommandError:
                 data = [None, None, None, None]
-            s.append("{0:3}: {1} ({2})".format(i, oprint(data), footer[i]))
-        return s
+            lines.append(tt2.pagedump(i, data, footer[i]))
+        return lines
 
 class NTAG210(NTAG21x):
     """The NTAG210 provides 48 bytes user data memory, password
@@ -638,4 +584,118 @@ class MifareUltralightEV1(NTAG21x):
                 "PWD0, PWD1, PWD2, PWD3", "PACK0, PACK1, RFU, RFU")
         footer = dict(zip(range(36, 36+len(text)), text))
         return super(MifareUltralightEV1, self)._dump(36, footer)
+
+class MF0UL11(MifareUltralightEV1):
+    def __init__(self, clf, target):
+        super(MF0UL11, self).__init__(clf, target)
+        self._product = "Mifare Ultralight EV1 (MF0UL11)"
+        self._cfgpage = 16
+    
+class MF0ULH11(MifareUltralightEV1):
+    def __init__(self, clf, target):
+        super(MF0ULH11, self).__init__(clf, target)
+        self._product = "Mifare Ultralight EV1 (MF0ULH11)"
+        self._cfgpage = 16
+    
+class MF0UL21(MifareUltralightEV1):
+    def __init__(self, clf, target):
+        super(MF0UL21, self).__init__(clf, target)
+        self._product = "Mifare Ultralight EV1 (MF0UL21)"
+        self._cfgpage = 37
+    
+class MF0ULH21(MifareUltralightEV1):
+    def __init__(self, clf, target):
+        super(MF0ULH21, self).__init__(clf, target)
+        self._product = "Mifare Ultralight EV1 (MF0ULH21)"
+        self._cfgpage = 37
+    
+class NTAGI2C(tt2.Type2Tag):
+    def _dump(self, stop):
+        s = super(NTAGI2C, self)._dump(stop)
+        
+        data = self.read(stop)[0:4]
+        s.append(tt2.pagedump(stop, data, "LOCK2-LOCK4, CHK"))
+        
+        data = self.read(232)
+        s.append("")
+        s.append("Configuration registers:")
+        s.append(tt2.pagedump(stop&256|232, data[0:4], "NC, LD, SM, WDT0"))
+        s.append(tt2.pagedump(stop&256|233, data[4:8], "WDT1, CLK, LOCK, RFU"))
+        
+        self.sector_select(3)
+        data = self.read(248)
+        s.append("")
+        s.append("Session registers:")
+        s.append(tt2.pagedump(0x3F8, data[0:4], "NC, LD, SM, WDT0"))
+        s.append(tt2.pagedump(0x3F9, data[4:8], "WDT1, CLK, NS, RFU"))
+        
+        self.sector_select(0)
+        return s
+
+class NT3H1101(NTAGI2C):
+    """NTAG I2C 1K.
+    
+    """
+    def __init__(self, clf, target):
+        super(NTAGI2C, self).__init__(clf, target)
+        self._product = "NTAG I2C 1K (NT3H1101)"
+
+    def dump(self):
+        return super(NT3H1101, self)._dump(226)
+
+class NT3H1201(NTAGI2C):
+    """NTAG I2C 2K.
+    
+    """
+    def __init__(self, clf, target):
+        super(NTAGI2C, self).__init__(clf, target)
+        self._product = "NTAG I2C 2K (NT3H1201)"
+
+    def dump(self):
+        return super(NT3H1101, self)._dump(480)
+
+VERSION_MAP = {
+    b"\x00\x04\x03\x01\x01\x00\x0B\x03": MF0UL11,
+    b"\x00\x04\x03\x02\x01\x00\x0B\x03": MF0ULH11,
+    b"\x00\x04\x03\x01\x01\x00\x0E\x03": MF0UL21,
+    b"\x00\x04\x03\x02\x01\x00\x0E\x03": MF0ULH21,
+    b"\x00\x04\x04\x01\x01\x00\x0B\x03": NTAG210,
+    b"\x00\x04\x04\x01\x01\x00\x0E\x03": NTAG212,
+    b"\x00\x04\x04\x02\x01\x00\x0F\x03": NTAG213,
+    b"\x00\x04\x04\x02\x01\x00\x11\x03": NTAG215,
+    b"\x00\x04\x04\x02\x01\x00\x13\x03": NTAG216,
+    b"\x00\x04\x04\x05\x02\x01\x13\x03": NT3H1101,
+    b"\x00\x04\x04\x05\x02\x01\x15\x03": NT3H1201,
+#    b"\x00\x04\x04\x05\x02\x02\x13\x03": NT3H2111,
+#    b"\x00\x04\x04\x05\x02\x02\x15\x03": NT3H2211,
+}
+
+def activate(clf, target):
+    log.debug("check if authenticate command is available")
+    try:
+        rsp = clf.exchange(b'\x1A\x00', timeout=0.01)
+        if clf.sense(target) is None: return
+        if rsp.startswith(b"\xAF"):
+            return MifareUltralightC(clf, target)
+    except nfc.clf.TimeoutError:
+        if clf.sense(target) is None: return
+    except nfc.clf.CommunicationError as error:
+        log.debug(repr(error)); return
+    
+    log.debug("check if version command is available")
+    try:
+        rsp = bytes(clf.exchange(b'\x60', timeout=0.01))
+        if rsp in VERSION_MAP:
+            return VERSION_MAP[rsp](clf, target)
+        if rsp == b"\x00":
+            if clf.sense(target) is None: return None
+            else: return NTAG203(clf, target)
+        log.debug("no match for version %s", hexlify(rsp).upper())
+        return
+    except nfc.clf.TimeoutError:
+        if clf.sense(target) is None: return
+    except nfc.clf.CommunicationError as error:
+        log.debug(repr(error)); return
+    
+    return MifareUltralight(clf, target)
 
