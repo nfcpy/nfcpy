@@ -243,9 +243,14 @@ class USB(object):
             log.error("no bulk endpoints for read and write")
             raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
 
-        self._manufacturer_name = dev.getManufacturer()
-        self._product_name = dev.getProduct()
-        
+        try:
+            # workaround the PN533's buggy USB implementation
+            self._manufacturer_name = dev.getManufacturer()
+            self._product_name = dev.getProduct()
+        except libusb.USBErrorIO:
+            self._manufacturer_name = None
+            self._product_name = None
+
         try:
             self.usb_dev = dev.open()
             self.usb_dev.claimInterface(0)
