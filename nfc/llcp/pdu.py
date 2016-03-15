@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2009-2011 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2009-2015 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -19,200 +19,412 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-
-__all__ = ["ProtocolDataUnit", "Symmetry", "ParameterExchange",
-           "AggregatedFrame", "UnnumberedInformation", "Connect",
-           "Disconnect", "ConnectionComplete", "DisconnectedMode",
-           "FrameReject", "ServiceNameLookup", "Information",
-           "ReceiveReady", "ReceiveNotReady", "connection_mode_pdu_types"]
-
-import struct
 import logging
 log = logging.getLogger(__name__)
 
-connection_mode_pdu_types = (4, 5, 6, 7, 8, 12, 13, 14)
+import struct
+from binascii import hexlify
+
+class Error(Exception): pass
+class DecodeError(Error): pass
+class EncodeError(Error): pass
 
 class Parameter:
-    VERSION, MIUX, WKS, LTO, RW, SN, OPT, SDREQ, SDRES = range(1, 10)
-
-class ProtocolDataUnit(object):
-    Symmetry = 0b0000
-    ParameterExchange = 0b0001
-    AggregatedFrame = 0b0010
-    UnnumberedInformation = 0b0011
-    Connect = 0b0100
-    Disconnect = 0b0101
-    ConnectionComplete = 0b0110
-    DisconnectedMode = 0b0111
-    FrameReject = 0b1000
-    ServiceNameLookup = 0b1001
-    Information = 0b1100
-    ReceiveReady = 0b1101
-    ReceiveNotReady = 0b1110
+    VERSION, MIUX, WKS, LTO, RW, SN, OPT, SDREQ, SDRES, ECPK, RN = range(1, 12)
     
-    def __init__(self, ptype, dsap, ssap):
-        self.type = ptype
-        self.dsap = dsap
-        self.ssap = ssap
-        self.name = "{0:04b}".format(ptype)
+    @staticmethod
+    def decode(data, offset, size):
+        try:
+            (T, L) = struct.unpack_from('!BB', data, offset)
+        except struct.error as error:
+            msg = " while decoding TLV %r" % hexlify(data[offset:])
+            raise DecodeError(str(error) + msg)
+        try:
+            if T == Parameter.VERSION:
+                if L != 1:
+                    raise DecodeError("VERSION TLV length error")
+                (version,) = struct.unpack_from('!B', data, offset+2)
+                return (T, L, version)
+            if T == Parameter.MIUX:
+                if L != 2:
+                    raise DecodeError("MIUX TLV length error")
+                (miux,) = struct.unpack_from('!H', data, offset+2)
+                if miux & 0xF800:
+                    log.warn("MIUX TLV reserved bits set")
+                return (T, L, miux & 0x07FF)
+            if T == Parameter.WKS:
+                if L != 2:
+                    raise DecodeError("WKS TLV length error")
+                (wks,) = struct.unpack_from('!H', data, offset+2)
+                return (T, L, wks)
+            if T == Parameter.LTO:
+                if L != 1:
+                    raise DecodeError("LTO TLV length error")
+                (lto,) = struct.unpack_from('!B', data, offset+2)
+                return (T, L, lto)
+            if T == Parameter.RW:
+                if L != 1:
+                    raise DecodeError("RW TLV length error")
+                (rw,) = struct.unpack_from('!B', data, offset+2)
+                if rw & 0xF0:
+                    log.warn("RW TLV reserved bits set")
+                return (T, L, rw & 0x0F)
+            if T == Parameter.SN:
+                if L == 0: log.warn("SN TLV with zero-length service name")
+                return (T, L, bytes(data[offset+2:offset+2+L]))
+            if T == Parameter.OPT:
+                if L != 1:
+                    raise DecodeError("OPT TLV length error")
+                (opt,) = struct.unpack_from('!B', data, offset+2)
+                if opt & 0xF8:
+                    log.warn("OPT TLV reserved bits set")
+                return (T, L, opt & 0x07)
+            if T == Parameter.SDREQ:
+                if L == 0:
+                    raise DecodeError("SDREQ TLV length error")
+                if L == 1:
+                    log.warn("SDREQ TLV with zero-length service name")
+                (tid, sn) = struct.unpack_from('!B%ds'%(L-1), data, offset+2)
+                return (T, L, (tid, sn))
+            if T == Parameter.SDRES:
+                if L != 2:
+                    raise DecodeError("SDRES TLV length error")
+                (tid, sap) = struct.unpack_from('!BB', data, offset+2)
+                return (T, L, (tid, sap))
+            if T == Parameter.ECPK:
+                if L == 0:
+                    log.warn("ECPK TLV with zero-length value")
+                if L & 1:
+                    log.warn("ECPK TLV with odd length value")
+                return (T, L, bytes(data[offset+2:offset+2+L]))
+            if T == Parameter.RN:
+                if L == 0:
+                    log.warn("RN TLV with zero-length value")
+                return (T, L, bytes(data[offset+2:offset+2+L]))
+            return (T, L, bytes(data[offset+2:offset+2+L]))
+        except struct.error as error:
+            msg = " while decoding TLV %r" % hexlify(data[offset:])
+            raise DecodeError(str(error) + msg)
 
     @staticmethod
-    def from_string(s):
-        h = struct.unpack("!H", s[0:2])[0]
-        dsap, ptype, ssap = (h>>10, h>>6 & 0b1111, h & 0b111111)
+    def encode(T, V):
+        try:
+            if T in (Parameter.VERSION, Parameter.LTO,
+                     Parameter.RW, Parameter.OPT):
+                return struct.pack('!BBB', T, 1, V)
+            if T in (Parameter.MIUX, Parameter.WKS):
+                return struct.pack('!BBH', T, 2, V)
+            if T in (Parameter.SN, Parameter.ECPK, Parameter.RN):
+                if len(V) > 255:
+                    raise EncodeError("can't encode TLV T=%d, V=%r" % (T, V))
+                return struct.pack('!BB', T, len(V)) + bytes(V)
+            if T == Parameter.SDREQ:
+                tid, sn = V[0], V[1]
+                if len(sn) > 254:
+                    raise EncodeError("can't encode TLV T=%d, V=%r" % (T, V))
+                return struct.pack('!BBB', T, 1+len(sn), tid) + bytes(sn)
+            if T == Parameter.SDRES:
+                tid, sap = V[0], V[1]
+                return struct.pack('!BBBB', T, 2, tid, sap)
+            raise EncodeError("unknown TLV T=%d, V=%r" % (T, V))
+        except struct.error as error:
+            msg = " for TLV T=%d, V=%r" % (T, V)
+            raise EncodeError(str(error) + msg)
 
-        if ptype == 0b0000:
-            return Symmetry(dsap=dsap, ssap=ssap).from_string(s)
-        if ptype == 0b0001:
-            return ParameterExchange(dsap=dsap, ssap=ssap).from_string(s)
-        if ptype == 0b0010:
-            return AggregatedFrame(dsap=dsap, ssap=ssap).from_string(s)
-        if ptype == 0b0011:
-            return UnnumberedInformation(dsap=dsap, ssap=ssap).from_string(s)
-        if ptype == 0b0100:
-            return Connect(dsap=dsap, ssap=ssap).from_string(s)
-        if ptype == 0b0101:
-            return Disconnect(dsap=dsap, ssap=ssap).from_string(s)
-        if ptype == 0b0110:
-            return ConnectionComplete(dsap=dsap, ssap=ssap).from_string(s)
-        if ptype == 0b0111:
-            return DisconnectedMode(dsap=dsap, ssap=ssap).from_string(s)
-        if ptype == 0b1000:
-            return FrameReject(dsap=dsap, ssap=ssap).from_string(s)
-        if ptype == 0b1001:
-            return ServiceNameLookup(dsap=dsap, ssap=ssap).from_string(s)
-        if ptype == 0b1100:
-            return Information(dsap=dsap, ssap=ssap).from_string(s)
-        if ptype == 0b1101:
-            return ReceiveReady(dsap=dsap, ssap=ssap).from_string(s)
-        if ptype == 0b1110:
-            return ReceiveNotReady(dsap=dsap, ssap=ssap).from_string(s)
+# -----------------------------------------------------------------------------
+#                                                   ProtocolDataUnit Base Class
+# -----------------------------------------------------------------------------
+class ProtocolDataUnit(object):
+    header_size = 2
+    
+    def __init__(self, ptype, dsap, ssap):
+        self.ptype = ptype
+        self.dsap = dsap
+        self.ssap = ssap
 
-        return ProtocolDataUnit(ptype, dsap=dsap, ssap=ssap)
-        
-    def to_string(self):
-        s  = chr((self.dsap << 2) | (self.type >> 2))
-        s += chr(((self.type & 0b11) << 6) | (self.ssap))
-        if self.type >= 0b1100 and pdu._type <= 0b1110:
-            s += chr(self._nr)
-            if self.type == 0b1100:
-                s[2] |= chr(self._ns << 4)
-        if self._data:
-            s += self._data
-        return s
+    @staticmethod
+    def decode_header(data, offset=0, size=None):
+        if size is None: size = len(data)
+        if size < 2: raise DecodeError("insufficient pdu header bytes")
+        (dsap, ssap) = struct.unpack_from('!BB', data, offset)
+        return (dsap >> 2, ssap & 63)
+    
+    def encode_header(self):
+        if self.dsap is None or self.ssap is None:
+            raise EncodeError("pdu dsap and ssap field can not be None")
+        if self.dsap < 0 or self.ssap < 0:
+            raise EncodeError("pdu dsap and ssap field can not be < 0")
+        if self.dsap > 63 or self.ssap > 63:
+            raise EncodeError("pdu dsap and ssap field can not be > 63")
+        return struct.pack('!H', self.dsap<<10 | self.ptype<<6 | self.ssap)
 
     def __eq__(self, other):
-        return self.to_string() == other.to_string()
+        return self.encode() == other.encode()
 
     def __str__(self):
         string = "{pdu.ssap:2} -> {pdu.dsap:2} {pdu.name:4.4s}"
         return string.format(pdu=self)
 
+# -----------------------------------------------------------------------------
+#                                           NumberedProtocolDataUnit Base Class
+# -----------------------------------------------------------------------------
+class NumberedProtocolDataUnit(ProtocolDataUnit):
+    header_size = 3
+    
+    def __init__(self, ptype, dsap, ssap, ns, nr):
+        super(NumberedProtocolDataUnit, self).__init__(ptype, dsap, ssap)
+        self.ns, self.nr = ns, nr
 
+    @staticmethod
+    def decode_header(data, offset=0, size=None):
+        if size is None: size = len(data)
+        if size < 3: raise DecodeError("numbered pdu header length error")
+        (dsap, ssap, sequence) = struct.unpack_from('!BBB', data, offset)
+        return (dsap >> 2, ssap & 63, sequence >> 4, sequence & 15)
+    
+    def encode_header(self):
+        data = super(NumberedProtocolDataUnit, self).encode_header()
+        if self.ns is None or self.nr is None:
+            raise EncodeError("pdu ns and nr field can not be none")
+        if self.ns < 0 or self.nr < 0:
+            raise EncodeError("pdu ns and nr field can not be < 0")
+        if self.ns > 15 or self.nr > 15:
+            raise EncodeError("pdu ns and nr field can not be > 15")
+        return data + struct.pack('!B', self.ns<<4 | self.nr)
 
+    def __len__(self):
+        return 3
+
+    def __str__(self):
+        f = " N(R)={p.nr}" if self.ns is None else " N(S)={p.ns} N(R)={p.nr}"
+        return super(NumberedProtocolDataUnit,self).__str__()+f.format(p=self)
+
+# -----------------------------------------------------------------------------
+#                                                                  Symmetry PDU
+# -----------------------------------------------------------------------------
 class Symmetry(ProtocolDataUnit):
+    name = "SYMM"
+    
     def __init__(self, dsap=0, ssap=0):
-        ProtocolDataUnit.__init__(self, 0b0000, dsap, ssap)
-        self.name = "SYMM"
+        super(Symmetry, self).__init__(0b0000, dsap, ssap)
 
-    def from_string(self, s):
-        return self
+    @classmethod
+    def decode(cls, data, offset, size):
+        dsap, ssap = cls.decode_header(data, offset, size)
+        if dsap != 0 or ssap != 0:
+            raise DecodeError("SSAP and DSAP must be 0 in SYMM PDU")
+        if size >= 3: raise DecodeError("SYMM PDU PAYLOAD must be empty")
+        return Symmetry(dsap, ssap)
 
-    def to_string(self):
-        return "\x00\x00"
+    def encode(self):
+        if self.dsap != 0 or self.ssap != 0:
+            raise EncodeError("SSAP and DSAP must be 0 in SYMM PDU")
+        return self.encode_header()
 
     def __len__(self):
         return 2
 
     def __str__(self):
-        return ProtocolDataUnit.__str__(self)
+        return super(Symmetry, self).__str__()
 
+# -----------------------------------------------------------------------------
+#                                                        Parameter Exchange PDU
+# -----------------------------------------------------------------------------
 class ParameterExchange(ProtocolDataUnit):
-    def __init__(self, dsap=0, ssap=0, version=(1,0), miu=128, wks=3, lto=100):
-        ProtocolDataUnit.__init__(self, 0b0001, dsap, ssap)
-        self.name = "PAX"
-        self.version = version
-        self.miu = miu
-        self.wks = wks
-        self.lto = lto
-        self.lsc = 3
+    name = "PAX"
+    
+    def __init__(self, dsap=0, ssap=0, version=None, miux=None,
+                 wks=None, lto=None, opt=None):
+        super(ParameterExchange, self).__init__(0b0001, dsap, ssap)
+        self._version = version
+        self._miux = miux
+        self._wks = wks
+        self._lto = lto
+        self._opt = opt
 
-    def from_string(self, s):
-        offset = 2
-        while offset < len(s):
-            t, l = [ord(x) for x in s[offset:offset+2]]
-            v = s[offset+2:offset+2+l]
-            if t == Parameter.VERSION and l == 1:
-                self.version = (ord(v)/16, ord(v)%16)
-            elif t == Parameter.MIUX and l == 2:
-                miux = struct.unpack("!H", v)[0]
-                self.miu = 128 + (miux & 0x07FF)
-            elif t == Parameter.WKS and l == 2:
-                self.wks = struct.unpack("!H", v)[0]
-            elif t == Parameter.LTO and l == 1:
-                self.lto = ord(v[0]) * 10
-            elif t == Parameter.OPT and l == 1:
-                self.lsc = ord(v[0])
-            offset += 2 + l
-        return self
-
-    def to_string(self):
-        version = self.version[0]<<4 | self.version[1]
-        s  = struct.pack("!BB", self.dsap<<2|0b00, 0b01<<6|self.ssap)
-        s += struct.pack("!BBB", Parameter.VERSION, 1, version)
-        if self.miu > 128:
-            s += struct.pack("!BBH", Parameter.MIUX, 2, self.miu - 128)
-        s += struct.pack("!BBH", Parameter.WKS, 2, self.wks)
-        if self.lto != 100:
-            s += struct.pack("!BBB", Parameter.LTO, 1, self.lto / 10)
-        s += struct.pack("!BBB", Parameter.OPT, 1, self.lsc)
-        return s
+    @classmethod
+    def decode(cls, data, offset, size):
+        dsap, ssap = cls.decode_header(data, offset, size)
+        if dsap != 0 or ssap != 0:
+            raise DecodeError("SSAP and DSAP must be 0 in PAX PDU")
+        pax_pdu = ParameterExchange(dsap, ssap)
+        offset, size = offset + 2, size - 2
+        while size >= 2:
+            T, L, V = Parameter.decode(data, offset, size)
+            if T == Parameter.VERSION: pax_pdu._version = V
+            elif T == Parameter.MIUX: pax_pdu._miux = V
+            elif T == Parameter.WKS: pax_pdu._wks = V
+            elif T == Parameter.LTO: pax_pdu._lto = V
+            elif T == Parameter.OPT: pax_pdu._opt = V
+            else: log.warn("invalid TLV %r in PAX PDU", (T, L, V))
+            offset, size = offset + 2 + L, size - 2 - L
+        return pax_pdu
+    
+    def encode(self):
+        if self.dsap != 0 or self.ssap != 0:
+            raise EncodeError("SSAP and DSAP must be 0 in PAX PDU")
+        data = self.encode_header()
+        if self._version is not None:
+            data += Parameter.encode(Parameter.VERSION, self._version)
+        if self._miux is not None:
+            data += Parameter.encode(Parameter.MIUX, self._miux)
+        if self._wks is not None:
+            data += Parameter.encode(Parameter.WKS, self._wks)
+        if self._lto is not None:
+            data += Parameter.encode(Parameter.LTO, self._lto)
+        if self._opt is not None:
+            data += Parameter.encode(Parameter.OPT, self._opt)
+        return data
 
     def __len__(self):
-        # we transmit all possible parameters
-        # len(header) + len(ver) + len(miux) + len(wks) + len(lto) + len(lsc)
-        return 2 + 3 + 4 + 4 + 3 + 3
+        return (2 +
+                (3 if self._version is not None else 0) +
+                (4 if self._miux is not None else 0) +
+                (4 if self._wks is not None else 0) +
+                (3 if self._lto is not None else 0) +
+                (3 if self._opt is not None else 0))
+
+    @property
+    def version(self):
+        version = self._version
+        return (version>>4, version&15) if version else (0, 0)
+    
+    @version.setter
+    def version(self, value):
+        self._version = (value[0]<<4 & 0xF0) | (value[1] & 0x0F)
+    
+    @property
+    def version_text(self):
+        return "{0}.{1}".format(*self.version)
+    
+    @property
+    def miu(self):
+        return self._miux + 128 if self._miux is not None else 128
+    
+    @miu.setter
+    def miu(self, value):
+        self._miux = max(value - 128, 0)
+    
+    @property
+    def wks(self):
+        return self._wks if self._wks is not None else 0
+    
+    @wks.setter
+    def wks(self, value):
+        self._wks = value & 0xFFFF
+    
+    @property
+    def wks_text(self):
+        t = {0: "LLC", 1: "SDP", 4: "SNEP"}
+        l = [t.get(i, str(i)) for i in range(15, -1, -1) if (self.wks>>i) & 1]
+        return ', '.join(l)
+
+    @property
+    def lto(self):
+        return (self._lto if self._lto is not None else 10) * 10
+    
+    @lto.setter
+    def lto(self, value):
+        self._lto = (value // 10) & 0xFF
+    
+    @property
+    def lsc(self):
+        return self._opt & 3 if self._opt is not None else 0
+    
+    @lsc.setter
+    def lsc(self, value):
+        if self._opt is None: self._opt = 0
+        self._opt = (self._opt & 0b11111100) | (value & 0b00000011)
+    
+    @property
+    def lsc_text(self):
+        return ("link service class unknown at activation",
+                "connection-less link service only",
+                "connection-oriented link service only",
+                "connection-less and connection-oriented")[self.lsc]
+
+    @property
+    def dpc(self):
+        return self._opt >> 2 & 1 if self._opt is not None else 0
+    
+    @dpc.setter
+    def dpc(self, value):
+        if self._opt is None: self._opt = 0
+        self._opt = (self._opt & 0b11111011) | (bool(value) << 2)
+    
+    @property
+    def dpc_text(self):
+        return ("secure data transfer mode not supported",
+                "secure data transfer mode is supported")[self.dpc]
 
     def __str__(self):
-        return ProtocolDataUnit.__str__(self) + \
-            " VER={pax.version} MIU={pax.miu} WKS={pax.wks:016b}"\
-            " LTO={pax.lto}".format(pax=self)
+        s = super(ParameterExchange, self).__str__()
+        if self._version is not None:
+            s += " VER={0}.{1}".format(*self.version)
+        if self._wks is not None:
+            s += " WKS={0:016b}".format(self._wks)
+        if self._miux is not None:
+            s += " MIUX={0}".format(self._miux)
+        if self._lto is not None:
+            s += " LTO={0}".format(self._lto)
+        if self._opt is not None:
+            s += " OPT={0:08b}".format(self._opt)
+        return s
 
-
-
+# -----------------------------------------------------------------------------
+#                                                          Aggregated Frame PDU
+# -----------------------------------------------------------------------------
 class AggregatedFrame(ProtocolDataUnit):
+    name = "AGF"
+    
     def __init__(self, dsap=0, ssap=0, aggregate=[]):
-        ProtocolDataUnit.__init__(self, 0b0010, dsap, ssap)
-        self.name = "AGF"
+        super(AggregatedFrame, self).__init__(0b0010, dsap, ssap)
         self._aggregate = aggregate[:]
 
-    def from_string(self, s):
-        offset = 2
-        while offset < len(s):
-            pdu_len = struct.unpack("!H", s[offset:offset+2])[0]
-            pdu = ProtocolDataUnit.from_string(s[offset+2:offset+2+pdu_len])
-            self.append(pdu)
-            offset += 2 + pdu_len
-        return self
+    @classmethod
+    def decode(cls, data, offset, size):
+        dsap, ssap = cls.decode_header(data, offset, size)
+        if dsap != 0 or ssap != 0:
+            raise DecodeError("SSAP and DSAP must be 0 in AGF PDU")
+        agf_pdu = AggregatedFrame(dsap, ssap)
+        offset, size = offset + 2, size - 2
+        while size > 0:
+            try:
+                (pdu_size,) = struct.unpack_from('!H', data, offset)
+            except struct.error:
+                raise DecodeError("aggregated PDU length field error in AGF")
+            agf_pdu.append(decode(data, offset+2, pdu_size))
+            offset, size = offset + 2 + pdu_size, size - 2 - pdu_size
+        return agf_pdu
 
-    def to_string(self):
-        data = ""
-        for pdu in self._aggregate:
-            data += struct.pack("!H", len(pdu)) + pdu.to_string()
-        return chr(self.dsap<<2|0b00) + chr(0b10<<6|self.ssap) + data
+    def encode(self):
+        if self.dsap != 0 or self.ssap != 0:
+            raise EncodeError("SSAP and DSAP must be 0 in AGF PDU")
+        data = self.encode_header()
+        for encoded_pdu in [pdu.encode() for pdu in self._aggregate]:
+            data += struct.pack('!H', len(encoded_pdu)) + encoded_pdu
+        return data
         
     def append(self, pdu):
         self._aggregate.append(pdu)
 
+    @property
+    def count(self):
+        return len(self._aggregate)
+
+    @property
+    def first(self):
+        return self._aggregate[0]
+
     def __len__(self):
-        return 2 + sum([2+len(p) for p in self._aggregate])
+        return 2 + sum([2+len(pdu) for pdu in self._aggregate])
 
     def __str__(self):
         def s(p):
             return "LEN={0} '".format(len(p)) + \
                 ProtocolDataUnit.__str__(p).rstrip() + "'"
-        return ProtocolDataUnit.__str__(self) + \
-             " LEN={0} [".format(len(self)) + \
+        return super(AggregatedFrame, self).__str__() + \
+             " LEN={0} [".format(len(self)-2) + \
              " ".join([s(p) for p in self._aggregate]) + "]"
 
     def __iter__(self):
@@ -229,161 +441,193 @@ class AggregatedFrameIterator(object):
         self._current += 1
         return self._aggregate[self._current-1]
 
-
-
+# -----------------------------------------------------------------------------
+#                                                    Unnumbered Information PDU
+# -----------------------------------------------------------------------------
 class UnnumberedInformation(ProtocolDataUnit):
-    def __init__(self, dsap, ssap, sdu=""):
-        ProtocolDataUnit.__init__(self, 0b0011, dsap, ssap)
-        self.name = "UI"
-        self.sdu = sdu
-        pass
+    name = "UI"
+    
+    def __init__(self, dsap, ssap, data=None):
+        super(UnnumberedInformation, self).__init__(0b0011, dsap, ssap)
+        self.data = data if data else b''
 
-    def from_string(self, s):
-        self.sdu = s[2:]
-        return self
-        
-    def to_string(self):
-        return chr(self.dsap<<2|0b00) + chr(0b11<<6|self.ssap) + self.sdu
+    @classmethod
+    def decode(cls, data, offset, size):
+        dsap, ssap = cls.decode_header(data, offset, size)
+        payload = bytes(data[offset+2:offset+size])
+        return UnnumberedInformation(dsap, ssap, payload)
+
+    def encode(self):
+        return self.encode_header() + bytes(self.data)
 
     def __len__(self):
-        return 2 + len(self.sdu)
+        return 2 + len(self.data)
 
     def __str__(self):
-        return ProtocolDataUnit.__str__(self) + " LEN={len} SDU={sdu}".\
-            format(len=len(self.sdu), sdu=self.sdu.encode("hex"))
+        return super(UnnumberedInformation, self).__str__() + \
+            " LEN={0} DATA={1}".format(len(self.data), hexlify(self.data))
 
-
-
+# -----------------------------------------------------------------------------
+#                                                                   Connect PDU
+# -----------------------------------------------------------------------------
 class Connect(ProtocolDataUnit):
-    def __init__(self, dsap, ssap, miu=128, rw=1, sn=""):
-        ProtocolDataUnit.__init__(self, 0b0100, dsap, ssap)
-        self.name = "CONNECT"
+    name = "CONNECT"
+    
+    def __init__(self, dsap, ssap, miu=128, rw=1, sn=None):
+        super(Connect, self).__init__(0b0100, dsap, ssap)
         self.miu = miu
         self.rw = rw
         self.sn = sn
-        pass
 
-    def from_string(self, s):
-        offset = 2
-        while offset < len(s):
-            t, l = [ord(x) for x in s[offset:offset+2]]
-            if t == 2 and l == 2:
-                miux = struct.unpack("!H", s[offset+2:offset+4])[0]
-                self.miu = 128 + (miux & 0x07FF)
-            if t == 5 and l == 1:
-                self.rw = ord(s[offset+2]) & 0x0F
-            if t == 6 and l > 0:
-                self.sn = s[offset+2:offset+2+l]
-            offset += 2 + l
-        return self
-        
-    def to_string(self):
-        data = ""
-        if self.miu > 128:
-            miux = self.miu - 128
-            data += "\x02\x02" + chr(miux/256) + chr(miux%256)
-        if self.rw != 1:
-            data += "\x05\x01" + chr(self.rw)
+    @classmethod
+    def decode(cls, data, offset, size):
+        dsap, ssap = cls.decode_header(data, offset, size)
+        connect_pdu = Connect(dsap, ssap)
+        offset, size = offset + 2, size - 2
+        while size >= 2:
+            T, L, V = Parameter.decode(data, offset, size)
+            if T == Parameter.MIUX: connect_pdu.miu = 128 + V
+            elif T == Parameter.RW: connect_pdu.rw = V
+            elif T == Parameter.SN: connect_pdu.sn = str(V)
+            else: log.warn("invalid TLV %r in CONNECT PDU", (T, L, V))
+            offset, size = offset + 2 + L, size - 2 - L
+        return connect_pdu
+    
+    def encode(self):
+        data = self.encode_header()
+        if self.miu and self.miu > 128:
+            data += Parameter.encode(Parameter.MIUX, self.miu - 128)
+        if self.rw and self.rw != 1:
+            data += Parameter.encode(Parameter.RW, self.rw)
         if self.sn:
-            data += "\x06" + chr(len(self.sn)) + self.sn
-        return chr(self.dsap<<2|0b01) + chr(0b00<<6|self.ssap) + data
-
+            data += Parameter.encode(Parameter.SN, self.sn)
+        return data
+        
     def __len__(self):
-        return 2 + (0,4)[self.miu>128] + (0,3)[self.rw!=1] \
-            + (0,2+len(self.sn))[bool(self.sn)]
+        return (2 +
+                (4 if self.miu and self.miu > 128 else 0) +
+                (3 if self.rw and self.rw != 1 else 0) +
+                (2 + len(self.sn) if self.sn else 0))
 
     def __str__(self):
-        s  = " MIU={conn.miu} RW={conn.rw}".format(conn=self)
-        s += " SN={conn.sn}".format(conn=self) if self.sn else ""
-        return ProtocolDataUnit.__str__(self) + s
+        s  = " MIU={conn.miu} RW={conn.rw} SN={conn.sn}"
+        return super(Connect, self).__str__() + s.format(conn=self)
 
-
-
+# -----------------------------------------------------------------------------
+#                                                                Disconnect PDU
+# -----------------------------------------------------------------------------
 class Disconnect(ProtocolDataUnit):
+    name = "DISC"
+    
     def __init__(self, dsap, ssap):
-        ProtocolDataUnit.__init__(self, 0b0101, dsap, ssap)
-        self.name = "DISC"
+        super(Disconnect, self).__init__(0b0101, dsap, ssap)
 
-    def from_string(self, s):
-        return self
-        
-    def to_string(self):
-        return chr(self.dsap<<2|0b01) + chr(0b01<<6|self.ssap)
+    @classmethod
+    def decode(cls, data, offset, size):
+        dsap, ssap = cls.decode_header(data, offset, size)
+        return Disconnect(dsap, ssap)
+
+    def encode(self):
+        return self.encode_header()
 
     def __len__(self):
         return 2
 
     def __str__(self):
-        return ProtocolDataUnit.__str__(self)
+        return super(Disconnect, self).__str__()
 
-
+# -----------------------------------------------------------------------------
+#                                                       Connection Complete PDU
+# -----------------------------------------------------------------------------
 class ConnectionComplete(ProtocolDataUnit):
+    name = "CC"
+    
     def __init__(self, dsap, ssap, miu=128, rw=1):
-        ProtocolDataUnit.__init__(self, 0b0110, dsap, ssap)
-        self.name = "CC"
+        super(ConnectionComplete, self).__init__(0b0110, dsap, ssap)
         self.miu = miu
         self.rw = rw
 
-    def from_string(self, s):
-        offset = 2
-        while offset < len(s):
-            t, l = [ord(x) for x in s[offset:offset+2]]
-            if t == 2 and l == 2:
-                miux = struct.unpack("!H", s[offset+2:offset+4])[0]
-                self.miu = 128 + (miux & 0x07FF)
-            if t == 5 and l == 1:
-                self.rw = ord(s[offset+2]) & 0x0F
-            offset += 2 + l
-        return self
-
-    def to_string(self):
-        data = ""
-        if self.miu > 128:
-            miux = self.miu - 128
-            data += "\x02\x02" + chr(miux/256) + chr(miux%256)
-        if self.rw != 1:
-            data += "\x05\x01" + chr(self.rw)
-        return chr(self.dsap<<2|0b01) + chr(0b10<<6|self.ssap) + data
-
+    @classmethod
+    def decode(cls, data, offset, size):
+        dsap, ssap = cls.decode_header(data, offset, size)
+        cc_pdu = ConnectionComplete(dsap, ssap)
+        offset, size = offset + 2, size - 2
+        while size >= 2:
+            T, L, V = Parameter.decode(data, offset, size)
+            if T == Parameter.MIUX: cc_pdu.miu = 128 + V
+            elif T == Parameter.RW: cc_pdu.rw = V
+            else: log.warn("invalid TLV %r in CC PDU", (T, L, V))
+            offset, size = offset + 2 + L, size - 2 - L
+        return cc_pdu
+    
+    def encode(self):
+        data = self.encode_header()
+        if self.miu and self.miu > 128:
+            data += Parameter.encode(Parameter.MIUX, self.miu - 128)
+        if self.rw and self.rw != 1:
+            data += Parameter.encode(Parameter.RW, self.rw)
+        return data
+        
     def __len__(self):
-        return 2 + (0,4)[self.miu>128] + (0,3)[self.rw!=1]
+        return (2 +
+                (4 if self.miu and self.miu > 128 else 0) +
+                (3 if self.rw and self.rw != 1 else 0))
 
     def __str__(self):
-        return ProtocolDataUnit.__str__(self) + \
+        return super(ConnectionComplete, self).__str__() + \
             " MIU={cc.miu} RW={cc.rw}".format(cc=self)
 
-
-
+# -----------------------------------------------------------------------------
+#                                                         Disconnected Mode PDU
+# -----------------------------------------------------------------------------
 class DisconnectedMode(ProtocolDataUnit):
+    name = "DM"
+    
     def __init__(self, dsap, ssap, reason=0):
-        ProtocolDataUnit.__init__(self, 0b0111, dsap, ssap)
-        self.name = "DM"
+        super(DisconnectedMode, self).__init__(0b0111, dsap, ssap)
         self.reason = reason
 
-    def from_string(self, s):
-        self.reason = ord(s[2])
-        return self
+    @classmethod
+    def decode(cls, data, offset, size):
+        if size != 3: raise DecodeError("DM PDU length error")
+        dsap, ssap = cls.decode_header(data, offset, size)
+        (reason,) = struct.unpack_from('!B', data, offset+2)
+        return DisconnectedMode(dsap, ssap, reason)
 
-    def to_string(self):
-        return chr(self.dsap<<2|0b01) + chr(0b11<<6|self.ssap)\
-            + chr(self.reason)
-
+    def encode(self):
+        return self.encode_header() + struct.pack('!B', self.reason)
+            
     def __len__(self):
         return 3
 
     def __str__(self):
-        return ProtocolDataUnit.__str__(self) + \
-            " REASON={dm.reason}".format(dm=self)
+        return super(DisconnectedMode, self).__str__() + \
+            " REASON={dm.reason:02x}h".format(dm=self)
 
+    @property
+    def reason_text(self):
+        return {
+            0x00: "disconnected",
+            0x01: "inactive",
+            0x02: "unbound",
+            0x03: "rejected",
+            0x10: "permanent reject for sap",
+            0x11: "permanent reject for any",
+            0x20: "temporary reject for sap",
+            0x21: "temporary reject for any",
+        }.get(self.reason, "{0:02x}h".format(self.reason))
 
-
+# -----------------------------------------------------------------------------
+#                                                              Frame Reject PDU
+# -----------------------------------------------------------------------------
 class FrameReject(ProtocolDataUnit):
+    name = "FRMR"
+    
     def __init__(self, dsap, ssap, flags=0, ptype=0,
                  ns=0, nr=0, vs=0, vr=0, vsa=0, vra=0):
-        ProtocolDataUnit.__init__(self, 0b1000, dsap, ssap)
-        self.name = "FRMR"
-        self.flags = flags
-        self.ptype = ptype
+        super(FrameReject, self).__init__(0b1000, dsap, ssap)
+        self.rej_flags = flags
+        self.rej_ptype = ptype
         self.ns = ns
         self.nr = nr
         self.vs = vs
@@ -391,32 +635,22 @@ class FrameReject(ProtocolDataUnit):
         self.vsa = vsa
         self.vra = vra
 
-    def from_string(self, s):
-        b0, b1, b2, b3 = struct.unpack("BBBB", s[2:6])
-        self.flags = b0 >> 4
-        self.ptype = b0 & 15
-        self.ns = b1 >> 4
-        self.nr = b1 & 15
-        self.vs = b2 >> 4
-        self.vr = b2 & 15
-        self.vsa = b3 >> 4
-        self.vra = b3 & 15
-        return self
-
-    def to_string(self):
-        return chr(self.dsap<<2|0b10) + chr(0b00<<6|self.ssap)\
-            + chr(self.flags<<4|self.ptype)\
-            + chr(self.ns<<4|self.nr)\
-            + chr(self.vs<<4|self.vr)\
-            + chr(self.vsa<<4|self.vra)
+    @classmethod
+    def decode(cls, data, offset, size):
+        if size != 6: raise DecodeError("FRMR PDU length error")
+        dsap, ssap = cls.decode_header(data, offset, size)
+        (b0, b1, b2, b3) = struct.unpack_from('!BBBB', data, offset+2)
+        flags, ptype = b0 >> 4, b0 & 15
+        ns,    nr    = b1 >> 4, b1 & 15
+        vs,    vr    = b2 >> 4, b2 & 15
+        vsa,   vra   = b3 >> 4, b3 & 15
+        return FrameReject(dsap, ssap, flags, ptype, ns, nr, vs, vr, vsa, vra)
 
     @staticmethod
     def from_pdu(pdu, flags, dlc):
-        frmr = FrameReject(pdu.ssap, pdu.dsap, ptype=pdu.type)
-        if "W" in flags: frmr.flags |= 0b1000
-        if "I" in flags: frmr.flags |= 0b0100
-        if "R" in flags: frmr.flags |= 0b0010
-        if "S" in flags: frmr.flags |= 0b0001
+        rej_ptype = pdu.ptype
+        rej_flags = sum([1 << "SRIW".index(f) for f in flags])
+        frmr = FrameReject(pdu.ssap, pdu.dsap, rej_flags, rej_ptype)
         if isinstance(pdu, Information):
             frmr.ns, frmr.nr = pdu.ns, pdu.nr
         if isinstance(pdu, ReceiveReady) or isinstance(pdu, ReceiveNotReady):
@@ -425,183 +659,234 @@ class FrameReject(ProtocolDataUnit):
         frmr.vr, frmr.vra = dlc.recv_cnt, dlc.recv_ack
         return frmr
 
+    def encode(self):
+        return self.encode_header() + struct.pack(
+            '!BBBB', self.rej_flags<<4|self.rej_ptype, self.ns<<4|self.nr,
+            self.vs<<4|self.vr, self.vsa<<4|self.vra)
+        
     def __len__(self):
         return 6
 
     def __str__(self):
-        return ProtocolDataUnit.__str__(self) +\
-            " FLAGS={frmr.flags:04b} N(S)={frmr.ns} N(R)={frmr.nr}"\
+        return super(FrameReject, self).__str__() +\
+            " FLAGS={frmr.rej_flags:04b} PTYPE={frmr.rej_ptype:04b}"\
+            " N(S)={frmr.ns} N(R)={frmr.nr}"\
             " V(S)={frmr.vs} V(R)={frmr.vr}"\
             " V(SA)={frmr.vsa} V(RA)={frmr.vra}"\
             .format(frmr=self)
 
-
-
+# -----------------------------------------------------------------------------
+#                                                       Service Name Lookup PDU
+# -----------------------------------------------------------------------------
 class ServiceNameLookup(ProtocolDataUnit):
-    def __init__(self, dsap, ssap):
-        ProtocolDataUnit.__init__(self, 0b1001, dsap, ssap)
-        self.name = "SNL"
-        self.sdreq = list()
-        self.sdres = list()
+    name = "SNL"
+    
+    def __init__(self, dsap, ssap, sdreq=None, sdres=None):
+        super(ServiceNameLookup, self).__init__(0b1001, dsap, ssap)
+        self.sdreq = sdreq if sdreq else list()
+        self.sdres = sdres if sdres else list()
 
-    def from_string(self, s):
-        offset = 2
-        while offset < len(s):
-            t, l = [ord(x) for x in s[offset:offset+2]]
-            v = s[offset+2:offset+2+l]
-            if t == Parameter.SDREQ and len >= 1:
-                tid, sn = ord(v[0]), v[1:]
-                self.sdreq.append((tid, sn))
-            if t == Parameter.SDRES and l == 2:
-                tid, sap = ord(v[0]), ord(v[1]) & 0x3F
-                self.sdres.append((tid, sap))
-            offset += 2 + l
-        return self
-
-    def to_string(self):
-        s = chr(self.dsap<<2|0b10) + chr(0b01<<6|self.ssap)
-        for sdres in self.sdres:
-            s = s + chr(Parameter.SDRES) + chr(2) \
-                + chr(sdres[0]) + chr(sdres[1])
+    @classmethod
+    def decode(cls, data, offset, size):
+        dsap, ssap = cls.decode_header(data, offset, size)
+        if dsap != 1 or ssap != 1:
+            raise DecodeError("SSAP and DSAP must be 1 in SNL PDU")
+        snl_pdu = ServiceNameLookup(dsap, ssap)
+        offset, size = offset + 2, size - 2
+        while size >= 2:
+            T, L, V = Parameter.decode(data, offset, size)
+            if T == Parameter.SDREQ: snl_pdu.sdreq.append(V)
+            elif T == Parameter.SDRES: snl_pdu.sdres.append(V)
+            else: log.warn("invalid TLV %r in SNL PDU", (T, L, V))
+            offset, size = offset + 2 + L, size - 2 - L
+        return snl_pdu
+    
+    def encode(self):
+        data = self.encode_header()
         for sdreq in self.sdreq:
-            s = s + chr(Parameter.SDREQ) \
-                + chr(1 + len(sdreq[1])) \
-                + chr(sdreq[0]) + sdreq[1]
-        return s
-
+            data += Parameter.encode(Parameter.SDREQ, sdreq)
+        for sdres in self.sdres:
+            data += Parameter.encode(Parameter.SDRES, sdres)
+        return data
+        
     def __len__(self):
         return 2 + (len(self.sdres) * 4) \
             + sum([3+len(sdreq[1]) for sdreq in self.sdreq])
 
     def __str__(self):
-        return ProtocolDataUnit.__str__(self) \
-            + "SDRES={0} SDREQ={1}".format(str(self.sdres), str(self.sdreq))
+        return super(ServiceNameLookup, self).__str__() + \
+            " SDRES={0} SDREQ={1}".format(str(self.sdres), str(self.sdreq))
 
+# -----------------------------------------------------------------------------
+#                                                     Data Protection Setup PDU
+# -----------------------------------------------------------------------------
+class DataProtectionSetup(ProtocolDataUnit):
+    name = "DPS"
+    
+    def __init__(self, dsap, ssap, ecpk=None, rn=None):
+        super(DataProtectionSetup, self).__init__(0b1010, dsap, ssap)
+        self.ecpk = ecpk
+        self.rn = rn
 
-
-class Information(ProtocolDataUnit):
-    def __init__(self, dsap, ssap, ns=None, nr=None, sdu=""):
-        ProtocolDataUnit.__init__(self, 0b1100, dsap, ssap)
-        self.name = "I"
-        self.ns = ns
-        self.nr = nr
-        self.sdu = sdu
-
-    def from_string(self, s):
-        self.ns = ord(s[2]) >> 4
-        self.nr = ord(s[2]) & 15
-        self.sdu = s[3:]
-        return self
-
-    def to_string(self):
-        return chr(self.dsap<<2|0b11) + chr(0b00<<6|self.ssap)\
-            + chr(self.ns<<4|self.nr) + self.sdu
-
+    @classmethod
+    def decode(cls, data, offset, size):
+        dsap, ssap = cls.decode_header(data, offset, size)
+        if dsap != 0 or ssap != 0:
+            raise DecodeError("SSAP and DSAP must be 0 in DPS PDU")
+        dps_pdu = DataProtectionSetup(dsap, ssap)
+        offset, size = offset + 2, size - 2
+        while size >= 2:
+            T, L, V = Parameter.decode(data, offset, size)
+            if T == Parameter.ECPK: dps_pdu.ecpk = V
+            elif T == Parameter.RN: dps_pdu.rn = V
+            else: log.debug("unknown TLV %r in DPS PDU", (T, L, V))
+            offset, size = offset + 2 + L, size - 2 - L
+        return dps_pdu
+    
+    def encode(self):
+        if self.dsap != 0 or self.ssap != 0:
+            raise EncodeError("SSAP and DSAP must be 0 in DPS PDU")
+        data = self.encode_header()
+        if self.ecpk:
+            data += Parameter.encode(Parameter.ECPK, self.ecpk)
+        if self.rn:
+            data += Parameter.encode(Parameter.RN, self.rn)
+        return data
+        
     def __len__(self):
-        return 3 + len(self.sdu)
+        return (2 +
+                (2 + len(self.ecpk) if self.ecpk else 0) +
+                (2 + len(self.rn) if self.rn else 0))
 
     def __str__(self):
-        return ProtocolDataUnit.__str__(self) + \
-            " N(S)={inf.ns} N(R)={inf.nr} LEN={len} SDU={sdu}" \
-            .format(inf=self, len=len(self.sdu), sdu=self.sdu.encode("hex"))
+        return super(DataProtectionSetup, self).__str__() + \
+            " ECPK={0} RN={1}".format(
+                'None' if self.ecpk is None else str(self.ecpk).encode('hex'),
+                'None' if self.rn is None else str(self.rn).encode('hex'))
 
+# -----------------------------------------------------------------------------
+#                                                               Information PDU
+# -----------------------------------------------------------------------------
+class Information(NumberedProtocolDataUnit):
+    name = "I"
+    
+    def __init__(self, dsap, ssap, ns=None, nr=None, data=None):
+        super(Information, self).__init__(0b1100, dsap, ssap, ns, nr)
+        self.data = data if data else b''
 
+    @classmethod
+    def decode(cls, data, offset, size):
+        dsap, ssap, ns, nr = cls.decode_header(data, offset, size)
+        payload = bytes(data[offset+3:offset+size])
+        return cls(dsap, ssap, ns, nr, payload)
 
-class ReceiveReady(ProtocolDataUnit):
+    def encode(self):
+        return self.encode_header() + bytes(self.data)
+        
+    def __len__(self):
+        return 3 + len(self.data)
+
+    def __str__(self):
+        return (super(Information, self).__str__() + " LEN={0} DATA={1}"
+                .format(len(self.data), hexlify(self.data)))
+
+# -----------------------------------------------------------------------------
+#                                                             Receive Ready PDU
+# -----------------------------------------------------------------------------
+class ReceiveReady(NumberedProtocolDataUnit):
+    name = "RR"
+    
     def __init__(self, dsap, ssap, nr=None):
-        ProtocolDataUnit.__init__(self, 0b1101, dsap, ssap)
-        self.name = "RR"
-        self.nr = nr
+        super(ReceiveReady, self).__init__(0b1101, dsap, ssap, 0, nr)
 
-    def from_string(self, s):
-        self.nr = ord(s[2]) & 15
-        return self
+    @classmethod
+    def decode(cls, data, offset, size):
+        dsap, ssap, ns, nr = cls.decode_header(data, offset, size)
+        if ns != 0: log.warn("reserved bits set in sequence field")
+        return cls(dsap, ssap, nr)
+    
+    def encode(self):
+        return self.encode_header()
+        
+# -----------------------------------------------------------------------------
+#                                                         Receive Not Ready PDU
+# -----------------------------------------------------------------------------
+class ReceiveNotReady(NumberedProtocolDataUnit):
+    name = "RNR"
+    
+    def __init__(self, dsap, ssap, nr):
+        super(ReceiveNotReady, self).__init__(0b1110, dsap, ssap, 0, nr)
 
-    def to_string(self):
-        return chr(self.dsap<<2|0b11) + chr(0b01<<6|self.ssap) + chr(self.nr)
+    @classmethod
+    def decode(cls, data, offset, size):
+        dsap, ssap, ns, nr = cls.decode_header(data, offset, size)
+        if ns != 0: log.warn("reserved bits set in sequence field")
+        return cls(dsap, ssap, nr)
+    
+    def encode(self):
+        return self.encode_header()
+        
+# -----------------------------------------------------------------------------
+#                                                       UnknownProtocolDataUnit
+# -----------------------------------------------------------------------------
+class UnknownProtocolDataUnit(ProtocolDataUnit):
+    def __init__(self, ptype, dsap, ssap, payload):
+        super(UnknownProtocolDataUnit, self).__init__(ptype, dsap, ssap)
+        self.name = "{0:04b}".format(ptype)
+        self.payload = payload
+
+    @classmethod
+    def decode(cls, data, offset, size):
+        dsap, ssap = cls.decode_header(data, offset, size)
+        pdutype = (data[offset]<<2 | data[offset+1]>>6) & 0x0F
+        payload = data[offset+2:offset+size]
+        return cls(pdutype, dsap, ssap, payload)
+    
+    def encode(self):
+        return self.encode_header() + bytes(self.payload)
 
     def __len__(self):
-        return 3
+        return 2 + len(self.payload)
 
     def __str__(self):
-        return ProtocolDataUnit.__str__(self) +\
-            " N(R)={rr.nr}".format(rr=self)
+        return (super(UnknownProtocolDataUnit, self).__str__()
+                + " PAYLOAD=" + hexlify(self.payload))
 
+# -----------------------------------------------------------------------------
+# pdu decode and encode functions
+# -----------------------------------------------------------------------------
+pdu_type_map = {
+    0b0000: Symmetry,
+    0b0001: ParameterExchange,
+    0b0010: AggregatedFrame,
+    0b0011: UnnumberedInformation,
+    0b0100: Connect,
+    0b0101: Disconnect,
+    0b0110: ConnectionComplete,
+    0b0111: DisconnectedMode,
+    0b1000: FrameReject,
+    0b1001: ServiceNameLookup,
+    0b1010: DataProtectionSetup,
+    0b1100: Information,
+    0b1101: ReceiveReady,
+    0b1110: ReceiveNotReady,
+}
 
+def decode(data, offset=0, size=None):
+    size = len(data) if size is None else size
+    
+    if offset + size > len(data):
+        raise DecodeError("size bytes from offset exceed the data length")
+    if size < 2:
+        raise DecodeError("less than two header bytes can't make a valid pdu")
 
-class ReceiveNotReady(ProtocolDataUnit):
-    def __init__(self, dsap, ssap, nr=None):
-        ProtocolDataUnit.__init__(self, 0b1110, dsap, ssap)
-        self.name = "RNR"
-        self.nr = nr
+    ptype = (struct.unpack_from('!H', data, offset)[0] >> 6) & 0b1111
+    pdu_type = pdu_type_map.get(ptype, UnknownProtocolDataUnit)
+    return pdu_type.decode(data, offset, size)
 
-    def from_string(self, s):
-        self.nr = ord(s[2]) & 15
-        return self
-
-    def to_string(self):
-        return chr(self.dsap<<2|0b11) + chr(0b10<<6|self.ssap) + chr(self.nr)
-
-    def __len__(self):
-        return 3
-
-    def __str__(self):
-        return ProtocolDataUnit.__str__(self) +\
-            " N(R)={rnr.nr}".format(rnr=self)
-
-
-
-if __name__ == '__main__':
-    print "--------------------------"
-    print "- running positive tests -"
-    print "--------------------------"
-    test = (
-        ( Symmetry(), 
-          "\x00\x00" ),
-        ( ParameterExchange(version=(1,1), miu=1024, wks=0x100F, lto=1000),
-          "\x00\x40\x01\x01\x11\x02\x02\x03\x80\x03\x02\x10\x0F\x04\x01\x64" ),
-        ( AggregatedFrame(aggregate=[Symmetry(), Symmetry()]),
-          "\x00\x80\x00\x02\x00\x00\x00\x02\x00\x00" ),
-        ( UnnumberedInformation(0, 0, "\xAA\xBB"),
-          "\x00\xC0\xAA\xBB" ),
-        ( Connect(0, 0, miu=1024, rw=8, sn="urn:nfc:sn:snep"),
-          "\x01\x00\x02\x02\x03\x80\x05\x01\x08\x06\x0Furn:nfc:sn:snep" ),
-        ( Disconnect(0, 0),
-          "\x01\x40" ),
-        ( ConnectionComplete(0, 0, miu=1024, rw=8),
-          "\x01\x80\x02\x02\x03\x80\x05\x01\x08" ),
-        ( DisconnectedMode(0, 0, reason=1),
-          "\x01\xC0\x01" ),
-        ( FrameReject(0, 0, 0b1010, 0b1100, 2, 3, 2, 3, 2, 3),
-          "\x02\x00\xAC\x23\x23\x23" ),
-        ( Information(0, 0, ns=2, nr=3, sdu="\x01\x02\x03\x04"),
-          "\x03\x00\x23\x01\x02\x03\x04" ),
-        ( ReceiveReady(0, 0, nr=4),
-          "\x03\x40\x04" ),
-        ( ReceiveNotReady(0, 0, nr=5),
-          "\x03\x80\x05" ),
-        )
-
-    for p, s in test:
-        print ("failed", "passed")[p.to_string() == s and len(p) == len(s)],
-        print ProtocolDataUnit.from_string(s)
-
-    print 
-    for p, s in test:
-        b0, b1 = struct.unpack("!BB", s[0:2])
-        b0 |= 0x80; b1 |= 0x01
-        s = struct.pack("!BB", b0, b1) + s[2:]
-        s = str(ProtocolDataUnit.from_string(s))
-        print ("failed", "passed")[s.startswith(" 1 -> 32")], s
-
-    print
-    agf = AggregatedFrame()
-    for p, s in test:
-        agf.append(p)
-    print agf
-    for p in agf:
-        print p
-
-    pdu1 = Disconnect(0,0)
-    pdu2 = Disconnect(0,0)
-    print repr(pdu1), "==", repr(pdu2), "->", pdu1 == pdu2
+def encode(pdu):
+    if not isinstance(pdu, ProtocolDataUnit):
+        raise AttributeError("can't encode %s" % type(pdu))
+    
+    return pdu.encode()
+    

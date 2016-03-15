@@ -22,8 +22,16 @@
 import logging
 log = logging.getLogger('main')
 
-import os, sys, errno, time, argparse
-from threading import Thread
+import os
+import re
+import sys
+import errno
+import time
+import inspect
+import argparse
+import threading
+from operator import itemgetter
+
 import nfc
 
 def log_device_access_denied(path):
@@ -121,7 +129,22 @@ def log_usb_device_found_busy(path):
                       "to see which process is using the device"
                 log.info(msg.format(bus, dev))
 
-class TestError(Exception):
+def get_test_methods(object):
+    test_methods = list()
+    for name, func in inspect.getmembers(object, inspect.ismethod):
+        if name.startswith("test_"):
+            line = inspect.getsourcelines(func)[1]
+            text = inspect.getdoc(func)
+            test_methods.append((line, name.lstrip("test_"), text))
+    return test_methods
+
+class TestFail(Exception):
+    def __init__(self, value):
+        self.value = value
+    def __str__(self):
+        return str(self.value)
+
+class TestSkip(Exception):
     def __init__(self, value):
         self.value = value
     def __str__(self):
@@ -167,10 +190,15 @@ class CommandLineInterface(object):
         
         log.debug(self.options)
         
-        if "test" in self.groups and self.options.test_all:
-            self.options.test = []
-            for test_name in [m for m in dir(self) if m.startswith("test_")]:
-                self.options.test.append(int(test_name.split('_')[1]))
+        if "test" in self.groups:
+            if self.options.test_all:
+                # get_test_method() yields a list of (line, name, docstr) tuples
+                test_methods = sorted(get_test_methods(self), key=itemgetter(0))
+                self.options.test = map(itemgetter(1), test_methods)
+
+            if len(self.options.test) > 0 and self.options.select:
+                match = lambda name: re.match(self.options.select, name)
+                self.options.test = filter(match, self.options.test)
         
     def add_dbg_options(self, argument_parser):
         group = argument_parser.add_argument_group(
@@ -200,29 +228,35 @@ class CommandLineInterface(object):
             title="Peer Mode Options")
         group.add_argument(
             "--miu", type=int, default=2175, metavar='',
-            help="LLCP Link MIU octets (default: %(default)s octets)")
+            help="LLC Link MIU octets (default: %(default)s octets)")
         group.add_argument(
             "--lto", type=int, default=500, metavar='',
-            help="LLCP Link Timeout in ms (default: %(default)s ms)")
+            help="LLC Link Timeout in ms (default: %(default)s ms)")
+        group.add_argument(
+            "--lsc", type=int, choices=range(3), default=3, metavar='',
+            help="LLC Link Service Class (default: %(default)s)")
         group.add_argument(
             "--rwt", type=int, default=8, metavar='',
-            help="response waiting time index (default: %(default)s)")
+            help="DEP Response Waiting Time index (default: %(default)s)")
         group.add_argument(
             "--mode", choices=["t","target","i","initiator"], metavar='',
             help="connect as [t]arget or [i]nitiator (default: both)")
         group.add_argument(
             "--bitrate", type=int, default=424, metavar='',
             choices=(106, 212, 424),
-            help="initiator bitrate 106/212/424 (default: %(default)s)")
+            help="DEP Initiator bitrate 106/212/424 (default: %(default)s)")
         group.add_argument(
             "--passive-only", action="store_true",
             help="only passive mode activation when initiator")
         group.add_argument(
             "--listen-time", type=int, default=250, metavar='',
-            help="target listen time in ms (default: %(default)s ms)")
+            help="DEP Target listen time in ms (default: %(default)s ms)")
         group.add_argument(
             "--no-aggregation", action="store_true",
             help="disable outbound packet aggregation")
+        group.add_argument(
+            "--no-encryption", action="store_true",
+            help="disable secure data transport")
 
     def add_rdwr_options(self, argument_parser):
         group = argument_parser.add_argument_group(
@@ -261,17 +295,24 @@ class CommandLineInterface(object):
         group = argument_parser.add_argument_group(
             title="Test options")
         group.add_argument(
-            "-t", "--test", type=int, default=[], action="append",
-            metavar="N", help="run test number <N>")
+            "-t", "--test", default=[], action="append",
+            metavar="T", help="add test name <T> to test schedule")
         group.add_argument(
             "-T", "--test-all", action="store_true",
-            help="run all available tests")
-        argument_parser.description += "\nTests:\n"
-        for test_name in [m for m in dir(self) if m.startswith("test_")]:
-            test_func = eval("self."+test_name)
-            test_info = test_func.__doc__.splitlines()[0]
-            argument_parser.description += "  {0:2d} - {1}\n".format(
-                int(test_name.split('_')[1]), test_info)
+            help="add all available tests to schedule")
+        group.add_argument(
+            "--select", metavar="REGEX",
+            help="from schedule select tests matching REGEX")
+        
+        test_name_and_text, max_name_length = list(), 0
+        for line,name,text in sorted(get_test_methods(self), key=itemgetter(0)):
+            test_name_and_text.append((name, text.splitlines()[0]))
+            max_name_length = max(max_name_length, len(name))
+
+        argument_parser.description += "\nAvailable Tests:\n"
+        for name, text in test_name_and_text:
+            argument_parser.description += '  {0}   {1}\n'.format(
+                name.ljust(max_name_length), text)
         
     def on_rdwr_startup(self, targets):
         return targets
@@ -289,7 +330,7 @@ class CommandLineInterface(object):
     def on_llcp_connect(self, llc):
         if "test" in self.groups:
             self.test_completed = False
-            Thread(target=self.run_tests, args=(llc,)).start()
+            threading.Thread(target=self.run_tests, args=(llc,)).start()
             llc.run(terminate=self.terminate)
             return False
         return True
@@ -315,23 +356,26 @@ class CommandLineInterface(object):
     def run_tests(self, *args):
         if len(self.options.test) > 1:
             log.info("run tests: {0}".format(self.options.test))
-        for test in self.options.test:
-            test_name = "test_{0:02d}".format(test)
+        for index, test in enumerate(self.options.test):
+            test_name = "test_{0}".format(test)
             try:
                 test_func = eval("self." + test_name)
             except AttributeError:
-                log.error("invalid test number '{0}'".format(test))
+                log.error("invalid test '{0}'".format(test))
                 continue
             test_info = test_func.__doc__.splitlines()[0]
-            test_name = test_name.capitalize().replace('_', ' ')
+            try: test_name = "Test {0:02d}".format(test)
+            except ValueError: test_name = test
             print("{0}: {1}".format(test_name, test_info))
             try:
                 test_func(*args)
-            except TestError as error:
-                print("Test {N:02d}: FAIL ({E})".format(N=test, E=error))
+            except (TestFail, AssertionError) as error:
+                print("{0}: FAIL ({1})".format(test_name, error))
+            except TestSkip as error:
+                print("{0}: SKIP ({1})".format(test_name, error))
             else:
                 print("{0}: PASS".format(test_name))
-            if self.options.test.index(test) < len(self.options.test) - 1:
+            if index < len(self.options.test) - 1:
                 time.sleep(1)
         self.test_completed = True
 
@@ -385,10 +429,12 @@ class CommandLineInterface(object):
                 'role': self.options.role,
                 'brs': (106, 212, 424).index(self.options.bitrate),
                 'acm': not self.options.passive_only,
+                'rwt': self.options.rwt,
                 'miu': self.options.miu,
                 'lto': self.options.lto,
-                'rwt': self.options.rwt,
+                'lsc': self.options.lsc,
                 'agf': not self.options.no_aggregation,
+                'sec': not self.options.no_encryption,
             }
         else:
             llcp_options = None
@@ -444,6 +490,7 @@ class AnsiColorStreamHandler(logging.StreamHandler):
     RED     = '\x1b[31m'
     GREEN   = '\x1b[32m'
     YELLOW  = '\x1b[33m'
+    BLUE    = '\x1b[34m'
     CYAN    = '\x1b[36m'
 
     CRITICAL = RED
@@ -451,6 +498,7 @@ class AnsiColorStreamHandler(logging.StreamHandler):
     WARNING  = YELLOW
     INFO     = GREEN
     DEBUG    = CYAN
+    VERBOSE  = BLUE
 
     @classmethod
     def _get_color(cls, level):
@@ -459,6 +507,7 @@ class AnsiColorStreamHandler(logging.StreamHandler):
         elif level >= logging.WARNING: return cls.WARNING
         elif level >= logging.INFO:    return cls.INFO
         elif level >= logging.DEBUG:   return cls.DEBUG
+        elif level >= logging.DEBUG-1: return cls.VERBOSE
         else:                          return cls.DEFAULT
 
     def format(self, record):
@@ -496,6 +545,7 @@ class WindowsColorStreamHandler(logging.StreamHandler):
     WARNING  = FOREGROUND_YELLOW | FOREGROUND_INTENSITY
     INFO     = FOREGROUND_GREEN
     DEBUG    = FOREGROUND_CYAN
+    VERBOSE  = FOREGROUND_BLUE
 
     @classmethod
     def _get_color(cls, level):
@@ -504,6 +554,7 @@ class WindowsColorStreamHandler(logging.StreamHandler):
         elif level >= logging.WARNING: return cls.WARNING
         elif level >= logging.INFO:    return cls.INFO
         elif level >= logging.DEBUG:   return cls.DEBUG
+        elif level >= logging.DEBUG-1: return cls.VERBOSE
         else:                          return cls.DEFAULT
 
     def _set_color(self, code):

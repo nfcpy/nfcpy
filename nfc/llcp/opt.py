@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2009-2011 Stephen Tiedemann <stephen.tiedemann@googlemail.com>
+# Copyright 2009-2015 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
 # Licensed under the EUPL, Version 1.1 or - as soon they 
 # will be approved by the European Commission - subsequent
@@ -26,3 +26,5 @@ SO_SNDBUF = 3
 SO_RCVBUF = 4
 SO_SNDBSY = 5
 SO_RCVBSY = 6
+
+MSG_DONTWAIT = 0b00000001
