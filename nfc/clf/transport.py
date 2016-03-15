@@ -229,10 +229,17 @@ class USB(object):
             log.error("no device {0} on bus {1}".format(dev_adr, usb_bus))
             raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
         
+        try:
+            first_setting = dev.iterSettings().next()
+        except StopIteration:
+            log.error("no usb configuration settings, please replug device")
+            raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
+            
         transfer_type = lambda x: x & libusb.TRANSFER_TYPE_MASK
         endpoint_dir = lambda x: x & libusb.ENDPOINT_DIR_MASK
-        for endpoint in dev.iterSettings().next().iterEndpoints():
-            ep_addr, ep_attr = endpoint.getAddress(), endpoint.getAttributes()
+        for endpoint in first_setting.iterEndpoints():
+            ep_addr = endpoint.getAddress()
+            ep_attr = endpoint.getAttributes()
             if transfer_type(ep_attr) == libusb.TRANSFER_TYPE_BULK:
                 if endpoint_dir(ep_addr) == libusb.ENDPOINT_IN:
                     if not self.usb_inp: self.usb_inp = endpoint
