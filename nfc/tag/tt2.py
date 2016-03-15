@@ -34,6 +34,17 @@ else: # for Debian Wheezy (and thus Raspbian)
 from nfc.tag import Tag, TagCommandError
 import nfc.clf
 
+def hexdump(octets, sep=""):
+    return sep.join(("??" if x is None else ("%02x" % x)) for x in octets)
+
+def chrdump(octets, sep=""):
+    return sep.join(("{:c}".format(x) if 32<=x<=126 else ".") for x in octets)
+
+def pagedump(page, octets, info=None):
+    info = ("|%s|" % chrdump(octets)) if info is None else ("(%s)" % info)
+    page = "  * " if page is None else "{0:03X}:".format(page)
+    return "{0} {1} {2}".format(page, hexdump(octets, sep=" "), info)
+
 TIMEOUT_ERROR, INVALID_SECTOR_ERROR, \
     INVALID_PAGE_ERROR, INVALID_RESPONSE_ERROR = range(4)
 
@@ -257,29 +268,24 @@ class Type2Tag(Tag):
         return self._dump(stop=None)
 
     def _dump(self, stop=None):
-        ispchr = lambda x: x >= 32 and x <= 126
-        oprint = lambda o: ' '.join(['??' if x < 0 else '%02x'%x for x in o])
-        cprint = lambda o: ''.join([chr(x) if ispchr(x) else '.' for x in o])
-        lprint = lambda fmt, d, i: fmt.format(i, oprint(d), cprint(d))
-        
         lines = list()
         header = ("UID0-UID2, BCC0", "UID3-UID6",
                   "BCC1, INT, LOCK0-LOCK1", "OTP0-OTP3")
 
-        for i, txt in enumerate(header):
-            try: data = oprint(self.read(i)[0:4])
-            except Type2TagCommandError: data = "?? ?? ?? ??"
-            lines.append("{0:3}: {1} ({2})".format(i, data, txt))
+        for i, info in enumerate(header):
+            try:
+                data = self.read(i)[0:4]
+            except Type2TagCommandError:
+                data = [None, None, None, None]
+            lines.append(pagedump(i, data, info))
 
-        data_line_fmt = "{0:>3}: {1} |{2}|"
-        same_line_fmt = "{0:>3}  {1} |{2}|"
         same_data = 0; this_data = last_data = None
 
         def dump_same_data(same_data, last_data, this_data, page):
             if same_data > 1:
-                lines.append(lprint(same_line_fmt, last_data, "*"))
+                lines.append(pagedump(None, this_data))
             if same_data > 0:
-                lines.append(lprint(data_line_fmt, this_data, page))
+                lines.append(pagedump(page, this_data))
             
         for i in xrange(4, stop if stop is not None else 0x40000):
             try:
@@ -289,7 +295,7 @@ class Type2Tag(Tag):
                 dump_same_data(same_data, last_data, this_data, i-1)
                 if stop is not None:
                     this_data = last_data = [None, None, None, None]
-                    lines.append(lprint(data_line_fmt, this_data, i))
+                    lines.append(pagedump(i, this_data))
                     dump_same_data(stop-i-1, this_data, this_data, stop-1)
                 break
             
@@ -297,7 +303,7 @@ class Type2Tag(Tag):
                 same_data += 1
             else:
                 dump_same_data(same_data, last_data, last_data, i-1)
-                lines.append(lprint(data_line_fmt, this_data, i))
+                lines.append(pagedump(i, this_data))
                 last_data = this_data; same_data = 0
         else:
             dump_same_data(same_data, last_data, this_data, i)
@@ -511,11 +517,15 @@ class Type2Tag(Tag):
             log.debug("select sector {0} (pages {1} to {2})".format(
                 sector, sector<<10, ((sector+1)<<8)-1))
 
-            rsp = self.transceive("\xC2\xFF")
+            sector_select_1 = b'\xC2\xFF'
+            sector_select_2 = pack('Bxxx', sector)
+            
+            rsp = self.transceive(sector_select_1)
             if len(rsp) == 1 and rsp[0] == 0x0A:
                 try:
                     # command is passively ack'd, i.e. there's no response
-                    self.transceive(chr(sector)+"\0\0\0", timeout=0.001)
+                    # and we must make sure there's no retries attempted
+                    self.transceive(sector_select_2, timeout=0.001, retries=0)
                 except Type2TagCommandError as error:
                     assert int(error) == TIMEOUT_ERROR # passive ack
                 else:
@@ -529,7 +539,7 @@ class Type2Tag(Tag):
             self._current_sector = sector
         return self._current_sector
 
-    def transceive(self, data, timeout=0.1):
+    def transceive(self, data, timeout=0.1, retries=2):
         """Send a Type 2 Tag command and receive the response.
         
         :meth:`transceive` is a type 2 tag specific wrapper around the
@@ -546,7 +556,7 @@ class Type2Tag(Tag):
         log.debug(">> {0} ({1:f}s)".format(hexlify(data), timeout))
         
         started = time.time()
-        for retry in range(3):
+        for retry in range(1 + retries):
             try:
                 data = self.clf.exchange(data, timeout)
                 break

@@ -41,7 +41,7 @@ sense_tta   yes      Only Type 1 Tags up to 128 byte (Topaz-96)
 sense_ttb   yes      ATTRIB by firmware voided with S(DESELECT)
 sense_ttf   yes
 sense_dep   yes
-listen_tta  yes
+listen_tta  yes      Only DEP and Type 2 Target
 listen_ttb  no
 listen_ttf  no
 listen_dep  yes      Only passive communication mode
@@ -262,11 +262,13 @@ class Device(pn53x.Device):
         ``sens_res``, ``sdd_res``, and ``sel_res`` response data must
         be provided and ``sdd_res`` must be a 4 byte UID that starts
         with ``08h``. Depending on ``sel_res`` an activation may
-        return a target with a ``tt2_cmd``, ``tt4_cmd`` or ``atr_req``
-        attribute. The default RATS response sent for a Type 4 Tag
-        activation can be replaced with a ``rats_res`` attribute.
+        return a target with ``tt2_cmd`` or ``atr_req`` attribute. A
+        Type 4A Tag activation is not supported.
 
         """
+        if target.sel_res[0] & 0x20:
+            info = "{device} does not support listen as Type 4A Target"
+            raise nfc.clf.UnsupportedTargetError(info.format(device=self))
         return super(Device, self).listen_tta(target, timeout)
 
     def listen_ttb(self, target, timeout):

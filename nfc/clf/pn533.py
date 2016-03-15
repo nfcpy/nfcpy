@@ -379,9 +379,9 @@ def init(transport):
     chipset = Chipset(transport, logger=log)
     device = Device(chipset, logger=log)
     
-    # PN533 bug: usb manufacturer and product strings disappear
-    # from usb configuration after first use in p2p mode. Thus
-    # we'll try to read it directly from the EEPROM.
+    # PN533 bug: Manufacturer and product strings are no longer
+    # accessible from USB device description after first use with
+    # slightly larger command frames. Better read it from EEPROM.
     if device.eeprom:
         eeprom = device.eeprom; index = 0
         while index < len(eeprom) and eeprom[index] != 0xFF:

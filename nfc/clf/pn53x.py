@@ -201,6 +201,7 @@ class Chipset(object):
             except IOError as error:
                 if error.errno == errno.ETIMEDOUT:
                     self.write_frame(self.ACK) # cancel command
+                    time.sleep(0.001)
                 raise error
         
         if frame.startswith(self.SOF + "\xFF\xFF"):

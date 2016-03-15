@@ -6,14 +6,14 @@ Requirements
 ============
 
 * `Python`_ version 2.6 or newer (but not Python 3)
-* `pyUSB`_ and `libusb`_ for readers with USB interface
-* `pyserial`_ for readers with serial interface (incl. FTDI)
-* `docopt`_ for execution of some of the example programs
+* Python `usb1`_ module to access USB devices through `libusb`_
+* Python `serial`_ module to access serial (incl. FTDI) devices
+* Python `docopt`_ module for some of the example programs
 
 .. _Python: https://www.python.org
-.. _PyUSB: http://walac.github.io/pyusb
-.. _libusb: http://www.libusb.org
-.. _pyserial: http://pythonhosted.org/pyserial/
+.. _usb1: https://github.com/vpelletier/python-libusb1
+.. _libusb: http://libusb.info
+.. _serial: http://pythonhosted.org/pyserial/
 .. _docopt: https://github.com/docopt/docopt
 
 Supported Devices

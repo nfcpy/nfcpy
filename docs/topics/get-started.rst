@@ -6,12 +6,46 @@ Installation
 ============
 
 .. _Bazaar: http://bazaar.canonical.com/en/
-
 .. _Launchpad: https://launchpad.net/
-
 .. _nfcpy trunk: https://code.launchpad.net/~stephen-tiedemann/nfcpy/trunk
+.. _pip: https://pip.pypa.io/en/stable/
+.. _libusb: http://libusb.info/
+.. _WinUSB: https://msdn.microsoft.com/en-us/library/ff540196.aspx
+.. _Zadig: http://zadig.akeo.ie/
 
-**1. Get the code**
+**1. Install Python and required packages**
+
+Python is usually installed on Linux, otherwise can be downloaded at
+https://www.python.org/downloads/. Windows users may grab an installer
+at https://www.python.org/downloads/windows/. Choose the latest 2.x
+version, *nfcpy* is not yet ready for Python 3.
+
+With Python installed use `pip`_ to install the required additional
+packages::
+
+  $ pip install libusb1 pyserial
+
+Windows users may have to use ``C:\Python27\Scripts\pip.exe``.
+
+**3. Install libusb (usually just Windows)**
+
+The `libusb`_ library provides generic access to USB devices. Most
+Linux distributions seem to install it by default, otherwise should be
+available through the standard package installer (beware to not choose
+the old version 0.x).
+
+Windows users will have a little work to (i) install the Microsoft
+`WinUSB`_ driver and (ii) place a copy of the libusb library into the
+system folder. Microsoft provides Instructions to install `WinUSB`_
+but a much simpler approach is to use the `Zadig`_ Windows application
+(download and run zadig, select your device and choose the WinUSB
+driver for install). The libusb library for Windows can be downloaded
+from `libusb`_ (Downloads -> Latest Windows Binaries) as a 7z
+archive. Just unpack and copy ``libusb-1.0.dll`` from either the
+``MS32\dll`` or ``MS64\dll`` into the ``C:\Windows\System32``
+directory.
+
+**2. Get nfcpy**
 
 To get the latest development version: ::
 
@@ -35,33 +69,8 @@ example the latest 0.9.x release. ::
 
   $ bzr branch lp:nfcpy/0.9
 
-Tarballs of released versions are available for download at
+Tarballs of release versions are available at
 https://launchpad.net/nfcpy.
-
-**2. Install Python**
-
-Python is usually installed on Linux, otherwise can be downloaded at
-https://www.python.org/downloads/. Windows users may grab an installer
-at https://www.python.org/downloads/windows/. Choose the latest 2.x
-version, *nfcpy* is not yet ready for Python 3.
-
-**3. Install libusb**
-
-The final piece needed is the USB library *libusb* and Python
-bindings. Once more this is dead easy for Linux where *libusb* is
-already available and the only step required is: ::
-
-  $ sudo apt-get install python-usb
-
-To install libusb for Windows read the *Driver Installation* at
-http://www.libusb.org/wiki/windows_backend and use *Zadig.exe* to
-install *libusb-win32* for the contactless reader device (connect the
-reader and cancel the standard Windows install dialog, the device will
-be selectable in *Zadig*). The Python USB library can be downloaded as
-a zip file from http://sourceforge.net/projects/pyusb/ and installed
-with ``python.exe setup.py install`` from within the unzipped pyusb
-source code directory (add the full path to *python.exe* if it's not
-part of the search path).
 
 **4. Run example**
 
