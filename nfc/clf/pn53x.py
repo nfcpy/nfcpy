@@ -590,9 +590,8 @@ class Device(device.Device):
         except Chipset.Error as error:
             if error.errno not in (0x01, 0x0A): self.log.error(error)
             return None
-
-        if target.brty == "106A":
-            # unset the detect-sync bit, the host handles the start byte
+        finally:
+            # unset the detect-sync bit, 106A sync byte is handled in dep.py
             self.chipset.write_register("CIU_Mode", 0b00111011)
         
         self.log.debug("running DEP in {0} kbps active mode".format(br))
@@ -837,7 +836,7 @@ class Device(device.Device):
         # enable the automatic mode detector (b2 <= 0)
         #self.chipset.write_register("CIU_Mode", 0b00111011)
         self.chipset.write_register(
-            ("CIU_Mode",    0b00111011), # b2 - enable mode detector
+            ("CIU_Mode",    0b01111011), # b2 - enable mode detector
             ("CIU_TxMode",  0b10110000), # 848 kbps Type A framing
             ("CIU_RxMode",  0b10110000)) # 848 kbps Type A framing
         
@@ -896,6 +895,10 @@ class Device(device.Device):
                 self.log.debug(error); return
         
         if data and data[0] == len(data) and data[1:3] == "\xD4\x06":
+            # set detect-sync bit to 0, the 106A sync byte is handled by dep.py
+            self.chipset.write_register("CIU_Mode", 0b00111011)
+            # prepare the target description to return, exact content
+            # depends on how we were activated (A or F with or w/o PSL)
             target = nfc.clf.LocalTarget(brty, dep_req=data[1:])
             target.atr_req, target.atr_res = atr_req, atr_res
             if psl_req: target.psl_req = psl_req
