@@ -1,10 +1,10 @@
 """Setup module for nfcpy.
 """
 
-from setuptools import setup
+from setuptools import setup, find_packages
 from codecs import open
 from os import path
-import nfc
+import re
 
 here = path.abspath(path.dirname(__file__))
 
@@ -12,10 +12,18 @@ here = path.abspath(path.dirname(__file__))
 with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
+with open(path.join(here, 'nfc', '__init__.py'), encoding='utf-8') as f:
+    match = re.search(r"^__version__ = ['\"]([^'\"]*)['\"]", f.read(), re.M)
+    if not match:
+        raise RuntimeError("Unable to find version string.")
+    version_string = match.group(1)
+    if not re.match(r"\d+\.\d+\.\d+$", version_string):
+        raise RuntimeError("This is not a release version.")
+
 setup(
     name = 'nfcpy',
-    version = nfc.__version__,
-    packages = ['nfc'],
+    version = version_string,
+    packages = find_packages(exclude=['examples']),
     license = 'EUPL',
     url = 'https://launchpad.net/nfcpy',
 
