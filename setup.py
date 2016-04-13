@@ -37,5 +37,5 @@ setup(
         'Topic :: Software Development :: Libraries :: Python Modules',
     ],
 
-    install_requires = ['libusb1', 'pyserial', 'docopt'],
+    install_requires = ['libusb1', 'pyserial'],
 )
