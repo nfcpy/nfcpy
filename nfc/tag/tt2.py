@@ -464,9 +464,9 @@ class Type2Tag(Tag):
         if len(data) == 1 and data[0] & 0xFA == 0x00:
             log.debug("received nak response")
             self.target.sel_req = self.target.sdd_res[:]
-            if self.clf.sense(self.target) is None:
-                raise Type2TagCommandError(nfc.tag.RECEIVE_ERROR)
-            raise Type2TagCommandError(INVALID_PAGE_ERROR)
+            self._target = self.clf.sense(self.target)
+            raise Type2TagCommandError(
+                INVALID_PAGE_ERROR if self.target else nfc.tag.RECEIVE_ERROR)
 
         if len(data) != 16:
             log.debug("invalid response " + hexlify(data))
@@ -554,7 +554,14 @@ class Type2Tag(Tag):
 
         """
         log.debug(">> {0} ({1:f}s)".format(hexlify(data), timeout))
-        
+
+        if not self.target:
+            # Sometimes we have to (re)sense the target during
+            # communication. If that failed (tag gone) then any
+            # further attempt to transceive() is the same as
+            # "unrecoverable timeout error".
+            raise Type2TagCommandError(nfc.tag.TIMEOUT_ERROR)
+
         started = time.time()
         for retry in range(1 + retries):
             try:
