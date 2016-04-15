@@ -36,7 +36,7 @@ import Queue as queue
 from threading import Thread, Lock
 
 sys.path.insert(1, os.path.split(sys.path[0])[0])
-from cli import CommandLineInterface, TestError
+from cli import CommandLineInterface, TestFail
 
 import nfc
 import nfc.ndef
@@ -242,7 +242,7 @@ class PhdcTagAgentTest(CommandLineInterface):
                     agent.send(apdu)
                     apdu = agent.recv(timeout=5.0)
                     if apdu is None:
-                        raise TestError("no data received")
+                        raise TestFail("no data received")
         except IOError as e:
             log.error(e)
             time.sleep(0.1)
@@ -265,7 +265,7 @@ class PhdcTagAgentTest(CommandLineInterface):
 
         apdu = agent.recv(timeout=5.0)
         if apdu is None:
-            raise TestError("no data received")
+            raise TestFail("no data received")
 
         if apdu.startswith("\xE3\x00"):
             info("rcvd association response")
@@ -278,7 +278,7 @@ class PhdcTagAgentTest(CommandLineInterface):
 
         apdu = agent.recv(timeout=5.0)
         if apdu is None:
-            raise TestError("no data received")
+            raise TestFail("no data received")
 
         if apdu.startswith("\xE5\x00"):
             info("rcvd association release response")
@@ -301,7 +301,7 @@ class PhdcTagAgentTest(CommandLineInterface):
 
         apdu = agent.recv(timeout=5.0)
         if apdu is None:
-            raise TestError("no data received")
+            raise TestFail("no data received")
         if apdu.startswith("\xE3\x00"):
             info("rcvd association response")
 
@@ -311,7 +311,7 @@ class PhdcTagAgentTest(CommandLineInterface):
 
         apdu = agent.recv(timeout=5.0)
         if apdu is None:
-            raise TestError("no data received")
+            raise TestFail("no data received")
         if apdu.startswith("\xE5\x00"):
             info("rcvd association release response")
 
@@ -327,7 +327,7 @@ class PhdcTagAgentTest(CommandLineInterface):
 
         apdu = agent.recv(timeout=5.0)
         if apdu is None:
-            raise TestError("no data received")
+            raise TestFail("no data received")
         if apdu.startswith("\xE3\x00"):
             info("rcvd association response")
 
@@ -412,7 +412,7 @@ class PhdcP2pAgentTest(CommandLineInterface):
         try:
             socket.connect(service_name)
         except nfc.llcp.ConnectRefused:
-            raise TestError("could not connect to {0!r}".format(service_name))
+            raise TestFail("could not connect to {0!r}".format(service_name))
         
         peer_sap = socket.getpeername()
         info("connected with phdc manager at sap {0}".format(peer_sap))
@@ -454,7 +454,7 @@ class PhdcP2pAgentTest(CommandLineInterface):
         try:
             socket.connect(service_name)
         except nfc.llcp.ConnectRefused:
-            raise TestError("could not connect to {0!r}".format(service_name))
+            raise TestFail("could not connect to {0!r}".format(service_name))
         
         peer_sap = socket.getpeername()
         info("connected with phdc manager at sap {0}".format(peer_sap))
@@ -515,7 +515,7 @@ class PhdcP2pAgentTest(CommandLineInterface):
         try:
             socket.connect(service_name)
         except nfc.llcp.ConnectRefused:
-            raise TestError("could not connect to {0!r}".format(service_name))
+            raise TestFail("could not connect to {0!r}".format(service_name))
         
         peer_sap = socket.getpeername()
         info("connected with phdc manager at sap {0}".format(peer_sap))
@@ -542,7 +542,7 @@ class PhdcP2pAgentTest(CommandLineInterface):
 
         rcvd_apdu = apdu[::-1]
         if rcvd_apdu != sent_apdu:
-            raise TestError("received data does not equal sent data")
+            raise TestFail("received data does not equal sent data")
 
         socket.close()
     

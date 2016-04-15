@@ -31,7 +31,7 @@ import argparse
 from threading import Thread
 
 sys.path.insert(1, os.path.split(sys.path[0])[0])
-from cli import CommandLineInterface, TestError
+from cli import CommandLineInterface, TestFail
 
 import nfc
 import nfc.snep
@@ -76,7 +76,7 @@ class TestProgram(CommandLineInterface):
             info("1st connect to {0}".format(validation_server))
             snep.connect(validation_server)
         except nfc.llcp.ConnectRefused:
-            raise TestError("could not connect to validation server")
+            raise TestFail("could not connect to validation server")
         else:
             info("disconnect from {0}".format(validation_server))
             snep.close()
@@ -84,7 +84,7 @@ class TestProgram(CommandLineInterface):
             info("2nd connect to {0}".format(validation_server))
             snep.connect(validation_server)
         except nfc.llcp.ConnectRefused:
-            raise TestError("could not connect to validation server")
+            raise TestFail("could not connect to validation server")
         else:
             info("disconnect from {0}".format(validation_server))
             snep.close()
@@ -104,7 +104,7 @@ class TestProgram(CommandLineInterface):
             info("connect to {0}".format(validation_server))
             snep.connect(validation_server)
         except nfc.llcp.ConnectRefused:
-            raise TestError("could not connect to validation server")
+            raise TestFail("could not connect to validation server")
 
         try:
             info("put short ndef message")
@@ -117,11 +117,11 @@ class TestProgram(CommandLineInterface):
 
             for i in range(len(ndef_message_sent)):
                 if not ndef_message_rcvd == ndef_message_sent:
-                    raise TestError("rcvd ndef message {0} differs".format(i))
+                    raise TestFail("rcvd ndef message {0} differs".format(i))
                 else:
                     info("rcvd ndef message {0} is correct".format(i))
         except Exception as e:
-            raise TestError("exception: " + str(e))
+            raise TestFail("exception: " + str(e))
         finally:
             info("disconnect from {0}".format(validation_server))
             snep.close()
@@ -141,7 +141,7 @@ class TestProgram(CommandLineInterface):
             info("connect to {0}".format(validation_server))
             snep.connect(validation_server)
         except nfc.llcp.ConnectRefused:
-            raise TestError("could not connect to validation server")
+            raise TestFail("could not connect to validation server")
 
         try:
             info("put large ndef message")
@@ -155,11 +155,11 @@ class TestProgram(CommandLineInterface):
             for i in range(len(ndef_message_sent)):
                 if not ndef_message_rcvd == ndef_message_sent:
                     info("rcvd ndef message {0} differs".format(i))
-                    raise TestError("rcvd ndef message {0} differs".format(i))
+                    raise TestFail("rcvd ndef message {0} differs".format(i))
                 else:
                     info("rcvd ndef message {0} is correct".format(i))
         except Exception as e:
-            raise TestError("exception " + str(e))
+            raise TestFail("exception " + str(e))
         finally:
             info("disconnect from {0}".format(validation_server))
             snep.close()
@@ -181,7 +181,7 @@ class TestProgram(CommandLineInterface):
             info("connect to {0}".format(validation_server))
             snep.connect(validation_server)
         except nfc.llcp.ConnectRefused:
-            raise TestError("could not connect to validation server")
+            raise TestFail("could not connect to validation server")
 
         try:
             info("put 1st ndef message")
@@ -203,11 +203,11 @@ class TestProgram(CommandLineInterface):
             for i in range(len(ndef_message_sent)):
                 if not ndef_message_rcvd == ndef_message_sent:
                     info("rcvd ndef message {0} differs".format(i))
-                    raise TestError("rcvd ndef message {0} differs".format(i))
+                    raise TestFail("rcvd ndef message {0} differs".format(i))
                 else:
                     info("rcvd ndef message {0} is correct".format(i))
         except Exception as e:
-            raise TestError("exception " + str(e))
+            raise TestFail("exception " + str(e))
         finally:
             info("disconnect from {0}".format(validation_server))
             snep.close()
@@ -225,7 +225,7 @@ class TestProgram(CommandLineInterface):
             info("connect to {0}".format(validation_server))
             snep.connect(validation_server)
         except nfc.llcp.ConnectRefused:
-            raise TestError("could not connect to validation server")
+            raise TestFail("could not connect to validation server")
 
         try:
             info("put {0} octets ndef message".format(
@@ -239,10 +239,10 @@ class TestProgram(CommandLineInterface):
                 ndef_message = snep.get(nfc.ndef.Message(identifier))
             except nfc.snep.SnepError as e:
                 if e.errno != nfc.snep.ExcessData:
-                    raise TestError("received unexpected response code")
+                    raise TestFail("received unexpected response code")
                 info("received 'excess data' response as expected")
             else:
-                raise TestError("received unexpected message from server")
+                raise TestFail("received unexpected message from server")
         finally:
             info("disconnect from {0}".format(validation_server))
             snep.close()
@@ -255,7 +255,7 @@ class TestProgram(CommandLineInterface):
             info("connect to {0}".format(validation_server))
             snep.connect(validation_server)
         except nfc.llcp.ConnectRefused:
-            raise TestError("could not connect to validation server")
+            raise TestFail("could not connect to validation server")
 
         try:
             identifier = nfc.ndef.Record("application/octet-stream", "0", "")
@@ -264,10 +264,10 @@ class TestProgram(CommandLineInterface):
                 ndef_message = snep.get(nfc.ndef.Message(identifier))
             except nfc.snep.SnepError as e:
                 if e.errno != nfc.snep.NotFound:
-                    raise TestError("received unexpected response code")
+                    raise TestFail("received unexpected response code")
                 info("received 'not found' response as expected")
             else:
-                raise TestError("received unexpected message from server")
+                raise TestFail("received unexpected message from server")
         finally:
             info("disconnect from {0}".format(validation_server))
             snep.close()
@@ -284,7 +284,7 @@ class TestProgram(CommandLineInterface):
             info("connect to {0}".format("urn:nfc:sn:snep"))
             snep.connect("urn:nfc:sn:snep")
         except nfc.llcp.ConnectRefused:
-            raise TestError("could not connect to default server")
+            raise TestFail("could not connect to default server")
 
         try:
             info("put {0} octets ndef message".format(len(str(ndef_message))))
@@ -296,10 +296,10 @@ class TestProgram(CommandLineInterface):
                 ndef_message = snep.get(nfc.ndef.Message(identifier))
             except nfc.snep.SnepError as e:
                 if e.errno != nfc.snep.NotImplemented:
-                    raise TestError("received unexpected response code")
+                    raise TestFail("received unexpected response code")
                 info("received 'not implemented' response as expected")
             else:
-                raise TestError("received unexpected message from server")
+                raise TestFail("received unexpected message from server")
         finally:
             info("disconnect from server")
             snep.close()

@@ -30,7 +30,7 @@ import argparse
 import random
 
 sys.path.insert(1, os.path.split(sys.path[0])[0])
-from cli import CommandLineInterface, TestError
+from cli import CommandLineInterface, TestFail
 
 import nfc
 import nfc.llcp
@@ -120,7 +120,7 @@ def handover_connect(llc, options):
         return client
     except nfc.llcp.ConnectRefused:
         if not options.quirks:
-            raise TestError("unable to connect to the handover server")
+            raise TestFail("unable to connect to the handover server")
         
     log.error("unable to connect to the handover server")
     log.warning("[quirks] trying the snep server get method")
@@ -130,7 +130,7 @@ def handover_connect(llc, options):
         info("[quirks] connected to the remote default snep server")
         return client
     except nfc.llcp.ConnectRefused:
-        raise TestError("unable to connect to the default snep server")
+        raise TestFail("unable to connect to the default snep server")
 
 # global object to store the handover response in quirks mode when the
 # handover message exchange is via the snep default server, as done by
@@ -141,17 +141,17 @@ def handover_send(client, message, miu=128):
     if isinstance(client, nfc.handover.HandoverClient):
         if isinstance(message, str):
             if not client._send(message, miu):
-                raise TestError("error sending handover request")
+                raise TestFail("error sending handover request")
         else:
             if not client.send(message):
-                raise TestError("error sending handover request")
+                raise TestFail("error sending handover request")
     elif isinstance(client, nfc.snep.SnepClient):
         global quirks_handover_snep_response
         quirks_handover_snep_response = None
         try:
             message = client.get(message, timeout=3.0)
         except nfc.snep.SnepError as err:
-            raise TestError("remote snep server returned '{0}'".format(err))
+            raise TestFail("remote snep server returned '{0}'".format(err))
         else:
             quirks_handover_snep_response = message
     else:
@@ -171,15 +171,15 @@ def handover_recv(client, timeout, raw=False):
         raise ValueError("wrong client argument type")
     
     if message is None:
-        raise TestError("no answer within {0} seconds".format(int(timeout)))
+        raise TestFail("no answer within {0} seconds".format(int(timeout)))
     if not message.type == "urn:nfc:wkt:Hs":
-        raise TestError("unexpected message type '{0}'".format(message.type))
+        raise TestFail("unexpected message type '{0}'".format(message.type))
     
     if not raw:
         try:
             message = nfc.ndef.HandoverSelectMessage(message)
         except nfc.ndef.DecodeError:
-            raise TestError("invalid handover select message")
+            raise TestFail("invalid handover select message")
         
     return message
     
@@ -285,7 +285,7 @@ class TestProgram(CommandLineInterface):
             handover_send(client, message)
             message = handover_recv(client, timeout=3.0)
             if len(message.carriers) > 0:
-                raise TestError("handover select message returned carriers")
+                raise TestFail("handover select message returned carriers")
         finally:
             client.close()
 
@@ -304,7 +304,7 @@ class TestProgram(CommandLineInterface):
             handover_send(client, message)
             message = handover_recv(client, timeout=3.0)
             if message.version.major != 1 and message.version.minor != 2:
-                raise TestError("handover select message version is not 1.2")
+                raise TestFail("handover select message version is not 1.2")
             info("received handover select message version 1.2")
         finally:
             client.close()
@@ -317,7 +317,7 @@ class TestProgram(CommandLineInterface):
             handover_send(client, message)
             message = handover_recv(client, timeout=3.0)
             if message.version.major != 1 and message.version.minor != 2:
-                raise TestError("handover select message version is not 1.2")
+                raise TestFail("handover select message version is not 1.2")
             info("received handover select message version 1.2")
         finally:
             client.close()
@@ -331,7 +331,7 @@ class TestProgram(CommandLineInterface):
             handover_send(client, message)
             message = handover_recv(client, timeout=3.0)
             if message.version.major != 1 and message.version.minor != 2:
-                raise TestError("handover select message version is not 1.2")
+                raise TestFail("handover select message version is not 1.2")
             info("received handover select message version 1.2")
         finally:
             client.close()
@@ -347,7 +347,7 @@ class TestProgram(CommandLineInterface):
             handover_send(client, str(data), miu=128)
             message = handover_recv(client, timeout=3.0)
             if message.version.major != 1 and message.version.minor != 2:
-                raise TestError("handover select message version is not 1.2")
+                raise TestFail("handover select message version is not 1.2")
             info("received handover select message version 1.2")
         finally:
             client.close()
@@ -380,17 +380,17 @@ class TestProgram(CommandLineInterface):
                      + message.pretty(2))
 
             if len(message.carriers) != 1:
-                raise TestError("one selected carrier is expected")
+                raise TestFail("one selected carrier is expected")
             if message.carriers[0].type != "application/vnd.bluetooth.ep.oob":
-                raise TestError("a Bluetooth carrier is expected")
+                raise TestFail("a Bluetooth carrier is expected")
             record = message.carriers[0].record
             if record.local_device_name is None:
                 if self.options.relax:
                     log.warning("no local device name attribute")
                 else:
-                    raise TestError("no local device name attribute")
+                    raise TestFail("no local device name attribute")
             if record.local_device_name == "":
-                raise TestError("empty local device name attribute")
+                raise TestFail("empty local device name attribute")
             if record.class_of_device is None:
                 log.warning("there is no class of device attribute")
             if len(record.service_class_uuid_list) == 0:
@@ -399,19 +399,19 @@ class TestProgram(CommandLineInterface):
                 if self.options.relax:
                     log.warning("ssp hash not expected in just-works mode")
                 else:
-                    raise TestError("ssp hash not expected in just-works mode")
+                    raise TestFail("ssp hash not expected in just-works mode")
             if not record.simple_pairing_rand is None:
                 if self.options.relax:
                     log.warning("ssp rand not expected in just-works mode")
                 else:
-                    raise TestError("ssp rand not expected in just-works mode")
+                    raise TestFail("ssp rand not expected in just-works mode")
         finally:
             client.close()
 
         hci0 = BluetoothAdapter()
         connected = hci0.create_pairing(record.device_address)
         if not connected:
-            raise TestError("Bluetooth connection was not established")
+            raise TestFail("Bluetooth connection was not established")
 
     def test_05(self, llc):
         """Bluetooth secure pairing"""
@@ -446,17 +446,17 @@ class TestProgram(CommandLineInterface):
                      + message.pretty(2))
 
             if len(message.carriers) != 1:
-                raise TestError("one selected carrier is expected")
+                raise TestFail("one selected carrier is expected")
             if message.carriers[0].type != "application/vnd.bluetooth.ep.oob":
-                raise TestError("a Bluetooth carrier is expected")
+                raise TestFail("a Bluetooth carrier is expected")
             record = message.carriers[0].record
             if record.local_device_name is None:
                 if self.options.relax:
                     log.warning("no local device name attribute")
                 else:
-                    raise TestError("no local device name attribute")
+                    raise TestFail("no local device name attribute")
             if record.local_device_name == "":
-                raise TestError("empty local device name attribute")
+                raise TestFail("empty local device name attribute")
             if record.class_of_device is None:
                 log.warning("there is no class of device attribute")
             if len(record.service_class_uuid_list) == 0:
@@ -465,12 +465,12 @@ class TestProgram(CommandLineInterface):
                 if self.options.relax:
                     log.warning("ssp hash required for secure pairing")
                 else:
-                    raise TestError("ssp hash required for secure pairing")
+                    raise TestFail("ssp hash required for secure pairing")
             if record.simple_pairing_rand is None:
                 if self.options.relax:
                     log.warning("ssp rand required for secure pairing")
                 else:
-                    raise TestError("ssp rand required for secure pairing")
+                    raise TestFail("ssp rand required for secure pairing")
         finally:
             client.close()
 
@@ -479,7 +479,7 @@ class TestProgram(CommandLineInterface):
         connected = hci0.create_pairing(record.device_address,
                                         ssp_hash, ssp_rand)
         if not connected:
-            raise TestError("Bluetooth connection was not established")
+            raise TestFail("Bluetooth connection was not established")
 
     def test_06(self, llc):
         """Unknown carrier type"""
@@ -498,9 +498,9 @@ class TestProgram(CommandLineInterface):
                      + message.pretty(2))
 
             if message.version.major != 1:
-                raise TestError("handover major version is not 1")
+                raise TestFail("handover major version is not 1")
             if len(message.carriers) != 0:
-                raise TestError("an empty carrier selection is expected")
+                raise TestFail("an empty carrier selection is expected")
         finally:
             client.close()
 
@@ -522,9 +522,9 @@ class TestProgram(CommandLineInterface):
                      + message.pretty(2))
 
             if message.version.major != 1:
-                raise TestError("handover major version is not 1")
+                raise TestFail("handover major version is not 1")
             if len(message.carriers) != 0:
-                raise TestError("an empty carrier selection is expected first")
+                raise TestFail("an empty carrier selection is expected first")
 
             message = nfc.ndef.HandoverRequestMessage(version="1.2")
             message.nonce = random.randint(0, 0xffff)
@@ -579,30 +579,30 @@ class TestProgram(CommandLineInterface):
                 info("received {0!r}\n".format(message.type) +
                          nfc.ndef.HandoverSelectMessage(message).pretty(2))
             except nfc.ndef.DecodeError:
-                raise TestError("decoding errors in received message")
+                raise TestFail("decoding errors in received message")
 
             if message[0].data[0] != "\x12":
-                raise TestError("handover message version 1.2 is required")
+                raise TestFail("handover message version 1.2 is required")
             if len(message[0].data) == 1:
-                raise TestError("non-empty carrier selection is required")
+                raise TestFail("non-empty carrier selection is required")
 
             try:
                 message = nfc.ndef.Message(message[0].data[1:])
             except nfc.ndef.FormatError as e:
-                raise TestError(str(e))
+                raise TestFail(str(e))
             else:
                 record = message[0]
                 if record.type != "urn:nfc:wkt:ac":
-                    raise TestError("no alternative carrier record")
+                    raise TestFail("no alternative carrier record")
                 data = bytearray(record.data)
                 if data[0] & 0xfc != 0:
-                    raise TestError("rfu bits set in 1st octet of ac record")
+                    raise TestFail("rfu bits set in 1st octet of ac record")
                 data = data[2+data[1]:] # carrier data reference
                 aux_ref_count = data.pop(0)
                 for i in range(aux_ref_count):
                     data = data[1+data[1]:] # auxiliary data reference
                 if len(data) != 0:
-                    raise TestError("reserved bytes used at end of ac record")
+                    raise TestFail("reserved bytes used at end of ac record")
 
         finally:
             client.close()
@@ -641,9 +641,9 @@ class TestProgram(CommandLineInterface):
                      + message.pretty(2))
 
             if len(message.carriers) != 1:
-                raise TestError("one selected carrier is expected")
+                raise TestFail("one selected carrier is expected")
             if message.carriers[0].type != "application/vnd.bluetooth.ep.oob":
-                raise TestError("a Bluetooth carrier is expected")
+                raise TestFail("a Bluetooth carrier is expected")
         finally:
             client.close()
 
