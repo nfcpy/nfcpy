@@ -130,10 +130,15 @@ class Initiator(DataExchangeProtocol):
             log.debug("searching passive communication mode target at 106A")
             target = nfc.clf.RemoteTarget("106A")
             target = self.clf.sense(target, iterations=2, interval=0.1)
-            if target:
-                if not (target.sel_res and bool(target.sel_res[0] & 0x40)):
-                    log.debug("Target does not support NFC-DEP")
-                    return None
+            if target and target.sel_res and bool(target.sel_res[0] & 0x40):
+                self.target = target
+
+        if self.target is None and self.brs > 0:
+            log.debug("searching passive communication mode target at 212F")
+            target = nfc.clf.RemoteTarget("212F", sensf_req=b'\0\xFF\xFF\0\0')
+            target = self.clf.sense(target, iterations=2, interval=0.1)
+            if target and target.sensf_res.startswith(b'\1\1\xFE'):
+                atr_req.nfcid3 = target.sensf_res[1:9] + b'ST'
                 self.target = target
 
         if self.target and self.target.atr_res is None:
@@ -144,7 +149,7 @@ class Initiator(DataExchangeProtocol):
                 return None
 
         if self.target and atr_res:
-            if self.brs > 0:
+            if self.brs > (0 if self.target.brty == '106A' else 1):
                 try: psl_res = self.send_req_recv_res(psl_req, 0.1)
                 except nfc.clf.CommunicationError: pass
                 if psl_res is None:
