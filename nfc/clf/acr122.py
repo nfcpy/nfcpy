@@ -98,12 +98,12 @@ class Device(pn532.Device):
         """
         return super(Device, self).sense_ttf(target)
 
-    def sense_dep(self, target, passive_target=None):
+    def sense_dep(self, target):
         """Search for a DEP Target. Both passive and passive communication
         mode are supported.
 
         """
-        return super(Device, self).sense_dep(target, passive_target)
+        return super(Device, self).sense_dep(target)
         
     def listen_tta(self, target, timeout):
         """Listen as Type A Target is not supported."""
