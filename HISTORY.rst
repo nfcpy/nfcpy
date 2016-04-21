@@ -1,6 +1,33 @@
 Changelog for nfcpy
 ===================
 
+0.11.0 (2016-04-21)
+-------------------
+
+* The main new feature of release 0.11 is the support for encrypted
+  LLCP connections from the NFC Forum LLCP 1.3 Specification. The
+  feature is available for Linux systems with OpenSSL crypto library
+  (probably all). Encryption is automatically used if the supported by
+  the peer device.
+
+* The Python USB library has changed from PyUSB to the python-libusb
+  module (pip install python-libusb). This allows to wait for a USB
+  response packet and still being able to cancel with keyboard
+  interrupt (which PyUSB was unfortunately blocking).
+
+* Starting with this release the nfcpy library part (the nfc module
+  but not the examples) will be uploaded to the Python Package Index
+  for simple installation with 'pip install nfcpy'.
+  
+* The Type 2 Tag sector_select command could finally be tested with an
+  NTAG I2C Tag and is now working as intended.
+
+0.10.2 (2015-10-02)
+-------------------
+
+* Fixes an initialization issue when PN532 is connected to serial port
+  on Raspberry Pi.
+
 0.10.1 (2015-09-28)
 -------------------
 

@@ -157,7 +157,7 @@ TS Text Record Type 1.0               implemented
 TS URI Record Type 1.0                implemented
 TS Smart Poster Record Type 1.0       implemented
 TS Signature Record Type              not implemented
-TS Logical Link Control Protocol 1.2  implemented
+TS Logical Link Control Protocol 1.3  implemented
 TS Simple NDEF Exchange Protocol 1.0  implemented
 TS Connection Handover 1.2            implemented
 TS Personal Health Communication 1.0  implemented

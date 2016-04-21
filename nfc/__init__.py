@@ -19,7 +19,7 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-__version__ = "trunk"
+__version__ = "0.11.0"
 
 import logging
 logging.getLogger(__name__).addHandler(logging.NullHandler())
