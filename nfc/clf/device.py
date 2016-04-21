@@ -94,7 +94,7 @@ def connect(path):
     if found is not None:
         devices = found[0]
         drivers = [found[1]] if found[1] else tty_driver_list
-        globbed = found[2]
+        globbed = found[2] or drivers is tty_driver_list
         for drv in drivers:
             for dev in devices:
                 log.debug("trying {0} on {1}".format(drv, dev))
