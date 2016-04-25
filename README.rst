@@ -15,10 +15,7 @@ wireless short-range data exchange with NFC devices and tags. It is
 written in `Python`_ and aims to provide an easy-to-use yet powerful
 framework for applications integrating NFC. The source code is
 licensed under the `EUPL`_ and hosted at `GitHub`_. Release versions
-are published on `PyPI`_ for easy installation with ``pip install -U
-nfcpy``. Documentation for the latest development and any active
-release versions can be found on `Read the Docs`_. The old development
-home at `Launchpad`_ can still be used for questions but the target
-would be to use `Stack Overflow`_ (just missing an ``nfcpy`` tag and
-can't create one yet).
-
+are published on `PyPI`_ for ``pip install -U nfcpy``. Documentation
+for latest development and active release versions can be found on
+`Read the Docs`_. For questions there is still the old `Launchpad`_ 
+project site but bugs should now be filed in `GitHub`_.
