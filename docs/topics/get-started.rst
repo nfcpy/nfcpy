@@ -279,8 +279,8 @@ the bad coding style but this gives fewer lines to copy).
 
 .. note:: A :class:`~nfc.tag.TagEmulation` class still only exists for
           Type 3 Tags although since version 0.10 it is possible to
-          run *nfcpy* in target mode for Type 2 and Type 4A Tgas with
-          selected devces. It is also now possible to use PN532, PN533
+          run *nfcpy* in target mode for Type 2 and Type 4A Tags with
+          selected devices. It is also now possible to use PN532, PN533
           and RC-S956 basesd devices in addition to RC-S380 for Type 3
           Tag emulation, but except for RC-S380 the command and
           response frames can only be up to 64 byte.
