@@ -122,7 +122,7 @@ ACR122U           ..  x   x   x   x    ..  ..  ..  ..  ..  x   ..  ..
 General Notes
 -------------   
 
-* Testbed devices are are verfied to work with the latest stable nfcpy
+* Testbed devices are verified to work with the latest stable nfcpy
   release. Test platforms are Ubuntu Linux (usually the latest
   version), Raspbian (with Raspberry Pi 2 Model B), and Windows
   (currently a Windows 7 virtual machine). No tests are done for MAC
