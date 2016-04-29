@@ -19,7 +19,7 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-__version__ = "0.11.0"
+__version__ = "0.11.1"
 
 import logging
 logging.getLogger(__name__).addHandler(logging.NullHandler())
