@@ -1,0 +1,7 @@
+*~
+*.pyc
+*.log
+
+dist/
+nfcpy.egg-info/
+docs/_build/
