@@ -171,7 +171,7 @@ class MifareUltralightC(tt2.Type2Tag):
 
         # Reactivate the tag to have the key effective and
         # authenticate with the same key
-        self.target = self.clf.sense(self.target)
+        self._target = self.clf.sense(self.target)
         return self.authenticate(key) if self.target else False
 
     def authenticate(self, password):
@@ -208,7 +208,7 @@ class MifareUltralightC(tt2.Type2Tag):
         
         log.debug("authenticate with key " + str(key).encode("hex"))
         
-        rsp = self.transceive("\x1A\x00", rlen=9)
+        rsp = self.transceive("\x1A\x00")
         m1 = str(rsp[1:9])
         iv = "\x00\x00\x00\x00\x00\x00\x00\x00"
         rb = triple_des(key, CBC, iv).decrypt(m1)
@@ -227,7 +227,7 @@ class MifareUltralightC(tt2.Type2Tag):
         log.debug("iv = " + str(iv).encode("hex"))
         log.debug("m2 = " + str(m2).encode("hex"))
         try:
-            rsp = self.transceive("\xAF" + m2, rlen=9)
+            rsp = self.transceive("\xAF" + m2)
         except tt2.Type2TagCommandError:
             return False
         
@@ -329,7 +329,7 @@ class NTAG21x(tt2.Type2Tag):
         """
         log.debug("read tag signature")
         try:
-            return str(self.transceive("\x3C\x00", rlen=32))
+            return str(self.transceive("\x3C\x00"))
         except tt2.Type2TagCommandError:
             return 32 * "\0"
 
@@ -421,7 +421,7 @@ class NTAG21x(tt2.Type2Tag):
 
         # Reactivate the tag to have the key effective and
         # authenticate with the same key
-        self.target = self.clf.sense(self.target)
+        self._target = self.clf.sense(self.target)
         return self.authenticate(key) if self.target else False
 
     def authenticate(self, password):
@@ -459,7 +459,7 @@ class NTAG21x(tt2.Type2Tag):
         log.debug("authenticate with key " + hexlify(key))
         
         try:
-            rsp = self.transceive(bytearray("\x1B") + key[0:4], rlen=2)
+            rsp = self.transceive(bytearray("\x1B") + key[0:4])
             return rsp == key[4:6]
         except tt2.Type2TagCommandError:
             return False
