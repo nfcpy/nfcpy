@@ -10,8 +10,8 @@ Changelog for nfcpy
   (probably all). Encryption is automatically used if the supported by
   the peer device.
 
-* The Python USB library has changed from PyUSB to the python-libusb
-  module (pip install python-libusb). This allows to wait for a USB
+* The Python USB library has changed from PyUSB to the libusb1
+  module (pip install libusb1). This allows to wait for a USB
   response packet and still being able to cancel with keyboard
   interrupt (which PyUSB was unfortunately blocking).
 
