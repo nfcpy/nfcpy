@@ -17,8 +17,6 @@ with open(path.join(here, 'nfc', '__init__.py'), encoding='utf-8') as f:
     if not match:
         raise RuntimeError("Unable to find version string.")
     version_string = match.group(1)
-    if not re.match(r"\d+\.\d+\.\d+$", version_string):
-        raise RuntimeError("This is not a release version.")
 
 setup(
     name = 'nfcpy',
