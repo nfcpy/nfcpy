@@ -2,15 +2,23 @@
 Python module for near field communication
 ##########################################
 
-.. epigraph:: This documentation covers the '\ |release|\ ' version of
-   *nfcpy*.  Source code, issue tracker and a question/answer section
-   are at https://launchpad.net/nfcpy.
+.. _versions: https://readthedocs.org/projects/nfcpy/versions
 
-The *nfcpy* module implements NFC Forum specifications for wireless
-short-range data exchange with NFC devices and tags. It is written in
-Python and aims to provide an easy-to-use yet powerful framework for
-contactless applications. The software is licensed under the 
-`EUPL <http://ec.europa.eu/idabc/eupl.html>`_.
+.. epigraph:: This documentation covers the '\ |release|\ ' version of
+   **nfcpy**. There are also other `versions`_.
+
+.. _Python: https://www.python.org
+.. _EUPL: http://ec.europa.eu/idabc/eupl
+.. _GitHub: https://github.com/nfcpy/nfcpy
+.. _NFC Forum: http://nfc-forum.org/
+.. _PyPI: https://pypi.python.org/pypi/nfcpy
+
+The **nfcpy** module implements `NFC Forum`_ specifications for
+wireless short-range data exchange with NFC devices and tags. It is
+written in `Python`_ and aims to provide an easy-to-use yet powerful
+framework for applications integrating NFC. The source code is
+licensed under the `EUPL`_ and hosted at `GitHub`_. The latest release
+version can be installed from `PyPI`_ with ``pip install -U nfcpy``.
 
 To send a web link to a smartphone:
 
