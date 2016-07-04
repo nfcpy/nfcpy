@@ -224,7 +224,6 @@ class ContactlessFrontend(object):
            actions but not for communication.
 
         'iterations' : integer
-
            This determines the number of sense cycles performed
            between calls to the terminate function. Each iteration
            searches once for all specified targets. The default value
