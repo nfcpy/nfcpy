@@ -223,6 +223,24 @@ class ContactlessFrontend(object):
            true value. The *tag* object may be used for cleanup
            actions but not for communication.
 
+        'iterations' : integer
+
+           This determines the number of sense cycles performed
+           between calls to the terminate function. Each iteration
+           searches once for all specified targets. The default value
+           is 5 iterations and between each iteration is a waiting
+           time determined by the 'interval' option described below.
+           As an effect of math there will be no waiting time if
+           iterations is set to 1.
+
+        'interval' : float
+           This determines the waiting time between iterations. The
+           default value of 0.5 seconds is considered a sensible
+           tradeoff between responsiveness in terms of tag discovery
+           and power consumption. It should be clear that changing
+           this value will impair one or the other. There is no free
+           beer.
+
         .. sourcecode:: python
 
            import nfc
@@ -503,6 +521,8 @@ class ContactlessFrontend(object):
             rdwr_options.setdefault('on-discover', on_discover)
             rdwr_options.setdefault('on-connect', lambda tag: True)
             rdwr_options.setdefault('on-release', lambda tag: True)
+            rdwr_options.setdefault('iterations', 5)
+            rdwr_options.setdefault('interval', 0.5)
             
             targets = [RemoteTarget(brty) for brty in rdwr_options['targets']]
             targets = rdwr_options['on-startup'](targets)
@@ -558,7 +578,9 @@ class ContactlessFrontend(object):
             return False
 
     def _rdwr_connect(self, options, terminate):
-        target = self.sense(*options['targets'], iterations=5, interval=0.5)
+        target = self.sense(*options['targets'],
+                            iterations=options['iterations'],
+                            interval=options['interval'])
         if target is not None:
             log.debug("discovered target {0}".format(target))
             if options['on-discover'](target):
@@ -626,7 +648,7 @@ class ContactlessFrontend(object):
         
         All positional arguments build the list of potential *targets*
         to discover and must be of type :class:`RemoteTarget`. Keyword
-        arguments *options* may be the number of ``iterations`` of the
+        argument *options* may be the number of ``iterations`` of the
         sense loop set by *targets* and the ``interval`` between
         iterations. The return value is either a :class:`RemoteTarget`
         instance or :const:`None`.
