@@ -191,28 +191,24 @@ class Device(pn53x.Device):
                 data = ' '.join(["%02X" % x for x in self.eeprom[i:i+16]])
                 self.log.debug(('0x%04X: %s' % (0xA000+i, data)))
         else:
-            # Write default RF settings from PN533 data sheet. Looks
-            # like they are not the same if there is no eeprom
-            # attached, least CIU_RFCfg register for 106A is different
-            # and prevents active mode initialization as target.
             self.log.debug("no eeprom attached")
-            
-            self.log.debug("write analog settings for Type A")
-            data = bytearray.fromhex("5A F4 3F 11 4D 85 61 6F 26 62 87")
-            self.chipset.rf_configuration(0x0A, data)
-            
-            #self.log.debug("write rf settings for 212F/424F")
-            #data = bytearray.fromhex("6A FF 3F 11 41 85 61 6F")
-            #self.chipset.rf_configuration(0x0B, data)
-            
-            #self.log.debug("write rf settings for 106B")
-            #data = bytearray.fromhex("FF 17 85") # ModGsP set differently
-            #self.chipset.rf_configuration(0x0C, data)
-            
-            #self.log.debug("write rf settings for 212A/424A/848A")
-            #data = bytearray.fromhex("85 15 8A 85 0A B2 85 04 DA")
-            #self.chipset.rf_configuration(0x0D, data)
-            
+
+        self.log.debug("write analog settings for Type A 106 kbps")
+        data = bytearray.fromhex("5A F4 3F 11 4D 85 61 6F 26 62 87")
+        self.chipset.rf_configuration(0x0A, data)
+
+        self.log.debug("write analog settings for Type F 212/424 kbps")
+        data = bytearray.fromhex("6A FF 3F 10 41 85 61 6F")
+        self.chipset.rf_configuration(0x0B, data)
+
+        self.log.debug("write analog settings for Type B 106 kbps")
+        data = bytearray.fromhex("FF 04 85")
+        self.chipset.rf_configuration(0x0C, data)
+
+        self.log.debug("write analog settings for 14443-4 212/424/848 kbps")
+        data = bytearray.fromhex("85 15 8A 85 0A B2 85 04 DA")
+        self.chipset.rf_configuration(0x0D, data)
+
     def close(self):
         self.mute()
         super(Device, self).close()
