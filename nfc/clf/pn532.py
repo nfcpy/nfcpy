@@ -222,10 +222,18 @@ class Device(pn53x.Device):
         self.mute()
 
     def close(self):
+        # Terminate last chip command in case we've interrupted befor
+        # the response and give the chip 10 ms to think about.
+        self.chipset.transport.write(Chipset.ACK)
+        time.sleep(0.01)
+
+        # When using the high speed uart we must set the baud rate
+        # back to 115.2 kbps, otherwise we can't talk next time.
         if self.chipset.transport.TYPE == "TTY":
             self.chipset.set_serial_baudrate(115200)
             self.chipset.transport.baudrate = 115200
-        
+
+        # Set the chip to sleep mode with some wakeup sources.
         self.chipset.power_down(wakeup_enable=("I2C", "SPI", "HSU"))
         super(Device, self).close()
 
