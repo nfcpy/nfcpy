@@ -215,11 +215,11 @@ def add_emulate_tt3_parser(parser):
         "--ver", metavar="x.y", type=parse_version, default="1.0",
         help="ndef mapping version number (default: %(default)s)")
     parser.add_argument(
-        "--nbr", metavar="INT", type=int, default=12,
-        help="max write blocks at once (default: %(default)s)")
-    parser.add_argument(
-        "--nbw", metavar="INT", type=int, default=8,
+        "--nbr", metavar="INT", type=int, default=1,
         help="max read blocks at once (default: %(default)s)")
+    parser.add_argument(
+        "--nbw", metavar="INT", type=int, default=1,
+        help="max write blocks at once (default: %(default)s)")
     parser.add_argument(
         "--max", metavar="INT", type=int,
         help="maximum number of blocks (default: computed)")
