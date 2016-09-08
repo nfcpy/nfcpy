@@ -377,11 +377,32 @@ def init(transport):
         baudrate = 115200 # PN532 initial baudrate
         transport.open(transport.port, baudrate)
         long_preamble = bytearray(10)
-        
+
+        # The PN532 chip should send an ack within 15 ms after a
+        # command. We'll give it a bit more and wait 100 ms, unless
+        # we're on a Raspberry Pi detected by the Broadcom SOC. The
+        # USB on BCM270x has a nasty bug (may be SW or HW) that
+        # introduces additional up to ~1000 ms delay for the first
+        # data from a ttyUSB. Tested with two serial converters
+        # (PL2303 and FT232R) in loopback and it's reproducable adding
+        # up to 1000 ms if a serial open is done 1 sec after serial
+        # close. Waiting longer decreases that time until after 2 sec
+        # wait between close and open it all goes fine until the wait
+        # time reaches 3 seconds, and so on.
+        initial_timeout = 100 # milliseconds
+        if sys.platform.startswith('linux'):
+            for line in open("/proc/cpuinfo"):
+                if line.startswith("Hardware") and "BCM270" in line:
+                    log.debug("detected Raspberry Pi with Broadcom SOC")
+                    if transport.port.startswith("/dev/ttyUSB"):
+                        initial_timeout = 1500 # milliseconds
+                    break
+
         get_version_cmd = bytearray.fromhex("0000ff02fed4022a00")
         get_version_rsp = bytearray.fromhex("0000ff06fad50332")
         transport.write(long_preamble + get_version_cmd)
-        if not transport.read(timeout=100) == Chipset.ACK:
+        log.debug("wait %d ms for data on %s", initial_timeout, transport.port)
+        if not transport.read(timeout=initial_timeout) == Chipset.ACK:
             raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
         if not transport.read(timeout=100).startswith(get_version_rsp):
             raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
@@ -401,7 +422,7 @@ def init(transport):
                 if os.system(stty % baudrate) == 0:
                     os.system(stty % 115200)
                     break
-                    
+
         if baudrate > 115200:
             set_baudrate_cmd = bytearray.fromhex("0000ff03fdd410000000")
             set_baudrate_rsp = bytearray.fromhex("0000ff02fed5111a00")
