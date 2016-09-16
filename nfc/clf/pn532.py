@@ -389,13 +389,18 @@ def init(transport):
         # close. Waiting longer decreases that time until after 2 sec
         # wait between close and open it all goes fine until the wait
         # time reaches 3 seconds, and so on.
-        initial_timeout = 100 # milliseconds
+        initial_timeout = 100   # milliseconds
+        change_baudrate = True  # try higher speeds
         if sys.platform.startswith('linux'):
             for line in open("/proc/cpuinfo"):
                 if line.startswith("Hardware") and "BCM270" in line:
-                    log.debug("detected Raspberry Pi with Broadcom SOC")
+                    log.debug("running on Raspberry Pi")
                     if transport.port.startswith("/dev/ttyUSB"):
-                        initial_timeout = 1500 # milliseconds
+                        log.debug("ttyUSB requires more time for first ack")
+                        initial_timeout = 1500  # milliseconds
+                    elif transport.port == "/dev/ttyS0":
+                        log.debug("ttyS0 can only do 115.2 kbps on RPi3")
+                        change_baudrate = False  # RPi3 'mini uart'
                     break
 
         get_version_cmd = bytearray.fromhex("0000ff02fed4022a00")
@@ -415,7 +420,7 @@ def init(transport):
         if not transport.read(timeout=100) == sam_configuration_rsp:
             raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
 
-        if sys.platform.startswith("linux"):
+        if sys.platform.startswith("linux") and change_baudrate is True:
             stty = 'stty -F %s %%d 2> /dev/null' % transport.port
             for baudrate in (921600, 460800, 230400, 115200):
                 log.debug("trying to set %d baud", baudrate)
