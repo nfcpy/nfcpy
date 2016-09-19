@@ -30,7 +30,7 @@ accepts callback functions that will receive the active
    import nfc.llcp
 
    def client(socket):
-       socket.sendto("message", address=16)
+       socket.sendto("message", addr=16)
 
    def connected(llc):
        socket = nfc.llcp.Socket(llc, nfc.llcp.LOGICAL_DATA_LINK)
