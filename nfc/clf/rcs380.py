@@ -234,8 +234,8 @@ class Chipset(object):
                 raise StatusError(data[0])
         
     def in_comm_rf(self, data, timeout):
-        to = struct.pack("<H", timeout*10) if timeout <= 6553 else '\xFF\xFF'
-        data = self.send_command(0x04, to + str(data))
+        timeout = min((timeout + (1 if timeout > 0 else 0)) * 10, 0xFFFF)
+        data = self.send_command(0x04, struct.pack("<H", timeout) + str(data))
         if data and tuple(data[0:4]) != (0, 0, 0, 0):
             raise CommunicationError(data[0:4])
         return data[5:] if data else None
