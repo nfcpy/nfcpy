@@ -318,7 +318,7 @@ class FelicaStandard(tt3.Type3Tag):
         # The maximum response time is given by the value of PMM[3].
         # Some cards (like RC-S860 with IC RC-S915) encode a value
         # that is too short, thus we use at lest 2 ms.
-        a, e = self.pmm[3] & 7, self.pmm[3]>>6
+        a, b, e = self.pmm[3] & 7, self.pmm[3]>>3 & 7, self.pmm[3]>>6
         timeout = max(302E-6 * (a + 1) * 4**e, 0.002)
         data = pack("<H", service_index)
         data = self.send_cmd_recv_rsp(0x0A, data, timeout, check_status=False)
@@ -343,7 +343,7 @@ class FelicaStandard(tt3.Type3Tag):
         """
         log.debug("request system code list")
         a, b, e = self.pmm[3] & 7, self.pmm[3]>>3 & 7, self.pmm[3]>>6
-        timeout = 302E-6 * (b + 1 + a + 1) * 4**e
+        timeout = max(302E-6 * (a + 1) * 4**e, 0.002)
         data = self.send_cmd_recv_rsp(0x0C, '', timeout, check_status=False)
         if len(data) != 1 + data[0] * 2:
             log.debug("insufficient data received from tag")
