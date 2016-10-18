@@ -92,7 +92,6 @@ class WifiConfigRecord(Record):
     @property
     def data(self):
         f = io.BytesIO()
-        write_attribute(f, VERSION1, '\x10')
 
         if len(self.credentials) == 0:
             log.warning("no credential(s) in wifi config record")
