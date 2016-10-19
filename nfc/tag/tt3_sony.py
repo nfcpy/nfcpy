@@ -178,21 +178,13 @@ class FelicaStandard(tt3.Type3Tag):
             self.idm = idm; self.pmm = pmm; self.sys = system_code
             lines.extend(print_system(system_code))
             
-            # There's always one area definition (the system area)
-            # that spans over all possible service/area codes.
-            area_from, area_last = self.search_service_code(0)
-            lines.extend(print_area(area_from, area_last, 0))
-            
-            # Every time we dive into an area we add it to the area
-            # stack. We're now starting from the system area so that
-            # becomes the first.
-            area_stack = [(area_from, area_last)]
+            area_stack = []
             overlap_services = []
             
             # We've already processed the first are/service entry so
             # index starts from 1. The first non-existing index will
             # give us None and thus terminate the loop.
-            for i in xrange(1, 0x10000):
+            for i in xrange(0, 0x10000):
                 depth = len(area_stack)
                 area_or_service = self.search_service_code(i)
                 if area_or_service is None:
@@ -230,7 +222,8 @@ class FelicaStandard(tt3.Type3Tag):
                         lines.extend(print_service(overlap_services, depth))
                         overlap_services = []
                     area_from, area_last = area_or_service
-                    if area_from > area_stack[-1][1]: area_stack.pop()
+                    if len(area_stack) > 0 and area_from > area_stack[-1][1]:
+                        area_stack.pop()
                     lines.extend(print_area(area_from, area_last, depth))
                     area_stack.append((area_from, area_last))
 
