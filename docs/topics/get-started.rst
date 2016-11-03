@@ -31,7 +31,7 @@ Windows users may have to use ``C:\Python27\Scripts\pip.exe``.
 
 The `libusb`_ library provides generic access to USB devices. Most
 Linux distributions seem to install it by default, otherwise should be
-available through the standard package installer (beware to not choose
+available through the standard package installer (beware not to choose
 the old version 0.x).
 
 Windows users will have a little work to (i) install the Microsoft
@@ -256,75 +256,69 @@ for pretty print.
 Emulate a card
 ==============
 
-It is possible to let *nfcpy* emulate a tag (card). This is simply
-requested with a **card** argument to |clf.connect|.
+It is possible to emulate a card (NFC Tag) with *nfcpy* but
+unfortunately it only works with some NFC devices and is limited to
+Type 3 Tag emulation. The RC-S380 fully supports Type 3 Tag
+emulation. Devices based on PN532, PN533, or RC-S956 chipset can also
+be used but an internal frame size limit of 64 byte only allows
+read/write operations with up to 3 data blocks.
 
-  >>> import nfc
-  >>> clf = nfc.ContactlessFrontend('usb')
-  >>> clf.connect(card={})
-  None
+Below is an example of an NDEF formatted Type 3 Tag. The first 16 byte
+(first data block) contain the attribute data by which the reader will
+learn the NDEF version, the number of data blocks that can be read or
+written in a single command, the total capacity and the write
+permission state. Bytes 11 to 13 contain the current NDEF message
+length, initialized to zero. The example is made to specifically open
+only an RC-S380 contactless frontend (otherwise the number of blocks
+that may be read or written should not be more than 3).
 
-Seems not so simple returned immediately with a None result. The
-reason is just that there exists no sensible default behavior that
-could be applied when working as a tag, there needs to be more
-information about what kind of tag we want to emulate (apologies for
-the bad coding style but this gives fewer lines to copy).
+.. code-block:: python
 
-  >>> sensf_res = bytearray.fromhex('01 03FEFFE011223344 01E0000000FFFF00 12FC')
-  >>> def on_startup(target):
-  ...     target.brty = "212F"; target.sensf_res = sensf_res; return target
-  ...
-  >>> clf.connect(card={'on-startup': on_startup}) # touch a reader
-  True
+   import nfc
+   import struct
 
-.. note:: A :class:`~nfc.tag.TagEmulation` class still only exists for
-          Type 3 Tags although since version 0.10 it is possible to
-          run *nfcpy* in target mode for Type 2 and Type 4A Tags with
-          selected devices. It is also now possible to use PN532, PN533
-          and RC-S956 basesd devices in addition to RC-S380 for Type 3
-          Tag emulation, but except for RC-S380 the command and
-          response frames can only be up to 64 byte.
-   
-A nice tool to read the tag we've just created is the excellent `NXP
-Tag Info`_ app available in the Android app store. It should report
-that our tag is a *FeliCa Plug RC-S926* (because sensf_res[9:11] is
-``01E0``) and show the 8 byte *IDm*, 8 byte *PMm* and 2 byte *System
-Code* in the TECH view. The `NXP Tag Info`_ app should also report
-that there is no NDEF partition on the tag, so this is gonna be fixed
-next.
+   ndef_data_area = bytearray(64 * 16)
+   ndef_data_area[0] = 0x10  # NDEF mapping version '1.0'
+   ndef_data_area[1] = 12    # Number of blocks that may be read at once
+   ndef_data_area[2] = 8     # Number of blocks that may be written at once
+   ndef_data_area[4] = 63    # Number of blocks available for NDEF data
+   ndef_data_area[10] = 1    # NDEF read and write operations are allowed
+   ndef_data_area[14:16] = struct.pack('>H', sum(ndef_data_area[0:14]))  # Checksum
 
-  >>> attr = nfc.tag.tt3.NdefAttributeData()
-  >>> attr.version, attr.nbr, attr.nbw = '1.0', 12, 8
-  >>> attr.capacity, attr.writeable = 1024, True
-  >>> ndef_data_area = str(attr) + bytearray(attr.capacity)
+   def ndef_read(block_number, rb, re):
+       if block_number < len(ndef_data_area) / 16:
+           first, last = block_number*16, (block_number+1)*16
+           block_data = ndef_data_area[first:last]
+           return block_data
 
-  >>> def ndef_read(block_number, rb, re):
-  ...     if block_number < len(ndef_data_area) / 16:
-  ...         first, last = block_number*16, (block_number+1)*16
-  ...         block_data = ndef_data_area[first:last]
-  ...         return block_data
-  ...
-  >>> def ndef_write(block_number, block_data, wb, we):
-  ...     global ndef_data_area
-  ...     if block_number < len(ndef_data_area) / 16:
-  ...         first, last = block_number*16, (block_number+1)*16
-  ...         ndef_data_area[first:last] = block_data
-  ...         return True
-  ...
-  >>> def on_connect(tag):
-  ...     tag.add_service(0x0009, ndef_read, ndef_write)
-  ...     tag.add_service(0x000B, ndef_read, lambda: False)
-  ...     return True
-  ...
-  >>> card_options = {'on_startup': on_startup, 'on-connect': on_connect}
-  >>> while clf.connect(card=card_options): pass
+   def ndef_write(block_number, block_data, wb, we):
+       global ndef_data_area
+       if block_number < len(ndef_data_area) / 16:
+           first, last = block_number*16, (block_number+1)*16
+           ndef_data_area[first:last] = block_data
+           return True
 
-This is now a fully functional NFC Forum Type 3 Tag. With something
-like the `NXP Tag Writer`_, NDEF data can now be stored into the
-**ndef_data_area** and read back. The loop can be terminated with a
-keyboard interrupt *Ctrl-C*.
+   def on_startup(target):
+       idm, pmm, sys = '03FEFFE011223344', '01E0000000FFFF00', '12FC'
+       target.sensf_res = bytearray.fromhex('01' + idm + pmm + sys)
+       target.brty = "212F"
+       return target
 
-   >>> clf.close()
+   def on_connect(tag):
+       print("tag activated")
+       tag.add_service(0x0009, ndef_read, ndef_write)
+       tag.add_service(0x000B, ndef_read, lambda: False)
+       return True
+
+   with nfc.ContactlessFrontend('usb:054c:06c1') as clf:
+       while clf.connect(card={'on-startup': on_startup, 'on-connect': on_connect}):
+           print("tag released")
+
+
+This is a fully functional NFC Forum Type 3 Tag. With a separate
+reader or Android apps such as `NXP Tag Info`_ and `NXP Tag Writer`_,
+NDEF data can now be written into the **ndef_data_area** and read back
+until the loop is terminated with the *Ctrl-C* keyboard interrupt.
 
 .. _NXP Tag Info:
    https://play.google.com/store/apps/details?id=com.nxp.taginfolite
