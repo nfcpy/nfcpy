@@ -588,7 +588,21 @@ class Device(object):
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
         fname = "get_max_recv_data_size"
         raise NotImplementedError("%s.%s() must be implemented"%(cname,fname))
-    
+
+    def turn_on_led_and_buzzer(self):
+        """If a device has an LED and/or a buzzer, this method can be
+        implemented to turn those indicators to the ON state.
+
+        """
+        pass
+
+    def turn_off_led_and_buzzer(self):
+        """If a device has an LED and/or a buzzer, this method can be
+        implemented to turn those indicators to the OFF state.
+
+        """
+        pass
+
     @staticmethod
     def add_crc_a(data):
         # Calculate CRC-A for bytearray *data* and return *data*
