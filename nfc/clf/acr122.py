@@ -185,12 +185,12 @@ class Chipset(pn532.Chipset):
         self.ccid_xfr_block(bytearray.fromhex("FF00400E0400000000"))
 
     def set_buzzer_and_led_to_active(self, duration_in_ms=300):
-        """Turn on buzzer and set LED to red only. The timeout here must exceed the total buzzer/flash duration defined
-        in bytes 5-8. """
+        """Turn on buzzer and set LED to red only. The timeout here must exceed
+         the total buzzer/flash duration defined in bytes 5-8. """
         duration_in_tenths_of_second = min(duration_in_ms / 100, 255)
         timeout_in_seconds = (duration_in_tenths_of_second + 1) / 10.0
-        self.ccid_xfr_block(bytearray.fromhex("FF00400D04{:02X}000101".format(duration_in_tenths_of_second)),
-                            timeout=timeout_in_seconds)
+        data = "FF00400D04{:02X}000101".format(duration_in_tenths_of_second)
+        self.ccid_xfr_block(bytearray.fromhex(data), timeout=timeout_in_seconds)
 
     def ccid_xfr_block(self, data, timeout=0.1):
         """Encapsulate host command *data* into an PC/SC Escape command to
