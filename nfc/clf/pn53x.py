@@ -253,7 +253,7 @@ class Chipset(object):
 
     def send_ack(self):
         # Send an ACK frame, usually to terminate most recent command.
-        self.chipset.transport.write(Chipset.ACK)
+        self.transport.write(Chipset.ACK)
 
     def diagnose(self, test, test_data=None):
         """Send a Diagnose command. The *test* argument selects the diagnose
