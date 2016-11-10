@@ -76,7 +76,7 @@ def main(args):
     else:
         print("I'm not trying serial devices because you haven't told me")
         print("-- add the option '--search-tty' to have me looking")
-        print("-- but beware that this may break existing connections")
+        print("-- but beware that this may break other serial devs")
 
     if not found:
         print("Sorry, but I couldn't find any contactless device")

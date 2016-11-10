@@ -13,25 +13,11 @@ Installation
 .. _WinUSB: https://msdn.microsoft.com/en-us/library/ff540196.aspx
 .. _Zadig: http://zadig.akeo.ie/
 
-**1. Install Python and required packages**
+**Install libusb**
 
-Python is usually installed on Linux, otherwise can be downloaded at
-https://www.python.org/downloads/. Windows users may grab an installer
-at https://www.python.org/downloads/windows/. Choose the latest 2.x
-version, *nfcpy* is not yet ready for Python 3.
-
-With Python installed use `pip`_ to install the required additional
-packages::
-
-  $ pip install libusb1 pyserial
-
-Windows users may have to use ``C:\Python27\Scripts\pip.exe``.
-
-**3. Install libusb (usually just Windows)**
-
-The `libusb`_ library provides generic access to USB devices. Most
-Linux distributions seem to install it by default, otherwise should be
-available through the standard package installer (beware not to choose
+The `libusb`_ library provides generic access to USB devices. Linux
+distributions usually have this installed, otherwise it should be
+available through the standard package manager (beware not to choose
 the old version 0.x).
 
 Windows users will have a little work to (i) install the Microsoft
@@ -39,80 +25,62 @@ Windows users will have a little work to (i) install the Microsoft
 system folder. Microsoft provides Instructions to install `WinUSB`_
 but a much simpler approach is to use the `Zadig`_ Windows application
 (download and run zadig, select your device and choose the WinUSB
-driver for install). The libusb library for Windows can be downloaded
+driver to install). The libusb library for Windows can be downloaded
 from `libusb`_ (Downloads -> Latest Windows Binaries) as a 7z
-archive. Just unpack and copy ``libusb-1.0.dll`` from either the
-``MS32\dll`` or ``MS64\dll`` into the ``C:\Windows\System32``
-directory.
+archive. Just unpack and copy ``MS64\dll\libusb-1.0.dll`` to
+``C:\Windows\System32`` and ``MS32\dll\libusb-1.0.dll`` to the
+``C:\Windows\SysWOW64`` directory.
 
-**2. Get nfcpy**
+**Install Python and nfcpy**
 
-To get the latest development version: ::
+Python is usually installed on Linux, otherwise can be downloaded at
+https://www.python.org/downloads/. Windows users may grab an installer
+at https://www.python.org/downloads/windows/. Choose the latest 2.x
+version, *nfcpy* is not yet ready for Python 3.
 
-  $ sudo apt-get install bzr
-  $ cd <somedir>
-  $ bzr branch lp:nfcpy trunk
+With Python installed use `pip`_ to install the latest stable version
+of nfcpy. This will also install the required libusb1 and pyserial
+modules.::
 
-This will download a branch of the `nfcpy trunk`_ repository from
-Canonical's `Launchpad`_ source code hosting platform into the local
-directory ``<somedir>/trunk``.
+  $ pip install -U nfcpy
 
-For Windows install, the easiest is to download the Bazaar standalone
-installer from http://wiki.bazaar.canonical.com/WindowsDownloads and
-choose the *Typical Installation* that includes the *Bazaar Explorer
-GUI Application*. Start *Bazaar Explorer*, go to *Get project source
-from elsewhere* and create a local **branch** of ``lp:nfcpy`` into
-``C:/src/nfcpy`` or some other directory of choice.
+Windows users may have to use ``C:\Python27\Scripts\pip.exe``.
 
-A release version can be branched from the appropriate series, for
-example the latest 0.9.x release. ::
+**Verify installation**
 
-  $ bzr branch lp:nfcpy/0.9
+Check if all is correctly installed and *nfcpy* finds your contactless
+reader (Windows users may have to use``C:\Python27\python.exe``). ::
 
-Tarballs of release versions are available at
-https://launchpad.net/nfcpy.
+  $ python -m nfc
 
-**4. Run example**
+If all goes well the output should tell that your your reader was
+found, below is an example of how it may look with an SCL3711:::
 
-A couple of example programs come with *nfcpy*. To see if the
-installation succeeded and the reader is working head over to the
-*nfcpy* directory and run the tagtool example: ::
+  This is the latest version of nfcpy run in Python 2.7.12
+  on Linux-4.4.0-47-generic-x86_64-with-Ubuntu-16.04-xenial
+  I'm now searching your system for contactless devices
+  ** found SCM Micro SCL3711-NFC&RW PN533v2.7 at usb:002:024
+  I'm not trying serial devices because you haven't told me
+  -- add the option '--search-tty' to have me looking
+  -- but beware that this may break existing connections
 
-  $ python examples/tagtool.py show
+Common problems on Linux (access rights or other drivers claiming the
+device) should be reported with a possible solution::
 
-Touch a compatible tag (NFC Forum Type 1-4) and the NDEF data should
-be printed. See :doc:`../examples/tagtool` for other options.
-
-.. note:: Things may not immediately work with contactless USB readers
-   on Linux. The first problem is that the readers are by default only
-   accessible by the root user and will not be found when nfcpy is run
-   from an unpriviledged user account. A second problem can be that a
-   kernel driver of the Linux NFC subsystem has been activated for the
-   device and this prevents nfcpy from accessing it. And the same
-   problem exists if the pcscd daemon is installed.
-
-   Since nfcpy version 0.10 the example programs are able to report
-   the issues and hint the necessary actions. However, this will only
-   be the case when program is called with a fully qualified --device
-   argument. Thus a typical call sequence might be: ::
-
-     $ examples/tagtool.py --device usb
-     [main] no contactless reader found on usb
-     [main] no contactless reader available
-     $ lsusb
-     Bus 003 Device 007: ID 054c:02e1 Sony Corp. FeliCa S330 [PaSoRi]
-     $ examples/tagtool.py --device usb:054c:02e1
-     [main] access denied for device with path usb:054c:02e1
-     [main] first match for path usb:054c:02e1 is usb:003:014
-     [main] usb:003:014 is owned by root but you are stephen
-     [main] members of the root group may use usb:003:014
-     [main] you may want to add a udev rule to access this device
-     [main] sudo sh -c 'echo SUBSYSTEM==\"usb\", ACTION==\"add\", ATTRS{idVendor}==\"054c\", ATTRS{idProduct}==\"02e1\", GROUP=\"plugdev\" >> /etc/udev/rules.d/nfcdev.rules'
-
-   The last line shown above provides a command line to copy into the
-   terminal which will add a udev rule to allow members of the
-   'plugdev' group to access the reader. The device must then be
-   briefly unplugged to get the rule effective.
+  This is the latest version of nfcpy run in Python 2.7.12
+  on Linux-4.4.0-47-generic-x86_64-with-Ubuntu-16.04-xenial
+  I'm now searching your system for contactless devices
+  ** found usb:04e6:5591 at usb:002:025 but access is denied
+  -- the device is owned by 'root' but you are 'stephen'
+  -- also members of the 'root' group would be permitted
+  -- you could use 'sudo' but this is not recommended
+  -- it's better to add the device to the 'plugdev' group
+     sudo sh -c 'echo SUBSYSTEM==\"usb\", ACTION==\"add\", ATTRS{idVendor}==\"04e6\", ATTRS{idProduct}==\"5591\", GROUP=\"plugdev\" >> /etc/udev/rules.d/nfcdev.rules'
+     sudo udevadm control -R # then re-attach device
+  I'm not trying serial devices because you haven't told me
+  -- add the option '--search-tty' to have me looking
+  -- but beware that this may break other serial devs
+  Sorry, but I couldn't find any contactless device
 
 
 Open a reader
