@@ -125,6 +125,15 @@ class Device(pn532.Device):
         info = "{device} does not support listen as DEP Target"
         raise nfc.clf.UnsupportedTargetError(info.format(device=self))
 
+    def turn_on_led_and_buzzer(self):
+        """Buzz and turn red."""
+        self.chipset.set_buzzer_and_led_to_active()
+
+    def turn_off_led_and_buzzer(self):
+        """Back to green."""
+        self.chipset.set_buzzer_and_led_to_default()
+
+
 class Chipset(pn532.Chipset):
     # Maximum size of a host command frame to the contactless chip.
     host_command_frame_max_size = 254
@@ -162,14 +171,26 @@ class Chipset(pn532.Chipset):
         
         # switch red/green led off/on
         log.debug("Configure Buzzer and LED")
-        self.ccid_xfr_block(bytearray.fromhex("FF00400E0400000000"))
-        
+        self.set_buzzer_and_led_to_default()
+
         super(Chipset, self).__init__(transport, logger=log)
         
     def close(self):
         self.ccid_xfr_block(bytearray.fromhex("FF00400C0400000000"))
         self.transport.close()
         self.transport = None
+
+    def set_buzzer_and_led_to_default(self):
+        """Turn off buzzer and set LED to default (green only). """
+        self.ccid_xfr_block(bytearray.fromhex("FF00400E0400000000"))
+
+    def set_buzzer_and_led_to_active(self, duration_in_ms=300):
+        """Turn on buzzer and set LED to red only. The timeout here must exceed
+         the total buzzer/flash duration defined in bytes 5-8. """
+        duration_in_tenths_of_second = min(duration_in_ms / 100, 255)
+        timeout_in_seconds = (duration_in_tenths_of_second + 1) / 10.0
+        data = "FF00400D04{:02X}000101".format(duration_in_tenths_of_second)
+        self.ccid_xfr_block(bytearray.fromhex(data), timeout=timeout_in_seconds)
 
     def ccid_xfr_block(self, data, timeout=0.1):
         """Encapsulate host command *data* into an PC/SC Escape command to
