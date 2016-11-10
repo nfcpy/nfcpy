@@ -22,112 +22,14 @@
 import logging
 log = logging.getLogger('main')
 
-import os
 import re
-import sys
-import errno
 import time
+import errno
 import inspect
-import argparse
 import threading
 from operator import itemgetter
 
 import nfc
-
-def log_device_access_denied(path):
-    log.info("access denied for device with path " + path)
-    if path.split(':')[0] == "usb": log_usb_device_access_denied(path)
-
-def log_device_found_busy(path):
-    log.info("the reader on " + path + " is busy")
-    if path.split(':')[0] == "usb": log_usb_device_found_busy(path)
-
-def log_usb_device_access_denied(path):
-    # The path arguments is either 'usb:bus:dev' or 'usb:vid:pid'. For
-    # the first form the length is 11 characters (bus and dev are 3
-    # char decimal strings). For the second form the total length is
-    # 13 (vid and pid are 4 char hex strings)
-    if sys.platform.startswith("linux"):
-        sysfs = '/sys/bus/usb/devices/'
-        for d in os.listdir(sysfs):
-            if d.startswith("usb") or ':' in d: continue
-            vid = open(sysfs + d + '/idVendor').read().strip()
-            pid = open(sysfs + d + '/idProduct').read().strip()
-            bus = int(open(sysfs + d + '/busnum').read().strip())
-            dev = int(open(sysfs + d + '/devnum').read().strip())
-            if len(path) == 11 and [bus, dev] == map(int, path.split(':')[1:]):
-                break
-            if len(path) == 13 and [vid, pid] == path.split(':')[1:]:
-                msg = "first match for path {path} is usb:{bus:03}:{dev:03}"
-                log.info(msg.format(path=path, bus=bus, dev=dev))
-                break
-            
-        devnode = "/dev/bus/usb/{0:03d}/{1:03d}".format(bus, dev)
-        if not os.access(devnode, os.R_OK | os.W_OK):
-            import pwd, grp
-            username = pwd.getpwuid(os.getuid()).pw_name
-            devinfo = os.stat(devnode)
-            dev_usr = pwd.getpwuid(devinfo.st_uid).pw_name
-            dev_grp = grp.getgrgid(devinfo.st_gid).gr_name
-            msg = "usb:{bus:03}:{dev:03} is owned by {owner} but you are {usr}"
-            log.info(msg.format(bus=bus, dev=dev, owner=dev_usr, usr=username))
-            msg = "members of the {group} group may use usb:{bus:03}:{dev:03}"
-            log.info(msg.format(bus=bus, dev=dev, group=dev_grp))
-            groups = [grp.getgrgid(gid).gr_name for gid in os.getgroups()]
-            if "plugdev" in groups:
-                msg = "you may want to add a udev rule to access this device"
-                log.info(msg)
-                udr = 'SUBSYSTEM==\\"usb\\", ACTION==\\"add\\", ' \
-                      'ATTRS{{idVendor}}==\\"{vid}\\", ' \
-                      'ATTRS{{idProduct}}==\\"{pid}\\", ' \
-                      'GROUP=\\"plugdev\\"'.format(vid=vid, pid=pid)
-                msg = "sudo sh -c 'echo {0} >> /etc/udev/rules.d/nfcdev.rules'"
-                log.info(msg.format(udr))
-
-def log_usb_device_found_busy(path):
-    # The path arguments is either 'usb:bus:dev' or 'usb:vid:pid'. For
-    # the first form the length is 11 characters (bus and dev are 3
-    # char decimal strings). For the second form the total length is
-    # 13 (vid and pid are 4 char hex strings)
-    if sys.platform.startswith("linux"):
-        sysfs = '/sys/bus/usb/devices/'
-        for d in os.listdir(sysfs):
-            if d.startswith("usb") or ':' in d: continue
-            sysfs_device_entry = sysfs + d + '/'
-            vid = open(sysfs_device_entry + 'idVendor').read().strip()
-            pid = open(sysfs_device_entry + 'idProduct').read().strip()
-            bus = int(open(sysfs_device_entry + 'busnum').read().strip())
-            dev = int(open(sysfs_device_entry + 'devnum').read().strip())
-            if len(path) == 11 and [bus, dev] == map(int, path.split(':')[1:]):
-                break
-            if len(path) == 13 and [vid, pid] == path.split(':')[1:]:
-                msg = "first match for path {path} is usb:{bus:03}:{dev:03}"
-                log.info(msg.format(path=path, bus=bus, dev=dev))
-                break
-
-        # We now have the sysfs entry for the device in question. All
-        # known contactless devices have only a single configuration
-        # and it will shown if a foreign driver has claimed the
-        # device.
-        sysfs_config_entry = sysfs_device_entry[:-1] + ":1.0/"
-        if os.access(sysfs_config_entry + "nfc", os.F_OK):
-            driver = os.readlink(sysfs_config_entry + "driver").split('/')[-1]
-            msg = "device at usb:{bus:03}:{dev:03} used by {drv} kernel driver"
-            log.info(msg.format(bus=bus, dev=dev, drv=driver))
-            msg = "use 'sudo modprobe -r {drv}' to temporarily free the device"
-            log.info(msg.format(drv=driver))
-            msg = "you may want to blacklist the {drv} kernel driver"
-            log.info(msg.format(drv=driver))
-            msg = "echo blacklist {drv} >> /etc/modprobe.d/blacklist-nfc.conf"
-            log.info("sudo sh -c '{0}'".format(msg.format(drv=driver)))
-        elif os.access(sysfs_config_entry + "driver", os.F_OK):
-            driver = os.readlink(sysfs_config_entry + "driver").split('/')[-1]
-            msg = "device at usb:{bus:03}:{dev:03} used by {drv} kernel driver"
-            log.info(msg.format(bus=bus, dev=dev, drv=driver))
-            if driver == "usbfs":
-                msg = "try 'sudo lsof /dev/bus/usb/{bus:03}/{dev:03}' " \
-                      "to see which process is using the device"
-                log.info(msg.format(bus, dev))
 
 def get_test_methods(object):
     test_methods = list()
@@ -390,9 +292,9 @@ class CommandLineInterface(object):
                 if error.errno == errno.ENODEV:
                     log.info("no contactless reader found on " + path)
                 elif error.errno == errno.EACCES:
-                    log_device_access_denied(path)
+                    log.info("access denied for device with path " + path)
                 elif error.errno == errno.EBUSY:
-                    log_device_found_busy(path)
+                    log.info("the reader on " + path + " is busy")
                 else:
                     log.debug(repr(error) + "when trying " + path)
             else:
