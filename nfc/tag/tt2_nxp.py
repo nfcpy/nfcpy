@@ -294,6 +294,13 @@ class NTAG203(tt2.Type2Tag):
             except tt2.Type2TagCommandError: pass
         return False
 
+    def _format(self, version, wipe):
+        if self.ndef is None:
+            log.debug("no management data, writing factory defaults")
+            self.write(4, b'\x01\x03\xA0\x10')
+            self.write(5, b'\x44\x03\x00\xFE')
+        return super(NTAG203, self)._format(version, wipe)
+
 class NTAG21x(tt2.Type2Tag):
     """Base class for the NTAG21x family (210/212/213/215/216). The
     methods and attributes documented here are supported for all
@@ -484,6 +491,13 @@ class NTAG210(NTAG21x):
         self._product = "NXP NTAG210"
         self._cfgpage = 16
         
+    def _format(self, version, wipe):
+        if self.ndef is None:
+            log.debug("no management data, writing factory defaults")
+            self.write(4, b'\x03\x00\xFE\x00')
+            self.write(5, b'\x00\x00\x00\x00')
+        return super(NTAG210, self)._format(version, wipe)
+
     def dump(self):
         footer = dict(zip(range(16, 20),
                           ("MIRROR_BYTE, RFU, MIRROR_PAGE, AUTH0",
@@ -500,6 +514,13 @@ class NTAG212(NTAG21x):
         self._product = "NXP NTAG212"
         self._cfgpage = 37
         
+    def _format(self, version, wipe):
+        if self.ndef is None:
+            log.debug("no management data, writing factory defaults")
+            self.write(4, b'\x01\x03\x90\x0A')
+            self.write(5, b'\x34\x03\x00\xFE')
+        return super(NTAG212, self)._format(version, wipe)
+
     def dump(self):
         text = ("LOCK2-LOCK4", "MIRROR_BYTE, RFU, MIRROR_PAGE, AUTH0",
                 "ACCESS", "PWD0-PWD3", "PACK0-PACK1")
@@ -516,6 +537,13 @@ class NTAG213(NTAG21x):
         super(NTAG213, self).__init__(clf, target)
         self._product = "NXP NTAG213"
         self._cfgpage = 41
+
+    def _format(self, version, wipe):
+        if self.ndef is None:
+            log.debug("no management data, writing factory defaults")
+            self.write(4, b'\x01\x03\xA0\x0C')
+            self.write(5, b'\x34\x03\x00\xFE')
+        return super(NTAG213, self)._format(version, wipe)
 
     def dump(self):
         text = ("LOCK2-LOCK4", "MIRROR, RFU, MIRROR_PAGE, AUTH0",
@@ -534,6 +562,13 @@ class NTAG215(NTAG21x):
         self._product = "NXP NTAG215"
         self._cfgpage = 131
         
+    def _format(self, version, wipe):
+        if self.ndef is None:
+            log.debug("no management data, writing factory defaults")
+            self.write(4, b'\x03\x00\xFE\x00')
+            self.write(5, b'\x00\x00\x00\x00')
+        return super(NTAG215, self)._format(version, wipe)
+
     def dump(self):
         text = ("LOCK2-LOCK4", "MIRROR, RFU, MIRROR_PAGE, AUTH0",
                 "ACCESS", "PWD0-PWD3", "PACK0-PACK1")
@@ -550,6 +585,13 @@ class NTAG216(NTAG21x):
         super(NTAG216, self).__init__(clf, target)
         self._product = "NXP NTAG216"
         self._cfgpage = 227
+
+    def _format(self, version, wipe):
+        if self.ndef is None:
+            log.debug("no management data, writing factory defaults")
+            self.write(4, b'\x03\x00\xFE\x00')
+            self.write(5, b'\x00\x00\x00\x00')
+        return super(NTAG216, self)._format(version, wipe)
 
     def dump(self):
         text = ("LOCK2-LOCK4", "MIRROR, RFU, MIRROR_PAGE, AUTH0",
