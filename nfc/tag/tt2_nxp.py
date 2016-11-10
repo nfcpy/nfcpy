@@ -629,27 +629,19 @@ class MifareUltralightEV1(NTAG21x):
 
 class MF0UL11(MifareUltralightEV1):
     def __init__(self, clf, target):
-        super(MF0UL11, self).__init__(clf, target)
-        self._product = "Mifare Ultralight EV1 (MF0UL11)"
-        self._cfgpage = 16
+        super(MF0UL11, self).__init__(clf, target, "MF0UL11", 16)
     
 class MF0ULH11(MifareUltralightEV1):
     def __init__(self, clf, target):
-        super(MF0ULH11, self).__init__(clf, target)
-        self._product = "Mifare Ultralight EV1 (MF0ULH11)"
-        self._cfgpage = 16
+        super(MF0ULH11, self).__init__(clf, target, "MF0ULH11", 16)
     
 class MF0UL21(MifareUltralightEV1):
     def __init__(self, clf, target):
-        super(MF0UL21, self).__init__(clf, target)
-        self._product = "Mifare Ultralight EV1 (MF0UL21)"
-        self._cfgpage = 37
+        super(MF0UL21, self).__init__(clf, target, "MF0UL21", 37)
     
 class MF0ULH21(MifareUltralightEV1):
     def __init__(self, clf, target):
-        super(MF0ULH21, self).__init__(clf, target)
-        self._product = "Mifare Ultralight EV1 (MF0ULH21)"
-        self._cfgpage = 37
+        super(MF0ULH21, self).__init__(clf, target, "MF0ULH21", 37)
     
 class NTAGI2C(tt2.Type2Tag):
     def _dump(self, stop):
