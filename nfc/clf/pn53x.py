@@ -250,7 +250,11 @@ class Chipset(object):
     def read_frame(self, timeout):
         """Wait *timeout* milliseconds to return a chip response frame."""
         return self.transport.read(timeout)
-        
+
+    def send_ack(self):
+        # Send an ACK frame, usually to terminate most recent command.
+        self.chipset.transport.write(Chipset.ACK)
+
     def diagnose(self, test, test_data=None):
         """Send a Diagnose command. The *test* argument selects the diagnose
         function either by number or the string ``line``, ``rom``, or

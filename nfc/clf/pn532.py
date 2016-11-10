@@ -222,9 +222,9 @@ class Device(pn53x.Device):
         self.mute()
 
     def close(self):
-        # Terminate last chip command in case we've interrupted befor
-        # the response and give the chip 10 ms to think about.
-        self.chipset.transport.write(Chipset.ACK)
+        # Cancel most recent command in case we've been interrupted
+        # before the response, give the chip 10 ms to think about it.
+        self.chipset.send_ack()
         time.sleep(0.01)
 
         # When using the high speed uart we must set the baud rate
