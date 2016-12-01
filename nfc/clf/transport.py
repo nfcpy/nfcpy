@@ -262,7 +262,7 @@ class USB(object):
             self.usb_dev = dev.open()
             self.usb_dev.claimInterface(0)
         except libusb.USBErrorAccess:
-            raise IOError(errno.EACCESS, os.strerror(errno.EACCESS))
+            raise IOError(errno.EACCES, os.strerror(errno.EACCES))
         except libusb.USBErrorBusy:
             raise IOError(errno.EBUSY, os.strerror(errno.EBUSY))
         except libusb.USBErrorNoDevice:
