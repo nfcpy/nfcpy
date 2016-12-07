@@ -175,6 +175,15 @@ class Chipset(object):
         # write ack to perform a soft reset
         # raises IOError(EACCES) if we're second
         self.transport.write(Chipset.ACK)
+
+        # Clear any response data that may be leftover from the last
+        # session when it was killed.
+        try:
+            while True:
+                data = self.transport.read(timeout=10)
+                log.debug("cleared garbage {}".format(hexlify(data)))
+        except IOError:
+            pass
         
         # do some basic initialization and deactivate rf
         self.set_command_type(1)
@@ -194,10 +203,19 @@ class Chipset(object):
         if self.transport is not None:
             cmd = bytearray([0xD6, cmd_code]) + cmd_data
             self.transport.write(str(Frame(cmd)))
-            if Frame(self.transport.read()).type == "ack":
-                rsp = Frame(self.transport.read()).data
-                if rsp and rsp[0] == 0xD7 and rsp[1] == cmd_code + 1:
-                    return rsp[2:]
+            ack = Frame(self.transport.read())
+            if ack.type == 'ack':
+                rsp = Frame(self.transport.read())
+                if rsp.type == 'data':
+                    if rsp.data[0] == 0xD7 and rsp.data[1] == cmd_code + 1:
+                        return rsp.data[2:]
+                    else:
+                        logmsg = "expected rsp code D7{:02X} not {:02X}{:02X}"
+                        log.error(logmsg.format(cmd_code+1, *rsp.data[0:2]))
+                else:
+                    log.error("expected data but got {}".format(rsp.type))
+            else:
+                log.error("expected ack but got {}".format(ack.type))
         else:
             log.debug("transport closed in send_command")
                 
