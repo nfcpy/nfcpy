@@ -657,7 +657,7 @@ class FelicaLite(tt3.Type3Tag):
         attribute_data = bytearray(16)
         attribute_data[:14] = pack(">BBBHxxxxBBxxx", 0x10, 4, 1, nmaxb, 0, 1)
         attribute_data[14:] = pack(">H", sum(attribute_data[:14]))
-        log.info("set ndef attributes {}".format(hexlify(attribute_data)))
+        log.debug("set ndef attributes {}".format(hexlify(attribute_data)))
         self.write_without_mac(attribute_data, 0)
 
         # Overwrite the ndef message area if a wipe is requested.

@@ -163,13 +163,13 @@ class Type3Tag(nfc.tag.Tag):
                 attributes = {
                     'ver': ver, 'nbr': nbr, 'nbw': nbw, 'nmaxb': nmaxb,
                     'writef': writef, 'rwflag': rwflag, 'ln': length}
-                log.info("got ndef attributes {0}".format(attributes))
+                log.debug("got ndef attributes {0}".format(attributes))
                 return attributes
             else:
                 log.debug("ndef attribute data checksum error")
 
         def _write_attribute_data(self, attributes):
-            log.info("set ndef attributes {0}".format(attributes))
+            log.debug("set ndef attributes {0}".format(attributes))
             attribute_data = bytearray(16)
             attribute_data[0] = attributes['ver']
             attribute_data[1] = attributes['nbr']
@@ -205,7 +205,7 @@ class Type3Tag(nfc.tag.Tag):
                 except Type3TagCommandError: return None
 
             data = data[0:attributes['ln']]
-            log.info("got {0} byte ndef data {1}{2}".format(
+            log.debug("got {0} byte ndef data {1}{2}".format(
                 len(data), hexlify(data[0:32]), ('','...')[len(data)>32]))
             
             return data
@@ -215,7 +215,7 @@ class Type3Tag(nfc.tag.Tag):
             attributes['writef'] = 0x0F
             self._write_attribute_data(attributes)
 
-            log.info("set {0} byte ndef data {1}{2}".format(
+            log.debug("set {0} byte ndef data {1}{2}".format(
                 len(data), hexlify(data[0:32]), ('','...')[len(data)>32]))
             
             last_block_number = 1 + (len(data) + 15) // 16
@@ -388,7 +388,7 @@ class Type3Tag(nfc.tag.Tag):
         attribute_data[0:5] = pack(">BBBH", 0x10, nbr, nbw, nmaxb)
         attribute_data[10] = 0x01 if nbw > 0 else 0x00
         attribute_data[14:16] = pack(">H", sum(attribute_data[0:14]))
-        log.info("set ndef attributes {}".format(hexlify(attribute_data)))
+        log.debug("set ndef attributes {}".format(hexlify(attribute_data)))
         self.write_to_ndef_service(attribute_data, 0)
 
         # If required, we will also overwrite the memory with the
