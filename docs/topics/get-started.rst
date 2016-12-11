@@ -154,9 +154,8 @@ choose ``on-connect`` to be alerted when the tag is activated.
   >>> def connected(tag): print(tag); return False
   ...
   >>> clf = nfc.ContactlessFrontend('usb')
-  >>> clf.connect(rdwr={'on-connect': connected}) # now touch a tag
+  >>> tag = clf.connect(rdwr={'on-connect': connected}) # now touch a tag
   Type3Tag IDm=01010501b00ac30b PMm=03014b024f4993ff SYS=12fc
-  <nfc.tag.tt3.Type3Tag object at 0x7f9e8302bfd0>
 
 This simple callback function print some basic information about the
 tag, here it is an NFC Forum Type 3 Tag with system code 12FCh. This
