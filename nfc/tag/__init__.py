@@ -162,9 +162,10 @@ class Tag(object):
             
             """
             import nfc.ndef
-            
-            if len(self._data) > 3:
-                try: return nfc.ndef.Message(str(self._data))
+
+            if len(self.octets) > 3:
+                try:
+                    return nfc.ndef.Message(self.octets)
                 except nfc.ndef.parser_error as error:
                     log.error(repr(error))
 
@@ -173,11 +174,33 @@ class Tag(object):
 
         @message.setter
         def message(self, msg):
+            self.octets = bytes(msg)
+
+        @property
+        def octets(self):
+            """Read or write NDEF message data octets.
+
+            .. versionadded:: 0.12
+
+            The *octets* attribute returns the NDEF message data
+            octets as bytes. A bytes or bytearray sequence assigned to
+            *octets* is immediately written to the NDEF message data
+            area, unless the Tag memory is write protected or to
+            small. ::
+
+                if tag.ndef is not None:
+                    print(hexlify(tag.ndef.octets))
+
+            """
+            return bytes(self._data)
+
+        @octets.setter
+        def octets(self, data):
             if not self._writeable:
-                raise AttributeError("ndef message is not writeable")
-            data = bytearray(str(msg))
+                raise AttributeError("tag ndef area is not writeable")
+            data = bytearray(data)
             if len(data) > self.capacity:
-                raise ValueError("ndef message size exceeds capacity")
+                raise ValueError("data length exceeds tag capacity")
             self._write_ndef_data(data)
             self._data = data
 
