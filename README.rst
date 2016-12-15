@@ -1,12 +1,13 @@
 Python module for near field communication
 ==========================================
 
-.. image:: https://img.shields.io/pypi/v/nfcpy.svg
+.. image:: https://badge.fury.io/py/nfcpy.svg
    :target: https://pypi.python.org/pypi/nfcpy
+   :alt: Python Package
 
 .. image:: http://readthedocs.org/projects/nfcpy/badge/?version=latest
    :target: http://nfcpy.readthedocs.io/en/latest/?badge=latest
-   :alt: Documentation Status
+   :alt: Documentation
 
 .. _Python: https://www.python.org
 .. _EUPL: http://ec.europa.eu/idabc/eupl
