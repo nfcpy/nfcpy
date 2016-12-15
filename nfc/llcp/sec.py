@@ -23,6 +23,7 @@
 import logging
 log = logging.getLogger(__name__)
 
+import sys
 import struct
 import ctypes
 import ctypes.util
@@ -487,5 +488,9 @@ class OpenSSLWrapper:
         
 libcrypto = ctypes.util.find_library('crypto')
 if libcrypto is not None:
-    OpenSSL = OpenSSLWrapper(libcrypto)
-
+    if not sys.platform.startswith('linux'):
+        log.debug("OpenSSL crypto library binding is only tested on Linux")
+    elif not libcrypto.startswith('libcrypto.so.1.0'):
+        log.warning("OpenSSL {} is not supported".format(libcrypto))
+    else:
+        OpenSSL = OpenSSLWrapper(libcrypto)
