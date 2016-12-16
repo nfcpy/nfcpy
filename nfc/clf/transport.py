@@ -189,8 +189,7 @@ class USB(object):
         else:
             return None
 
-        context = libusb.USBContext()
-        try:
+        with libusb.USBContext() as context:
             devices = context.getDeviceList(skip_on_error=True)
             vid, pid = match.get('vid'), match.get('pid')
             bus, dev = match.get('bus'), match.get('adr')
@@ -204,8 +203,6 @@ class USB(object):
                 devices = [d for d in devices if d.getDeviceAddress() == dev]
             return [(d.getVendorID(), d.getProductID(), d.getBusNumber(),
                      d.getDeviceAddress()) for d in devices]
-        finally:
-            context.exit()
 
     def __init__(self, usb_bus, dev_adr):
         self.context = libusb.USBContext()
