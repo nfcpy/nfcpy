@@ -1,7 +1,14 @@
 *~
 *.pyc
 *.log
-
+#
+# build directories
+#
 dist/
 nfcpy.egg-info/
 docs/_build/
+#
+# virtual envs
+#
+python-2/
+python-3/
