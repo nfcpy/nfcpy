@@ -43,5 +43,5 @@ setup(
         'Topic :: Software Development :: Libraries :: Python Modules',
     ],
 
-    install_requires = ['libusb1', 'pyserial'],
+    install_requires = ['libusb1', 'pyserial', 'ndeflib'],
 )
