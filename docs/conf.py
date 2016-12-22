@@ -21,7 +21,10 @@ extensions = [
     'sphinx.ext.napoleon',
     'sphinx.ext.intersphinx'
 ]
-intersphinx_mapping = {'python':('https://docs.python.org/2.7', None)}
+intersphinx_mapping = {
+    'python': ('https://docs.python.org/2.7', None),
+    'ndeflib': ('https://ndeflib.readthedocs.io/en/latest', None),
+}
 templates_path = ['_templates']
 source_suffix = '.rst'
 master_doc = 'index'

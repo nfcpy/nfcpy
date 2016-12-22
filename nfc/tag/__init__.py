@@ -23,6 +23,11 @@
 import logging
 log = logging.getLogger(__name__)
 
+import warnings
+logging.captureWarnings(True)
+
+from ndef import message_decoder, message_encoder
+
 class Tag(object):
     """The base class for all NFC Tags/Cards. The methods and attributes
     defined here are commonly available but some may, depending on the
@@ -41,15 +46,16 @@ class Tag(object):
 
         This class presents the NDEF management information and the
         actual NDEF message by a couple of attributes. It is normally
-        accessed from a :class:`Tag` instance through the
-        :attr:`~Tag.ndef` attribute for reading or writing an NDEF
-        message. ::
+        accessed from a :class:`Tag` instance (further named *tag*)
+        through the :attr:`Tag.ndef` attribute for reading or writing
+        NDEF records. ::
 
             if tag.ndef is not None:
-                print(tag.ndef.message.pretty())
+                for record in tag.ndef.records:
+                    print(record)
                 if tag.ndef.is_writeable:
-                    text_record = nfc.ndef.TextRecord("Hello World")
-                    tag.ndef.message = nfc.ndef.Message(text_record)
+                    from ndef import TextRecord
+                    tag.ndef.records = [TextRecord("Hello World")]
 
         """
         def __init__(self, tag):
@@ -112,22 +118,22 @@ class Tag(object):
             on some state.
 
             Note that reading this attribute involves a complete
-            update of the :class:`~Tag.NDEF` instance accessed through
-            :attr:`Tag.ndef`. As a result, it is possible that the
-            :attr:`Tag.ndef` attribute may have become :const:`None`
-            if there was, for example, now invalid data on the tag. A
-            robust implementation should thus verify the value of the
-            :attr:`Tag.ndef` attribute. ::
+            update of the :class:`Tag.NDEF` instance and it is
+            possible that :attr:`Tag.ndef` is :const:`None` after the
+            update (e.g. tag gone during read or a dynamic tag that
+            failed). A robust implementation should always verify the
+            value of the :attr:`Tag.ndef` attribute. ::
 
-                if tag.ndef.has_changed:
-                    if tag.ndef is not None:
-                        print(tag.ndef.message.pretty())
+                if tag.ndef.has_changed and tag.ndef is not None:
+                    for record in tag.ndef.records:
+                        print(record)
 
             The :attr:`has_changed` attribute can also be used to
-            verify that an NDEF message that was written to the tag is
-            identical to the NDEF message stored on the tag. ::
+            verify that NDEF records written to the tag are identical
+            to the NDEF records stored on the tag. ::
 
-                tag.ndef.message = my_new_ndef_message
+                from ndef import TextRecord
+                tag.ndef.records = [TextRecord("Hello World")]
                 if tag.ndef.has_changed:
                     print("the tag data differs from what was written")
 
@@ -138,29 +144,19 @@ class Tag(object):
 
         @property
         def message(self):
-            """Read or write the :class:`nfc.ndef.Message` on the tag.
-            
-            If valid NDEF data was read from the tag, then
-            :attr:`message` holds an :class:`nfc.ndef.Message` object
-            representing that data. Otherwise it holds an empty
-            message, i.e. an NDEF message that is composed of a single
-            NDEF record with type zero, no name (identifier) and no
-            data. Note that the :attr:`length` attribute always
-            returns the true NDEF data length. ::
-            
-                empty_message = nfc.ndef.Message(nfc.ndef.Record())
-            
-                if tag.ndef is not None:
-                    print(tag.ndef.message.pretty())
-                    if tag.ndef.message == empty_message:
-                        if tag.ndef.length == 0:
-                            print("there's no data stored on the tag")
-                        elif tag.ndef.length == 3:
-                            print("looks like an empty message found")
-                        else:
-                            print("got a message that failed to parse")
-            
+            """Read or write an :class:`nfc.ndef.Message`.
+
+            .. deprecated:: 0.12
+               Use :attr:`records`.
+
             """
+            warnings.warn(
+                'The Tag.ndef.message attribute will be removed in a future'
+                ' version when the ndeflib replaces the nfc.ndef submodule.'
+                ' Use Tag.ndef.records to get or set a list of NDEF Records'
+                ' as implemented by https://github.com/nfcpy/ndeflib.',
+                DeprecationWarning
+            )
             import nfc.ndef
 
             if len(self.octets) > 3:
@@ -174,7 +170,51 @@ class Tag(object):
 
         @message.setter
         def message(self, msg):
+            warnings.warn(
+                'The Tag.ndef.message attribute will be removed in a future'
+                ' version when the ndeflib replaces the nfc.ndef submodule.'
+                ' Use Tag.ndef.records to get or set a list of NDEF Records'
+                ' as implemented by https://github.com/nfcpy/ndeflib.',
+                DeprecationWarning
+            )
             self.octets = bytes(msg)
+
+        @property
+        def records(self):
+            """Read or write a list of NDEF Records.
+
+            .. versionadded:: 0.12
+
+            This attribute is a convinience wrapper for decoding and
+            encoding of the NDEF message data :attr:`octets`. It uses
+            the `ndeflib <https://ndeflib.readthedocs.io>`_ module to
+            return the list of :class:`ndef.Record` instances decoded
+            from the NDEF message data or set the message data from a
+            list of records. ::
+
+                if tag.ndef is not None:
+                    for record in tag.ndef.records:
+                        print(record)
+                    import ndef
+                    tag.ndef.records = [ndef.TextRecord('Hello World')]
+
+            Decoding and encoding are performed with a relaxed error
+            handling strategy that ignores minor errors in the NDEF
+            data. The `ndeflib <https://ndeflib.readthedocs.io>`_ does
+            also support 'strict' and 'ignore' error handling which
+            may be used like so::
+
+                from ndef import message_decoder, message_encoder
+                records = message_decoder(tag.ndef.octets, errors='strict')
+                octets = b''.join(message_encoder(records, errors='strict'))
+                tag.ndef.octets = octets
+
+            """
+            return list(message_decoder(self.octets, errors='relax'))
+
+        @records.setter
+        def records(self, value):
+            self.octets = b''.join(message_encoder(value, errors='relax'))
 
         @property
         def octets(self):
