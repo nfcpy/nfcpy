@@ -31,7 +31,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'nfcpy'
-copyright = u'2009-2015, Stephen Tiedemann'
+copyright = u'2009-2017, Stephen Tiedemann'
 version = nfc.__version__
 release = version
 exclude_patterns = ['_build', '.#*', 'topics/.#*', 'examples/.#*']

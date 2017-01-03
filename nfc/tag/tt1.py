@@ -1,6 +1,6 @@
 # -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
-# Copyright 2011-2015
+# Copyright 2011, 2017
 #   Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #   Alexander Knaub <sanyok.og@googlemail.com>
 #
@@ -11,7 +11,7 @@
 # Licence.
 # You may obtain a copy of the Licence at:
 #
-# http://www.osor.eu/eupl
+# https://joinup.ec.europa.eu/software/page/eupl
 #
 # Unless required by applicable law or agreed to in
 # writing, software distributed under the Licence is
