@@ -10,7 +10,7 @@ Python module for near field communication
    :alt: Documentation
 
 .. _Python: https://www.python.org
-.. _EUPL: http://ec.europa.eu/idabc/eupl
+.. _EUPL: https://joinup.ec.europa.eu/software/page/eupl
 .. _GitHub: https://github.com/nfcpy/nfcpy
 .. _issues: https://github.com/nfcpy/nfcpy/issues
 .. _bugs: https://github.com/nfcpy/nfcpy/labels/bug
