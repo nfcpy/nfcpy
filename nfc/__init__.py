@@ -19,10 +19,24 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-__version__ = "latest"
-
 import logging
 logging.getLogger(__name__).addHandler(logging.NullHandler())
 logging.getLogger(__name__).setLevel(logging.INFO)
 
 from clf import ContactlessFrontend
+
+# METADATA ####################################################################
+
+__version__ = "0.12.0"
+
+__title__ = "nfcpy"
+__description__ = "Python module for Near Field Communication."
+__uri__ = "https://github.com/nfcpy/nfcpy"
+
+__author__ = "Stephen Tiedemann"
+__email__ = "stephen.tiedemann@gmail.com"
+
+__license__ = "EUPL"
+__copyright__ = "Copyright (c) 2009, 2017 Stephen Tiedemann"
+
+###############################################################################

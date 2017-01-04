@@ -1,6 +1,48 @@
 Changelog for nfcpy
 ===================
 
+0.12.0 (2017-01-04)
+-------------------
+
+* Release 0.12 marks the end of code-transfer from Launchpad to Github
+  (and bazaar to git). The Launchpad site will stay for questions and
+  answers.
+
+* Release 0.12 also marks the begin of some code separation, starting
+  with inclusion of the separate NDEF decoder/encoder module from
+  https://github.com/nfcpy/ndeflib when installing from PyPI or
+  running `setup.py`. The `Tag.ndef` attribute's new `records` member
+  uses the new ndeflib for decode and encode.
+
+* New module main function for "python -m nfc" searches for locally
+  connected contactless devices and provides diagnostic output for
+  some known issues with access rights and conflicting drivers.
+
+* New `iterations` and `interval` options allow more fine tuning of
+  the polling loop in `ContactlessFrontend.connect()`.
+
+* New `beep-on-connect` option and implementation to let an ACR-122
+  blink and sound when a card is detected. Contributed by
+  https://github.com/svvitale
+
+* Ability to apply factory format completely empty NTAG tags.
+
+* Correct dump of FeliCa Mobile data structures and timeout tuning for
+  some older FeliCa cards.
+
+* A fix for the Raspberry Pi's erratic USB implementation, see
+  https://github.com/nfcpy/nfcpy/wiki/USB-TTL-serial-adapter-on-Raspberry-Pi
+
+* A number of bug fixes, source code and documentation improvements
+  including contributions by GitHub members https://github.com/pyrog,
+  https://github.com/Skylled and https://github.com/hideo54.
+
+0.11.1 (2016-04-29)
+-------------------
+
+* Fixes an error in in the authentication procedure for Ultralight-C
+  and NTAG21x Type 2 Tags.
+
 0.11.0 (2016-04-21)
 -------------------
 

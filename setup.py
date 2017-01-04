@@ -1,47 +1,76 @@
-"""Setup module for nfcpy.
-"""
-
-from setuptools import setup, find_packages
-from codecs import open
-from os import path
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+import codecs
+import os
 import re
 
-here = path.abspath(path.dirname(__file__))
+from setuptools import setup, find_packages
 
-# Get the long description from the README file
-with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
-    long_description = f.read()
+###############################################################################
 
-with open(path.join(here, 'nfc', '__init__.py'), encoding='utf-8') as f:
-    match = re.search(r"^__version__ = ['\"]([^'\"]*)['\"]", f.read(), re.M)
-    if not match:
-        raise RuntimeError("Unable to find version string.")
-    version_string = match.group(1)
+PACKAGES = find_packages(exclude=['examples'])
+META_PATH = os.path.join("nfc", "__init__.py")
+KEYWORDS = ["contactless", "nfc", "llcp", "p2p", "snep"]
+CLASSIFIERS = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 2",
+    "Programming Language :: Python :: 2.6",
+    "Programming Language :: Python :: 2.7",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: Microsoft :: Windows",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "License :: OSI Approved :: European Union Public Licence 1.1 (EUPL 1.1)",
+]
+INSTALL_REQUIRES = ["libusb1", "pyserial", "ndeflib"]
 
-setup(
-    name = 'nfcpy',
-    version = version_string,
-    packages = find_packages(exclude=['examples']),
-    license = 'EUPL',
-    url = 'https://launchpad.net/nfcpy',
+###############################################################################
 
-    description = 'Python module for Near Field Communication',
-    long_description = long_description,
-    keywords = 'contactless nfc llcp p2p ndef',
+HERE = os.path.abspath(os.path.dirname(__file__))
 
-    author = 'Stephen Tiedemann',
-    author_email = 'stephen.tiedemann@gmail.com',
 
-    classifiers = [
-        'Development Status :: 5 - Production/Stable',
-        'License :: OSI Approved :: European Union Public Licence 1.1 (EUPL 1.1)',
-        'Programming Language :: Python :: 2',
-        'Programming Language :: Python :: 2.6',
-        'Programming Language :: Python :: 2.7',
-        'Intended Audience :: Developers',
-        'Environment :: Console',
-        'Topic :: Software Development :: Libraries :: Python Modules',
-    ],
+def read(*parts):
+    """
+    Build an absolute path from *parts* and and return the contents of the
+    resulting file.  Assume UTF-8 encoding.
+    """
+    with codecs.open(os.path.join(HERE, *parts), "rb", "utf-8") as f:
+        return f.read()
 
-    install_requires = ['libusb1', 'pyserial', 'ndeflib'],
-)
+
+META_FILE = read(META_PATH)
+
+
+def find_meta(meta):
+    """
+    Extract __*meta*__ from META_FILE.
+    """
+    meta_match = re.search(
+        r"^__{meta}__ = ['\"]([^'\"]*)['\"]".format(meta=meta),
+        META_FILE, re.M
+    )
+    if meta_match:
+        return meta_match.group(1)
+    raise RuntimeError("Unable to find __{meta}__ string.".format(meta=meta))
+
+
+if __name__ == "__main__":
+    setup(
+        name=find_meta("title"),
+        description=find_meta("description"),
+        license=find_meta("license"),
+        url=find_meta("uri"),
+        version=find_meta("version"),
+        author=find_meta("author"),
+        author_email=find_meta("email"),
+        maintainer=find_meta("author"),
+        maintainer_email=find_meta("email"),
+        keywords=KEYWORDS,
+        long_description=read("README.rst"),
+        packages=PACKAGES,
+        zip_safe=False,
+        classifiers=CLASSIFIERS,
+        install_requires=INSTALL_REQUIRES,
+    )
