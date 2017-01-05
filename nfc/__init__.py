@@ -27,7 +27,7 @@ from clf import ContactlessFrontend
 
 # METADATA ####################################################################
 
-__version__ = "0.12.0"
+__version__ = "latest"
 
 __title__ = "nfcpy"
 __description__ = "Python module for Near Field Communication."
