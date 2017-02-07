@@ -1,0 +1,22 @@
+# This is an annoteted version because I tend to forget.
+#
+# After 'git clone':
+#
+#   virtualenv python-2
+#   source python-2/bin/activate
+#   python setup.py develop
+#   pip install -r requirements-dev.txt
+#
+# Before 'git push':
+#
+#   pip install --upgrade -r requirements-dev.txt
+#   tox -c tox.ini  # or just tox
+#
+# Required packages and typical use:
+#
+pytest            # run regression tests     "py.test tests/"
+pytest-cov        # check code coverage      "py.test tests/ --cov ndef --cov-report html"
+flake8            # syntax and style checks  "flake8 src/"
+tox               # run tests before push    "tox -c tox.ini"
+sphinx            # to create documentation  "(cd docs && amke html doctest)"
+sphinx-rtd-theme  # with the final layout    "firefox docs/_build/html/index.html"
