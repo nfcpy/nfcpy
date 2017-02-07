@@ -1,14 +1,12 @@
 *~
 *.pyc
-*.log
-#
-# build directories
-#
-dist/
-nfcpy.egg-info/
+*.egg-info
+.tox
+.cache
+.coverage*
+__pycache__/
 docs/_build/
-#
-# virtual envs
-#
-python-2/
-python-3/
+htmlcov
+dist
+python-2
+python-3
