@@ -305,7 +305,7 @@ class Type1Tag(Tag):
             try:
                 this_data = self.read_block(i)
                 if stop is None:
-                    test_data = bytearray([~b & 0xFF for b in data])
+                    test_data = bytearray([b ^ 0xFF for b in this_data])
                     self.write_block(i, test_data)
                     self.write_block(i, this_data)
             except Type1TagCommandError:
