@@ -214,7 +214,7 @@ class Tag(object):
 
         @records.setter
         def records(self, value):
-            self.octets = b''.join(message_encoder(value, errors='relax'))
+            self.octets = b''.join(message_encoder(value))
 
         @property
         def octets(self):
