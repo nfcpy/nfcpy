@@ -1,44 +1,35 @@
-#!/usr/bin/python
 # -*- coding: latin-1 -*-
-# -----------------------------------------------------------------------------
-# Copyright 2013 Stephen Tiedemann <stephen.tiedemann@gmail.com>
-#
-# Licensed under the EUPL, Version 1.1 or - as soon they 
-# will be approved by the European Commission - subsequent
-# versions of the EUPL (the "Licence");
-# You may not use this work except in compliance with the
-# Licence.
-# You may obtain a copy of the Licence at:
-#
-# https://joinup.ec.europa.eu/software/page/eupl
-#
-# Unless required by applicable law or agreed to in
-# writing, software distributed under the Licence is
-# distributed on an "AS IS" basis,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
-# express or implied.
-# See the Licence for the specific language governing
-# permissions and limitations under the Licence.
-# -----------------------------------------------------------------------------
-import sys, os
-sys.path.insert(1, os.path.split(sys.path[0])[0])
-
 import nfc
 import nfc.ndef
 import nfc.tag.tt3
-
-from binascii import hexlify
+import ndef
+import mock
+import pytest
+from pytest_mock import mocker  # noqa: F401
 from struct import pack, unpack
-from nose.tools import raises
-from nose.plugins.skip import SkipTest
-from nose.plugins.attrib import attr
 
-import logging
-logging_level = logging.getLogger().getEffectiveLevel()
-logging.getLogger("nfc.tag.tt3").setLevel(logging_level)
-logging.getLogger("nfc.tag").setLevel(logging_level)
+
+def fromhex(s):
+    return bytearray.fromhex(s)
+
+
+@pytest.fixture()  # noqa: F811
+def clf(mocker):
+    clf = nfc.ContactlessFrontend()
+    mocker.patch.object(clf, 'exchange', autospec=True)
+    return clf
+
+
+@pytest.fixture()
+def target():
+    target = nfc.clf.RemoteTarget("212F")
+    #target.sensf_res = fromhex("000C")
+    return target
+
 
 class Type3TagSimulator(nfc.clf.ContactlessFrontend):
+    pass
+"""
     def __init__(self, tag_memory, sys="12 FC",
                  idm="02 FE 00 01 02 03 04 05",
                  pmm="03 01 4B 02 4F 49 93 FF"):
@@ -58,7 +49,6 @@ class Type3TagSimulator(nfc.clf.ContactlessFrontend):
         return nfc.clf.TTF(424, self.idm, self.pmm, self.sys[0])
 
     def exchange(self, data, timeout):
-        print hexlify(data)
         self.cmd_counter += 1
         if self.tag_is_present is False:
             raise nfc.clf.TimeoutError("mute tag")
@@ -161,10 +151,13 @@ class Type3TagSimulator(nfc.clf.ContactlessFrontend):
     
     def set_communication_mode(self, brm, **kwargs):
         pass
+"""
+
 
 #
 # TEST TYPE 3 TAG CLASS
 #
+@pytest.mark.skip(reason="not yet converted")
 class TestType3Tag:
     sys = "12 FC"
     idm = "01 02 03 04 05 06 07 08"
@@ -187,8 +180,8 @@ class TestType3Tag:
             0x000B: service_data, 0x004B: service_data[1:],
             0x0009: service_data, 0x0049: service_data[1:],
         }
-        self.clf = Type3TagSimulator(tag_memory, self.sys, self.idm, self.pmm)
-        self.tag = self.clf.connect(rdwr={'on-connect': None})
+        #self.clf = Type3TagSimulator(tag_memory, self.sys, self.idm, self.pmm)
+        #self.tag = self.clf.connect(rdwr={'on-connect': None})
 
     #
     # NDEF DATA READ
@@ -241,14 +234,14 @@ class TestType3Tag:
         data = bytearray.fromhex("d1020b53 70d10107 55036364 2e636f6d")
         assert self.clf.mem[0x0009][1] == data
 
-    @raises(AttributeError)
+    #pytest.raises(AttributeError)
     def test_ndef_write_to_readonly_data_area(self):
         self.clf.mem[0x0009][0][10] -= 0x01
         self.clf.mem[0x0009][0][15] -= 0x01
         assert self.tag.ndef is not None
         self.tag.ndef.message = nfc.ndef.Message(nfc.ndef.TextRecord(" "))
 
-    @raises(ValueError)
+    #pytest.raises(ValueError)
     def test_ndef_write_to_smaller_data_area(self):
         assert self.tag.ndef is not None
         self.tag.ndef.message = nfc.ndef.Message(nfc.ndef.TextRecord(100*" "))
@@ -353,7 +346,7 @@ class TestType3Tag:
     def test_polling_for_system_ffff(self):
         assert self.tag.polling(0xFFFF) == (self.clf.idm, self.clf.pmm)
         
-    @raises(nfc.tag.tt3.Type3TagCommandError)
+    #pytest.raises(nfc.tag.tt3.Type3TagCommandError)
     def test_polling_for_system_fefe(self):
         try: self.tag.polling(0xFEFE)
         except nfc.tag.tt3.Type3TagCommandError as error:
@@ -363,11 +356,11 @@ class TestType3Tag:
         rsp = self.tag.polling(0xFFFF, request_code=1)
         assert rsp == (self.clf.idm, self.clf.pmm, self.clf.sys[0])
     
-    @raises(ValueError)
+    #pytest.raises(ValueError)
     def test_polling_with_invalid_request_code(self):
         self.tag.polling(0xFFFF, request_code=3)
         
-    def test_polling_with_time_slots_value(self):
+    def __test_polling_with_time_slots_value(self):
         for v in (1, 3, 7, 15):
             yield self.check_polling_with_time_slots_value, v
         
@@ -375,11 +368,11 @@ class TestType3Tag:
         self.clf.expect_command = bytearray("\x06\x00\xFF\xFF\x00" + chr(v))
         self.tag.polling(0xFFFF, time_slots=v)
         
-    @raises(ValueError)
+    #pytest.raises(ValueError)
     def test_polling_with_invalid_time_slots(self):
         self.tag.polling(0xFFFF, time_slots=255)
         
-    @raises(nfc.tag.tt3.Type3TagCommandError)
+    #pytest.raises(nfc.tag.tt3.Type3TagCommandError)
     def test_polling_with_data_size_error(self):
         del self.clf.pmm[4:8]
         try: self.tag.polling(0x12FC)
@@ -513,34 +506,34 @@ class TestType3Tag:
         rsp = self.tag.send_cmd_recv_rsp(0xF0, "\xA5", 0.1, check_status=False)
         assert rsp == "\x00\x00\x5A"
         
-    @raises(nfc.tag.tt3.Type3TagCommandError)
+    #pytest.raises(nfc.tag.tt3.Type3TagCommandError)
     def test_send_cmd_recv_rsp_with_timeout_error(self):
         try: self.tag.send_cmd_recv_rsp(0xF0, bytearray(), timeout=0.1)
         except nfc.tag.tt3.Type3TagCommandError as error:
             assert error.errno == nfc.tag.TIMEOUT_ERROR; raise
         
-    @raises(nfc.tag.tt3.Type3TagCommandError)
+    #pytest.raises(nfc.tag.tt3.Type3TagCommandError)
     def test_send_cmd_recv_rsp_with_rsp_length_error(self):
         self.clf.return_response = "\x0B\xF1" + self.clf.idm
         try: self.tag.send_cmd_recv_rsp(0xF0, bytearray(), timeout=0.1)
         except nfc.tag.tt3.Type3TagCommandError as error:
             assert error.errno == nfc.tag.tt3.RSP_LENGTH_ERROR; raise
         
-    @raises(nfc.tag.tt3.Type3TagCommandError)
+    #pytest.raises(nfc.tag.tt3.Type3TagCommandError)
     def test_send_cmd_recv_rsp_with_rsp_code_error(self):
         self.clf.return_response = "\x0A\xF0" + self.clf.idm
         try: self.tag.send_cmd_recv_rsp(0xF0, bytearray(), timeout=0.1)
         except nfc.tag.tt3.Type3TagCommandError as error:
             assert error.errno == nfc.tag.tt3.RSP_CODE_ERROR; raise
         
-    @raises(nfc.tag.tt3.Type3TagCommandError)
+    #pytest.raises(nfc.tag.tt3.Type3TagCommandError)
     def test_send_cmd_recv_rsp_with_tag_idm_error(self):
         self.clf.return_response = "\x0A\xF1" + self.clf.idm[::-1]
         try: self.tag.send_cmd_recv_rsp(0xF0, bytearray(), timeout=0.1)
         except nfc.tag.tt3.Type3TagCommandError as error:
             assert error.errno == nfc.tag.tt3.TAG_IDM_ERROR; raise
 
-    @raises(nfc.tag.tt3.Type3TagCommandError)
+    #pytest.raises(nfc.tag.tt3.Type3TagCommandError)
     def test_send_cmd_recv_rsp_with_tag_command_error(self):
         self.clf.expect_command = "\x0B\xF0" + self.clf.idm + "\xA5"
         self.clf.return_response = "\x0D\xF1" + self.clf.idm + "\x12\x34\x5A"
@@ -551,6 +544,7 @@ class TestType3Tag:
 #
 # TEST SERVICE CODE CLASS
 #
+@pytest.mark.skip(reason="not yet converted")
 class TestServiceCode:
     def test_init(self):
         sc = nfc.tag.tt3.ServiceCode(1, 9)
@@ -581,6 +575,7 @@ class TestServiceCode:
 #
 # TEST BLOCK CODE CLASS
 #
+@pytest.mark.skip(reason="not yet converted")
 class TestBlockCode:
     def test_init(self):
         bc = nfc.tag.tt3.BlockCode(12)
@@ -622,6 +617,7 @@ class TestBlockCode:
         sc = nfc.tag.tt3.BlockCode(1, 3)
         assert str(sc) == "BlockCode(number=1, access=011, service=0)"
 
+@pytest.mark.skip(reason="not yet converted")
 class TestType3TagFelicaStandard:
     idm = "01 02 03 04 05 06 07 08"
     pmm = "00 01 FF FF FF FF FF FF"
@@ -650,11 +646,11 @@ class TestType3TagFelicaStandard:
             0x0414: service_data[-1:], 0x0415: service_data[-1:],
             0x0516: service_data[-1:], 0x0517: service_data[-1:],
         }
-        self.clf = Type3TagSimulator(tag_memory, "0000", self.idm, self.pmm)
-        self.clf.sys.append(bytearray.fromhex("12FC"))
-        self.tag = self.clf.connect(rdwr={'on-connect': None})
+        #self.clf = Type3TagSimulator(tag_memory, "0000", self.idm, self.pmm)
+        #self.clf.sys.append(bytearray.fromhex("12FC"))
+        #self.tag = self.clf.connect(rdwr={'on-connect': None})
     
-    def test_init_with_ic_code(self):
+    def __test_init_with_ic_code(self):
         for ic in (0, 1, 2, 8, 9, 11, 12, 13, 32, 50, 53):
             yield self.check_init_with_ic_code, ic
 
@@ -669,7 +665,7 @@ class TestType3TagFelicaStandard:
         sc_list = [nfc.tag.tt3.ServiceCode(0, 9), nfc.tag.tt3.ServiceCode(1, 9)]
         assert self.tag.request_service(sc_list) == [0x0009, 0x0049]
 
-    @raises(nfc.tag.TagCommandError)
+    #pytest.raises(nfc.tag.TagCommandError)
     def test_request_service_error(self):
         self.clf.return_response = "\x0B\x03" + self.clf.idm + '\x00'
         sc_list = [nfc.tag.tt3.ServiceCode(0, 9)]
@@ -680,7 +676,7 @@ class TestType3TagFelicaStandard:
     def test_request_response_success(self):
         assert self.tag.request_response() == 0
 
-    @raises(nfc.tag.TagCommandError)
+    #pytest.raises(nfc.tag.TagCommandError)
     def test_request_response_error(self):
         self.clf.return_response = "\x0C\x05" + self.clf.idm + "\0\0"
         try: self.tag.request_response()
@@ -696,7 +692,7 @@ class TestType3TagFelicaStandard:
     def test_request_system_code(self):
         assert self.tag.request_system_code() == [0x0000, 0x12fc]
 
-    @raises(nfc.tag.TagCommandError)
+    #pytest.raises(nfc.tag.TagCommandError)
     def test_request_system_code_failure(self):
         self.clf.return_response = "\x0C\x0D" + self.clf.idm + '\x01\x02'
         try: self.tag.request_system_code()
@@ -714,10 +710,11 @@ class TestType3TagFelicaStandard:
         lines = self.tag.dump()
         assert len(lines) == 58
 
+@pytest.mark.skip(reason="not yet converted")
 class TestType3TagFelicaMobile:
     idm = "01 02 03 04 05 06 07 08"
     
-    def test_init_with_ic_code(self):
+    def __test_init_with_ic_code(self):
         for ic in [6, 7] + range(16, 32):
             yield self.check_init_with_ic_code, ic
 
@@ -728,6 +725,7 @@ class TestType3TagFelicaMobile:
         assert isinstance(tag, nfc.tag.tt3_sony.FelicaMobile)
         assert tag._product.startswith("FeliCa Mobile")
 
+@pytest.mark.skip(reason="not yet converted")
 class FelicaLiteTagSimulator(Type3TagSimulator):
     def read_blocks(self, block_list):
         data = bytearray()
@@ -744,6 +742,7 @@ class FelicaLiteTagSimulator(Type3TagSimulator):
             data[-16:-8] = mac(data[:-16], sk, rc[:8])
         return self.encode(0x06, self.idm, chr(len(block_list)) + data)
 
+@pytest.mark.skip(reason="not yet converted")
 class TestType3TagFelicaLite:
     sys = "88 B4"
     idm = "01 02 03 04 05 06 07 08"
@@ -778,10 +777,10 @@ class TestType3TagFelicaLite:
             "FF FF FF 01  07 00 00 00  00 00 00 00  00 00 00 00",
         ]]
         tag_memory = {0x000B: service_data, 0x0009: service_data}
-        self.clf = FelicaLiteTagSimulator(
-            tag_memory, self.sys, self.idm, self.pmm)
-        self.clf.sys.append(bytearray.fromhex("12FC"))
-        self.tag = self.clf.connect(rdwr={'on-connect': None})
+        #self.clf = FelicaLiteTagSimulator(
+        #    tag_memory, self.sys, self.idm, self.pmm)
+        #self.clf.sys.append(bytearray.fromhex("12FC"))
+        #self.tag = self.clf.connect(rdwr={'on-connect': None})
 
     def test_init(self):
         assert isinstance(self.tag, nfc.tag.tt3_sony.FelicaLite)
@@ -838,11 +837,11 @@ class TestType3TagFelicaLite:
     def test_authenticate_with_wrong_password(self):
         self.tag.authenticate("0123456789abcdef") is False
 
-    @raises(ValueError)
+    #pytest.raises(ValueError)
     def test_authenticate_with_short_password(self):
         self.tag.authenticate("abc")
 
-    @raises(RuntimeError)
+    #pytest.raises(RuntimeError)
     def test_read_with_mac_before_authentication(self):
         self.tag.read_with_mac(0)
 
@@ -851,11 +850,11 @@ class TestType3TagFelicaLite:
         self.clf.mem[9][0x80] = bytearray(16) # change rc
         assert self.tag.read_with_mac(0) == None
 
-    @raises(ValueError)
+    #pytest.raises(ValueError)
     def test_protect_with_insufficient_password(self):
         self.tag.protect("abc")
 
-    @raises(ValueError)
+    #pytest.raises(ValueError)
     def test_protect_with_negative_protect_from(self):
         self.tag.protect("0123456789abcdef", protect_from=-1)
 
@@ -911,11 +910,11 @@ class TestType3TagFelicaLite:
         for i in range(1, 14):
             assert self.clf.mem[9][i] == bytearray(16)
 
-    @raises(AssertionError)
+    #pytest.raises(AssertionError)
     def test_format_with_wrong_version_argument_type(self):
         self.tag.format(version="1.0")
 
-    @raises(AssertionError)
+    #pytest.raises(AssertionError)
     def test_format_with_wrong_wipe_argument_type(self):
         self.tag.format(wipe="1")
 
@@ -960,6 +959,7 @@ class FelicaLiteSTagSimulator(FelicaLiteTagSimulator):
                 return self.encode(0x08, self.idm, '', "\x01\xA2")
         return self.encode(0x08, self.idm, '')
 
+@pytest.mark.skip(reason="not yet converted")
 class TestType3TagFelicaLiteS:
     sys = "88 B4"
     idm = "01 02 03 04 05 06 07 08"
@@ -998,10 +998,10 @@ class TestType3TagFelicaLiteS:
             "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
         ]]
         tag_memory = {0x000B: service_data, 0x0009: service_data}
-        self.clf = FelicaLiteSTagSimulator(
-            tag_memory, self.sys, self.idm, self.pmm)
-        self.clf.sys.append(bytearray.fromhex("12FC"))
-        self.tag = self.clf.connect(rdwr={'on-connect': None})
+        #self.clf = FelicaLiteSTagSimulator(
+        #    tag_memory, self.sys, self.idm, self.pmm)
+        #self.clf.sys.append(bytearray.fromhex("12FC"))
+        #self.tag = self.clf.connect(rdwr={'on-connect': None})
 
     def test_init_with_ic_code_f1(self):
         assert isinstance(self.tag, nfc.tag.tt3_sony.FelicaLiteS)
@@ -1042,7 +1042,7 @@ class TestType3TagFelicaLiteS:
         assert self.tag.ndef.is_writeable == True
         assert self.tag.ndef.message == msg
 
-    @raises(AttributeError)
+    #pytest.raises(AttributeError)
     def test_write_ndef_without_authentication(self):
         msg = nfc.ndef.Message(nfc.ndef.SmartPosterRecord("http://cd.org"))
         self.tag.ndef.message = msg
@@ -1062,29 +1062,29 @@ class TestType3TagFelicaLiteS:
     def test_authenticate_with_wrong_password(self):
         self.tag.authenticate("0123456789abcdef") is False
 
-    @raises(RuntimeError)
+    #pytest.raises(RuntimeError)
     def test_write_with_mac_before_authentication(self):
         self.tag.write_with_mac(bytearray(16), 0)
 
-    @raises(nfc.tag.tt3.Type3TagCommandError)
+    #pytest.raises(nfc.tag.tt3.Type3TagCommandError)
     def test_write_with_mac_fails_mac_verification(self):
         assert self.tag.authenticate("") is True
         self.clf.mem[9][0x80] = bytearray(16) # change rc
         self.tag.write_with_mac(bytearray(16), 0)
 
-    @raises(ValueError)
+    #pytest.raises(ValueError)
     def test_write_with_mac_with_insufficient_data(self):
         self.tag.write_with_mac(bytearray(15), 0)
 
-    @raises(ValueError)
+    #pytest.raises(ValueError)
     def test_write_with_mac_with_block_not_a_number(self):
         self.tag.write_with_mac(bytearray(16), '0')
 
-    @raises(ValueError)
+    #pytest.raises(ValueError)
     def test_protect_with_insufficient_password(self):
         self.tag.protect("abc")
 
-    @raises(ValueError)
+    #pytest.raises(ValueError)
     def test_protect_with_negative_protect_from(self):
         self.tag.protect("0123456789abcdef", protect_from=-1)
 
@@ -1148,6 +1148,7 @@ class TestType3TagFelicaLiteS:
         assert self.clf.mem[9][0x88] == mc_block
         assert self.clf.mem[9][0][10] == 0 # RWFlag
 
+@pytest.mark.skip(reason="not yet converted")
 class TestType3TagFelicaPlug:
     sys = "00 00"
     idm = "01 02 03 04 05 06 07 08"
@@ -1169,331 +1170,3 @@ class TestType3TagFelicaPlug:
         assert tag._product == "FeliCa Link (RC-S730) Plug Mode"
         assert tag._nbr == 12
         assert tag._nbw == 12
-
-################################################################################
-#
-# NFC FORUM TEST CASES
-#
-################################################################################
-
-@attr("nfc-forum")
-def test_manufacture_parameter_and_maximum_timing():
-    "TC_T3T_MEM_BV_1"
-    ndef_service_data = [bytearray.fromhex(hexstr) for hexstr in [
-        "10 01 01 00  01 00 00 00  00 00 00 00  00 10 00 23",
-        "d1 02 0b 53  70 d1 01 07  55 03 61 62  2e 63 6f 6d",
-    ]]
-    tag_services = {
-        0x0009: ndef_service_data,  0x000B: ndef_service_data,
-    }
-    clf = Type3TagSimulator(tag_services)
-    tag = clf.connect(rdwr={'on-connect': None})
-    send_data = bytearray("0123456789abcdef")
-    tag.write_to_ndef_service(send_data, 1)
-    rcvd_data = tag.read_from_ndef_service(1)
-    assert send_data == rcvd_data
-    tag.write_to_ndef_service(bytearray("\x0F"+15*"\0"), 1)
-
-@attr("nfc-forum")
-def test_frame_structure_and_communication_protocol():
-    "TC_T3T_FTH_BV_1"
-    ndef_service_data = [bytearray.fromhex(hexstr) for hexstr in [
-        "10 01 01 00  01 00 00 00  00 00 00 00  00 10 00 23",
-        "d1 02 0b 53  70 d1 01 07  55 03 61 62  2e 63 6f 6d",
-    ]]
-    tag_services = {
-        0x0009: ndef_service_data,  0x000B: ndef_service_data,
-    }
-    clf = Type3TagSimulator(tag_services)
-    tag = clf.connect(rdwr={'on-connect': None})
-    send_data = bytearray("0123456789abcdef")
-    tag.write_to_ndef_service(send_data, 1)
-    rcvd_data = tag.read_from_ndef_service(1)
-    assert send_data == rcvd_data
-    tag.write_to_ndef_service(bytearray("\x0F"+15*"\0"), 1)
-
-@attr("nfc-forum")
-def test_update_command_and_check_command_with_different_services():
-    "TC_T3T_CSE_BV_1"
-    memory_blocks = [bytearray(16) for i in range(15)]
-    tag_services = {
-        0x0009: [memory_blocks[0]],  0x000B: [memory_blocks[0]],
-        0x1149: [memory_blocks[1]],  0x114B: [memory_blocks[1]],
-        0x2289: [memory_blocks[2]],  0x228B: [memory_blocks[2]],
-        0x33C9: [memory_blocks[3]],  0x33CB: [memory_blocks[3]],
-        0x4409: [memory_blocks[4]],  0x440B: [memory_blocks[4]],
-        0x5549: [memory_blocks[5]],  0x554B: [memory_blocks[5]],
-        0x6689: [memory_blocks[6]],  0x668B: [memory_blocks[6]],
-        0x77C9: [memory_blocks[7]],  0x77CB: [memory_blocks[7]],
-        0x8809: [memory_blocks[8]],  0x880B: [memory_blocks[8]],
-        0x9949: [memory_blocks[9]],  0x994B: [memory_blocks[9]],
-        0xAA89: [memory_blocks[10]], 0xAA8B: [memory_blocks[10]],
-        0xBBC9: [memory_blocks[11]], 0xBBCB: [memory_blocks[11]],
-        0xCC0B: [memory_blocks[12]],
-        0xDD4B: [memory_blocks[13]],
-        0xEE8B: [memory_blocks[14]],
-    }
-    clf = Type3TagSimulator(tag_services)
-    tag = clf.connect(rdwr={'on-connect': None})
-    sc_list = list()
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b0000000000, 0b001001))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b0001000101, 0b001001))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b0010001010, 0b001001))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b0011001111, 0b001001))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b0100010000, 0b001001))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b0101010101, 0b001001))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b0110011010, 0b001001))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b0111011111, 0b001001))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b1000100000, 0b001001))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b1001100101, 0b001001))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b1010101010, 0b001001))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b1011101111, 0b001001))
-    bc_list = [nfc.tag.tt3.BlockCode(0, service=i) for i in range(12)]
-    send_data = bytearray(''.join([16*c for c in '0123456789AB']))
-    tag.write_without_encryption(sc_list, bc_list, send_data)
-
-    sc_list = list()
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b0000000000, 0b001011))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b0001000101, 0b001011))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b0010001010, 0b001011))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b0011001111, 0b001011))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b0100010000, 0b001011))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b0101010101, 0b001011))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b0110011010, 0b001011))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b0111011111, 0b001011))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b1000100000, 0b001011))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b1001100101, 0b001011))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b1010101010, 0b001011))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b1011101111, 0b001011))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b1100110000, 0b001011))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b1101110101, 0b001011))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b1110111010, 0b001011))
-    bc_list = [nfc.tag.tt3.BlockCode(0, service=i) for i in range(15)]
-    rcvd_data = tag.read_without_encryption(sc_list, bc_list)
-    assert rcvd_data[0:12*16] == send_data
-
-@attr("nfc-forum")
-def test_block_list_format():
-    "TC_T3T_CSE_BV_2"
-    memory_blocks = [bytearray(16) for i in range(5*4)]
-    tag_services = {
-        0x0009: memory_blocks[ 0: 4],  0x000B: memory_blocks[ 0: 4],
-        0x1149: memory_blocks[ 4: 8],  0x114B: memory_blocks[ 4: 8],
-        0x2289: memory_blocks[ 8:12],  0x228B: memory_blocks[ 8:12],
-        0x33C9: memory_blocks[12:16],  0x33CB: memory_blocks[12:16],
-        0x4409: memory_blocks[16:20],  0x440B: memory_blocks[16:20],
-    }
-    clf = Type3TagSimulator(tag_services)
-    tag = clf.connect(rdwr={'on-connect': None})
-    sc_list = list()
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b0000000000, 0b001001))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b0001000101, 0b001001))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b0010001010, 0b001001))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b0011001111, 0b001001))
-    bc_list = list()
-    bc_list.append(nfc.tag.tt3.BlockCode(0, service=0))
-    bc_list.append(nfc.tag.tt3.BlockCode(1, service=0))
-    bc_list.append(nfc.tag.tt3.BlockCode(2, service=0))
-    bc_list.append(nfc.tag.tt3.BlockCode(0, service=1))
-    bc_list.append(nfc.tag.tt3.BlockCode(1, service=1))
-    bc_list.append(nfc.tag.tt3.BlockCode(2, service=1))
-    bc_list.append(nfc.tag.tt3.BlockCode(0, service=2))
-    bc_list.append(nfc.tag.tt3.BlockCode(1, service=2))
-    bc_list.append(nfc.tag.tt3.BlockCode(2, service=2))
-    bc_list.append(nfc.tag.tt3.BlockCode(0, service=3))
-    bc_list.append(nfc.tag.tt3.BlockCode(1, service=3))
-    bc_list.append(nfc.tag.tt3.BlockCode(2, service=3))
-    bc_list.append(nfc.tag.tt3.BlockCode(3, service=3))
-    send_data = bytearray(''.join([16*c for c in '0001112223333']))
-    tag.write_without_encryption(sc_list, bc_list, send_data)
-
-    sc_list = list()
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b0000000000, 0b001011))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b0001000101, 0b001011))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b0010001010, 0b001011))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b0011001111, 0b001011))
-    sc_list.append(nfc.tag.tt3.ServiceCode(0b0100010000, 0b001011))
-    bc_list = list()
-    bc_list.append(nfc.tag.tt3.BlockCode(0, service=0))
-    bc_list.append(nfc.tag.tt3.BlockCode(1, service=0))
-    bc_list.append(nfc.tag.tt3.BlockCode(2, service=0))
-    bc_list.append(nfc.tag.tt3.BlockCode(0, service=1))
-    bc_list.append(nfc.tag.tt3.BlockCode(1, service=1))
-    bc_list.append(nfc.tag.tt3.BlockCode(2, service=1))
-    bc_list.append(nfc.tag.tt3.BlockCode(0, service=2))
-    bc_list.append(nfc.tag.tt3.BlockCode(1, service=2))
-    bc_list.append(nfc.tag.tt3.BlockCode(2, service=2))
-    bc_list.append(nfc.tag.tt3.BlockCode(0, service=3))
-    bc_list.append(nfc.tag.tt3.BlockCode(1, service=3))
-    bc_list.append(nfc.tag.tt3.BlockCode(2, service=3))
-    bc_list.append(nfc.tag.tt3.BlockCode(0, service=4))
-    bc_list.append(nfc.tag.tt3.BlockCode(1, service=4))
-    bc_list.append(nfc.tag.tt3.BlockCode(2, service=4))
-    rcvd_data = tag.read_without_encryption(sc_list, bc_list)
-    assert rcvd_data[0:12*16] == send_data[0:12*16]
-    # can't test 3-byte block elements as in test description when the
-    # block address is below 256. The nfcpy implementation will always
-    # use 2-byte format if it fits.
-
-@attr("nfc-forum")
-@raises(AttributeError)
-def test_write_to_ndef_tag_with_rw_flag_zero():
-    "TC_T3T_NDA_BV_1"
-    ndef_service_data = [bytearray.fromhex(hexstr) for hexstr in [
-        "10 01 01 00  01 00 00 00  00 00 00 00  00 10 00 23",
-        "d1 02 0b 53  70 d1 01 07  55 03 61 62  2e 63 6f 6d",
-    ]]
-    clf = Type3TagSimulator({0x000B: ndef_service_data})
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.ndef is not None
-    assert tag.ndef.capacity == 16
-    assert tag.ndef.length == 16
-    assert tag.ndef.is_readable == True
-    assert tag.ndef.is_writeable == False
-    tag.ndef.message = nfc.ndef.Message(nfc.ndef.Record())
-
-@attr("nfc-forum")
-def test_ndef_versioning_tolerable_version_number_one_dot_zero():
-    "TC_T3T_NDA_BV_2_0"
-    ndef_service_data = [bytearray.fromhex(hexstr) for hexstr in [
-        "10 0F 0C 00  93 00 00 00  00 00 01 00  00 F0 01 AF",
-        "d1 02 22 53  70 91 01 0e  55 03 6e 66  63 2d 66 6f",
-        "72 75 6d 2e  6f 72 67 51  01 0c 54 02  65 6e 4e 46",
-        "43 20 46 6f  72 75 6d 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-    ]]
-    uri = 'http://nfc-forum.org'; title = "NFC Forum"
-    msg = nfc.ndef.Message(nfc.ndef.SmartPosterRecord(uri, title))
-    clf = Type3TagSimulator({0x000B: ndef_service_data})
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.ndef is not None
-    assert tag.ndef.length == 240
-    assert tag.ndef.message == msg
-
-@attr("nfc-forum")
-def test_ndef_versioning_tolerable_version_number_one_dot_one():
-    "TC_T3T_NDA_BV_2_1"
-    ndef_service_data = [bytearray.fromhex(hexstr) for hexstr in [
-        "11 0F 0C 00  93 00 00 00  00 00 01 00  00 F0 01 B0",
-        "d1 02 22 53  70 91 01 0e  55 03 6e 66  63 2d 66 6f",
-        "72 75 6d 2e  6f 72 67 51  01 0c 54 02  65 6e 4e 46",
-        "43 20 46 6f  72 75 6d 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-    ]]
-    uri = 'http://nfc-forum.org'; title = "NFC Forum"
-    msg = nfc.ndef.Message(nfc.ndef.SmartPosterRecord(uri, title))
-    clf = Type3TagSimulator({0x000B: ndef_service_data})
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.ndef is not None
-    assert tag.ndef.length == 240
-    assert tag.ndef.message == msg
-
-@attr("nfc-forum")
-def test_ndef_versioning_intolerable_version_number_two_dot_zero():
-    "TC_T3T_NDA_BV_2_3"
-    ndef_service_data = [bytearray.fromhex(hexstr) for hexstr in [
-        "20 0F 0C 00  93 00 00 00  00 00 01 00  00 F0 01 BF",
-    ]]
-    clf = Type3TagSimulator({0x000B: ndef_service_data})
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.ndef is None
-    assert clf.cmd_counter == 1
-    
-@attr("nfc-forum")
-def test_ndef_detection_and_read_sequence_with_a_correct_checksum_value():
-    "TC_T3T_NDA_BV_3_0"
-    ndef_service_data = [bytearray.fromhex(hexstr) for hexstr in [
-        "10 0F 0C 00  93 00 00 00  00 00 01 00  00 F0 01 AF",
-        "d1 02 22 53  70 91 01 0e  55 03 6e 66  63 2d 66 6f",
-        "72 75 6d 2e  6f 72 67 51  01 0c 54 02  65 6e 4e 46",
-        "43 20 46 6f  72 75 6d 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-    ]]
-    uri = 'http://nfc-forum.org'; title = "NFC Forum"
-    msg = nfc.ndef.Message(nfc.ndef.SmartPosterRecord(uri, title))
-    clf = Type3TagSimulator({0x000B: ndef_service_data})
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.ndef is not None
-    assert tag.ndef.length == 240
-    assert tag.ndef.message == msg
-
-@attr("nfc-forum")
-def test_ndef_detection_and_read_sequence_with_an_incorrect_checksum_value():
-    "TC_T3T_NDA_BV_3_1"
-    ndef_service_data = [bytearray.fromhex(hexstr) for hexstr in [
-        "10 0F 0C 00  93 00 00 00  00 00 01 00  00 F0 00 FF",
-    ]]
-    clf = Type3TagSimulator({0x000B: ndef_service_data})
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.ndef is None
-    assert clf.cmd_counter == 1
-
-@attr("nfc-forum")
-def test_ndef_write_sequence():
-    "TC_T3T_NDA_BV_4"
-    ndef_service_data = [bytearray.fromhex(hexstr) for hexstr in [
-        "10 0F 0C 00  93 00 00 00  00 00 01 00  00 F0 01 AF",
-        "d1 02 22 53  70 91 01 0e  55 03 6e 66  63 2d 66 6f",
-        "72 75 6d 2e  6f 72 67 51  01 0c 54 02  65 6e 4e 46",
-        "43 20 46 6f  72 75 6d 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-    ]]
-    tag_services = {
-        0x0009: ndef_service_data,  0x000B: ndef_service_data,
-    }
-    uri = 'http://nfc-forum.org'; title = "NFC Forum Home"
-    msg = nfc.ndef.Message(nfc.ndef.SmartPosterRecord(uri, title))
-    clf = Type3TagSimulator(tag_services)
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.ndef is not None
-    assert tag.ndef.length == 240
-    tag.ndef.message = msg
-    tag = clf.connect(rdwr={'on-connect': None})
-    assert tag.ndef is not None
-    assert tag.ndef.length == 44
-    assert tag.ndef.message == msg
-

@@ -1,30 +1,10 @@
-#!/usr/bin/python
 # -*- coding: latin-1 -*-
-# -----------------------------------------------------------------------------
-# Copyright 2013 Stephen Tiedemann <stephen.tiedemann@gmail.com>
-#
-# Licensed under the EUPL, Version 1.1 or - as soon they 
-# will be approved by the European Commission - subsequent
-# versions of the EUPL (the "Licence");
-# You may not use this work except in compliance with the
-# Licence.
-# You may obtain a copy of the Licence at:
-#
-# https://joinup.ec.europa.eu/software/page/eupl
-#
-# Unless required by applicable law or agreed to in
-# writing, software distributed under the Licence is
-# distributed on an "AS IS" basis,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
-# express or implied.
-# See the Licence for the specific language governing
-# permissions and limitations under the Licence.
-# -----------------------------------------------------------------------------
-import nfc.dev.transport
-
-from nose.tools import raises
+#import nfc.dev.transport
 import subprocess
 import re
+import pytest
+
+pytestmark = pytest.mark.skip(reason="not yet converted")
 
 lsusb = subprocess.check_output(['lsusb']).splitlines()
 regex = re.compile(r'^Bus (.{3}) Device (.{3}): ID (.{4}):(.{4})')
@@ -66,7 +46,7 @@ def test_usb_find_path_with_pid():
     found = nfc.dev.transport.USB.find(path='usb:{0}:{1}'.format(vid, pid))
     assert len(found) == len([1 for b,d,v,p in devices if (v,p) == (vid,pid)])
 
-def test_usb_find_path_no_match():
+def __test_usb_find_path_no_match():
     for path in ('usb:', 'usb:0o0', 'usb::001'):
         yield check_usb_find_path_no_match, path
 

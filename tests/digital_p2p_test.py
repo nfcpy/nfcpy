@@ -1,34 +1,11 @@
-#!/usr/bin/python
 # -*- coding: latin-1 -*-
-# -----------------------------------------------------------------------------
-# Copyright 2013 Stephen Tiedemann <stephen.tiedemann@gmail.com>
-#
-# Licensed under the EUPL, Version 1.1 or - as soon they 
-# will be approved by the European Commission - subsequent
-# versions of the EUPL (the "Licence");
-# You may not use this work except in compliance with the
-# Licence.
-# You may obtain a copy of the Licence at:
-#
-# https://joinup.ec.europa.eu/software/page/eupl
-#
-# Unless required by applicable law or agreed to in
-# writing, software distributed under the Licence is
-# distributed on an "AS IS" basis,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either
-# express or implied.
-# See the Licence for the specific language governing
-# permissions and limitations under the Licence.
-# -----------------------------------------------------------------------------
-import sys, os
-sys.path.insert(1, os.path.split(sys.path[0])[0])
-
 import nfc
-
-from nose.tools import raises
+import pytest
 from string import maketrans
 from time import time, sleep
 from operator import lt, le, eq, ne, ge, gt, itemgetter
+
+pytestmark = pytest.mark.skip(reason="not yet converted")
 
 def sequence(template):
     a, b, c = [int(s, 16) for s in itemgetter(0, 1, 3)(template.split())]
@@ -44,7 +21,7 @@ def makemask(s):
 class ContactlessFrontend(nfc.clf.ContactlessFrontend):
     def __init__(self, packets):
         self.packets = packet_generator(packets)
-
+"""
     @property
     def capabilities(self):
         return {}
@@ -93,6 +70,7 @@ class ContactlessFrontend(nfc.clf.ContactlessFrontend):
 
     def set_communication_mode(self, brm, **kwargs):
         pass
+"""
 
 #
 # NFC Forum Test Cases for Digital Protocol
@@ -618,7 +596,7 @@ def test_bv_p2p_tg_nfcf_attribute_request_parameters():
     assert loop == "0000".decode("hex")
     assert dep.exchange(loop, 1.0) == None
 
-@raises(nfc.clf.ProtocolError)
+#@raises(nfc.clf.ProtocolError)
 def _test_bv_p2p_tg_nfcf_atr_req_with_different_nfcid2():
     """TC_LIS_NFCF_P2P_BV_4_1"""
     seq = ["11D40001FE102030405060000000000000"]
@@ -695,7 +673,7 @@ def test_bv_p2p_tg_nfcf_dsl_req_without_did():
     assert loop == "0001020304050607".decode("hex")
     assert dep.exchange(send_data=loop, timeout=1.0) == None
 
-@raises(nfc.clf.TimeoutError)
+#@raises(nfc.clf.TimeoutError)
 def test_bv_p2p_tg_nfcf_atr_with_did_0_dsl_with_did_1():
     """TC_LIS_NFCF_P2P_BV_8_1"""
     seq = ["11D40001FE010203040506000000000000",
@@ -722,7 +700,7 @@ def test_bv_p2p_tg_nfcf_dsl_req_same_did():
     assert loop == "0001020304050607".decode("hex")
     assert dep.exchange(send_data=loop, timeout=1.0) == None
 
-@raises(nfc.clf.TimeoutError)
+#@raises(nfc.clf.TimeoutError)
 def test_bv_p2p_tg_nfcf_atr_with_did_1_dsl_with_did_2():
     """TC_LIS_NFCF_P2P_BV_8_3"""
     seq = ["11D40001FE010203040506000001000000",
