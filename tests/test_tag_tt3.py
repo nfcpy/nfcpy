@@ -13,6 +13,10 @@ def fromhex(s):
     return bytearray.fromhex(s)
 
 
+def HEX(s):
+    return bytearray.fromhex(s)
+
+
 @pytest.fixture()  # noqa: F811
 def clf(mocker):
     clf = nfc.ContactlessFrontend()
@@ -314,42 +318,171 @@ class TestType3TagCommands:
         assert str(excinfo.value) == "invalid number of time slots"
         
     def test_read_without_encryption(self, tag):
-        service_data = fromhex(
+        data = fromhex(
             "10 01 01 00  01 00 00 00  00 00 00 00  00 10 00 23"
             "d1 02 0b 53  70 d1 01 07  55 03 61 62  2e 63 6f 6d"
         )
         tag.clf.exchange.side_effect = [
-            fromhex('2d 07 0102030405060708 0000 02') + service_data[:32],
-            fromhex('2d 07 0102030405060708 0000 02') + service_data[:32],
-            fromhex('2c 07 0102030405060708 0000 02') + service_data[:31],
-        ] + 3 * [nfc.clf.TimeoutError]
+            fromhex('2d 07 0102030405060708 0000 02') + data[:32],
+            fromhex('2d 07 0102030405060708 0000 02') + data[:32],
+            fromhex('2c 07 0102030405060708 0000 02') + data[:31],
+        ]
 
         sc_list = [nfc.tag.tt3.ServiceCode(0, 11)]
         bc_list = [nfc.tag.tt3.BlockCode(0), nfc.tag.tt3.BlockCode(1)]
-        data = tag.read_without_encryption(sc_list, bc_list)
-        assert data == service_data[:32]
+        assert tag.read_without_encryption(sc_list, bc_list) == data[:32]
 
         sc_list = 2 * [nfc.tag.tt3.ServiceCode(0, 11)]
-        bc_list = [nfc.tag.tt3.BlockCode(0), nfc.tag.tt3.BlockCode(0, 0, 1)]
-        data = tag.read_without_encryption(sc_list, bc_list)
-        data == service_data[0] + service_data[0]
+        bc_list = [nfc.tag.tt3.BlockCode(0), nfc.tag.tt3.BlockCode(1, 0, 1)]
+        assert tag.read_without_encryption(sc_list, bc_list) == data[:32]
         
         sc_list = [nfc.tag.tt3.ServiceCode(0, 11)]
         bc_list = [nfc.tag.tt3.BlockCode(0), nfc.tag.tt3.BlockCode(1)]
         with pytest.raises(nfc.tag.tt3.Type3TagCommandError) as excinfo:
-            data = tag.read_without_encryption(sc_list, bc_list)
-            assert data == service_data[:32]
+            tag.read_without_encryption(sc_list, bc_list)
         assert excinfo.value.errno == nfc.tag.tt3.DATA_SIZE_ERROR
 
-        timeout = 0.46402560000000004
         assert tag.clf.exchange.mock_calls == [
             mock.call(fromhex(
-                '12 06 0102030405060708 010b00 0280008001'), timeout),
+                '12 06 0102030405060708 010b00 0280008001'),
+                      0.46402560000000004),
             mock.call(fromhex(
-                '14 06 0102030405060708 020b000b00 0280008100'), timeout),
+                '14 06 0102030405060708 020b000b00 0280008101'),
+                      0.46402560000000004),
             mock.call(fromhex(
-                '12 06 0102030405060708 010b00 0280008001'), timeout),
+                '12 06 0102030405060708 010b00 0280008001'),
+                      0.46402560000000004),
         ]
+
+    def test_read_from_ndef_service(self, tag):
+        data = fromhex(
+            "10 01 01 00  01 00 00 00  00 00 00 00  00 10 00 23"
+            "d1 02 0b 53  70 d1 01 07  55 03 61 62  2e 63 6f 6d"
+        )
+        tag.clf.exchange.side_effect = [
+            fromhex('2d 07 0102030405060708 0000 02') + data[:32],
+        ]
+        assert tag.read_from_ndef_service(0, 1) == data
+        assert tag.clf.exchange.mock_calls == [
+            mock.call(fromhex(
+                '12 06 0102030405060708 010b00 0280008001'),
+                      0.46402560000000004),
+        ]
+
+    def test_write_without_encryption(self, tag):
+        data = fromhex(
+            "10 01 01 00  01 00 00 00  00 00 00 00  00 10 00 23"
+            "d1 02 0b 53  70 d1 01 07  55 03 61 62  2e 63 6f 6d"
+        )
+        tag.clf.exchange.side_effect = [
+            fromhex('0c 09 0102030405060708 0000'),
+            fromhex('0c 09 0102030405060708 0000'),
+        ]
+
+        sc_list = [nfc.tag.tt3.ServiceCode(0, 9)]
+        bc_list = [nfc.tag.tt3.BlockCode(0), nfc.tag.tt3.BlockCode(1)]
+        tag.write_without_encryption(sc_list, bc_list, data)
+
+        sc_list = [nfc.tag.tt3.ServiceCode(0,9),nfc.tag.tt3.ServiceCode(1,9)]
+        bc_list = [nfc.tag.tt3.BlockCode(0), nfc.tag.tt3.BlockCode(1, 0, 1)]
+        tag.write_without_encryption(sc_list, bc_list, data)
+
+        assert tag.clf.exchange.mock_calls == [
+            mock.call(fromhex(
+                '32 08 0102030405060708 010900 0280008001') + data,
+                      0.46402560000000004),
+            mock.call(fromhex(
+                '34 08 0102030405060708 0209004900 0280008101') + data,
+                      0.46402560000000004),
+        ]
+
+    def test_write_to_ndef_service(self, tag):
+        data = fromhex(
+            "10 01 01 00  01 00 00 00  00 00 00 00  00 10 00 23"
+            "d1 02 0b 53  70 d1 01 07  55 03 61 62  2e 63 6f 6d"
+        )
+        tag.clf.exchange.side_effect = [
+            fromhex('0c 09 0102030405060708 0000'),
+        ] + 3 * [nfc.clf.TimeoutError]
+        tag.write_to_ndef_service(data, 0, 1)
+        assert tag.clf.exchange.mock_calls == [
+            mock.call(fromhex(
+                '32 08 0102030405060708 010900 0280008001') + data,
+                0.46402560000000004),
+        ]
+        print(tag.clf.exchange.mock_calls)
+
+    def test_send_cmd_recv_rsp(self, tag):
+        xxx = tag.clf.exchange
+
+        xxx.return_value = HEX("0DF1") + tag.idm + HEX("00005A")
+        rsp = tag.send_cmd_recv_rsp(0xF0, HEX("A5"), 0.1)
+        xxx.assert_called_once_with(HEX("0BF0") + tag.idm + HEX("A5"), 0.1)
+        assert rsp == fromhex("5A")
+
+        xxx.reset_mock()
+        xxx.return_value = fromhex("03F15A")
+        rsp = tag.send_cmd_recv_rsp(0xF0, fromhex("A5"), 0.1, send_idm=False)
+        xxx.assert_called_once_with(fromhex("03F0A5"), 0.1)
+        assert rsp == fromhex("5A")
+
+        xxx.reset_mock()
+        xxx.return_value = HEX("0DF1") + tag.idm + HEX("12345A")
+        rsp = tag.send_cmd_recv_rsp(0xF0, HEX("A5"), 0.1, check_status=False)
+        xxx.assert_called_once_with(HEX("0BF0") + tag.idm + HEX("A5"), 0.1)
+        assert rsp == fromhex("12345A")
+
+        xxx.reset_mock()
+        xxx.return_value = fromhex("04F15A")
+        with pytest.raises(nfc.tag.tt3.Type3TagCommandError) as excinfo:
+            tag.send_cmd_recv_rsp(0xF0, fromhex("A5"), 0.1, send_idm=False)
+        assert excinfo.value.errno == nfc.tag.tt3.RSP_LENGTH_ERROR
+        xxx.assert_called_once_with(fromhex("03F0A5"), 0.1)
+
+        xxx.reset_mock()
+        xxx.return_value = fromhex("03F35A")
+        with pytest.raises(nfc.tag.tt3.Type3TagCommandError) as excinfo:
+            tag.send_cmd_recv_rsp(0xF0, fromhex("A5"), 0.1, send_idm=False)
+        assert excinfo.value.errno == nfc.tag.tt3.RSP_CODE_ERROR
+        xxx.assert_called_once_with(fromhex("03F0A5"), 0.1)
+
+        xxx.reset_mock()
+        xxx.return_value = HEX("0DF1 1020304050607080 0000 5A")
+        with pytest.raises(nfc.tag.tt3.Type3TagCommandError) as excinfo:
+            tag.send_cmd_recv_rsp(0xF0, fromhex("A5"), 0.1)
+        assert excinfo.value.errno == nfc.tag.tt3.TAG_IDM_ERROR
+        xxx.assert_called_once_with(HEX("0BF0") + tag.idm + HEX("A5"), 0.1)
+
+        xxx.reset_mock()
+        xxx.return_value = HEX("0DF1") + tag.idm + HEX("1234 5A")
+        with pytest.raises(nfc.tag.tt3.Type3TagCommandError) as excinfo:
+            tag.send_cmd_recv_rsp(0xF0, fromhex("A5"), 0.1)
+        assert excinfo.value.errno == 0x1234
+        xxx.assert_called_once_with(HEX("0BF0") + tag.idm + HEX("A5"), 0.1)
+
+        xxx.reset_mock()
+        xxx.side_effect = 3 * [nfc.clf.TimeoutError]
+        with pytest.raises(nfc.tag.tt3.Type3TagCommandError) as excinfo:
+            tag.send_cmd_recv_rsp(0xF0, fromhex("A5"), 0.1)
+        assert excinfo.value.errno == nfc.tag.TIMEOUT_ERROR
+        xxx.assert_called_with(HEX("0BF0") + tag.idm + HEX("A5"), 0.1)
+        assert xxx.call_count == 3
+
+        xxx.reset_mock()
+        xxx.side_effect = 3 * [nfc.clf.TransmissionError]
+        with pytest.raises(nfc.tag.tt3.Type3TagCommandError) as excinfo:
+            tag.send_cmd_recv_rsp(0xF0, fromhex("A5"), 0.1)
+        assert excinfo.value.errno == nfc.tag.RECEIVE_ERROR
+        xxx.assert_called_with(HEX("0BF0") + tag.idm + HEX("A5"), 0.1)
+        assert xxx.call_count == 3
+
+        xxx.reset_mock()
+        xxx.side_effect = 3 * [nfc.clf.ProtocolError]
+        with pytest.raises(nfc.tag.tt3.Type3TagCommandError) as excinfo:
+            tag.send_cmd_recv_rsp(0xF0, fromhex("A5"), 0.1)
+        assert excinfo.value.errno == nfc.tag.PROTOCOL_ERROR
+        xxx.assert_called_with(HEX("0BF0") + tag.idm + HEX("A5"), 0.1)
+        assert xxx.call_count == 3
 
 
 class __TestType3Tag:
@@ -509,132 +642,6 @@ class __TestType3Tag:
         clf = Type3TagSimulator(None, "1234", self.idm, self.pmm)
         tag = clf.connect(rdwr={'on-connect': None})
         assert tag.format() == False
-
-    #
-    # READ FROM NDEF SERVICE METHOD
-    #
-    def test_read_from_ndef_service_with_system_12fc(self):
-        service_data = [bytearray.fromhex(hexstr) for hexstr in [
-            "10 01 01 00  01 00 00 00  00 00 00 00  00 10 00 23",
-            "d1 02 0b 53  70 d1 01 07  55 03 61 62  2e 63 6f 6d",
-        ]]
-        self.clf.mem = {0x000B: service_data}
-        data = self.tag.read_from_ndef_service(0, 1)
-        assert data == service_data[0] + service_data[1]
-
-    def test_read_from_ndef_service_with_system_1234(self):
-        service_data = [bytearray.fromhex(hexstr) for hexstr in [
-            "10 01 01 00  01 00 00 00  00 00 00 00  00 10 00 23",
-            "d1 02 0b 53  70 d1 01 07  55 03 61 62  2e 63 6f 6d",
-        ]]
-        tag_memory = {0x000B: service_data}
-        clf = Type3TagSimulator(tag_memory, "1234", self.idm, self.pmm)
-        tag = clf.connect(rdwr={'on-connect': None})
-        assert tag.read_from_ndef_service(0, 1) == None
-
-    #
-    # WRITE W/O ENCRYPTION COMMAND
-    #
-    def test_write_without_encryption(self):
-        service_data = [bytearray.fromhex(hexstr) for hexstr in [
-            "10 01 01 00  01 00 00 00  00 00 00 00  00 10 00 23",
-            "d1 02 0b 53  70 d1 01 07  55 03 61 62  2e 63 6f 6d",
-        ]]
-        self.clf.mem = {0x0009: service_data, 0x0049: service_data[1:]}
-        a, b, e = self.clf.pmm[6]&7, self.clf.pmm[6]>>3&7, self.clf.pmm[6]>>6
-        self.clf.expect_timeout = 302E-6 * ((b + 1) * 2 + a + 1) * 4**e
-        data = service_data[0][:] + service_data[1][:]
-
-        sc_list = [nfc.tag.tt3.ServiceCode(0, 9)]
-        bc_list = [nfc.tag.tt3.BlockCode(1), nfc.tag.tt3.BlockCode(0)]
-        self.tag.write_without_encryption(sc_list, bc_list, data)
-        assert self.clf.mem[0x0009][1] + self.clf.mem[0x0009][0] == data
-
-        sc_list = [nfc.tag.tt3.ServiceCode(0,9),nfc.tag.tt3.ServiceCode(1,9)]
-        bc_list = [nfc.tag.tt3.BlockCode(0), nfc.tag.tt3.BlockCode(0, 0, 1)]
-        self.tag.write_without_encryption(sc_list, bc_list, data)
-        assert self.clf.mem[0x0009][0] + self.clf.mem[0x0049][0] == data
-
-    #
-    # WRITE TO NDEF SERVICE METHOD
-    #
-    def test_write_to_ndef_service_with_system_12fc(self):
-        service_data = [bytearray.fromhex(hexstr) for hexstr in [
-            "10 01 01 00  01 00 00 00  00 00 00 00  00 10 00 23",
-            "d1 02 0b 53  70 d1 01 07  55 03 61 62  2e 63 6f 6d",
-        ]]
-        self.clf.mem = {0x0009: service_data}
-        data = service_data[0][:] + service_data[1][:]
-        self.tag.write_to_ndef_service(data, 1, 0)
-        assert self.clf.mem[0x0009][1] + self.clf.mem[0x0009][0] == data
-
-    def test_write_to_ndef_service_with_system_1234(self):
-        service_data = [bytearray.fromhex(hexstr) for hexstr in [
-            "10 01 01 00  01 00 00 00  00 00 00 00  00 10 00 23",
-            "d1 02 0b 53  70 d1 01 07  55 03 61 62  2e 63 6f 6d",
-        ]]
-        tag_memory = {0x0009: service_data}
-        clf = Type3TagSimulator(tag_memory, "1234", self.idm, self.pmm)
-        tag = clf.connect(rdwr={'on-connect': None})
-        data = service_data[0][:] + service_data[1][:]
-        tag.write_to_ndef_service(data, 1, 0)
-        assert clf.mem[0x0009][0] + clf.mem[0x0009][1] == data
-
-    #
-    # SEND CMD RECV RSP METHOD
-    #
-    def test_send_cmd_recv_rsp_with_send_idm_false(self):
-        self.clf.expect_command = bytearray("\x04\xF0\xA5\x5A")
-        self.clf.return_response = bytearray("\x04\xF1\x5A\xA5")
-        rsp = self.tag.send_cmd_recv_rsp(0xF0, "\xA5\x5A", 0.1, send_idm=False)
-        assert rsp == "\x5A\xA5"
-        
-    def test_send_cmd_recv_rsp_with_check_status_true(self):
-        self.clf.expect_command = "\x0B\xF0" + self.clf.idm + "\xA5"
-        self.clf.return_response = "\x0D\xF1" + self.clf.idm + "\x00\x00\x5A"
-        rsp = self.tag.send_cmd_recv_rsp(0xF0, "\xA5", 0.1, check_status=True)
-        assert rsp == "\x5A"
-        
-    def test_send_cmd_recv_rsp_with_check_status_false(self):
-        self.clf.expect_command = "\x0B\xF0" + self.clf.idm + "\xA5"
-        self.clf.return_response = "\x0D\xF1" + self.clf.idm + "\x00\x00\x5A"
-        rsp = self.tag.send_cmd_recv_rsp(0xF0, "\xA5", 0.1, check_status=False)
-        assert rsp == "\x00\x00\x5A"
-        
-    #pytest.raises(nfc.tag.tt3.Type3TagCommandError)
-    def test_send_cmd_recv_rsp_with_timeout_error(self):
-        try: self.tag.send_cmd_recv_rsp(0xF0, bytearray(), timeout=0.1)
-        except nfc.tag.tt3.Type3TagCommandError as error:
-            assert error.errno == nfc.tag.TIMEOUT_ERROR; raise
-        
-    #pytest.raises(nfc.tag.tt3.Type3TagCommandError)
-    def test_send_cmd_recv_rsp_with_rsp_length_error(self):
-        self.clf.return_response = "\x0B\xF1" + self.clf.idm
-        try: self.tag.send_cmd_recv_rsp(0xF0, bytearray(), timeout=0.1)
-        except nfc.tag.tt3.Type3TagCommandError as error:
-            assert error.errno == nfc.tag.tt3.RSP_LENGTH_ERROR; raise
-        
-    #pytest.raises(nfc.tag.tt3.Type3TagCommandError)
-    def test_send_cmd_recv_rsp_with_rsp_code_error(self):
-        self.clf.return_response = "\x0A\xF0" + self.clf.idm
-        try: self.tag.send_cmd_recv_rsp(0xF0, bytearray(), timeout=0.1)
-        except nfc.tag.tt3.Type3TagCommandError as error:
-            assert error.errno == nfc.tag.tt3.RSP_CODE_ERROR; raise
-        
-    #pytest.raises(nfc.tag.tt3.Type3TagCommandError)
-    def test_send_cmd_recv_rsp_with_tag_idm_error(self):
-        self.clf.return_response = "\x0A\xF1" + self.clf.idm[::-1]
-        try: self.tag.send_cmd_recv_rsp(0xF0, bytearray(), timeout=0.1)
-        except nfc.tag.tt3.Type3TagCommandError as error:
-            assert error.errno == nfc.tag.tt3.TAG_IDM_ERROR; raise
-
-    #pytest.raises(nfc.tag.tt3.Type3TagCommandError)
-    def test_send_cmd_recv_rsp_with_tag_command_error(self):
-        self.clf.expect_command = "\x0B\xF0" + self.clf.idm + "\xA5"
-        self.clf.return_response = "\x0D\xF1" + self.clf.idm + "\x12\x34\x5A"
-        try: self.tag.send_cmd_recv_rsp(0xF0, "\xA5", 0.1)
-        except nfc.tag.tt3.Type3TagCommandError as error:
-            assert error.errno == 0x1234; raise
 
 @pytest.mark.skip(reason="not yet converted")
 class TestType3TagFelicaStandard:
