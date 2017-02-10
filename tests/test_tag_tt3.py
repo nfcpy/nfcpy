@@ -23,8 +23,15 @@ def clf(mocker):
 @pytest.fixture()
 def target():
     target = nfc.clf.RemoteTarget("212F")
-    #target.sensf_res = fromhex("000C")
+    target.sensf_res = fromhex("01 0102030405060708 FFFFFFFFFFFFFFFF 12FC")
     return target
+
+
+@pytest.fixture()
+def tag(clf, target):
+    tag = nfc.tag.activate(clf, target)
+    assert isinstance(tag, nfc.tag.tt3.Type3Tag)
+    return tag
 
 
 class Type3TagSimulator(nfc.clf.ContactlessFrontend):
@@ -154,11 +161,198 @@ class Type3TagSimulator(nfc.clf.ContactlessFrontend):
 """
 
 
+###############################################################################
+#
+# TEST SERVICE CODE CLASS
+#
+###############################################################################
+class TestServiceCode:
+    def test_init(self):
+        sc = nfc.tag.tt3.ServiceCode(1, 9)
+        assert sc.number == 1
+        assert sc.attribute == 9
+        sc = nfc.tag.tt3.ServiceCode(number=1, attribute=9)
+        assert sc.number == 1
+        assert sc.attribute == 9
+                
+    def test_unpack(self):
+        sc = nfc.tag.tt3.ServiceCode.unpack("\x0B\x01")
+        assert sc.number == 4
+        assert sc.attribute == 11
+
+    def test_pack(self):
+        assert nfc.tag.tt3.ServiceCode(4, 11).pack() == "\x0B\x01"
+
+    def test_repr(self):
+        sc = nfc.tag.tt3.ServiceCode(1, 8)
+        assert repr(sc) == "ServiceCode(1, 8)"
+
+    def test_str(self):
+        sc = nfc.tag.tt3.ServiceCode(1, 8)
+        assert str(sc) == "Service Code 0048h (Service 1 Random RW with key)"
+        sc = nfc.tag.tt3.ServiceCode(1, 0b111111)
+        assert str(sc) == "Service Code 007Fh (Service 1 Type 111111b)"
+
+
+###############################################################################
+#
+# TEST BLOCK CODE CLASS
+#
+###############################################################################
+class TestBlockCode:
+    def test_init(self):
+        bc = nfc.tag.tt3.BlockCode(12)
+        assert bc.number == 12
+        assert bc.access == 0
+        assert bc.service == 0
+        bc = nfc.tag.tt3.BlockCode(12, 3)
+        assert bc.number == 12
+        assert bc.access == 3
+        assert bc.service == 0
+        bc = nfc.tag.tt3.BlockCode(12, 3, 1)
+        assert bc.number == 12
+        assert bc.access == 3
+        assert bc.service == 1
+        bc = nfc.tag.tt3.BlockCode(12, access=3)
+        assert bc.number == 12
+        assert bc.access == 3
+        assert bc.service == 0
+        bc = nfc.tag.tt3.BlockCode(12, service=1)
+        assert bc.number == 12
+        assert bc.access == 0
+        assert bc.service == 1
+
+    def test_pack(self):
+        assert nfc.tag.tt3.BlockCode(12).pack() == "\x80\x0C"
+        assert nfc.tag.tt3.BlockCode(12, 3).pack() == "\xB0\x0C"
+        assert nfc.tag.tt3.BlockCode(12, 3, 1).pack() == "\xB1\x0C"
+        assert nfc.tag.tt3.BlockCode(255).pack() == "\x80\xff"
+        assert nfc.tag.tt3.BlockCode(256).pack() == "\x00\x00\x01"
+        assert nfc.tag.tt3.BlockCode(256, 3).pack() == "\x30\x00\x01"
+        assert nfc.tag.tt3.BlockCode(256, 3, 1).pack() == "\x31\x00\x01"
+        assert nfc.tag.tt3.BlockCode(0xffff).pack() == "\x00\xff\xff"
+
+    def test_repr(self):
+        sc = nfc.tag.tt3.BlockCode(1, 3, 7)
+        assert repr(sc) == "BlockCode(1, 3, 7)"
+
+    def test_str(self):
+        sc = nfc.tag.tt3.BlockCode(1, 3)
+        assert str(sc) == "BlockCode(number=1, access=011, service=0)"
+
+
+###############################################################################
 #
 # TEST TYPE 3 TAG CLASS
 #
-@pytest.mark.skip(reason="not yet converted")
-class TestType3Tag:
+###############################################################################
+class TestType3TagCommands:
+    def test_init(self, tag):
+        assert tag.sys == 0x12FC
+        assert tag.idm == fromhex("01 02 03 04 05 06 07 08")
+        assert tag.pmm == fromhex("FF FF FF FF FF FF FF FF")
+        assert tag.identifier == bytes(tag.idm)
+        assert tag._nbr == 1
+        assert tag._nbw == 1
+        
+    def test_str(self, tag):
+        s = "Type3Tag ID=0102030405060708 PMM=FFFFFFFFFFFFFFFF SYS=12FC"
+        assert str(tag) == s
+
+    def test_is_present(self, tag):
+        tag.clf.exchange.side_effect = [
+            fromhex("12 01 0102030405060708 FFFFFFFFFFFFFFFF"),
+            nfc.clf.TimeoutError,
+            nfc.clf.TimeoutError,
+            nfc.clf.TimeoutError,
+        ]
+        assert tag.is_present is True
+        assert tag.is_present is False
+        assert tag.clf.exchange.mock_calls == [
+            mock.call(fromhex('060012fc0000'), 0.003625),
+            mock.call(fromhex('060012fc0000'), 0.003625),
+            mock.call(fromhex('060012fc0000'), 0.003625),
+            mock.call(fromhex('060012fc0000'), 0.003625),
+        ]
+
+    def test_polling(self, tag):
+        tag.clf.exchange.side_effect = [
+            fromhex("12 01 0102030405060708 FFFFFFFFFFFFFFFF"),
+            fromhex("12 01 0102030405060708 FFFFFFFFFFFFFFFF"),
+            fromhex("14 01 0102030405060708 FFFFFFFFFFFFFFFF 12FC"),
+            fromhex("12 01 0102030405060708 FFFFFFFFFFFFFFFF"),
+            fromhex("12 01 0102030405060708 FFFFFFFFFFFFFFFF"),
+            fromhex("12 01 0102030405060708 FFFFFFFFFFFFFFFF"),
+            fromhex("12 01 0102030405060708 FFFFFFFFFFFFFFFF"),
+            fromhex("10 01 0102030405060708 FFFFFFFFFFFF"),
+        ]
+        assert tag.polling() == (tag.idm, tag.pmm)
+        assert tag.polling(0x12FC) == (tag.idm, tag.pmm)
+        assert tag.polling(0xFFFF, 1) == (tag.idm, tag.pmm, fromhex("12FC"))
+        assert tag.polling(0x12FC, 0, 1) == (tag.idm, tag.pmm)
+        assert tag.polling(0x12FC, 0, 3) == (tag.idm, tag.pmm)
+        assert tag.polling(0x12FC, 0, 7) == (tag.idm, tag.pmm)
+        assert tag.polling(0x12FC, 0, 15) == (tag.idm, tag.pmm)
+        with pytest.raises(nfc.tag.tt3.Type3TagCommandError) as excinfo:
+            tag.polling()
+        assert excinfo.value.errno == nfc.tag.tt3.DATA_SIZE_ERROR
+        assert tag.clf.exchange.mock_calls == [
+            mock.call(fromhex('0600ffff0000'), 0.003625),
+            mock.call(fromhex('060012fc0000'), 0.003625),
+            mock.call(fromhex('0600ffff0100'), 0.003625),
+            mock.call(fromhex('060012fc0001'), 0.0048330000000000005),
+            mock.call(fromhex('060012fc0003'), 0.007249),
+            mock.call(fromhex('060012fc0007'), 0.012081),
+            mock.call(fromhex('060012fc000f'), 0.021745),
+            mock.call(fromhex('0600ffff0000'), 0.003625),
+        ]
+        with pytest.raises(ValueError) as excinfo:
+            tag.polling(0xFFFF, request_code=3)
+        assert str(excinfo.value) == "invalid request code for polling"
+        with pytest.raises(ValueError) as excinfo:
+            tag.polling(0xFFFF, time_slots=255)
+        assert str(excinfo.value) == "invalid number of time slots"
+        
+    def test_read_without_encryption(self, tag):
+        service_data = fromhex(
+            "10 01 01 00  01 00 00 00  00 00 00 00  00 10 00 23"
+            "d1 02 0b 53  70 d1 01 07  55 03 61 62  2e 63 6f 6d"
+        )
+        tag.clf.exchange.side_effect = [
+            fromhex('2d 07 0102030405060708 0000 02') + service_data[:32],
+            fromhex('2d 07 0102030405060708 0000 02') + service_data[:32],
+            fromhex('2c 07 0102030405060708 0000 02') + service_data[:31],
+        ] + 3 * [nfc.clf.TimeoutError]
+
+        sc_list = [nfc.tag.tt3.ServiceCode(0, 11)]
+        bc_list = [nfc.tag.tt3.BlockCode(0), nfc.tag.tt3.BlockCode(1)]
+        data = tag.read_without_encryption(sc_list, bc_list)
+        assert data == service_data[:32]
+
+        sc_list = 2 * [nfc.tag.tt3.ServiceCode(0, 11)]
+        bc_list = [nfc.tag.tt3.BlockCode(0), nfc.tag.tt3.BlockCode(0, 0, 1)]
+        data = tag.read_without_encryption(sc_list, bc_list)
+        data == service_data[0] + service_data[0]
+        
+        sc_list = [nfc.tag.tt3.ServiceCode(0, 11)]
+        bc_list = [nfc.tag.tt3.BlockCode(0), nfc.tag.tt3.BlockCode(1)]
+        with pytest.raises(nfc.tag.tt3.Type3TagCommandError) as excinfo:
+            data = tag.read_without_encryption(sc_list, bc_list)
+            assert data == service_data[:32]
+        assert excinfo.value.errno == nfc.tag.tt3.DATA_SIZE_ERROR
+
+        timeout = 0.46402560000000004
+        assert tag.clf.exchange.mock_calls == [
+            mock.call(fromhex(
+                '12 06 0102030405060708 010b00 0280008001'), timeout),
+            mock.call(fromhex(
+                '14 06 0102030405060708 020b000b00 0280008100'), timeout),
+            mock.call(fromhex(
+                '12 06 0102030405060708 010b00 0280008001'), timeout),
+        ]
+
+
+class __TestType3Tag:
     sys = "12 FC"
     idm = "01 02 03 04 05 06 07 08"
     pmm = "FF FF FF FF FF FF FF FF"
@@ -180,8 +374,6 @@ class TestType3Tag:
             0x000B: service_data, 0x004B: service_data[1:],
             0x0009: service_data, 0x0049: service_data[1:],
         }
-        #self.clf = Type3TagSimulator(tag_memory, self.sys, self.idm, self.pmm)
-        #self.tag = self.clf.connect(rdwr={'on-connect': None})
 
     #
     # NDEF DATA READ
@@ -245,25 +437,6 @@ class TestType3Tag:
     def test_ndef_write_to_smaller_data_area(self):
         assert self.tag.ndef is not None
         self.tag.ndef.message = nfc.ndef.Message(nfc.ndef.TextRecord(100*" "))
-
-    #
-    # TEST INIT, STR, IS_PRESENT
-    #
-    def test_init(self):
-        assert self.tag.sys == 0x12FC
-        assert self.tag.idm == bytearray.fromhex(self.idm)
-        assert self.tag.pmm == bytearray.fromhex(self.pmm)
-        assert self.tag._nbr == 1
-        assert self.tag._nbw == 1
-        
-    def test_str(self):
-        s = "Type3Tag ID=0102030405060708 PMM=FFFFFFFFFFFFFFFF SYS=12FC"
-        assert str(self.tag) == s
-
-    def test_is_present(self):
-        assert self.tag.is_present == True
-        self.clf.tag_is_present = False
-        assert self.tag.is_present == False
 
     #
     # DUMP METHOD
@@ -336,84 +509,6 @@ class TestType3Tag:
         clf = Type3TagSimulator(None, "1234", self.idm, self.pmm)
         tag = clf.connect(rdwr={'on-connect': None})
         assert tag.format() == False
-
-    #
-    # POLLING COMMAND
-    #
-    def test_polling_for_system_12fc(self):
-        assert self.tag.polling(0x12FC) == (self.clf.idm, self.clf.pmm)
-        
-    def test_polling_for_system_ffff(self):
-        assert self.tag.polling(0xFFFF) == (self.clf.idm, self.clf.pmm)
-        
-    #pytest.raises(nfc.tag.tt3.Type3TagCommandError)
-    def test_polling_for_system_fefe(self):
-        try: self.tag.polling(0xFEFE)
-        except nfc.tag.tt3.Type3TagCommandError as error:
-            assert error.errno == nfc.tag.TIMEOUT_ERROR; raise
-        
-    def test_polling_with_request_system_code(self):
-        rsp = self.tag.polling(0xFFFF, request_code=1)
-        assert rsp == (self.clf.idm, self.clf.pmm, self.clf.sys[0])
-    
-    #pytest.raises(ValueError)
-    def test_polling_with_invalid_request_code(self):
-        self.tag.polling(0xFFFF, request_code=3)
-        
-    def __test_polling_with_time_slots_value(self):
-        for v in (1, 3, 7, 15):
-            yield self.check_polling_with_time_slots_value, v
-        
-    def check_polling_with_time_slots_value(self, v):
-        self.clf.expect_command = bytearray("\x06\x00\xFF\xFF\x00" + chr(v))
-        self.tag.polling(0xFFFF, time_slots=v)
-        
-    #pytest.raises(ValueError)
-    def test_polling_with_invalid_time_slots(self):
-        self.tag.polling(0xFFFF, time_slots=255)
-        
-    #pytest.raises(nfc.tag.tt3.Type3TagCommandError)
-    def test_polling_with_data_size_error(self):
-        del self.clf.pmm[4:8]
-        try: self.tag.polling(0x12FC)
-        except nfc.tag.tt3.Type3TagCommandError as error:
-            assert error.errno == nfc.tag.tt3.DATA_SIZE_ERROR; raise
-
-    #
-    # READ W/O ENCRYPTION COMMAND
-    #
-    def test_read_without_encryption(self):
-        clf, tag = self.clf, self.tag
-        service_data = [bytearray.fromhex(hexstr) for hexstr in [
-            "10 01 01 00  01 00 00 00  00 00 00 00  00 10 00 23",
-            "d1 02 0b 53  70 d1 01 07  55 03 61 62  2e 63 6f 6d",
-        ]]
-        clf.mem = {0x000B:service_data, 0x004B:service_data[1:]}
-        a, b, e = clf.pmm[5] & 7, clf.pmm[5]>>3 & 7, clf.pmm[5]>>6
-        clf.expect_timeout = 302E-6 * ((b + 1) * 2 + a + 1) * 4**e
-        
-        sc_list = [nfc.tag.tt3.ServiceCode(0, 11)]
-        bc_list = [nfc.tag.tt3.BlockCode(0), nfc.tag.tt3.BlockCode(1)]
-        data = tag.read_without_encryption(sc_list, bc_list)
-        assert data == service_data[0] + service_data[1]
-
-        sc_list = 2 * [nfc.tag.tt3.ServiceCode(0, 11)]
-        bc_list = [nfc.tag.tt3.BlockCode(0), nfc.tag.tt3.BlockCode(0, 0, 1)]
-        data = tag.read_without_encryption(sc_list, bc_list)
-        assert data == service_data[0] + service_data[0]
-        
-        sc_list = [nfc.tag.tt3.ServiceCode(1,11),nfc.tag.tt3.ServiceCode(0,11)]
-        bc_list = [nfc.tag.tt3.BlockCode(0),nfc.tag.tt3.BlockCode(1, 0, 1)]
-        data = tag.read_without_encryption(sc_list, bc_list)
-        assert data == service_data[1] + service_data[1]
-        
-        del service_data[1][15]
-        sc_list = [nfc.tag.tt3.ServiceCode(0, 11)]
-        bc_list = [nfc.tag.tt3.BlockCode(0), nfc.tag.tt3.BlockCode(1)]
-        try: tag.read_without_encryption(sc_list, bc_list)
-        except nfc.tag.tt3.Type3TagCommandError as error:
-            assert error.errno == nfc.tag.tt3.DATA_SIZE_ERROR
-        else: assert 0, "expected data size error"
 
     #
     # READ FROM NDEF SERVICE METHOD
@@ -540,82 +635,6 @@ class TestType3Tag:
         try: self.tag.send_cmd_recv_rsp(0xF0, "\xA5", 0.1)
         except nfc.tag.tt3.Type3TagCommandError as error:
             assert error.errno == 0x1234; raise
-
-#
-# TEST SERVICE CODE CLASS
-#
-@pytest.mark.skip(reason="not yet converted")
-class TestServiceCode:
-    def test_init(self):
-        sc = nfc.tag.tt3.ServiceCode(1, 9)
-        assert sc.number == 1
-        assert sc.attribute == 9
-        sc = nfc.tag.tt3.ServiceCode(number=1, attribute=9)
-        assert sc.number == 1
-        assert sc.attribute == 9
-                
-    def test_unpack(self):
-        sc = nfc.tag.tt3.ServiceCode.unpack("\x0B\x01")
-        assert sc.number == 4
-        assert sc.attribute == 11
-
-    def test_pack(self):
-        assert nfc.tag.tt3.ServiceCode(4, 11).pack() == "\x0B\x01"
-
-    def test_repr(self):
-        sc = nfc.tag.tt3.ServiceCode(1, 8)
-        assert repr(sc) == "ServiceCode(1, 8)"
-
-    def test_str(self):
-        sc = nfc.tag.tt3.ServiceCode(1, 8)
-        assert str(sc) == "Service Code 0048h (Service 1 Random RW with key)"
-        sc = nfc.tag.tt3.ServiceCode(1, 0b111111)
-        assert str(sc) == "Service Code 007Fh (Service 1 Type 111111b)"
-
-#
-# TEST BLOCK CODE CLASS
-#
-@pytest.mark.skip(reason="not yet converted")
-class TestBlockCode:
-    def test_init(self):
-        bc = nfc.tag.tt3.BlockCode(12)
-        assert bc.number == 12
-        assert bc.access == 0
-        assert bc.service == 0
-        bc = nfc.tag.tt3.BlockCode(12, 3)
-        assert bc.number == 12
-        assert bc.access == 3
-        assert bc.service == 0
-        bc = nfc.tag.tt3.BlockCode(12, 3, 1)
-        assert bc.number == 12
-        assert bc.access == 3
-        assert bc.service == 1
-        bc = nfc.tag.tt3.BlockCode(12, access=3)
-        assert bc.number == 12
-        assert bc.access == 3
-        assert bc.service == 0
-        bc = nfc.tag.tt3.BlockCode(12, service=1)
-        assert bc.number == 12
-        assert bc.access == 0
-        assert bc.service == 1
-
-    def test_pack(self):
-        assert nfc.tag.tt3.BlockCode(12).pack() == "\x80\x0C"
-        assert nfc.tag.tt3.BlockCode(12, 3).pack() == "\xB0\x0C"
-        assert nfc.tag.tt3.BlockCode(12, 3, 1).pack() == "\xB1\x0C"
-        assert nfc.tag.tt3.BlockCode(255).pack() == "\x80\xff"
-        assert nfc.tag.tt3.BlockCode(256).pack() == "\x00\x00\x01"
-        assert nfc.tag.tt3.BlockCode(256, 3).pack() == "\x30\x00\x01"
-        assert nfc.tag.tt3.BlockCode(256, 3, 1).pack() == "\x31\x00\x01"
-        assert nfc.tag.tt3.BlockCode(0xffff).pack() == "\x00\xff\xff"
-
-    def test_repr(self):
-        sc = nfc.tag.tt3.BlockCode(1, 3, 7)
-        assert repr(sc) == "BlockCode(1, 3, 7)"
-
-    def test_str(self):
-        sc = nfc.tag.tt3.BlockCode(1, 3)
-        assert str(sc) == "BlockCode(number=1, access=011, service=0)"
 
 @pytest.mark.skip(reason="not yet converted")
 class TestType3TagFelicaStandard:
