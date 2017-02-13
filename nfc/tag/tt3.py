@@ -271,7 +271,8 @@ class Type3Tag(nfc.tag.Tag):
         if self.sys == 0x12FC:
             ndef_read_service = ServiceCode(0, 0b01011)
             return self.dump_service(ndef_read_service)
-        else: return ["This is not an NFC Forum Tag."]
+        else:
+            return ["This is not an NFC Forum Tag."]
         
     def dump_service(self, sc):
         """Read all data blocks of a given service.
@@ -296,8 +297,11 @@ class Type3Tag(nfc.tag.Tag):
         last_data = None; same_data = 0
 
         for i in xrange(0x10000):
-            try: this_data = self.read_without_encryption([sc], [BlockCode(i)])
-            except Type3TagCommandError: break
+            try:
+                this_data = self.read_without_encryption([sc], [BlockCode(i)])
+            except Type3TagCommandError:
+                i = i - 1
+                break
             
             if this_data == last_data:
                 same_data += 1
@@ -345,8 +349,8 @@ class Type3Tag(nfc.tag.Tag):
         if self.sys != 0x12FC:
             log.warning("not an ndef tag and can not be made compatible")
             return False
-        if version and version != 0x10:
-            log.warning("type 3 tag ndef mapping version can only be 0x10")
+        if version and version >> 4 != 1:
+            log.warning("Type 3 Tag NDEF mapping major version must be 1")
             return False
         
         # To determine the total number of data blocks we start with
@@ -358,34 +362,40 @@ class Type3Tag(nfc.tag.Tag):
         nmaxb = [0, 0x10000]
         while nmaxb[1] - nmaxb[0] > 1:
             block = nmaxb[0] + (nmaxb[1] - nmaxb[0]) / 2 - 1
-            try: self.read_from_ndef_service(block)
-            except Type3TagCommandError: nmaxb[1] = block + 1
-            else: nmaxb[0] = block + 1
+            try:
+                self.read_from_ndef_service(block)
+            except Type3TagCommandError:
+                nmaxb[1] = block + 1
+            else:
+                nmaxb[0] = block + 1
+
         nmaxb = nmaxb[0] - 1 # subtract attribute block
+        if nmaxb < 0:
+            log.warning("this tag does not have any usable data blocks")
+            return False
 
         # To get the number of blocks that can be read in one command
         # we just try to read with an increasing number of blocks.
-        for i in range(nmaxb + 1):
-            try: self.read_from_ndef_service(*range(0, i+1))
-            except Type3TagCommandError: break
-        else: i = i + 1
-        nbr = i
+        for nbr in range(12):
+            try:
+                self.read_from_ndef_service(*((nbr+1)*[0]))
+            except Type3TagCommandError:
+                break
 
         # To get the number of blocks that can be written in one
         # command we do essentially the same as for nbr, just that to
         # preserve existing data we first read and then write it back.
-        data = bytearray()
-        for i in range(nbr):
-            data += self.read_from_ndef_service(i)
-            try: self.write_to_ndef_service(data, *range(0, i+1))
-            except Type3TagCommandError: break
-        else: i = i + 1
-        nbw = i
+        data = self.read_from_ndef_service(0)
+        for nbw in range(12):
+            try:
+                self.write_to_ndef_service((nbw+1)*data, *((nbw+1)*[0]))
+            except Type3TagCommandError:
+                break
 
         # We now have all information needed to create and write the
         # new attribute data to block number 0.
         attribute_data = bytearray(16)
-        attribute_data[0:5] = pack(">BBBH", 0x10, nbr, nbw, nmaxb)
+        attribute_data[0:5] = pack(">BBBH", version, nbr, nbw, nmaxb)
         attribute_data[10] = 0x01 if nbw > 0 else 0x00
         attribute_data[14:16] = pack(">H", sum(attribute_data[0:14]))
         log.debug("set ndef attributes {}".format(hexlify(attribute_data)))
@@ -395,8 +405,9 @@ class Type3Tag(nfc.tag.Tag):
         # 8-bit integer provided. This could take a while.
         if wipe is not None:
             data = bytearray(chr(wipe) * 16)
-            for block in xrange(1, nmaxb + 1):
-                self.write_to_ndef_service(data, block)
+            while nmaxb > 0:
+                self.write_to_ndef_service(data, nmaxb)
+                nmaxb = nmaxb - 1
 
         return True
 
