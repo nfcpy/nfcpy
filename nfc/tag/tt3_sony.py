@@ -2,7 +2,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2014, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -19,21 +19,17 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
+import os
+from binascii import hexlify
+from pyDes import triple_des, CBC
+from struct import pack, unpack
+
+import nfc.tag
+from . import tt3
 
 import logging
 log = logging.getLogger(__name__)
 
-import sys, os
-from binascii import hexlify
-from pyDes import triple_des, CBC
-if sys.hexversion >= 0x020704F0:
-    from struct import pack, unpack
-else: # for Debian Wheezy (and thus Raspbian)
-    from struct import pack, unpack as _unpack
-    unpack = lambda fmt, string: _unpack(fmt, buffer(string))
-
-import nfc.tag
-from . import tt3
 
 def activate(clf, target):
     # http://www.sony.net/Products/felica/business/tech-support/list.html
@@ -50,6 +46,7 @@ def activate(clf, target):
         return FelicaPlug(clf, target)
     return None
 
+
 class FelicaStandard(tt3.Type3Tag):
     """Standard FeliCa is a range of FeliCa OS based card products with a
     flexible file system that supports multiple applications and
@@ -60,19 +57,19 @@ class FelicaStandard(tt3.Type3Tag):
     """
     IC_CODE_MAP = {
         # IC    IC-NAME    NBR NBW
-        0x00: ("RC-S830",    8,  8), # RC-S831/833
-        0x01: ("RC-S915",   12,  8), # RC-S860/862/863/864/891
-        0x02: ("RC-S919",    1,  1), # RC-S890
+        0x00: ("RC-S830",    8,  8),  # RC-S831/833
+        0x01: ("RC-S915",   12,  8),  # RC-S860/862/863/864/891
+        0x02: ("RC-S919",    1,  1),  # RC-S890
         0x08: ("RC-S952",   12,  8),
         0x09: ("RC-S953",   12,  8),
-        0x0B: ("RC-S???",    1,  1), # new suica
+        0x0B: ("RC-S???",    1,  1),  # new suica
         0x0C: ("RC-S954",   12,  8),
-        0x0D: ("RC-S960",   12, 10), # RC-S880/889
-        0x20: ("RC-S962",   12, 10), # RC-S885/888/892/893
-        0x32: ("RC-SA00/1",  1,  1), # AES chip
+        0x0D: ("RC-S960",   12, 10),  # RC-S880/889
+        0x20: ("RC-S962",   12, 10),  # RC-S885/888/892/893
+        0x32: ("RC-SA00/1",  1,  1),  # AES chip
         0x35: ("RC-SA00/2",  1,  1),
     }
-    
+
     def __init__(self, clf, target):
         super(FelicaStandard, self).__init__(clf, target)
         self._product = "FeliCa Standard ({0})".format(
@@ -112,42 +109,42 @@ class FelicaStandard(tt3.Type3Tag):
             # Prints area information with indentation.
             return ["{indent}Area {0:04X}--{1:04X}".format(
                 area_from, area_last, indent=depth*'  ')]
-            
+
         def print_service(services, depth):
             # This function processes a list of overlapped services
             # and reads all block data if there is one service that
             # does not require a key. First we figure out the common
             # service type and which access modes are available.
-            if services[0]>>2 & 0b1111 == 0b0010:
+            if services[0] >> 2 & 0b1111 == 0b0010:
                 service_type = "Random"
                 access_types = " & ".join([(
                     "write with key", "write w/o key",
-                    "read with key", "read w/o key")[x&3] for x in services])
-            if services[0]>>2 & 0b1111 == 0b0011:
+                    "read with key", "read w/o key")[x & 3] for x in services])
+            if services[0] >> 2 & 0b1111 == 0b0011:
                 service_type = "Cyclic"
                 access_types = " & ".join([(
                     "write with key", "write w/o key",
-                    "read with key", "read w/o key")[x&3] for x in services])
-            if services[0]>>2 & 0b1110 == 0b0100:
+                    "read with key", "read w/o key")[x & 3] for x in services])
+            if services[0] >> 2 & 0b1110 == 0b0100:
                 service_type = "Purse"
                 access_types = " & ".join([(
                     "direct with key", "direct w/o key",
                     "cashback with key", "cashback w/o key",
                     "decrement with key", "decrement w/o key",
-                    "read with key", "read w/o key")[x&7] for x in services])
+                    "read with key", "read w/o key")[x & 7] for x in services])
             # Now we print one line to verbosely describe the service
             # and list the service codes.
             service_codes = " ".join(["0x{0:04X}".format(x) for x in services])
             lines = [
                 "{indent}{type} Service {number}: {access} ({0})".format(
                     service_codes, indent=depth*'  ', type=service_type,
-                    number=services[0]>>6, access=access_types)]
+                    number=services[0] >> 6, access=access_types)]
             # The final piece is to see if any of the services allows
             # us to read block data without a key. Services w/o key
             # have the last bit set to 1, so we generate a list of
             # only those services and iterate over the slice from the
             # last item to end (that's one or zero services).
-            for service in [sc for sc in services if sc&1][-1:]:
+            for service in [sc for sc in services if sc & 1][-1:]:
                 sc = tt3.ServiceCode(service >> 6, service & 0b111111)
                 for line in self.dump_service(sc):
                     lines.append(depth*'  ' + ' ' + line)
@@ -162,7 +159,8 @@ class FelicaStandard(tt3.Type3Tag):
         except nfc.tag.TagCommandError:
             if self.sys == 0x12FC:
                 return super(FelicaStandard, self).dump()
-            else: return ["unable to create a memory dump"]
+            else:
+                return ["unable to create a memory dump"]
 
         # A FeliCa card has one or more systems, each system has one
         # or more areas which may be nested, and an area may have zero
@@ -171,16 +169,18 @@ class FelicaStandard(tt3.Type3Tag):
         # by index over all area and service definitions.
         lines = []
         for system_code in card_system_codes:
-            
+
             # A system must be activated first, this is what the
             # polling() command does.
             idm, pmm = self.polling(system_code)
-            self.idm = idm; self.pmm = pmm; self.sys = system_code
+            self.idm = idm
+            self.pmm = pmm
+            self.sys = system_code
             lines.extend(print_system(system_code))
-            
+
             area_stack = []
             overlap_services = []
-            
+
             # We've already processed the first are/service entry so
             # index starts from 1. The first non-existing index will
             # give us None and thus terminate the loop.
@@ -204,13 +204,15 @@ class FelicaStandard(tt3.Type3Tag):
                     end_overlap_services = False
                     if len(overlap_services) == 0:
                         overlap_services.append(service)
-                    elif service>>4 == overlap_services[-1]>>4:
-                        if service>>4 & 1: # purse
+                    elif service >> 4 == overlap_services[-1] >> 4:
+                        if service >> 4 & 1:  # purse
                             overlap_services.append(service)
-                        elif service>>2 == overlap_services[-1]>>2:
+                        elif service >> 2 == overlap_services[-1] >> 2:
                             overlap_services.append(service)
-                        else: end_overlap_services = True
-                    else: end_overlap_services = True
+                        else:
+                            end_overlap_services = True
+                    else:
+                        end_overlap_services = True
                     if end_overlap_services:
                         lines.extend(print_service(overlap_services, depth))
                         overlap_services = [service]
@@ -228,7 +230,7 @@ class FelicaStandard(tt3.Type3Tag):
                     area_stack.append((area_from, area_last))
 
         return lines
-        
+
     def request_service(self, service_list):
         """Verify existence of a service (or area) and get the key version.
 
@@ -238,20 +240,20 @@ class FelicaStandard(tt3.Type3Tag):
         16-bit integers, in the order requested. If a specified
         service (or area) does not exist, the key version will be
         0xFFFF.
-        
+
         Command execution errors raise :exc:`~nfc.tag.TagCommandError`.
 
         """
-        a, b, e = self.pmm[2] & 7, self.pmm[2]>>3 & 7, self.pmm[2]>>6
+        a, b, e = self.pmm[2] & 7, self.pmm[2] >> 3 & 7, self.pmm[2] >> 6
         timeout = 302E-6 * ((b + 1) * len(service_list) + a + 1) * 4**e
-        pack = lambda x: x.pack()
+        pack = lambda x: x.pack()  # noqa: E731
         data = chr(len(service_list)) + ''.join(map(pack, service_list))
         data = self.send_cmd_recv_rsp(0x02, data, timeout, check_status=False)
         if len(data) != 1 + len(service_list) * 2:
             log.debug("insufficient data received from tag")
             raise tt3.Type3TagCommandError(tt3.DATA_SIZE_ERROR)
         return [unpack("<H", data[i:i+2])[0] for i in range(1, len(data), 2)]
-        
+
     def request_response(self):
         """Verify that a card is still present and get its operating mode.
 
@@ -267,14 +269,14 @@ class FelicaStandard(tt3.Type3Tag):
         :exc:`~nfc.tag.TagCommandError`.
 
         """
-        a, b, e = self.pmm[3] & 7, self.pmm[3]>>3 & 7, self.pmm[3]>>6
+        a, b, e = self.pmm[3] & 7, self.pmm[3] >> 3 & 7, self.pmm[3] >> 6
         timeout = 302E-6 * (b + 1 + a + 1) * 4**e
         data = self.send_cmd_recv_rsp(0x04, '', timeout, check_status=False)
         if len(data) != 1:
             log.debug("insufficient data received from tag")
             raise tt3.Type3TagCommandError(tt3.DATA_SIZE_ERROR)
-        return data[0] # mode
-        
+        return data[0]  # mode
+
     def search_service_code(self, service_index):
         """Search for a service code that corresponds to an index.
 
@@ -311,14 +313,14 @@ class FelicaStandard(tt3.Type3Tag):
         # The maximum response time is given by the value of PMM[3].
         # Some cards (like RC-S860 with IC RC-S915) encode a value
         # that is too short, thus we use at lest 2 ms.
-        a, b, e = self.pmm[3] & 7, self.pmm[3]>>3 & 7, self.pmm[3]>>6
+        a, e = self.pmm[3] & 7, self.pmm[3] >> 6
         timeout = max(302E-6 * (a + 1) * 4**e, 0.002)
         data = pack("<H", service_index)
         data = self.send_cmd_recv_rsp(0x0A, data, timeout, check_status=False)
         if data != "\xFF\xFF":
             unpack_format = "<H" if len(data) == 2 else "<HH"
             return unpack(unpack_format, data)
-        
+
     def request_system_code(self):
         """Return all system codes that are registered in the card.
 
@@ -330,19 +332,20 @@ class FelicaStandard(tt3.Type3Tag):
 
             for system_code in tag.request_system_code():
                 print("System {0:04X}".format(system_code))
-        
+
         Command execution errors raise :exc:`~nfc.tag.TagCommandError`.
 
         """
         log.debug("request system code list")
-        a, b, e = self.pmm[3] & 7, self.pmm[3]>>3 & 7, self.pmm[3]>>6
+        a, e = self.pmm[3] & 7, self.pmm[3] >> 6
         timeout = max(302E-6 * (a + 1) * 4**e, 0.002)
         data = self.send_cmd_recv_rsp(0x0C, '', timeout, check_status=False)
         if len(data) != 1 + data[0] * 2:
             log.debug("insufficient data received from tag")
             raise tt3.Type3TagCommandError(tt3.DATA_SIZE_ERROR)
         return [unpack(">H", data[i:i+2])[0] for i in range(1, len(data), 2)]
-        
+
+
 class FelicaMobile(FelicaStandard):
     """Mobile FeliCa is a modification of FeliCa for use in mobile
     phones. This class does currently not implement anything specific
@@ -370,10 +373,11 @@ class FelicaMobile(FelicaStandard):
         0x1E: ("3.0",       1,  1),
         0x1F: ("3.0",       1,  1),
     }
-    
+
     def __init__(self, clf, target):
         super(FelicaMobile, self).__init__(clf, target)
         self._product = "FeliCa Mobile " + self.IC_CODE_MAP[self.pmm[1]][0]
+
 
 class FelicaLite(tt3.Type3Tag):
     """FeliCa Lite is a version of FeliCa with simplified file system and
@@ -386,7 +390,7 @@ class FelicaLite(tt3.Type3Tag):
     IC_CODE_MAP = {
         0xF0: "FeliCa Lite (RC-S965)",
     }
-    
+
     class NDEF(tt3.Type3Tag.NDEF):
         def _read_attribute_data(self):
             log.debug("FelicaLite.read_attribute_data")
@@ -396,7 +400,7 @@ class FelicaLite(tt3.Type3Tag):
                 self._original_nbr = attributes['nbr']
                 attributes['nbr'] = min(attributes['nbr'], 3)
             return attributes
-            
+
         def _write_attribute_data(self, attributes):
             log.debug("FelicaLite.read_attribute_data")
             if self._tag.is_authenticated:
@@ -407,16 +411,19 @@ class FelicaLite(tt3.Type3Tag):
     def __init__(self, clf, target):
         super(FelicaLite, self).__init__(clf, target)
         self._product = self.IC_CODE_MAP[self.pmm[1]]
-        self._nbr = 4; self._nbw = 1
+        self._nbr = 4
+        self._nbw = 1
         self._sk = self._iv = None
         self.read_from_ndef_service = self.read_without_mac
         self.write_to_ndef_service = self.write_without_mac
-        
+
     def dump(self):
-        ispchr = lambda x: x >= 32 and x <= 126
-        oprint = lambda o: ' '.join(['%02x' % x for x in o])
-        cprint = lambda o: ''.join([chr(x) if ispchr(x) else '.' for x in o])
-        
+        def oprint(octets):
+            return ' '.join(['%02x' % x for x in octets])
+
+        def cprint(octets):
+            return ''.join([chr(x) if 32 <= x <= 126 else '.' for x in octets])
+
         userblocks = list()
         for i in range(0, 14):
             try:
@@ -428,8 +435,10 @@ class FelicaLite(tt3.Type3Tag):
                 userblocks.append("{0} |{1}|".format(
                     oprint(data), cprint(data)))
 
-        lines = list()        
-        last_block = None; same_blocks = 0
+        lines = list()
+        last_block = None
+        same_blocks = 0
+
         for i, block in enumerate(userblocks):
             if block == last_block:
                 same_blocks += 1
@@ -440,11 +449,12 @@ class FelicaLite(tt3.Type3Tag):
                 same_blocks = 0
             lines.append("{0:3}: ".format(i) + block)
             last_block = block
+
         if same_blocks:
             if same_blocks > 1:
                 lines.append("  *  " + last_block)
             lines.append("{0:3}: ".format(i) + block)
-        
+
         data = self.read_without_mac(14)
         lines.append(" 14: {0} ({1})".format(oprint(data), "REGA[4]B[4]C[8]"))
 
@@ -453,16 +463,17 @@ class FelicaLite(tt3.Type3Tag):
                 "SYSTEM_CODE[2]", "CKV[2]", "CK1[8], CK2[8]",
                 "MEMORY_CONFIG")
         config = dict(zip(range(0x80, 0x80+len(text)), text))
-        
+
         for i in sorted(config.keys()):
-            data = self.read_without_mac(i)
-            if data is None:
+            try:
+                data = self.read_without_mac(i)
+            except tt3.Type3TagCommandError:
                 lines.append("{0:3}: {1}({2})".format(
                     i, 16 * "?? ", config[i]))
             else:
                 lines.append("{0:3}: {1} ({2})".format(
                     i, oprint(data), config[i]))
-        
+
         return lines
 
     @staticmethod
@@ -475,10 +486,10 @@ class FelicaLite(tt3.Type3Tag):
         # write). The resulting mac is the last 8 bytes returned in
         # reversed order.
         assert len(data) % 8 == 0 and len(key) == 16 and len(iv) == 8
-        key = str(key[8:] + key[:8]) if flip_key else str(key)
-        txt = [''.join(reversed(x)) for x in zip(*[iter(str(data))]*8)]
-        return triple_des(key, CBC, iv).encrypt(''.join(txt))[:-9:-1]
-        
+        key = bytes(key[8:] + key[:8]) if flip_key else bytes(key)
+        txt = [''.join(reversed(x)) for x in zip(*[iter(bytes(data))]*8)]
+        return triple_des(key, CBC, bytes(iv)).encrypt(''.join(txt))[:-9:-1]
+
     def protect(self, password=None, read_protect=False, protect_from=0):
         """Protect a FeliCa Lite Tag.
 
@@ -487,11 +498,11 @@ class FelicaLite(tt3.Type3Tag):
         string or bytearray) to ensure that data retrieved by future
         read operations, after authentication, is genuine. Read
         protection is not supported.
-        
+
         A non-empty *password* must provide at least 128 bit key
         material, in other words it must be a string or bytearray of
         length 16 or more.
-        
+
         The memory unit for the value of *protect_from* is 16 byte,
         thus with ``protect_from=2`` bytes 0 to 31 are not protected.
         If *protect_from* is zero (the default value) and the Tag has
@@ -501,22 +512,22 @@ class FelicaLite(tt3.Type3Tag):
         """
         return super(FelicaLite, self).protect(
             password, read_protect, protect_from)
-        
+
     def _protect(self, password, read_protect, protect_from):
         if password and len(password) < 16:
-            raise ValueError("'password' must be at least length 16")
+            raise ValueError("password must be at least 16 byte")
 
         if protect_from < 0:
-            raise ValueError("'protect_from' can not be negative")
-        
+            raise ValueError("protect_from can not be negative")
+
         if read_protect:
-            log.info("this tag can not be read protected")
+            log.info("this tag can not be made read protected")
             return False
 
         # The memory configuration block contains access permissions
         # and ndef compatibility information.
         mc = self.read_without_mac(0x88)
-        
+
         if password is not None:
             if mc[2] != 0xFF:
                 log.info("system block protected, can't write key")
@@ -539,8 +550,8 @@ class FelicaLite(tt3.Type3Tag):
             self.write_without_mac(attribute_data, 0)
 
         log.debug("write protect system blocks 82,83,84,86,87")
-        mc[2] = 0x00 # set system blocks 82,83,84,86,87 to read only
-        
+        mc[2] = 0x00  # set system blocks 82,83,84,86,87 to read only
+
         log.debug("write memory configuration {0}".format(hexlify(mc)))
         self.write_without_mac(mc, 0x88)
         return True
@@ -565,18 +576,18 @@ class FelicaLite(tt3.Type3Tag):
 
     def _authenticate(self, password):
         if password and len(password) < 16:
-            raise ValueError("'password' must be at least length 16")
+            raise ValueError("password must be at least 16 byte")
 
         # Perform internal authentication, i.e. ensure that the tag
-        # has the same card key as in password. If the password string
-        # (or bytearray) is empty, we'll try with the factory key.
-        key = str(bytearray(password[0:16])) if password else 16 * "\0"
-        
+        # has the same card key as in password. If the password is
+        # empty, we'll try with the factory key.
+        key = bytes(bytearray(password[0:16])) if password else 16 * b"\0"
+
         log.debug("authenticate with key " + hexlify(key))
         self._authenticated = False
         self.read_from_ndef_service = self.read_without_mac
         self.write_to_ndef_service = self.write_without_mac
-        
+
         # Internal authentication starts with a random challenge (rc1 || rc2)
         # that we write to the rc block. Because the tag works little endian,
         # we reverse the order of rc1 and rc2 bytes when writing.
@@ -604,7 +615,8 @@ class FelicaLite(tt3.Type3Tag):
         # generate_mac() function.
         if data[-16:-8] == self.generate_mac(data[0:-16], sk, iv=rc[0:8]):
             log.debug("tag authentication completed")
-            self._sk = sk; self._iv = rc[0:8]
+            self._sk = sk
+            self._iv = rc[0:8]
             self._authenticated = True
             self.read_from_ndef_service = self.read_with_mac
         else:
@@ -612,20 +624,18 @@ class FelicaLite(tt3.Type3Tag):
 
         return self._authenticated
 
-    def format(self, version=None, wipe=None):
+    def format(self, version=0x10, wipe=None):
         """Format a FeliCa Lite Tag for NDEF.
-
-        
 
         """
         return super(FelicaLite, self).format(version, wipe)
-        
-    def _format(self, version=None, wipe=False):
-        assert version is None or type(version) is int
+
+    def _format(self, version, wipe):
+        assert type(version) is int
         assert wipe is None or type(wipe) is int
 
-        if version and version != 0x10:
-            log.error("type 3 tag ndef mapping version can only be 0x10")
+        if version and version >> 4 != 1:
+            log.error("type 3 tag ndef mapping major version must be 1")
             return False
 
         # The memory configuration block contains access permissions
@@ -636,14 +646,14 @@ class FelicaLite(tt3.Type3Tag):
             log.info("the first user data block is not writeable")
             return False
 
-        if not mc[3] & 0x01: # ndef compatibility flag
-            if mc[2] == 0xFF: # mc block is writeable
+        if not mc[3] & 0x01:  # ndef compatibility flag
+            if mc[2] == 0xFF:  # mc block is writeable
                 mc[3] = mc[3] | 0x01
                 self.write_without_mac(mc, 0x88)
             else:
                 log.info("this tag can no longer be changed to ndef")
                 return False
-            
+
         # Count the number of writeable data blocks (that is excluding
         # the attribute block) from the least significant read/write
         # permission bits that are consecutively set to 1.
@@ -655,15 +665,15 @@ class FelicaLite(tt3.Type3Tag):
         # Create and write the attribute data. Version number, Nbr and
         # Nbw are fix and we have just determined Nmaxb.
         attribute_data = bytearray(16)
-        attribute_data[:14] = pack(">BBBHxxxxBBxxx", 0x10, 4, 1, nmaxb, 0, 1)
+        attribute_data[:14] = pack(">BBBHxxxxxBxxx", version, 4, 1, nmaxb, 1)
         attribute_data[14:] = pack(">H", sum(attribute_data[:14]))
         log.debug("set ndef attributes {}".format(hexlify(attribute_data)))
         self.write_without_mac(attribute_data, 0)
 
         # Overwrite the ndef message area if a wipe is requested.
         if wipe is not None:
-            data = bytearray(chr(wipe) * 16)
-            for block in range(1, 14):
+            data = bytearray(16 * [wipe])
+            for block in range(1, nmaxb+1):
                 self.write_without_mac(data, block)
 
         return True
@@ -682,7 +692,7 @@ class FelicaLite(tt3.Type3Tag):
         service_list = [tt3.ServiceCode(0, 0b001011)]
         block_list = [tt3.BlockCode(n) for n in blocks]
         return self.read_without_encryption(service_list, block_list)
-        
+
     def read_with_mac(self, *blocks):
         """Read a number of data blocks with integrity check.
 
@@ -703,16 +713,17 @@ class FelicaLite(tt3.Type3Tag):
 
         if self._sk is None or self._iv is None:
             raise RuntimeError("authentication required")
-        
+
         service_list = [tt3.ServiceCode(0, 0b001011)]
         block_list = [tt3.BlockCode(n) for n in blocks]
         block_list.append(tt3.BlockCode(0x81))
-        
+
         data = self.read_without_encryption(service_list, block_list)
         data, mac = data[0:-16], data[-16:-8]
         if mac != self.generate_mac(data, self._sk, self._iv):
             log.warning("mac verification failed")
-        else: return data
+        else:
+            return data
 
     def write_without_mac(self, data, block):
         """Write a data block without integrity check.
@@ -725,7 +736,7 @@ class FelicaLite(tt3.Type3Tag):
             try: tag.write_without_mac(data, 5) # write block 5
             except nfc.tag.TagCommandError:
                 print("something went wrong")
-        
+
         Tag command errors raise :exc:`~nfc.tag.TagCommandError`.
 
         """
@@ -736,6 +747,7 @@ class FelicaLite(tt3.Type3Tag):
         sc_list = [tt3.ServiceCode(0, 0b001001)]
         bc_list = [tt3.BlockCode(block)]
         self.write_without_encryption(sc_list, bc_list, data)
+
 
 class FelicaLiteS(FelicaLite):
     """FeliCa Lite-S is a version of FeliCa Lite with enhanced security
@@ -749,7 +761,7 @@ class FelicaLiteS(FelicaLite):
         0xF1: "FeliCa Lite-S (RC-S966)",
         0xF2: "FeliCa Link (RC-S730) Lite-S Mode",
     }
-    
+
     class NDEF(FelicaLite.NDEF):
         def _read_attribute_data(self):
             log.debug("FelicaLiteS.read_attribute_data")
@@ -766,12 +778,14 @@ class FelicaLiteS(FelicaLite):
         self._product = self.IC_CODE_MAP[self.pmm[1]]
 
     def dump(self):
-        oprint = lambda o: ' '.join(['%02x' % x for x in o])
+        def oprint(octets):
+            return ' '.join(['%02x' % x for x in octets])
+
         lines = super(FelicaLiteS, self).dump()
-        
+
         text = ("WCNT[3]", "MAC_A[8]", "STATE")
         config = dict(zip(range(0x90, 0x90+len(text)), text))
-        
+
         for i in sorted(config.keys()):
             try:
                 data = self.read_without_mac(i)
@@ -781,7 +795,7 @@ class FelicaLiteS(FelicaLite):
             else:
                 lines.append("{0:3}: {1} ({2})".format(
                     i, oprint(data), config[i]))
-        
+
         return lines
 
     def protect(self, password=None, read_protect=False, protect_from=0):
@@ -796,7 +810,7 @@ class FelicaLiteS(FelicaLite):
         A non-empty *password* must provide at least 128 bit key
         material, in other words it must be a string or bytearray of
         length 16 or more.
-        
+
         The memory unit for the value of *protect_from* is 16 byte,
         thus with ``protect_from=2`` bytes 0 to 31 are not protected.
         If *protect_from* is zero (the default value) and the Tag has
@@ -806,27 +820,27 @@ class FelicaLiteS(FelicaLite):
         """
         return super(FelicaLite, self).protect(
             password, read_protect, protect_from)
-        
+
     def _protect(self, password, read_protect, protect_from):
         if password and len(password) < 16:
             raise ValueError("'password' must be at least length 16")
 
         if protect_from < 0:
-            raise ValueError("'protect_from' can not be negative")        
+            raise ValueError("'protect_from' can not be negative")
 
         # The memory configuration block contains access permissions
         # and ndef compatibility information.
         mc = self.read_without_mac(0x88)
-        
+
         if password is not None:
-            if mc[2] != 0xFF: # system block protected
-                if mc[5] & 1 == 0: # key change disabled
+            if mc[2] != 0xFF:  # system block protected
+                if mc[5] & 1 == 0:  # key change disabled
                     log.info("card key can not be changed")
                     return False
                 if self._authenticated is False:
                     log.info("authentication required to change key")
                     return False
-                
+
             # if password is empty use factory key of 16 zero bytes
             key = bytearray(password[0:16] if password else 16*"\0")
 
@@ -840,7 +854,7 @@ class FelicaLiteS(FelicaLite):
             if not self.authenticate(key):
                 log.error("failed to authenticate with new card key")
                 return False
-            
+
             if read_protect and protect_from < 14:
                 log.debug("read protect blocks {0}--13".format(protect_from))
                 protect_mask = pack("<H", 2**14 - 2**protect_from)
@@ -850,7 +864,7 @@ class FelicaLiteS(FelicaLite):
             log.debug("write protect blocks {0}--13".format(protect_from))
             protect_mask = pack("<H", 2**14 - 2**protect_from)
             mc[8:10] = mc[10:12] = protect_mask
-            
+
         if protect_from == 0 and self.ndef is not None:
             attribute_data = self.read_without_mac(0)
             attribute_data[10] = 0x00
@@ -858,9 +872,9 @@ class FelicaLiteS(FelicaLite):
             self.write_without_mac(attribute_data, 0)
 
         log.debug("write protect system blocks 82,83,84,86,87")
-        mc[2] = 0x00 # set system blocks 82,83,84,86,87 to read only
-        mc[5] = 0x01 # but allow write with mac to ck and ckv block
-        
+        mc[2] = 0x00  # set system blocks 82,83,84,86,87 to read only
+        mc[5] = 0x01  # but allow write with mac to ck and ckv block
+
         # Write the new memory control block.
         log.debug("write memory configuration {0}".format(hexlify(mc)))
         self.write_without_mac(mc, 0x88)
@@ -877,7 +891,7 @@ class FelicaLiteS(FelicaLite):
         integrity check value for write operation to update a specific
         memory block. If that was successful then the tag is ensured
         that the reader has the correct card key.
-        
+
         After successful authentication the
         :meth:`~FelicaLite.read_with_mac` and :meth:`write_with_mac`
         methods can be used to read and write data such that it can
@@ -898,7 +912,7 @@ class FelicaLiteS(FelicaLite):
             # ext_auth byte of the state block (block 0x92). The other
             # bytes of the state block can be all set to zero.
             self.write_with_mac("\x01" + 15*"\0", 0x92)
-            
+
             # Now read the state block and check the value of the
             # ext_auth to see if we are authenticated. If it's 01h
             # then we are, otherwise not.
@@ -917,7 +931,7 @@ class FelicaLiteS(FelicaLite):
 
         If prior to calling this method the tag was not authenticated,
         a :exc:`RuntimeError` exception is raised.
-        
+
         Command execution errors raise :exc:`~nfc.tag.TagCommandError`.
 
         """
@@ -934,12 +948,14 @@ class FelicaLiteS(FelicaLite):
         # The write count is the first three byte of the wcnt block.
         wcnt = str(self.read_without_mac(0x90)[0:3])
         log.debug("write count is 0x{0}".format(wcnt[::-1].encode("hex")))
-        
+
         # We must generate the mac_a block to write the data. The data
         # to encrypt to the mac is composed of write count and block
         # numbers (8 byte) and the data we want to write. The mac for
         # write must be generated with the key flipped (sk2 || sk1).
-        flip = lambda sk: sk[8:16] + sk[0:8]
+        def flip(sk):
+            return sk[8:16] + sk[0:8]
+
         data = wcnt + "\x00" + chr(block) + "\x00\x91\x00" + data
         maca = self.generate_mac(data, flip(self._sk), self._iv) + wcnt+5*"\0"
 
@@ -950,6 +966,7 @@ class FelicaLiteS(FelicaLite):
         bc_list = [tt3.BlockCode(block), tt3.BlockCode(0x91)]
         self.write_without_encryption(sc_list, bc_list, data[8:24] + maca)
 
+
 class FelicaPlug(tt3.Type3Tag):
     """FeliCa Plug is a contactless communication interface module for
     microcontrollers.
@@ -959,10 +976,8 @@ class FelicaPlug(tt3.Type3Tag):
         0xE0: "FeliCa Plug (RC-S926)",
         0xE1: "FeliCa Link (RC-S730) Plug Mode",
     }
-    
+
     def __init__(self, clf, target):
         super(FelicaPlug, self).__init__(clf, target)
         self._nbr, self._nbw = (12, 12)
         self._product = self.IC_CODE_MAP[self.pmm[1]]
-            
-
