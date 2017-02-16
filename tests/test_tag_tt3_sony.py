@@ -9,6 +9,12 @@ import pytest
 from pytest_mock import mocker  # noqa: F401
 from struct import pack, unpack
 
+import logging
+logging.basicConfig(level=logging.DEBUG)
+logging_level = logging.getLogger().getEffectiveLevel()
+logging.getLogger("nfc.tag.tt3").setLevel(logging_level)
+logging.getLogger("nfc.tag").setLevel(logging_level)
+
 
 def HEX(s):
     return bytearray.fromhex(s)
@@ -210,7 +216,7 @@ felica_lite_dump_2 = [
     "136: ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? (MEMORY_CONFIG)",
 ]
 
-class TestType3TagFelicaLite:
+class TestFelicaLite:
     @pytest.fixture()
     def target(self):
         target = nfc.clf.RemoteTarget("212F")
@@ -223,10 +229,14 @@ class TestType3TagFelicaLite:
         assert isinstance(tag, nfc.tag.tt3_sony.FelicaLite)
         return tag
 
-    def test_init(self, tag):
-        assert tag.product == "FeliCa Lite (RC-S965)"
-        assert tag._nbr == 4
-        assert tag._nbw == 1
+    @pytest.mark.parametrize("ic_code, product", [
+        ('F0', "FeliCa Lite (RC-S965)"),
+    ])
+    def test_init(self, target, ic_code, product):
+        target.sensf_res[10] = HEX(ic_code)[0]
+        tag = nfc.tag.activate(clf, target)
+        assert isinstance(tag, nfc.tag.tt3_sony.FelicaLite)
+        assert tag.product == product
 
     @pytest.mark.parametrize("data, dump", [
         (felica_lite_data_1, felica_lite_dump_1),
@@ -519,193 +529,354 @@ class TestType3TagFelicaLite:
 
 ###############################################################################
 #
-# FeliCa Lite S
+# FeliCa Lite-S
 #
 ###############################################################################
-@pytest.mark.skip(reason="not yet converted")
-class TestType3TagFelicaLiteS:
-    sys = "88 B4"
-    idm = "01 02 03 04 05 06 07 08"
-    pmm = "00 F1 FF FF FF FF FF FF"
-    
-    def setup(self):
-        service_data = [bytearray.fromhex(hexstr) for hexstr in [
-            "10 01 01 00  05 00 00 00  00 00 00 00  00 10 00 27",
-            "d1 02 0b 53  70 d1 01 07  55 03 61 62  2e 63 6f 6d",
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-            "FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF",
-        ]] + 113 * [None] + [bytearray.fromhex(hexstr) for hexstr in [
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-            "FF FF FF 01  07 00 00 00  00 00 00 00  00 00 00 00",
-        ]] + 7 * [None] + [bytearray.fromhex(hexstr) for hexstr in [
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        ]]
-        tag_memory = {0x000B: service_data, 0x0009: service_data}
+felica_lites_data_1 = [
+    HEX("1d 07 0102030405060708 0000 01 10040100030000000000010000270040"),
+    HEX('1d 07 0102030405060708 0000 01 d10222537091010e55036e66632d666f'),
+    HEX("1d 07 0102030405060708 0000 01 72756d2e6f726751010c5402656e4e46"),
+    HEX("1d 07 0102030405060708 0000 01 4320466f72756d000000000000000000"),
+    HEX("1d 07 0102030405060708 0000 01 4320466f72756d000000000000000000"),
+    HEX("1d 07 0102030405060708 0000 01 4320466f72756d000000000000000000"),
+] + 21 * [
+    HEX('1d 07 0102030405060708 0000 01') + bytearray(16)
+]
 
-    def test_init_with_ic_code_f1(self):
-        assert isinstance(self.tag, nfc.tag.tt3_sony.FelicaLiteS)
-        assert self.tag._product == "FeliCa Lite-S (RC-S966)"
-        assert self.tag._nbr == 4
-        assert self.tag._nbw == 1
+felica_lites_dump_1 = [
+    "  0: 10 04 01 00 03 00 00 00 00 00 01 00 00 27 00 40 |.............'.@|",
+    '  1: d1 02 22 53 70 91 01 0e 55 03 6e 66 63 2d 66 6f |.."Sp...U.nfc-fo|',
+    "  2: 72 75 6d 2e 6f 72 67 51 01 0c 54 02 65 6e 4e 46 |rum.orgQ..T.enNF|",
+    "  3: 43 20 46 6f 72 75 6d 00 00 00 00 00 00 00 00 00 |C Forum.........|",
+    "  *  43 20 46 6f 72 75 6d 00 00 00 00 00 00 00 00 00 |C Forum.........|",
+    "  6: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "  *  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    " 13: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    " 14: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 (REGA[4]B[4]C[8])",
+    "128: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 (RC1[8], RC2[8])",
+    "129: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 (MAC[8])",
+    "130: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 (IDD[8], DFC[2])",
+    "131: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 (IDM[8], PMM[8])",
+    "132: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 (SERVICE_CODE[2])",
+    "133: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 (SYSTEM_CODE[2])",
+    "134: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 (CKV[2])",
+    "135: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 (CK1[8], CK2[8])",
+    "136: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 (MEMORY_CONFIG)",
+    '144: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 (WCNT[3])',
+    '145: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 (MAC_A[8])',
+    '146: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 (STATE)',
+]
 
-    def test_init_with_ic_code_f2(self):
-        pmm = "00F2FFFF FFFFFFFF"
-        clf = Type3TagSimulator(self.clf.mem, self.sys, self.idm, pmm)
-        tag = clf.connect(rdwr={'on-connect': None})
+felica_lites_data_2 = [
+    HEX("1d 07 0102030405060708 0000 01 10040100030000000000010000270040"),
+    HEX('1d 07 0102030405060708 0000 01 d10222537091010e55036e66632d666f'),
+    HEX("1d 07 0102030405060708 0000 01 72756d2e6f726751010c5402656e4e46"),
+    HEX("1d 07 0102030405060708 0000 01 4320466f72756d000000000000000000"),
+    HEX("0c 07 0102030405060708 FFFF"),
+] + 21 * [
+    HEX('1d 07 0102030405060708 0000 01') + bytearray(16)
+] + [
+    HEX("0c 07 0102030405060708 FFFF"),
+]
+
+felica_lites_dump_2 = [
+    "  0: 10 04 01 00 03 00 00 00 00 00 01 00 00 27 00 40 |.............'.@|",
+    '  1: d1 02 22 53 70 91 01 0e 55 03 6e 66 63 2d 66 6f |.."Sp...U.nfc-fo|',
+    "  2: 72 75 6d 2e 6f 72 67 51 01 0c 54 02 65 6e 4e 46 |rum.orgQ..T.enNF|",
+    "  3: 43 20 46 6f 72 75 6d 00 00 00 00 00 00 00 00 00 |C Forum.........|",
+    "  4: ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? |................|",
+    "  5: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "  *  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    " 13: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    " 14: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 (REGA[4]B[4]C[8])",
+    "128: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 (RC1[8], RC2[8])",
+    "129: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 (MAC[8])",
+    "130: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 (IDD[8], DFC[2])",
+    "131: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 (IDM[8], PMM[8])",
+    "132: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 (SERVICE_CODE[2])",
+    "133: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 (SYSTEM_CODE[2])",
+    "134: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 (CKV[2])",
+    "135: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 (CK1[8], CK2[8])",
+    "136: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 (MEMORY_CONFIG)",
+    '144: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 (WCNT[3])',
+    '145: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 (MAC_A[8])',
+    '146: ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? (STATE)',
+]
+
+class TestFelicaLiteS:
+    @pytest.fixture()
+    def target(self):
+        target = nfc.clf.RemoteTarget("212F")
+        target.sensf_res = HEX("01 0102030405060708 00F1FFFFFFFFFFFF 88B4")
+        return target
+
+    @pytest.fixture()
+    def tag(self, clf, target):
+        tag = nfc.tag.activate(clf, target)
         assert isinstance(tag, nfc.tag.tt3_sony.FelicaLiteS)
-        assert tag._product == "FeliCa Link (RC-S730) Lite-S Mode"
-        assert tag._nbr == 4
-        assert tag._nbw == 1
+        return tag
 
-    def test_dump(self):
-        lines = self.tag.dump()
-        print "\n".join(lines)
-        assert len(lines) == 18
+    @pytest.mark.parametrize("ic_code, product", [
+        ('F1', "FeliCa Lite-S (RC-S966)"),
+        ('F2', "FeliCa Link (RC-S730) Lite-S Mode"),
+    ])
+    def test_init(self, target, ic_code, product):
+        target.sensf_res[10] = HEX(ic_code)[0]
+        tag = nfc.tag.activate(clf, target)
+        assert isinstance(tag, nfc.tag.tt3_sony.FelicaLiteS)
+        assert tag.product == product
 
-    def test_read_ndef_without_authentication(self):
-        msg = nfc.ndef.Message(nfc.ndef.SmartPosterRecord("http://ab.com"))
-        assert self.tag.ndef is not None
-        assert self.tag.ndef.capacity == 5 * 16
-        assert self.tag.ndef.length == 16
-        assert self.tag.ndef.is_readable == True
-        assert self.tag.ndef.is_writeable == False
-        assert self.tag.ndef.message == msg
+    @pytest.mark.parametrize("data, dump", [
+        (felica_lites_data_1, felica_lites_dump_1),
+        (felica_lites_data_2, felica_lites_dump_2),
+    ])
+    def test_dump(self, tag, data, dump):
+        tag.clf.exchange.side_effect = data
+        assert tag.dump() == dump
 
-    def test_read_ndef_after_authentication(self):
-        msg = nfc.ndef.Message(nfc.ndef.SmartPosterRecord("http://ab.com"))
-        assert self.tag.authenticate('') is True
-        assert self.tag.ndef is not None
-        assert self.tag.ndef.capacity == 5 * 16
-        assert self.tag.ndef.length == 16
-        assert self.tag.ndef.is_readable == True
-        assert self.tag.ndef.is_writeable == True
-        assert self.tag.ndef.message == msg
+    def test_protect_with_password_too_short(self, tag):
+        with pytest.raises(ValueError) as excinfo:
+            tag.protect("abc")
+        assert str(excinfo.value) == "password must be at least 16 byte"
 
-    #pytest.raises(AttributeError)
-    def test_write_ndef_without_authentication(self):
-        msg = nfc.ndef.Message(nfc.ndef.SmartPosterRecord("http://cd.org"))
-        self.tag.ndef.message = msg
-        assert self.clf.mem[9][1][10:16] == "cd.org"
+    def test_protect_from_negative_block_value(self, tag):
+        with pytest.raises(ValueError) as excinfo:
+            tag.protect("0123456789abcdef", protect_from=-1)
+        assert str(excinfo.value) == "protect_from can not be negative"
 
-    def test_write_ndef_after_authentication(self):
-        msg = nfc.ndef.Message(nfc.ndef.SmartPosterRecord("http://cd.org"))
-        assert self.clf.mem[9][0][10] == 0 # RWFlag
-        assert self.tag.authenticate('') is True
-        self.tag.ndef.message = msg
-        assert self.clf.mem[9][1][10:16] == "cd.org"
-        assert self.clf.mem[9][0][10] == 0 # RWFlag
-
-    def test_authenticate_with_default_password(self):
-        assert self.tag.authenticate("") is True
-
-    def test_authenticate_with_wrong_password(self):
-        self.tag.authenticate("0123456789abcdef") is False
-
-    #pytest.raises(RuntimeError)
-    def test_write_with_mac_before_authentication(self):
-        self.tag.write_with_mac(bytearray(16), 0)
-
-    #pytest.raises(nfc.tag.tt3.Type3TagCommandError)
-    def test_write_with_mac_fails_mac_verification(self):
-        assert self.tag.authenticate("") is True
-        self.clf.mem[9][0x80] = bytearray(16) # change rc
-        self.tag.write_with_mac(bytearray(16), 0)
-
-    #pytest.raises(ValueError)
-    def test_write_with_mac_with_insufficient_data(self):
-        self.tag.write_with_mac(bytearray(15), 0)
-
-    #pytest.raises(ValueError)
-    def test_write_with_mac_with_block_not_a_number(self):
-        self.tag.write_with_mac(bytearray(16), '0')
-
-    #pytest.raises(ValueError)
-    def test_protect_with_insufficient_password(self):
-        self.tag.protect("abc")
-
-    #pytest.raises(ValueError)
-    def test_protect_with_negative_protect_from(self):
-        self.tag.protect("0123456789abcdef", protect_from=-1)
-
-    def test_protect_when_key_change_is_not_possible(self):
-        self.clf.mem[9][0x88][2] = 0
-        tag = self.clf.connect(rdwr={'on-connect': None})
+    def test_protect_when_key_change_is_disabled(self, tag):
+        tag.clf.exchange.side_effect = [
+            HEX("1d 07 0102030405060708 0000 01"
+                "FF FF 00 01  07 00 00 00  00 00 00 00  00 00 00 00"),
+        ]
         assert tag.protect("0123456789abcdef") is False
+        tag.clf.exchange.assert_called_with(
+            HEX('10 06 0102030405060708 010b00 018088'), 0.3093504)
 
-    def test_protect_when_key_change_requires_authentication(self):
-        self.clf.mem[9][0x88][2] = 0
-        self.clf.mem[9][0x88][5] = 1
-        tag = self.clf.connect(rdwr={'on-connect': None})
+    def test_protect_when_authentication_needed(self, tag):
+        tag.clf.exchange.side_effect = [
+            HEX("1d 07 0102030405060708 0000 01"
+                "FF FF 00 01  07 01 00 00  00 00 00 00  00 00 00 00"),
+        ]
         assert tag.protect("0123456789abcdef") is False
-        assert tag.authenticate("") is True
+        tag.clf.exchange.assert_called_with(
+            HEX('10 06 0102030405060708 010b00 018088'), 0.3093504)
+
+    def test_protect_ndef_tag_readonly(self, tag, mocker):
+        mocker.patch('os.urandom', new=lambda x: bytes(bytearray(range(x))))
+        commands = [
+            (HEX('10 06 0102030405060708 010b00 018088'), 0.3093504),   # 1
+            (HEX('10 06 0102030405060708 010b00 018086'), 0.3093504),   # 2
+            (HEX('20 08 0102030405060708 010900 018086'  # write CKV    # 3
+                 '01000000 00000000 00000000 00000000'), 0.3093504),
+            (HEX('20 08 0102030405060708 010900 018087'  # write CK     # 4
+                 '37363534 33323130 66656463 62613938'), 0.3093504),
+            # authenticate_1
+            (HEX('20 08 0102030405060708 010900 018080'  # write RC     # 5
+                 '07060504 03020100 0f0e0d0c 0b0a0908'), 0.3093504),
+            (HEX('12 06 0102030405060708 010b00 0280828081'),           # 6
+             0.46402560000000004),  # read ID, MAC
+            # authenticate_2 - write_with_mac
+            (HEX('10 06 0102030405060708 010b00 018090'), 0.3093504),   # 7
+            (HEX('32 08 0102030405060708 010900 0280928091'             # 8
+                 '01000000 00000000 00000000 00000000'
+                 '17c19e3b bdc3e8bd 00feff00 00000000'),
+             0.46402560000000004),  # write STATE, MAC_A
+            (HEX('12 06 0102030405060708 010b00 0280928081'),           # 9
+             0.46402560000000004),  # read_with_mac STATE
+            # read ndef
+            (HEX('06 00 12fc 0000'), 0.003625),  # poll for ndef        # 10
+            (HEX('12 06 0102030405060708 010b00 0280008081'),           # 11
+             0.46402560000000004),  # read_with_mac Block 0
+            # read MC for ndef attribute rw flag
+            (HEX('10 06 0102030405060708 010b00 018088'), 0.3093504),   # 12
+            # read and write ndef attribute data
+            (HEX('10 06 0102030405060708 010b00 018000'), 0.3093504),   # 13
+            (HEX('20 08 0102030405060708 010900 018000'                 # 14
+                 '10040100 03000000 00000000 00000018'), 0.3093504),
+            # write memory configuration
+            (HEX('20 08 0102030405060708 010900 018088'  # write MC     # 15
+                 'ffff0001 0701ff3f ff3fff3f 00000000'), 0.3093504),
+        ]
+        responses = [
+            HEX('1d 07 0102030405060708 0000 01'  # read MC             # 1
+                'FF FF FF 01  07 00 00 00  00 00 00 00  00 00 00 00'),
+            HEX('1d 07 0102030405060708 0000 01'  # read CKV            # 2
+                '00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00'),
+            HEX('0c 09 0102030405060708 0000'),   # write CKV           # 3
+            HEX('0c 09 0102030405060708 0000'),   # write CK            # 4
+            # authenticate_1
+            HEX('0c 09 0102030405060708 0000'),   # write RC            # 5
+            HEX('2d 07 0102030405060708 0000 02'  # read ID, MAC        # 6
+                '01 02 03 04  05 06 07 08  00 00 00 00  00 00 00 00'
+                '91 ae c5 b6  d9 b3 b1 2d  00 00 00 00  00 00 00 00'),
+            # authenticate_2
+            HEX('1d 07 0102030405060708 0000 01'  # read WCNT           # 7
+                '00 FE FF 00  00 00 00 00  00 00 00 00  00 00 00 00'),
+            HEX('0c 09 0102030405060708 0000'),   # write STATE, MAC_A  # 8
+            HEX('2d 07 0102030405060708 0000 02'  # read STATE, MAC     # 9
+                '01 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00'
+                'bd 73 eb 72  94 a0 02 79  00 00 00 00  00 00 00 00'),
+            HEX("12 01 0102030405060708 00F1FFFFFFFFFFFF"),  # polling  # 10
+            HEX('2d 07 0102030405060708 0000 02'  # read attribute data # 11
+                '10 04 01 00  03 00 00 00  00 00 01 00  00 00 00 19'
+                'a6 22 c3 37  a4 e4 42 71  00 00 00 00  00 00 00 00'),
+            HEX('1d 07 0102030405060708 0000 01'  # read MC             # 12
+                'FF FF FF 01  07 00 00 00  00 00 00 00  00 00 00 00'),
+            HEX('1d 07 0102030405060708 0000 01'  # read attribute data # 13
+                '10 04 01 00  03 00 00 00  00 00 01 00  00 00 00 19'),
+            HEX('0c 09 0102030405060708 0000'),   # write Block 0       # 14
+            HEX('0c 09 0102030405060708 0000'),   # write MC            # 15
+        ]
+        tag.clf.exchange.side_effect = responses
+        assert tag.protect("0123456789abcdef", read_protect=True) is True
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
+
+    def test_protect_unformatted_tag(self, tag, mocker):
+        mocker.patch('os.urandom', new=lambda x: bytes(bytearray(range(x))))
+        commands = [
+            (HEX('10 06 0102030405060708 010b00 018088'), 0.3093504),   # 1
+            (HEX('10 06 0102030405060708 010b00 018086'), 0.3093504),   # 2
+            (HEX('20 08 0102030405060708 010900 018086'  # write CKV    # 3
+                 '01000000 00000000 00000000 00000000'), 0.3093504),
+            (HEX('20 08 0102030405060708 010900 018087'  # write CK     # 4
+                 '37363534 33323130 66656463 62613938'), 0.3093504),
+            # authenticate_1
+            (HEX('20 08 0102030405060708 010900 018080'  # write RC     # 5
+                 '07060504 03020100 0f0e0d0c 0b0a0908'), 0.3093504),
+            (HEX('12 06 0102030405060708 010b00 0280828081'),           # 6
+             0.46402560000000004),  # read ID, MAC
+            # authenticate_2 - write_with_mac
+            (HEX('10 06 0102030405060708 010b00 018090'), 0.3093504),   # 7
+            (HEX('32 08 0102030405060708 010900 0280928091'             # 8
+                 '01000000 00000000 00000000 00000000'
+                 '17c19e3b bdc3e8bd 00feff00 00000000'),
+             0.46402560000000004),  # write STATE, MAC_A
+            (HEX('12 06 0102030405060708 010b00 0280928081'),           # 9
+             0.46402560000000004),  # read_with_mac STATE
+            # read ndef
+            (HEX('06 00 12fc 0000'), 0.003625),  # poll for ndef        # 10
+            (HEX('12 06 0102030405060708 010b00 0280008081'),           # 11
+             0.46402560000000004),  # read_with_mac Block 0
+            # read MC for ndef attribute rw flag
+            (HEX('10 06 0102030405060708 010b00 018088'), 0.3093504),   # 12
+            # write memory configuration
+            (HEX('20 08 0102030405060708 010900 018088'  # write MC     # 13
+                 'ffff0001 07010000 ff3fff3f 00000000'), 0.3093504),
+        ]
+        responses = [
+            HEX('1d 07 0102030405060708 0000 01'  # read MC             # 1
+                'FF FF FF 01  07 00 00 00  00 00 00 00  00 00 00 00'),
+            HEX('1d 07 0102030405060708 0000 01'  # read CKV            # 2
+                '00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00'),
+            HEX('0c 09 0102030405060708 0000'),   # write CKV           # 3
+            HEX('0c 09 0102030405060708 0000'),   # write CK            # 4
+            # authenticate_1
+            HEX('0c 09 0102030405060708 0000'),   # write RC            # 5
+            HEX('2d 07 0102030405060708 0000 02'  # read ID, MAC        # 6
+                '01 02 03 04  05 06 07 08  00 00 00 00  00 00 00 00'
+                '91 ae c5 b6  d9 b3 b1 2d  00 00 00 00  00 00 00 00'),
+            # authenticate_2
+            HEX('1d 07 0102030405060708 0000 01'  # read WCNT           # 7
+                '00 FE FF 00  00 00 00 00  00 00 00 00  00 00 00 00'),
+            HEX('0c 09 0102030405060708 0000'),   # write STATE, MAC_A  # 8
+            HEX('2d 07 0102030405060708 0000 02'  # read STATE, MAC     # 9
+                '01 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00'
+                'bd 73 eb 72  94 a0 02 79  00 00 00 00  00 00 00 00'),
+            HEX("12 01 0102030405060708 00F1FFFFFFFFFFFF"),  # polling  # 10
+            HEX('2d 07 0102030405060708 0000 02'  # read attribute data # 11
+                '00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00'
+                'cc 97 f1 b9  7b 8b bc 79  00 00 00 00  00 00 00 00'),
+            HEX('1d 07 0102030405060708 0000 01'  # read MC             # 12
+                'FF FF FF 01  07 00 00 00  00 00 00 00  00 00 00 00'),
+            HEX('0c 09 0102030405060708 0000'),   # write MC            # 13
+        ]
+        tag.clf.exchange.side_effect = responses
         assert tag.protect("0123456789abcdef") is True
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
-    def test_protect_all_blocks_with_read_protect_set_true(self):
-        assert self.tag.protect("0123456789abcdef", read_protect=True)
-        assert self.clf.mem[9][0x87] == "76543210fedcba98"
-        mc_block = "ffff00010701ff3fff3fff3f00000000".decode("hex")
-        assert self.clf.mem[9][0x88] == mc_block
-        assert self.clf.mem[9][0][10] == 0 # RWFlag
+    def test_protect_with_wrong_password(self, tag, mocker):
+        mocker.patch('os.urandom', new=lambda x: bytes(bytearray(range(x))))
+        commands = [
+            (HEX('10 06 0102030405060708 010b00 018088'), 0.3093504),   # 1
+            (HEX('10 06 0102030405060708 010b00 018086'), 0.3093504),   # 2
+            (HEX('20 08 0102030405060708 010900 018086'  # write CKV    # 3
+                 '01000000 00000000 00000000 00000000'), 0.3093504),
+            (HEX('20 08 0102030405060708 010900 018087'  # write CK     # 4
+                 '38373635 34333231 66656463 62613039'), 0.3093504),
+            # authenticate_1
+            (HEX('20 08 0102030405060708 010900 018080'  # write RC     # 5
+                 '07060504 03020100 0f0e0d0c 0b0a0908'), 0.3093504),
+            (HEX('12 06 0102030405060708 010b00 0280828081'),           # 6
+             0.46402560000000004),  # read ID, MAC
+        ]
+        responses = [
+            HEX('1d 07 0102030405060708 0000 01'  # read MC             # 1
+                'FF FF FF 01  07 00 00 00  00 00 00 00  00 00 00 00'),
+            HEX('1d 07 0102030405060708 0000 01'  # read CKV            # 2
+                '00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00'),
+            HEX('0c 09 0102030405060708 0000'),   # write CKV           # 3
+            HEX('0c 09 0102030405060708 0000'),   # write CK            # 4
+            # authenticate_1
+            HEX('0c 09 0102030405060708 0000'),   # write RC            # 5
+            HEX('2d 07 0102030405060708 0000 02'  # read ID, MAC        # 6
+                '01 02 03 04  05 06 07 08  00 00 00 00  00 00 00 00'
+                '91 ae c5 b6  d9 b3 b1 2d  00 00 00 00  00 00 00 00'),
+        ]
+        tag.clf.exchange.side_effect = responses
+        assert tag.protect("1234567890abcdef") is False
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
-    def test_protect_some_blocks_with_read_protect_set_true(self):
-        assert self.tag.protect("", protect_from=4, read_protect=True)
-        mc_block = "ffff00010701f03ff03ff03f00000000".decode("hex")
-        assert self.clf.mem[9][0x88] == mc_block
-        assert self.clf.mem[9][0][10] == 0 # RWFlag
+    def test_mutual_authentication_error(self, tag, mocker):
+        mocker.patch('os.urandom', new=lambda x: bytes(bytearray(range(x))))
+        commands = [
+            # authenticate_1
+            (HEX('20 08 0102030405060708 010900 018080'  # write RC     # 5
+                 '07060504 03020100 0f0e0d0c 0b0a0908'), 0.3093504),
+            (HEX('12 06 0102030405060708 010b00 0280828081'),           # 6
+             0.46402560000000004),  # read ID, MAC
+            # authenticate_2 - write_with_mac
+            (HEX('10 06 0102030405060708 010b00 018090'), 0.3093504),   # 7
+            (HEX('32 08 0102030405060708 010900 0280928091'             # 8
+                 '01000000 00000000 00000000 00000000'
+                 '17c19e3b bdc3e8bd 00feff00 00000000'),
+             0.46402560000000004),  # write STATE, MAC_A
+            (HEX('12 06 0102030405060708 010b00 0280928081'),           # 9
+             0.46402560000000004),  # read_with_mac STATE
+        ]
+        responses = [
+            # authenticate_1
+            HEX('0c 09 0102030405060708 0000'),   # write RC            # 5
+            HEX('2d 07 0102030405060708 0000 02'  # read ID, MAC        # 6
+                '01 02 03 04  05 06 07 08  00 00 00 00  00 00 00 00'
+                '91 ae c5 b6  d9 b3 b1 2d  00 00 00 00  00 00 00 00'),
+            # authenticate_2
+            HEX('1d 07 0102030405060708 0000 01'  # read WCNT           # 7
+                '00 FE FF 00  00 00 00 00  00 00 00 00  00 00 00 00'),
+            HEX('0c 09 0102030405060708 0000'),   # write STATE, MAC_A  # 8
+            HEX('2d 07 0102030405060708 0000 02'  # read STATE, MAC     # 9
+                '00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00'
+                'cc 97 f1 b9  7b 8b bc 79  00 00 00 00  00 00 00 00'),
+        ]
+        tag.clf.exchange.side_effect = responses
+        assert tag.authenticate("0123456789abcdef") is False
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
-    def test_protect_all_blocks_and_set_card_key(self):
-        self.clf.mem[9][0][10] = 1 # RWFlag
-        self.clf.mem[9][0][15] += 1 # checksum
-        assert self.tag.protect("0123456789abcdef") is True
-        assert self.clf.mem[9][0x87] == "76543210fedcba98"
-        mc_block = "ffff000107010000ff3fff3f00000000".decode("hex")
-        assert self.clf.mem[9][0x88] == mc_block
-        assert self.clf.mem[9][0][10] == 0 # RWFlag
+    def test_write_with_mac_wrong_data_size(self, tag):
+        with pytest.raises(ValueError) as excinfo:
+            tag.write_with_mac(bytearray(15), 0)
+        assert str(excinfo.value) == "data must be 16 octets"
 
-    def test_protect_all_blocks_and_set_default_key(self):
-        self.clf.mem[9][0x87] = bytearray("76543210fedcba98")
-        assert self.tag.protect("") is True
-        assert self.clf.mem[9][0x87] == 16 * "\0"
-        mc_block = "ffff000107010000ff3fff3f00000000".decode("hex")
-        assert self.clf.mem[9][0x88] == mc_block
-        assert self.clf.mem[9][0][10] == 0 # RWFlag
+    def test_write_with_mac_block_arg_not_int(self, tag):
+        with pytest.raises(ValueError) as excinfo:
+            tag.write_with_mac(bytearray(16), '0')
+        assert str(excinfo.value) == "block number must be int"
 
-    def test_protect_some_blocks_and_not_set_card_key(self):
-        self.clf.mem[9][0x87] = bytearray("76543210fedcba98")
-        assert self.tag.protect(protect_from=4) is True
-        assert self.clf.mem[9][0x87] == "76543210fedcba98"
-        mc_block = "ffff000107010000f03ff03f00000000".decode("hex")
-        assert self.clf.mem[9][0x88] == mc_block
-        assert self.clf.mem[9][0][10] == 0 # RWFlag
+    def test_write_with_mac_not_authenticated(self, tag):
+        with pytest.raises(RuntimeError) as excinfo:
+            tag.write_with_mac(bytearray(16), 0)
+        assert str(excinfo.value) == "tag must be authenticated first"
 
-    def test_protect_system_blocks_and_not_set_card_key(self):
-        self.clf.mem[9][0x87] = bytearray("76543210fedcba98")
-        assert self.tag.protect(protect_from=14) is True
-        assert self.clf.mem[9][0x87] == "76543210fedcba98"
-        assert self.clf.mem[9][0x88][0:3] == "\xFF\xFF\x00"
-        mc_block = "ffff0001070100000000000000000000".decode("hex")
-        assert self.clf.mem[9][0x88] == mc_block
-        assert self.clf.mem[9][0][10] == 0 # RWFlag
 
 ###############################################################################
 #
@@ -717,7 +888,7 @@ class TestType3TagFelicaPlug:
     sys = "00 00"
     idm = "01 02 03 04 05 06 07 08"
     
-    def test_init_with_ic_code_e0(self):
+    def __test_init_with_ic_code_e0(self):
         pmm = "00E0FFFF FFFFFFFF"
         clf = Type3TagSimulator(None, self.sys, self.idm, pmm)
         tag = clf.connect(rdwr={'on-connect': None})
@@ -726,7 +897,7 @@ class TestType3TagFelicaPlug:
         assert tag._nbr == 12
         assert tag._nbw == 12
 
-    def test_init_with_ic_code_e1(self):
+    def __test_init_with_ic_code_e1(self):
         pmm = "00E1FFFF FFFFFFFF"
         clf = Type3TagSimulator(None, self.sys, self.idm, pmm)
         tag = clf.connect(rdwr={'on-connect': None})

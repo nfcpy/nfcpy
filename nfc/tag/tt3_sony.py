@@ -411,8 +411,6 @@ class FelicaLite(tt3.Type3Tag):
     def __init__(self, clf, target):
         super(FelicaLite, self).__init__(clf, target)
         self._product = self.IC_CODE_MAP[self.pmm[1]]
-        self._nbr = 4
-        self._nbw = 1
         self._sk = self._iv = None
         self.read_from_ndef_service = self.read_without_mac
         self.write_to_ndef_service = self.write_without_mac
@@ -823,10 +821,10 @@ class FelicaLiteS(FelicaLite):
 
     def _protect(self, password, read_protect, protect_from):
         if password and len(password) < 16:
-            raise ValueError("'password' must be at least length 16")
+            raise ValueError("password must be at least 16 byte")
 
         if protect_from < 0:
-            raise ValueError("'protect_from' can not be negative")
+            raise ValueError("protect_from can not be negative")
 
         # The memory configuration block contains access permissions
         # and ndef compatibility information.
@@ -939,7 +937,7 @@ class FelicaLiteS(FelicaLite):
         # will only accept the write if it computed the same mac.
         log.debug("write 1 block with mac")
         if len(data) != 16:
-            raise ValueError("data length must be 16")
+            raise ValueError("data must be 16 octets")
         if type(block) is not int:
             raise ValueError("block number must be int")
         if self._sk is None or self._iv is None:
