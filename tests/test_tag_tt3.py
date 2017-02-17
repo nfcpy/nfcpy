@@ -229,8 +229,6 @@ class TestType3Tag:
         assert tag.idm == HEX("01 02 03 04 05 06 07 08")
         assert tag.pmm == HEX("FF FF FF FF FF FF FF FF")
         assert tag.identifier == bytes(tag.idm)
-        assert tag._nbr == 1
-        assert tag._nbw == 1
 
     def test_str(self, tag):
         s = "Type3Tag ID=0102030405060708 PMM=FFFFFFFFFFFFFFFF SYS=12FC"

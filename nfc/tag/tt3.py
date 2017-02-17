@@ -246,7 +246,6 @@ class Type3Tag(nfc.tag.Tag):
         self.sys = 0xFFFF
         if len(target.sensf_res) > 17:
             self.sys = unpack(">H", target.sensf_res[17:19])[0]
-        self._nbr, self._nbw = (1, 1)
         self._nfcid = bytearray(self.idm)
 
     def __str__(self):

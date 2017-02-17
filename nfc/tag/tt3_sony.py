@@ -74,7 +74,6 @@ class FelicaStandard(tt3.Type3Tag):
         super(FelicaStandard, self).__init__(clf, target)
         self._product = "FeliCa Standard ({0})".format(
             self.IC_CODE_MAP[self.pmm[1]][0])
-        self._nbr, self._nbw = self.IC_CODE_MAP[self.pmm[1]][1:3]
 
     def _is_present(self):
         # Perform a presence check. Modern FeliCa cards implement the
@@ -181,12 +180,12 @@ class FelicaStandard(tt3.Type3Tag):
             area_stack = []
             overlap_services = []
 
-            # We've already processed the first are/service entry so
-            # index starts from 1. The first non-existing index will
-            # give us None and thus terminate the loop.
-            for i in xrange(0, 0x10000):
+            # Walk through the list of services by index. The first
+            # index for which there is no service returns None and
+            # terminate the loop.
+            for service_index in xrange(0, 0x10000):
                 depth = len(area_stack)
-                area_or_service = self.search_service_code(i)
+                area_or_service = self.search_service_code(service_index)
                 if area_or_service is None:
                     # Went beyond the service index. Print overlap
                     # services if any and exit loop.
@@ -228,6 +227,8 @@ class FelicaStandard(tt3.Type3Tag):
                         area_stack.pop()
                     lines.extend(print_area(area_from, area_last, depth))
                     area_stack.append((area_from, area_last))
+            else:  # pragma: no cover
+                pass  # never reached
 
         return lines
 
@@ -977,5 +978,4 @@ class FelicaPlug(tt3.Type3Tag):
 
     def __init__(self, clf, target):
         super(FelicaPlug, self).__init__(clf, target)
-        self._nbr, self._nbw = (12, 12)
         self._product = self.IC_CODE_MAP[self.pmm[1]]

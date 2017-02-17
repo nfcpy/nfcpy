@@ -7,7 +7,6 @@ import ndef
 import mock
 import pytest
 from pytest_mock import mocker  # noqa: F401
-from struct import pack, unpack
 
 import logging
 logging.basicConfig(level=logging.DEBUG)
@@ -19,10 +18,12 @@ logging.getLogger("nfc.tag").setLevel(logging_level)
 def HEX(s):
     return bytearray.fromhex(s)
 
+
 @pytest.fixture()  # noqa: F811
 def clf(mocker):
     clf = nfc.ContactlessFrontend()
     mocker.patch.object(clf, 'exchange', autospec=True)
+    mocker.patch('os.urandom', new=lambda x: bytes(bytearray(range(x))))
     return clf
 
 
@@ -31,98 +32,582 @@ def clf(mocker):
 # FeliCa Standard
 #
 ###############################################################################
-@pytest.mark.skip(reason="not yet converted")
-class TestType3TagFelicaStandard:
-    idm = "01 02 03 04 05 06 07 08"
-    pmm = "00 01 FF FF FF FF FF FF"
+felica_sample_1_responses = [
+    HEX('0f 0d 0102030405060708 028092fe00'),
+    HEX('12 01 0102030405060708 03014b024f4993ff'),
+    HEX('0e 0b 0102030405060708 0000feff'),
+    HEX('0c 0b 0102030405060708 ffff'),
+    HEX('12 01 0102030405060708 03014b024f4993ff'),
+    HEX('0e 0b 0102030405060708 0000feff'),
+    HEX('0e 0b 0102030405060708 00101717'),
+    HEX('0e 0b 0102030405060708 01101717'),
+    HEX('0c 0b 0102030405060708 0810'),
+    HEX('0c 0b 0102030405060708 0811'),
+    HEX('0c 0b 0102030405060708 0a11'),
+    HEX('0c 0b 0102030405060708 0b11'),
+    HEX('0c 0b 0102030405060708 0812'),
+    HEX('1d 07 0102030405060708 00000100011001900700004225098e00000011'),
+    HEX('1d 07 0102030405060708 000001000061a80000c3500000c35000000000'),
+    HEX('0c 07 0102030405060708 01a8'),
+    HEX('0c 0b 0102030405060708 1013'),
+    HEX('0c 0b 0102030405060708 1213'),
+    HEX('0c 0b 0102030405060708 1713'),
+    HEX('0c 0b 0102030405060708 0814'),
+    HEX('1d 07 0102030405060708 0000019e0100004a0200000000000000000400'),
+    HEX('0c 07 0102030405060708 01a8'),
+    HEX('0c 0b 0102030405060708 0a14'),
+    HEX('0c 0b 0102030405060708 0815'),
+    HEX('0c 0b 0102030405060708 0a15'),
+    HEX('0c 0b 0102030405060708 0816'),
+    HEX('0c 0b 0102030405060708 0a16'),
+    HEX('0c 0b 0102030405060708 0c17'),
+    HEX('0c 0b 0102030405060708 0f17'),
+    HEX('0c 0b 0102030405060708 ffff'),
+    HEX('1d 07 0102030405060708 000001200000042e02ae410000024a0000019e'),
+    HEX('1d 07 0102030405060708 000001020000032e02ab84000003e8000003e8'),
+    HEX('1d 07 0102030405060708 000001200000020a98ac7d000001f400000000'),
+    HEX('1d 07 0102030405060708 00000104000001099a9dad000001f4000001f4'),
+    HEX('1d 07 0102030405060708 00000100060000000000000000000000000000'),
+    HEX('1d 07 0102030405060708 00000100050000000000000000000000000000'),
+    HEX('0c 07 0102030405060708 01a8'),
+]
 
-    def setup(self):
-        service_data = [bytearray.fromhex(hexstr) for hexstr in [
-            "10 01 01 00  05 00 00 00  00 00 01 00  00 10 00 28",
-            "d1 02 0b 53  70 d1 01 07  55 03 61 62  2e 63 6f 6d",
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-            "FF FF FF FF  FF FF FF FF  FF FF FF FF  FF FF FF FF",
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00",
-        ]]
-        tag_memory = {
-            0x0009: service_data, 0x000B: service_data,
-            0x0048: service_data[1:], 0x0049: service_data[1:],
-            0x004A: service_data[1:], 0x004B: service_data[1:],
-            0x010C: service_data[-1:], 0x010D: service_data[-1:],
-            0x010E: service_data[-1:], 0x010F: service_data[-1:],
-            0x0210: service_data[-1:], 0x0211: service_data[-1:],
-            0x0312: service_data[-1:], 0x0313: service_data[-1:],
-            0x0414: service_data[-1:], 0x0415: service_data[-1:],
-            0x0516: service_data[-1:], 0x0517: service_data[-1:],
-        }
-        #self.clf = Type3TagSimulator(tag_memory, "0000", self.idm, self.pmm)
-        #self.clf.sys.append(bytearray.fromhex("12FC"))
-        #self.tag = self.clf.connect(rdwr={'on-connect': None})
-    
-    def __test_init_with_ic_code(self):
-        for ic in (0, 1, 2, 8, 9, 11, 12, 13, 32, 50, 53):
-            yield self.check_init_with_ic_code, ic
+felica_sample_1_sys = 0x8092
 
-    def check_init_with_ic_code(self, ic):
-        pmm = "00{0:02X}FFFF FFFFFFFF".format(ic)
-        clf = Type3TagSimulator(None, "0000", self.idm, pmm)
-        tag = clf.connect(rdwr={'on-connect': None})
+felica_sample_1_dump = [
+    "System 8092 (unknown)",
+    "Area 0000--FFFE",
+    "System FE00 (Common Area)",
+    "Area 0000--FFFE",
+    "  Area 1000--1717",
+    "    Area 1001--1717",
+    "      Random Service 64: write with key (0x1008)",
+    "      Random Service 68: write with key & read with key & read w/o key (0x1108 0x110A 0x110B)",
+    "       0000: 00 01 10 01 90 07 00 00 42 25 09 8e 00 00 00 11 |........B%......|",
+    "       0001: 00 00 61 a8 00 00 c3 50 00 00 c3 50 00 00 00 00 |..a....P...P....|",
+    "      Random Service 72: write with key (0x1208)",
+    "      Purse Service 76: direct with key & cashback with key & read w/o key (0x1310 0x1312 0x1317)",
+    "       0000: 9e 01 00 00 4a 02 00 00 00 00 00 00 00 00 04 00 |....J...........|",
+    "      Random Service 80: write with key & read with key (0x1408 0x140A)",
+    "      Random Service 84: write with key & read with key (0x1508 0x150A)",
+    "      Random Service 88: write with key & read with key (0x1608 0x160A)",
+    "      Cyclic Service 92: write with key & read w/o key (0x170C 0x170F)",
+    "       0000: 20 00 00 04 2e 02 ae 41 00 00 02 4a 00 00 01 9e | ......A...J....|",
+    "       0001: 02 00 00 03 2e 02 ab 84 00 00 03 e8 00 00 03 e8 |................|",
+    "       0002: 20 00 00 02 0a 98 ac 7d 00 00 01 f4 00 00 00 00 | ......}........|",
+    "       0003: 04 00 00 01 09 9a 9d ad 00 00 01 f4 00 00 01 f4 |................|",
+    "       0004: 00 06 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "       0005: 00 05 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+]
+
+felica_sample_2_responses = [
+    HEX("11 0d 0102030405060708 030003fe0086a7"),
+    HEX("12 01 0102030405060708 100b4b428485d0ff"),
+    HEX("0e 0b 0102030405060708 0000feff"),
+    HEX("0e 0b 0102030405060708 4000ff07"),
+    HEX("0c 0b 0102030405060708 4800"),
+    HEX("0c 0b 0102030405060708 4a00"),
+    HEX("0c 0b 0102030405060708 8800"),
+    HEX("0c 0b 0102030405060708 8b00"),
+    HEX("0e 0b 0102030405060708 0008bf0f"),
+    HEX("1d 07 0102030405060708 0000010000000000000000200000fc08000022"),
+    HEX("0c 07 0102030405060708 01a8"),
+    HEX("0c 0b 0102030405060708 1008"),
+    HEX("0c 0b 0102030405060708 1208"),
+    HEX("0c 0b 0102030405060708 1608"),
+    HEX("0c 0b 0102030405060708 5008"),
+    HEX("0c 0b 0102030405060708 5208"),
+    HEX("0c 0b 0102030405060708 5608"),
+    HEX("0c 0b 0102030405060708 9008"),
+    HEX("0c 0b 0102030405060708 9208"),
+    HEX("0c 0b 0102030405060708 9608"),
+    HEX("0c 0b 0102030405060708 c808"),
+    HEX("0c 0b 0102030405060708 ca08"),
+    HEX("0c 0b 0102030405060708 0a09"),
+    HEX("0c 0b 0102030405060708 0c09"),
+    HEX("0c 0b 0102030405060708 0f09"),
+    HEX("0e 0b 0102030405060708 c00fff7f"),
+    HEX("1d 07 0102030405060708 000001c746000018d93d802928fc0800002200"),
+    HEX("1d 07 0102030405060708 000001c746000018d8aba02927920900002100"),
+    HEX("1d 07 0102030405060708 000001c746000018d88e002753280a00002000"),
+    HEX("1d 07 0102030405060708 000001c746000018d73ee02752720b00001f00"),
+    HEX("1d 07 0102030405060708 0000010802000018d701070000480d00001e00"),
+    HEX("1d 07 0102030405060708 000001c846000018d72a43b195900100001d00"),
+    HEX("1d 07 0102030405060708 000001c746000018d538a028a0120200001c00"),
+    HEX("1d 07 0102030405060708 000001c746000017715200505a320500001b00"),
+    HEX("1d 07 0102030405060708 00000116010002176e25070107260700001a00"),
+    HEX("1d 07 0102030405060708 00000116010002176e01072507c60700001800"),
+    HEX("1d 07 0102030405060708 00000108020000176e01070000660800001600"),
+    HEX("1d 07 0102030405060708 0000011601000212e801020107960000001500"),
+    HEX("1d 07 0102030405060708 0000011601000212e8250201022c0100001300"),
+    HEX("1d 07 0102030405060708 0000011601000212e801072502cc0100001100"),
+    HEX("1d 07 0102030405060708 0000011601000212e7010601074e0200000f00"),
+    HEX("1d 07 0102030405060708 0000011601000212e701070106d00200000d00"),
+    HEX("1d 07 0102030405060708 0000011601000212e625020107520300000b00"),
+    HEX("1d 07 0102030405060708 0000011601000212e601072502d40300000900"),
+    HEX("1d 07 0102030405060708 0000011601000212e325020107560400000700"),
+    HEX("1d 07 0102030405060708 0000011601000212e301072502d80400000500"),
+    HEX("0c 07 0102030405060708 01a8"),
+    HEX("0e 0b 0102030405060708 0010bf17"),
+    HEX("0c 0b 0102030405060708 0810"),
+    HEX("0c 0b 0102030405060708 0a10"),
+    HEX("0c 0b 0102030405060708 4810"),
+    HEX("0c 0b 0102030405060708 4a10"),
+    HEX("0c 0b 0102030405060708 8c10"),
+    HEX("0c 0b 0102030405060708 8f10"),
+    HEX("0c 0b 0102030405060708 c810"),
+    HEX("1d 07 0102030405060708 000001200001071015176e2210a00000000000"),
+    HEX("1d 07 0102030405060708 000001a00025075007176e2151000000000000"),
+    HEX("1d 07 0102030405060708 000001200025075002176e1901a00000000000"),
+    HEX("0c 07 0102030405060708 01a8"),
+    HEX("0c 0b 0102030405060708 cb10"),
+    HEX("0c 0b 0102030405060708 0811"),
+    HEX("1d 07 0102030405060708 00000125070000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("0c 07 0102030405060708 01a8"),
+    HEX("0c 0b 0102030405060708 0a11"),
+    HEX("0c 0b 0102030405060708 4811"),
+    HEX("0c 0b 0102030405060708 4a11"),
+    HEX("0e 0b 0102030405060708 c017ff7f"),
+    HEX("0e 0b 0102030405060708 00183f1a"),
+    HEX("0c 0b 0102030405060708 0818"),
+    HEX("0c 0b 0102030405060708 0a18"),
+    HEX("0c 0b 0102030405060708 4818"),
+    HEX("0c 0b 0102030405060708 4b18"),
+    HEX("0c 0b 0102030405060708 c818"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("0c 07 0102030405060708 01a8"),
+    HEX("0c 0b 0102030405060708 ca18"),
+    HEX("0c 0b 0102030405060708 0819"),
+    HEX("0c 0b 0102030405060708 0a19"),
+    HEX("0c 0b 0102030405060708 4819"),
+    HEX("0c 0b 0102030405060708 4b19"),
+    HEX("0c 0b 0102030405060708 8819"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("0c 07 0102030405060708 01a8"),
+    HEX("0c 0b 0102030405060708 8b19"),
+    HEX("0e 0b 0102030405060708 00233f24"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("0c 07 0102030405060708 01a8"),
+    HEX("0c 0b 0102030405060708 0823"),
+    HEX("0c 0b 0102030405060708 0a23"),
+    HEX("0c 0b 0102030405060708 4823"),
+    HEX("0c 0b 0102030405060708 4b23"),
+    HEX("0c 0b 0102030405060708 8823"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("0c 07 0102030405060708 01a8"),
+    HEX("0c 0b 0102030405060708 8b23"),
+    HEX("0c 0b 0102030405060708 c823"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("0c 07 0102030405060708 01a8"),
+    HEX("0c 0b 0102030405060708 cb23"),
+    HEX("0c 0b 0102030405060708 ffff"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("0c 07 0102030405060708 01a8"),
+    HEX("12 01 0102030405060708 100b4b428485d0ff"),
+    HEX("0e 0b 0102030405060708 0000feff"),
+    HEX("0e 0b 0102030405060708 4039ff39"),
+    HEX("0e 0b 0102030405060708 4139ff39"),
+    HEX("0c 0b 0102030405060708 4839"),
+    HEX("0c 0b 0102030405060708 4b39"),
+    HEX("0c 0b 0102030405060708 8839"),
+    HEX("1d 07 0102030405060708 00000148077739080000040100000000000000"),
+    HEX("0c 07 0102030405060708 01a8"),
+    HEX("0c 0b 0102030405060708 8b39"),
+    HEX("0c 0b 0102030405060708 c939"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("0c 07 0102030405060708 01a8"),
+    HEX("0c 0b 0102030405060708 ffff"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("0c 07 0102030405060708 01a8"),
+    HEX("12 01 0102030405060708 100b4b428485d0ff"),
+    HEX("0e 0b 0102030405060708 0000feff"),
+    HEX("0e 0b 0102030405060708 40007f00"),
+    HEX("0c 0b 0102030405060708 4800"),
+    HEX("0c 0b 0102030405060708 4b00"),
+    HEX("0e 0b 0102030405060708 8002bf02"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("0c 07 0102030405060708 01a8"),
+    HEX("0c 0b 0102030405060708 8802"),
+    HEX("0c 0b 0102030405060708 8b02"),
+    HEX("0c 0b 0102030405060708 ffff"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 00000100000000000000000000000000000000"),
+    HEX("0c 07 0102030405060708 01a8"),
+]
+
+felica_sample_2_sys = 0x0003
+
+felica_sample_2_dump = [
+    "System 0003 (Suica)",
+    "Area 0000--FFFE",
+    "  Area 0040--07FF",
+    "    Random Service 1: write with key & read with key (0x0048 0x004A)",
+    "    Random Service 2: write with key & read w/o key (0x0088 0x008B)",
+    '     0000: 00 00 00 00 00 00 00 00 20 00 00 fc 08 00 00 22 |........ ......"|',
+    "    Area 0800--0FBF",
+    "    Purse Service 32: direct with key & cashback with key & read with key (0x0810 0x0812 0x0816)",
+    "    Purse Service 33: direct with key & cashback with key & read with key (0x0850 0x0852 0x0856)",
+    "    Purse Service 34: direct with key & cashback with key & read with key (0x0890 0x0892 0x0896)",
+    "    Random Service 35: write with key & read with key (0x08C8 0x08CA)",
+    "    Random Service 36: read with key (0x090A)",
+    "    Cyclic Service 36: write with key & read w/o key (0x090C 0x090F)",
+    '     0000: c7 46 00 00 18 d9 3d 80 29 28 fc 08 00 00 22 00 |.F....=.)(....".|',
+    "     0001: c7 46 00 00 18 d8 ab a0 29 27 92 09 00 00 21 00 |.F......)'....!.|",
+    "     0002: c7 46 00 00 18 d8 8e 00 27 53 28 0a 00 00 20 00 |.F......'S(... .|",
+    "     0003: c7 46 00 00 18 d7 3e e0 27 52 72 0b 00 00 1f 00 |.F....>.'Rr.....|",
+    "     0004: 08 02 00 00 18 d7 01 07 00 00 48 0d 00 00 1e 00 |..........H.....|",
+    "     0005: c8 46 00 00 18 d7 2a 43 b1 95 90 01 00 00 1d 00 |.F....*C........|",
+    "     0006: c7 46 00 00 18 d5 38 a0 28 a0 12 02 00 00 1c 00 |.F....8.(.......|",
+    "     0007: c7 46 00 00 17 71 52 00 50 5a 32 05 00 00 1b 00 |.F...qR.PZ2.....|",
+    "     0008: 16 01 00 02 17 6e 25 07 01 07 26 07 00 00 1a 00 |.....n%...&.....|",
+    "     0009: 16 01 00 02 17 6e 01 07 25 07 c6 07 00 00 18 00 |.....n..%.......|",
+    "     000A: 08 02 00 00 17 6e 01 07 00 00 66 08 00 00 16 00 |.....n....f.....|",
+    "     000B: 16 01 00 02 12 e8 01 02 01 07 96 00 00 00 15 00 |................|",
+    "     000C: 16 01 00 02 12 e8 25 02 01 02 2c 01 00 00 13 00 |......%...,.....|",
+    "     000D: 16 01 00 02 12 e8 01 07 25 02 cc 01 00 00 11 00 |........%.......|",
+    "     000E: 16 01 00 02 12 e7 01 06 01 07 4e 02 00 00 0f 00 |..........N.....|",
+    "     000F: 16 01 00 02 12 e7 01 07 01 06 d0 02 00 00 0d 00 |................|",
+    "     0010: 16 01 00 02 12 e6 25 02 01 07 52 03 00 00 0b 00 |......%...R.....|",
+    "     0011: 16 01 00 02 12 e6 01 07 25 02 d4 03 00 00 09 00 |........%.......|",
+    "     0012: 16 01 00 02 12 e3 25 02 01 07 56 04 00 00 07 00 |......%...V.....|",
+    "     0013: 16 01 00 02 12 e3 01 07 25 02 d8 04 00 00 05 00 |........%.......|",
+    "    Area 0FC0--7FFF",
+    "    Area 1000--17BF",
+    "      Random Service 64: write with key & read with key (0x1008 0x100A)",
+    "      Random Service 65: write with key & read with key (0x1048 0x104A)",
+    "      Cyclic Service 66: write with key & read w/o key (0x108C 0x108F)",
+    '       0000: 20 00 01 07 10 15 17 6e 22 10 a0 00 00 00 00 00 | ......n".......|',
+    "       0001: a0 00 25 07 50 07 17 6e 21 51 00 00 00 00 00 00 |..%.P..n!Q......|",
+    "       0002: 20 00 25 07 50 02 17 6e 19 01 a0 00 00 00 00 00 | .%.P..n........|",
+    "      Random Service 67: write with key & read w/o key (0x10C8 0x10CB)",
+    "       0000: 25 07 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |%...............|",
+    "       0001: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "      Random Service 68: write with key & read with key (0x1108 0x110A)",
+    "      Random Service 69: write with key & read with key (0x1148 0x114A)",
+    "      Area 17C0--7FFF",
+    "      Area 1800--1A3F",
+    "        Random Service 96: write with key & read with key (0x1808 0x180A)",
+    "        Random Service 97: write with key & read w/o key (0x1848 0x184B)",
+    "         0000: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "         *     00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "         0023: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "        Random Service 99: write with key & read with key (0x18C8 0x18CA)",
+    "        Random Service 100: write with key & read with key (0x1908 0x190A)",
+    "        Random Service 101: write with key & read w/o key (0x1948 0x194B)",
+    "         0000: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "         *     00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "         000F: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "        Random Service 102: write with key & read w/o key (0x1988 0x198B)",
+    "         0000: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "         *     00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "         0002: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "        Area 2300--243F",
+    "        Random Service 140: write with key & read with key (0x2308 0x230A)",
+    "        Random Service 141: write with key & read w/o key (0x2348 0x234B)",
+    "         0000: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "         *     00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "         0003: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "        Random Service 142: write with key & read w/o key (0x2388 0x238B)",
+    "         0000: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "         *     00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "         000F: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "        Random Service 143: write with key & read w/o key (0x23C8 0x23CB)",
+    "         0000: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "         *     00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "         0003: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "System FE00 (Common Area)",
+    "Area 0000--FFFE",
+    "  Area 3940--39FF",
+    "    Area 3941--39FF",
+    "      Random Service 229: write with key & read w/o key (0x3948 0x394B)",
+    "       0000: 48 07 77 39 08 00 00 04 01 00 00 00 00 00 00 00 |H.w9............|",
+    "      Random Service 230: write with key & read w/o key (0x3988 0x398B)",
+    "       0000: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "       *     00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "       000F: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "      Random Service 231: write w/o key (0x39C9)",
+    "       0000: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "       *     00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "       0005: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "System 86A7 (unknown)",
+    "Area 0000--FFFE",
+    "  Area 0040--007F",
+    "    Random Service 1: write with key & read w/o key (0x0048 0x004B)",
+    "     0000: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "     *     00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "     0004: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "    Area 0280--02BF",
+    "    Random Service 10: write with key & read w/o key (0x0288 0x028B)",
+    "     0000: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "     *     00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "     0004: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+]
+
+felica_sample_3_responses = [
+    nfc.clf.TimeoutError, nfc.clf.TimeoutError, nfc.clf.TimeoutError,
+    HEX("1d 07 0102030405060708 0000 01 100b0a009300000000000100000000b9"),
+    HEX("1d 07 0102030405060708 0000 01 00000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 0000 01 00000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 0000 01 00000000000000000000000000000000"),
+    HEX("1d 07 0102030405060708 0000 01 00000000000000000000000000000000"),
+    nfc.clf.TimeoutError, nfc.clf.TimeoutError, nfc.clf.TimeoutError,
+]
+
+felica_sample_3_sys = 0x12FC
+
+felica_sample_3_dump = [
+    "0000: 10 0b 0a 00 93 00 00 00 00 00 01 00 00 00 00 b9 |................|",
+    "0001: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "*     00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+    "0004: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 |................|",
+]
+
+felica_sample_4_responses = [
+    nfc.clf.TimeoutError, nfc.clf.TimeoutError, nfc.clf.TimeoutError,
+]
+
+felica_sample_4_sys = 0x0000
+
+felica_sample_4_dump = [
+    "unable to create a memory dump",
+]
+
+
+class TestFelicaStandard:
+    @pytest.fixture()
+    def target(self):
+        target = nfc.clf.RemoteTarget("212F")
+        target.sensf_res = HEX("01 0102030405060708 0000FFFFFFFFFFFF 0000")
+        return target
+
+    @pytest.fixture()
+    def tag(self, clf, target):
+        tag = nfc.tag.activate(clf, target)
         assert isinstance(tag, nfc.tag.tt3_sony.FelicaStandard)
-        assert tag._product.startswith("FeliCa Standard")
+        return tag
 
-    def test_request_service_success(self):
-        sc_list = [nfc.tag.tt3.ServiceCode(0, 9), nfc.tag.tt3.ServiceCode(1, 9)]
-        assert self.tag.request_service(sc_list) == [0x0009, 0x0049]
+    @pytest.mark.parametrize("ic_code, product", [
+        ('00', "FeliCa Standard (RC-S830)"),
+        ('01', "FeliCa Standard (RC-S915)"),
+        ('02', "FeliCa Standard (RC-S919)"),
+        ('08', "FeliCa Standard (RC-S952)"),
+        ('09', "FeliCa Standard (RC-S953)"),
+        ('0B', "FeliCa Standard (RC-S???)"),
+        ('0C', "FeliCa Standard (RC-S954)"),
+        ('0D', "FeliCa Standard (RC-S960)"),
+        ('20', "FeliCa Standard (RC-S962)"),
+        ('32', "FeliCa Standard (RC-SA00/1)"),
+        ('35', "FeliCa Standard (RC-SA00/2)"),
+    ])
+    def test_init(self, target, ic_code, product):
+        target.sensf_res[10] = HEX(ic_code)[0]
+        tag = nfc.tag.activate(clf, target)
+        assert isinstance(tag, nfc.tag.tt3_sony.FelicaStandard)
+        assert tag.product == product
 
-    #pytest.raises(nfc.tag.TagCommandError)
-    def test_request_service_error(self):
-        self.clf.return_response = "\x0B\x03" + self.clf.idm + '\x00'
-        sc_list = [nfc.tag.tt3.ServiceCode(0, 9)]
-        try: self.tag.request_service(sc_list)
-        except nfc.tag.tt3.Type3TagCommandError as error:
-            assert error.errno == nfc.tag.tt3.DATA_SIZE_ERROR; raise
+    @pytest.mark.parametrize("responses, dump, system_code", [
+        (felica_sample_1_responses, felica_sample_1_dump, felica_sample_1_sys),
+        (felica_sample_2_responses, felica_sample_2_dump, felica_sample_2_sys),
+        (felica_sample_3_responses, felica_sample_3_dump, felica_sample_3_sys),
+        (felica_sample_4_responses, felica_sample_4_dump, felica_sample_4_sys),
+    ])
+    def test_dump(self, tag, responses, dump, system_code):
+        tag.sys = system_code
+        tag.clf.exchange.side_effect = responses
+        assert tag.dump() == dump
 
-    def test_request_response_success(self):
-        assert self.tag.request_response() == 0
+    @pytest.mark.parametrize("mode, result", [
+        ('00', True), ('01', True), ('02', True), ('03', True),
+        ('04', False), ('FF', False),
+    ])
+    def test_is_present_request_response(self, tag, mode, result):
+        cmd = HEX('0a 04 0102030405060708')
+        rsp = HEX('0b 05 0102030405060708') + HEX(mode)
+        tag.clf.exchange.return_value = rsp
+        assert tag.is_present is result
+        tag.clf.exchange.assert_called_once_with(cmd, 0.309248)
 
-    #pytest.raises(nfc.tag.TagCommandError)
-    def test_request_response_error(self):
-        self.clf.return_response = "\x0C\x05" + self.clf.idm + "\0\0"
-        try: self.tag.request_response()
-        except nfc.tag.tt3.Type3TagCommandError as error:
-            assert error.errno == nfc.tag.tt3.DATA_SIZE_ERROR; raise
+    def test_is_present_polling_command(self, tag):
+        tag.clf.exchange.side_effect = [
+            nfc.clf.TimeoutError, nfc.clf.TimeoutError, nfc.clf.TimeoutError,
+            HEX("12 01 0102030405060708 0000FFFFFFFFFFFF"),
+        ]
+        assert tag.is_present is True
+        assert tag.clf.exchange.mock_calls == [
+            mock.call(HEX('0a 04 0102030405060708'), 0.309248),
+            mock.call(HEX('0a 04 0102030405060708'), 0.309248),
+            mock.call(HEX('0a 04 0102030405060708'), 0.309248),
+            mock.call(HEX('06 00 0000 0000'), 0.003625),
+        ]
 
-    def test_search_service_code(self):
-        assert self.tag.search_service_code(0) == (0x0000, 0xFFFE)
-        assert self.tag.search_service_code(1) == (0x0009,)
-        assert self.tag.search_service_code(2) == (0x000B,)
-        assert self.tag.search_service_code(1000) == None
+    def test_request_service(self, tag):
+        sc_1 = nfc.tag.tt3.ServiceCode(0, 9)
+        sc_2 = nfc.tag.tt3.ServiceCode(1, 9)
+        cmd = HEX('0f 02 0102030405060708 02 0900 4900')
+        rsp = HEX('0f 03 0102030405060708 02 0100 1100')
+        tag.clf.exchange.return_value = rsp
+        assert tag.request_service([sc_1, sc_2]) == [0x0001, 0x0011]
+        tag.clf.exchange.assert_called_once_with(cmd, 0.46387200000000006)
 
-    def test_request_system_code(self):
-        assert self.tag.request_system_code() == [0x0000, 0x12fc]
+        tag.clf.exchange.reset_mock()
+        rsp = HEX('0e 03 0102030405060708 01 0000 00')
+        tag.clf.exchange.return_value = rsp
+        with pytest.raises(nfc.tag.tt3.Type3TagCommandError) as excinfo:
+            tag.request_service([sc_1, sc_2])
+        assert excinfo.value.errno == nfc.tag.tt3.DATA_SIZE_ERROR
+        tag.clf.exchange.assert_called_once_with(cmd, 0.46387200000000006)
 
-    #pytest.raises(nfc.tag.TagCommandError)
-    def test_request_system_code_failure(self):
-        self.clf.return_response = "\x0C\x0D" + self.clf.idm + '\x01\x02'
-        try: self.tag.request_system_code()
-        except nfc.tag.tt3.Type3TagCommandError as error:
-            assert error.errno == nfc.tag.tt3.DATA_SIZE_ERROR; raise
+    def test_request_response(self, tag):
+        cmd = HEX('0a 04 0102030405060708')
+        rsp = HEX('0b 05 0102030405060708 00')
+        tag.clf.exchange.return_value = rsp
+        assert tag.request_response() == 0
+        tag.clf.exchange.assert_called_once_with(cmd, 0.309248)
 
-    def test_is_present_if_present(self):
-        assert self.tag.is_present is True
+        tag.clf.exchange.reset_mock()
+        rsp = HEX('0a 05 0102030405060708')
+        tag.clf.exchange.return_value = rsp
+        with pytest.raises(nfc.tag.tt3.Type3TagCommandError) as excinfo:
+            tag.request_response()
+        assert excinfo.value.errno == nfc.tag.tt3.DATA_SIZE_ERROR
+        tag.clf.exchange.assert_called_once_with(cmd, 0.309248)
 
-    def test_is_present_if_gone(self):
-        self.clf.tag_is_present = False
-        assert self.tag.is_present is False
+    def test_search_service_code(self, tag):
+        cmd = HEX('0c 0a 0102030405060708 0000')
+        rsp = HEX('0e 0b 0102030405060708 0000 FEFF')
+        tag.clf.exchange.return_value = rsp
+        assert tag.search_service_code(0) == (0x0000, 0xFFFE)
+        tag.clf.exchange.assert_called_once_with(cmd, 0.154624)
 
-    def test_dump(self):
-        lines = self.tag.dump()
-        assert len(lines) == 58
+        tag.clf.exchange.reset_mock()
+        cmd = HEX('0c 0a 0102030405060708 0100')
+        rsp = HEX('0c 0b 0102030405060708 0900')
+        tag.clf.exchange.return_value = rsp
+        assert tag.search_service_code(1) == (0x0009,)
+        tag.clf.exchange.assert_called_once_with(cmd, 0.154624)
+
+        tag.clf.exchange.reset_mock()
+        cmd = HEX('0c 0a 0102030405060708 0010')
+        rsp = HEX('0c 0b 0102030405060708 ffff')
+        tag.clf.exchange.return_value = rsp
+        assert tag.search_service_code(0x1000) is None
+        tag.clf.exchange.assert_called_once_with(cmd, 0.154624)
+
+    def test_request_system_code(self, tag):
+        cmd = HEX('0a 0c 0102030405060708')
+        rsp = HEX('0f 0d 0102030405060708 02 0000 12fc')
+        tag.clf.exchange.return_value = rsp
+        assert tag.request_system_code() == [0x0000, 0x12fc]
+        tag.clf.exchange.assert_called_once_with(cmd, 0.154624)
+
+        tag.clf.exchange.reset_mock()
+        rsp = HEX('0f 0d 0102030405060708 03 0000 12fc')
+        tag.clf.exchange.return_value = rsp
+        with pytest.raises(nfc.tag.tt3.Type3TagCommandError) as excinfo:
+            tag.request_system_code()
+        assert excinfo.value.errno == nfc.tag.tt3.DATA_SIZE_ERROR
+        tag.clf.exchange.assert_called_once_with(cmd, 0.154624)
 
 
 ###############################################################################
@@ -130,20 +615,33 @@ class TestType3TagFelicaStandard:
 # FeliCa Mobile
 #
 ###############################################################################
-@pytest.mark.skip(reason="not yet converted")
-class TestType3TagFelicaMobile:
-    idm = "01 02 03 04 05 06 07 08"
-    
-    def __test_init_with_ic_code(self):
-        for ic in [6, 7] + range(16, 32):
-            yield self.check_init_with_ic_code, ic
-
-    def check_init_with_ic_code(self, ic):
-        pmm = "00{0:02X}FFFF FFFFFFFF".format(ic)
-        clf = Type3TagSimulator(None, "0000", self.idm, pmm)
-        tag = clf.connect(rdwr={'on-connect': None})
+class TestFelicaMobile:
+    @pytest.mark.parametrize("ic_code, product", [
+        ('06', "FeliCa Mobile 1.0"),
+        ('07', "FeliCa Mobile 1.0"),
+        ('10', "FeliCa Mobile 2.0"),
+        ('11', "FeliCa Mobile 2.0"),
+        ('12', "FeliCa Mobile 2.0"),
+        ('13', "FeliCa Mobile 2.0"),
+        ('14', "FeliCa Mobile 3.0"),
+        ('15', "FeliCa Mobile 3.0"),
+        ('16', "FeliCa Mobile 3.0"),
+        ('17', "FeliCa Mobile 3.0"),
+        ('18', "FeliCa Mobile 3.0"),
+        ('19', "FeliCa Mobile 3.0"),
+        ('1A', "FeliCa Mobile 3.0"),
+        ('1B', "FeliCa Mobile 3.0"),
+        ('1C', "FeliCa Mobile 3.0"),
+        ('1D', "FeliCa Mobile 3.0"),
+        ('1E', "FeliCa Mobile 3.0"),
+        ('1F', "FeliCa Mobile 3.0"),
+    ])
+    def test_init(self, ic_code, product):
+        sensf_res = HEX("01 0102030405060708 00%sFFFFFFFFFFFF 0000" % ic_code)
+        target = nfc.clf.RemoteTarget("212F", sensf_res=sensf_res)
+        tag = nfc.tag.activate(clf, target)
         assert isinstance(tag, nfc.tag.tt3_sony.FelicaMobile)
-        assert tag._product.startswith("FeliCa Mobile")
+        assert tag.product == product
 
 
 ###############################################################################
@@ -216,6 +714,7 @@ felica_lite_dump_2 = [
     "136: ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? (MEMORY_CONFIG)",
 ]
 
+
 class TestFelicaLite:
     @pytest.fixture()
     def target(self):
@@ -246,8 +745,7 @@ class TestFelicaLite:
         tag.clf.exchange.side_effect = data
         assert tag.dump() == dump
 
-    def test_ndef(self, tag, mocker):
-        mocker.patch('os.urandom', new=lambda x: bytes(bytearray(range(x))))
+    def test_ndef(self, tag):
         tag.clf.exchange.side_effect = [
             # authenticate
             HEX('0c 09 0102030405060708 0000'),  # write block 0x80
@@ -399,9 +897,7 @@ class TestFelicaLite:
                           '01400001 07000000 00000000 00000000'), 0.3093504),
         ]
 
-    def test_authenticate(self, tag, mocker):
-        mocker.patch('os.urandom', new=lambda x: bytes(bytearray(range(x))))
-
+    def test_authenticate(self, tag):
         # test invalid password (too short)
         with pytest.raises(ValueError) as excinfo:
             tag.authenticate("abc")
@@ -603,6 +1099,7 @@ felica_lites_dump_2 = [
     '146: ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? (STATE)',
 ]
 
+
 class TestFelicaLiteS:
     @pytest.fixture()
     def target(self):
@@ -662,8 +1159,7 @@ class TestFelicaLiteS:
         tag.clf.exchange.assert_called_with(
             HEX('10 06 0102030405060708 010b00 018088'), 0.3093504)
 
-    def test_protect_ndef_tag_readonly(self, tag, mocker):
-        mocker.patch('os.urandom', new=lambda x: bytes(bytearray(range(x))))
+    def test_protect_ndef_tag_readonly(self, tag):
         commands = [
             (HEX('10 06 0102030405060708 010b00 018088'), 0.3093504),   # 1
             (HEX('10 06 0102030405060708 010b00 018086'), 0.3093504),   # 2
@@ -732,8 +1228,7 @@ class TestFelicaLiteS:
         assert tag.protect("0123456789abcdef", read_protect=True) is True
         assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
-    def test_protect_unformatted_tag(self, tag, mocker):
-        mocker.patch('os.urandom', new=lambda x: bytes(bytearray(range(x))))
+    def test_protect_unformatted_tag(self, tag):
         commands = [
             (HEX('10 06 0102030405060708 010b00 018088'), 0.3093504),   # 1
             (HEX('10 06 0102030405060708 010b00 018086'), 0.3093504),   # 2
@@ -795,8 +1290,7 @@ class TestFelicaLiteS:
         assert tag.protect("0123456789abcdef") is True
         assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
-    def test_protect_with_wrong_password(self, tag, mocker):
-        mocker.patch('os.urandom', new=lambda x: bytes(bytearray(range(x))))
+    def test_protect_with_wrong_password(self, tag):
         commands = [
             (HEX('10 06 0102030405060708 010b00 018088'), 0.3093504),   # 1
             (HEX('10 06 0102030405060708 010b00 018086'), 0.3093504),   # 2
@@ -827,8 +1321,7 @@ class TestFelicaLiteS:
         assert tag.protect("1234567890abcdef") is False
         assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
-    def test_mutual_authentication_error(self, tag, mocker):
-        mocker.patch('os.urandom', new=lambda x: bytes(bytearray(range(x))))
+    def test_mutual_authentication_error(self, tag):
         commands = [
             # authenticate_1
             (HEX('20 08 0102030405060708 010900 018080'  # write RC     # 5
@@ -883,25 +1376,14 @@ class TestFelicaLiteS:
 # FeliCa Plug
 #
 ###############################################################################
-@pytest.mark.skip(reason="not yet converted")
-class TestType3TagFelicaPlug:
-    sys = "00 00"
-    idm = "01 02 03 04 05 06 07 08"
-    
-    def __test_init_with_ic_code_e0(self):
-        pmm = "00E0FFFF FFFFFFFF"
-        clf = Type3TagSimulator(None, self.sys, self.idm, pmm)
-        tag = clf.connect(rdwr={'on-connect': None})
+class TestFelicaPlug:
+    @pytest.mark.parametrize("ic_code, product", [
+        ('E0', "FeliCa Plug (RC-S926)"),
+        ('E1', "FeliCa Link (RC-S730) Plug Mode"),
+    ])
+    def test_init(self, ic_code, product):
+        sensf_res = HEX("01 0102030405060708 00%sFFFFFFFFFFFF 0000" % ic_code)
+        target = nfc.clf.RemoteTarget("212F", sensf_res=sensf_res)
+        tag = nfc.tag.activate(clf, target)
         assert isinstance(tag, nfc.tag.tt3_sony.FelicaPlug)
-        assert tag._product == "FeliCa Plug (RC-S926)"
-        assert tag._nbr == 12
-        assert tag._nbw == 12
-
-    def __test_init_with_ic_code_e1(self):
-        pmm = "00E1FFFF FFFFFFFF"
-        clf = Type3TagSimulator(None, self.sys, self.idm, pmm)
-        tag = clf.connect(rdwr={'on-connect': None})
-        assert isinstance(tag, nfc.tag.tt3_sony.FelicaPlug)
-        assert tag._product == "FeliCa Link (RC-S730) Plug Mode"
-        assert tag._nbr == 12
-        assert tag._nbw == 12
+        assert tag.product == product
