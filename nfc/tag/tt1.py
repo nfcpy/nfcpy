@@ -4,7 +4,7 @@
 #   Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #   Alexander Knaub <sanyok.og@googlemail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -21,28 +21,24 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-
-import logging
-log = logging.getLogger(__name__)
-
-import sys, time
+import time
 from binascii import hexlify
-if sys.hexversion >= 0x020704F0:
-    from struct import pack, unpack
-else: # for Debian Wheezy (and thus Raspbian)
-    from struct import pack, unpack as _unpack
-    unpack = lambda fmt, string: _unpack(fmt, buffer(string))
+from struct import pack, unpack
 
 from nfc.tag import Tag, TagCommandError
 import nfc.clf
 
+import logging
+log = logging.getLogger(__name__)
+
 CHECKSUM_ERROR, RESPONSE_ERROR, WRITE_ERROR, \
     BLOCK_ERROR, SECTOR_ERROR = range(1, 6)
 
+
 class Type1TagCommandError(TagCommandError):
-    """Type 1 Tag specific exceptions. Sets 
+    """Type 1 Tag specific exceptions. Sets
     :attr:`~nfc.tag.TagCommandError.errno` to one of:
-    
+
     | 1 - CHECKSUM_ERROR
     | 2 - RESPONSE_ERROR
     | 3 - WRITE_ERROR
@@ -54,24 +50,34 @@ class Type1TagCommandError(TagCommandError):
         WRITE_ERROR: "data write failure",
     }
 
+
 def read_tlv(memory, offset, skip_bytes):
     # Unpack a Type 2 Tag TLV from tag memory and return tag type, tag
     # length and tag value. For tag type 0 there is no length field,
     # this is returned as length -1. The tlv length field can be one
     # or three bytes, if the first byte is 255 then the next two byte
     # carry the length (big endian).
-    try: tlv_t, offset = (memory[offset], offset+1)
-    except IndexError: return (None, None, None)
-    if tlv_t in (0x00, 0xFE): return (tlv_t, -1, None)
+    try:
+        tlv_t, offset = (memory[offset], offset+1)
+    except IndexError:
+        return (None, None, None)
+
+    if tlv_t in (0x00, 0xFE):
+        return (tlv_t, -1, None)
+
     tlv_l, offset = (memory[offset], offset+1)
+
     if tlv_l == 0xFF:
         tlv_l, offset = (unpack(">H", memory[offset:offset+2])[0], offset+2)
+
     tlv_v = bytearray(tlv_l)
     for i in xrange(tlv_l):
         while (offset + i) in skip_bytes:
             offset += 1
         tlv_v[i] = memory[offset+i]
+
     return (tlv_t, tlv_l, tlv_v)
+
 
 def get_lock_byte_range(data):
     # Extract the lock byte range indicated by a Lock Control TLV. The
@@ -83,6 +89,7 @@ def get_lock_byte_range(data):
     rsvd_from = page_addr * page_size + byte_offs
     return slice(rsvd_from, rsvd_from + rsvd_size)
 
+
 def get_rsvd_byte_range(data):
     # Extract the reserved memory range indicated by a Memory Control
     # TLV. The data argument is the TLV value field.
@@ -92,6 +99,7 @@ def get_rsvd_byte_range(data):
     page_size = 2 ** (data[2] & 0x0F)
     rsvd_from = page_addr * page_size + byte_offs
     return slice(rsvd_from, rsvd_from + rsvd_size)
+
 
 def get_capacity(tag_memory_size, offset, skip_bytes):
     # The net capacity is the range of bytes from the current offset
@@ -108,6 +116,7 @@ def get_capacity(tag_memory_size, offset, skip_bytes):
     capacity -= 4 if capacity > 256 else 2
     return capacity
 
+
 class Type1Tag(Tag):
     """Implementation of the NFC Forum Type 1 Tag Operation specification.
 
@@ -122,7 +131,7 @@ class Type1Tag(Tag):
     class NDEF(Tag.NDEF):
         # Type 1 Tag specific implementation of the NDEF access type
         # class that is returned by the Tag.ndef attribute.
-        
+
         def __init__(self, tag):
             super(Type1Tag.NDEF, self).__init__(tag)
             self._ndef_tlv_offset = 0
@@ -160,11 +169,15 @@ class Type1Tag(Tag):
 
             ndef = None
             offset = 12
-            skip_bytes = set(range(104, 120 if tag_memory_size==120 else 128))
+            skip_end = 120 if tag_memory_size == 120 else 128
+            skip_bytes = set(range(104, skip_end))
             while offset < tag_memory_size:
-                while (offset) in skip_bytes: offset += 1
+                while (offset) in skip_bytes:
+                    offset += 1
+
                 tlv_t, tlv_l, tlv_v = read_tlv(tag_memory, offset, skip_bytes)
                 log.debug("tlv type {0} at address {1}".format(tlv_t, offset))
+
                 if tlv_t == 0x00:
                     pass
                 elif tlv_t == 0x01:
@@ -174,7 +187,8 @@ class Type1Tag(Tag):
                     rsvd_bytes = get_rsvd_byte_range(tlv_v)
                     skip_bytes.update(range(*rsvd_bytes.indices(0x800)))
                 elif tlv_t == 0x03:
-                    ndef = tlv_v; break
+                    ndef = tlv_v
+                    break
                 elif tlv_t == 0xFE or tlv_t is None:
                     break
                 else:
@@ -190,23 +204,24 @@ class Type1Tag(Tag):
 
         def _write_ndef_data(self, data):
             log.debug("write ndef data {0}{1}".format(
-                hexlify(data[:10]), '...' if len(data)>10 else ''))
-            
+                hexlify(data[:10]), '...' if len(data) > 10 else ''))
+
             tag_memory = self._tag_memory
             skip_bytes = self._skip_bytes
             offset = self._ndef_tlv_offset
             tag_memory_size = (tag_memory[10] + 1) * 8
-            
+
             # Set the ndef message tlv length to 0.
             tag_memory[offset+1] = 0
             tag_memory.synchronize()
-            
+
             # Leave room for ndef message length byte(s) and write
             # ndef data into the memory image, but jump over skip
             # bytes.
             offset += 2 if len(data) < 255 else 4
             for i in xrange(len(data)):
-                while offset + i in skip_bytes: offset += 1
+                while offset + i in skip_bytes:
+                    offset += 1
                 tag_memory[offset+i] = data[i]
             # Write a terminator tlv if space permits. We may have to
             # skip reserved and lock bytes.
@@ -218,7 +233,7 @@ class Type1Tag(Tag):
                 offset += 1
             # Write the new message data to the tag.
             tag_memory.synchronize()
-            
+
             # Write the ndef message tlv length.
             offset = self._ndef_tlv_offset
             if len(data) < 255:
@@ -257,7 +272,7 @@ class Type1Tag(Tag):
 
         """
         return self._dump(stop=None)
-        
+
     def _dump(self, stop=None):
         # Read and print all data blocks until the non-inclusive stop
         # block number. Type 1 Tags with dynamic memory seem to return
@@ -267,14 +282,20 @@ class Type1Tag(Tag):
         # overwritten with an inverted version of the content and then
         # recovered. Because WRITE8 returns the new data content, a
         # non-existing block can be detected.
-        ispchr = lambda x: x >= 32 and x <= 126
-        oprint = lambda o: ' '.join(['??' if x < 0 else '%02x'%x for x in o])
-        cprint = lambda o: ''.join([chr(x) if ispchr(x) else '.' for x in o])
-        lprint = lambda fmt, d, i: fmt.format(i, oprint(d), cprint(d))
-        
+        ispchr = lambda x: x >= 32 and x <= 126  # noqa: E731
+
+        def oprint(octets):
+            return ' '.join(['??' if x < 0 else '%02x' % x for x in octets])
+
+        def cprint(octets):
+            return ''.join([chr(x) if ispchr(x) else '.' for x in octets])
+
+        def lprint(fmt, d, i):
+            return fmt.format(i, oprint(d), cprint(d))
+
         txt = ["UID0-UID6, RESERVED", "RESERVED", "LOCK0-LOCK1, OTP0-OTP5",
                "LOCK2-LOCK3, RESERVED"]
-        
+
         lines = list()
         data = self.read_all()
         hrom, data = data[0:2], data[2:]
@@ -287,20 +308,24 @@ class Type1Tag(Tag):
         lines.append(" 14: {0} ({1})".format(oprint(data[112:120]), txt[2]))
 
         if stop is None or stop > 15:
-            try: data = self.read_block(15)
-            except Type1TagCommandError: return lines
-            else: lines.append(" 15: {0} ({1})".format(oprint(data), txt[3]))
+            try:
+                data = self.read_block(15)
+            except Type1TagCommandError:
+                return lines
+            else:
+                lines.append(" 15: {0} ({1})".format(oprint(data), txt[3]))
 
         data_line_fmt = "{0:>3}: {1} |{2}|"
         same_line_fmt = "{0:>3}  {1} |{2}|"
-        same_data = 0; this_data = last_data = None
+        this_data = last_data = None
+        same_data = 0
 
         def dump_same_data(same_data, last_data, this_data, page):
             if same_data > 1:
                 lines.append(lprint(same_line_fmt, last_data, "*"))
             if same_data > 0:
                 lines.append(lprint(data_line_fmt, this_data, page))
-            
+
         for i in xrange(16, stop if stop is not None else 256):
             try:
                 this_data = self.read_block(i)
@@ -311,18 +336,19 @@ class Type1Tag(Tag):
             except Type1TagCommandError:
                 dump_same_data(same_data, last_data, this_data, i-1)
                 break
-            
+
             if this_data == last_data:
                 same_data += 1
             else:
                 dump_same_data(same_data, last_data, last_data, i-1)
                 lines.append(lprint(data_line_fmt, this_data, i))
-                last_data = this_data; same_data = 0
+                last_data = this_data
+                same_data = 0
         else:
             dump_same_data(same_data, last_data, this_data, i)
 
         return lines
-        
+
     def protect(self, password=None, read_protect=False, protect_from=0):
         """The implementation of :meth:`nfc.tag.Tag.protect` for a generic
         type 1 tag is limited to setting the NDEF data read-only for
@@ -331,19 +357,23 @@ class Type1Tag(Tag):
         """
         return super(Type1Tag, self).protect(
             password, read_protect, protect_from)
-    
+
     def _protect(self, password, read_protect, protect_from):
         if password is None:
             if self.ndef is not None:
                 self.write_byte(11, 0x0F, erase=False)
                 return True
-            else: log.warning("no ndef, can't set write access restriction")
-        else: log.warning("this tag can not be protected with a password")
+            else:
+                log.warning("no ndef, can't set write access restriction")
+        else:
+            log.warning("this tag can not be protected with a password")
         return False
 
     def _is_present(self):
-        try: return self.read_byte(0) == self.uid[0]
-        except Type1TagCommandError: return False
+        try:
+            return self.read_byte(0) == self.uid[0]
+        except Type1TagCommandError:
+            return False
 
     def read_id(self):
         """Returns the 2 byte Header ROM and 4 byte UID.
@@ -383,7 +413,7 @@ class Type1Tag(Tag):
         log.debug("read segment {0}".format(segment))
         if segment < 0 or segment > 15:
             raise ValueError("invalid segment number")
-        cmd = "\x10" + chr(segment<<4) + 8 * chr(0) + self.uid
+        cmd = "\x10" + chr(segment << 4) + 8 * chr(0) + self.uid
         rsp = self.transceive(cmd)
         if len(rsp) < 129:
             raise Type1TagCommandError(RESPONSE_ERROR)
@@ -414,7 +444,7 @@ class Type1Tag(Tag):
         rsp = self.transceive(cmd)
         if len(rsp) < 9:
             raise Type1TagCommandError(RESPONSE_ERROR)
-        if erase == True and rsp[1:9] != data:
+        if erase is True and rsp[1:9] != data:
             raise Type1TagCommandError(WRITE_ERROR)
 
     def transceive(self, data, timeout=0.1):
@@ -435,10 +465,11 @@ class Type1Tag(Tag):
                 raise Type1TagCommandError(nfc.tag.RECEIVE_ERROR)
             if type(error) is nfc.clf.ProtocolError:
                 raise Type1TagCommandError(nfc.tag.PROTOCOL_ERROR)
-            
+
         elapsed = time.time() - started
         log.debug("<< {0} ({1:f}s)".format(hexlify(data), elapsed))
         return data
+
 
 class Type1TagMemoryReader(object):
     def __init__(self, tag):
@@ -477,21 +508,30 @@ class Type1TagMemoryReader(object):
 
     def _read_from_tag(self, stop):
         if len(self) < 120:
-            try: read_all_data_response = self._tag.read_all()
-            except Type1TagCommandError: return
-            self._header_rom = read_all_data_response[0:2]
-            self._data_from_tag[0:] = read_all_data_response[2:]
-            self._data_in_cache[0:] = self._data_from_tag[0:]
+            try:
+                read_all_data_response = self._tag.read_all()
+            except Type1TagCommandError:
+                return
+            else:
+                self._header_rom = read_all_data_response[0:2]
+                self._data_from_tag[0:] = read_all_data_response[2:]
+                self._data_in_cache[0:] = self._data_from_tag[0:]
         if stop > 120 and len(self) < 128:
-            try: read_block_response = self._tag.read_block(15)
-            except Type1TagCommandError: return
-            self._data_from_tag[120:128] = read_block_response
-            self._data_in_cache[120:128] = read_block_response
+            try:
+                read_block_response = self._tag.read_block(15)
+            except Type1TagCommandError:
+                return
+            else:
+                self._data_from_tag[120:128] = read_block_response
+                self._data_in_cache[120:128] = read_block_response
         while len(self) < stop:
-            try: data = self._tag.read_segment(len(self)>>7)
-            except Type1TagCommandError: return
-            self._data_from_tag.extend(data)
-            self._data_in_cache.extend(data)
+            try:
+                data = self._tag.read_segment(len(self) >> 7)
+            except Type1TagCommandError:
+                return
+            else:
+                self._data_from_tag.extend(data)
+                self._data_in_cache.extend(data)
 
     def _write_to_tag(self, stop):
         try:
@@ -515,9 +555,8 @@ class Type1TagMemoryReader(object):
         """Write pages that contain modified data back to tag memory."""
         self._write_to_tag(stop=len(self))
 
+
 def activate(clf, target):
     import nfc.tag.tt1_broadcom
     tag = nfc.tag.tt1_broadcom.activate(clf, target)
-    if tag is not None: return tag
-    return Type1Tag(clf, target)
-
+    return tag if tag is not None else Type1Tag(clf, target)
