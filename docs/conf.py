@@ -56,7 +56,6 @@ html_title = ' '.join([project, version, "documentation"])
 html_short_title = ' '.join([project, version])
 html_logo = "images/nfcpy-logo-64x64.png"
 html_favicon = "images/nfcpy-logo-32x32.ico"
-html_static_path = ['_static']
 html_last_updated_fmt = '%b %d, %Y'
 html_show_sourcelink = True
 htmlhelp_basename = 'nfcpydoc'

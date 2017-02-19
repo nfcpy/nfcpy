@@ -127,9 +127,10 @@ Tag. ::
 
 .. option:: --ver x.y
 
-   The version number to write into the NDEF mapping version byte. The
-   difference to :option:`tagtool.py format --version` is that here
-   the version number does not need to be valid.
+   Type 1 Tag NDEF mapping version number, specified as a version
+   string in the same way as for to the `--version` argument. The
+   difference is that this version number will be written regardless
+   of whether it constitutes a valid version number.
 
 .. option:: --tms BYTE
 

@@ -1,4 +1,4 @@
-include *.rst LICENSE docs/Makefile docs/make.bat docs/conf.py
+include *.txt *.rst *.yml LICENSE tox.ini .coveragerc docs/Makefile docs/make.bat docs/conf.py
 recursive-include examples *.py
 recursive-include tests *.py
 recursive-include docs *.rst

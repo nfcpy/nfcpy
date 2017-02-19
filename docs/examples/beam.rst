@@ -219,7 +219,7 @@ will be appended): ::
 
   $ beam.py recv save message.ndef
 
-With the :option:`--loop` option it gets easy to collect messages into
+With the ``--loop`` option it gets easy to collect messages into
 a single file. ::
 
   $ beam.py --loop recv save collected.ndef
