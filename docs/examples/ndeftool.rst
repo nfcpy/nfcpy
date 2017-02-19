@@ -2,6 +2,13 @@
 ndeftool.py
 ===========
 
+.. warning::
+
+   The ndeftool example has become a separate `project
+   <https://github.com/nfcpy/ndeftool>`_ with its own `documentation
+   <https://ndeftool.readthedocs.io>`_. The example code documented
+   here will be removed in a future *nfcpy* release.
+
 The **ndeftool** intends to be a swiss army knife for working with
 NDEF data. ::
 
