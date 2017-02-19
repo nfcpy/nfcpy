@@ -2,6 +2,7 @@
 
 from __future__ import absolute_import, division
 
+import time
 import pytest
 import nfc.llcp.sec
 
@@ -88,6 +89,7 @@ def test_bi_cs1_initialize_by_name():
 
 def test_bv_cs1_calculate_session_key():
     cs_1 = nfc.llcp.sec.CipherSuite1()
+    time.sleep(0.1)
     cs_2 = nfc.llcp.sec.CipherSuite1()
     ecpk = cs_2.public_key_x + cs_2.public_key_y
     rn_i = cs_2.random_nonce
@@ -133,6 +135,7 @@ def test_bi_cs1_public_key_not_on_curve():
 ])
 def test_bv_cs1_encrypt_decrypt(a, p):
     cs_i = nfc.llcp.sec.CipherSuite1()
+    time.sleep(0.1)
     cs_t = nfc.llcp.sec.CipherSuite1()
     pk_i = cs_i.public_key_x + cs_i.public_key_y
     pk_t = cs_t.public_key_x + cs_t.public_key_y
@@ -148,6 +151,7 @@ def test_bv_cs1_encrypt_decrypt(a, p):
 
 def test_bv_cs1_last_packet_send_counter():
     cs_a = nfc.llcp.sec.CipherSuite1()
+    time.sleep(0.1)
     cs_b = nfc.llcp.sec.CipherSuite1()
     pk_b = cs_b.public_key_x + cs_b.public_key_y
     cs_a.calculate_session_key(pk_b, cs_b.random_nonce)
@@ -159,6 +163,7 @@ def test_bv_cs1_last_packet_send_counter():
 def test_bv_cs1_packet_send_counter_overflow():
     with pytest.raises(nfc.llcp.sec.EncryptionError):
         cs_a = nfc.llcp.sec.CipherSuite1()
+        time.sleep(0.1)
         cs_b = nfc.llcp.sec.CipherSuite1()
         pk_b = cs_b.public_key_x + cs_b.public_key_y
         cs_a.calculate_session_key(pk_b, cs_b.random_nonce)
@@ -170,6 +175,7 @@ def test_bv_cs1_packet_send_counter_overflow():
 
 def test_bv_cs1_last_packet_recv_counter():
     cs_a = nfc.llcp.sec.CipherSuite1()
+    time.sleep(0.1)
     cs_b = nfc.llcp.sec.CipherSuite1()
     pk_b = cs_b.public_key_x + cs_b.public_key_y
     cs_a.calculate_session_key(pk_b, cs_b.random_nonce)
@@ -183,6 +189,7 @@ def test_bv_cs1_last_packet_recv_counter():
 def test_bv_cs1_packet_recv_counter_overflow():
     with pytest.raises(nfc.llcp.sec.DecryptionError):
         cs_a = nfc.llcp.sec.CipherSuite1()
+        time.sleep(0.1)
         cs_b = nfc.llcp.sec.CipherSuite1()
         pk_b = cs_b.public_key_x + cs_b.public_key_y
         cs_a.calculate_session_key(pk_b, cs_b.random_nonce)
@@ -197,6 +204,7 @@ def test_bv_cs1_packet_recv_counter_overflow():
 def test_bi_cs1_packet_recv_counter_mismatch():
     with pytest.raises(nfc.llcp.sec.DecryptionError):
         cs_a = nfc.llcp.sec.CipherSuite1()
+        time.sleep(0.1)
         cs_b = nfc.llcp.sec.CipherSuite1()
         pk_b = cs_b.public_key_x + cs_b.public_key_y
         cs_a.calculate_session_key(pk_b, cs_b.random_nonce)
@@ -210,6 +218,7 @@ def test_bi_cs1_packet_recv_counter_mismatch():
 def test_bi_cs1_set_invalid_tag_size():
     with pytest.raises(nfc.llcp.sec.EncryptionError):
         cs_a = nfc.llcp.sec.CipherSuite1()
+        time.sleep(0.1)
         cs_b = nfc.llcp.sec.CipherSuite1()
         pk_b = cs_b.public_key_x + cs_b.public_key_y
         cs_a.calculate_session_key(pk_b, cs_b.random_nonce)
