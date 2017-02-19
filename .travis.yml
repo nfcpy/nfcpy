@@ -1,0 +1,40 @@
+sudo: false
+cache:
+  directories:
+    - $HOME/.cache/pip
+
+language: python
+
+
+matrix:
+  include:
+    - python: "2.7"
+      env: TOXENV=py27
+
+    # Meta
+    - python: "2.7"
+      env: TOXENV=flake8
+    - python: "2.7"
+      env: TOXENV=manifest
+    - python: "2.7"
+      env: TOXENV=docs
+    - python: "2.7"
+      env: TOXENV=readme
+
+
+install:
+  - pip install tox
+
+
+script:
+  - tox
+
+
+before_install:
+  - pip install codecov
+
+
+after_success:
+  - tox -e coverage-report
+  - codecov
+
