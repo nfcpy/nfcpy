@@ -1,13 +1,15 @@
 # -*- coding: latin-1 -*-
 
-import nfc
-import nfc.tag
-import nfc.tag.tt1
-
+import sys
 import pytest
-import mock
-
+from mock import MagicMock, call
 from pytest_mock import mocker  # noqa: F401
+
+sys.modules['usb1'] = MagicMock
+
+import nfc          # noqa: E402
+import nfc.tag      # noqa: E402
+import nfc.tag.tt1  # noqa: E402
 
 
 def HEX(s):
@@ -84,9 +86,9 @@ class TestTopaz:
         ]
         assert tag.format(version=0x12) is True
         assert tag.clf.exchange.mock_calls == [
-            mock.call(HEX("00 00 00 01020304"), 0.1),
-            mock.call(HEX("53 09 12 01020304"), 0.1),
-            mock.call(HEX("53 0d 00 01020304"), 0.1),
+            call(HEX("00 00 00 01020304"), 0.1),
+            call(HEX("53 09 12 01020304"), 0.1),
+            call(HEX("53 0d 00 01020304"), 0.1),
         ]
 
     def test_format_invalid_version_number(self, tag):
@@ -100,10 +102,10 @@ class TestTopaz:
             tag.target.rid_res[:2] + self.mmap[:120],  # RALL
         ] + [bytearray([addr, 0]) for addr in range(13, 57)]  # WRITE-E
         assert tag.format(wipe=0) is True
-        commands = [mock.call(HEX("00 00 00 01020304"), 0.1)]
+        commands = [call(HEX("00 00 00 01020304"), 0.1)]
         for addr in range(13, 57):
             cmd = bytearray([0x53, addr, 0, 1, 2, 3, 4])
-            commands.append(mock.call(cmd, 0.1))
+            commands.append(call(cmd, 0.1))
         assert tag.clf.exchange.mock_calls == commands
 
     def test_protect_with_defaults(self, tag):
@@ -115,10 +117,10 @@ class TestTopaz:
         ]
         assert tag.protect() is True
         assert tag.clf.exchange.mock_calls == [
-            mock.call(HEX("00 00 00 01020304"), 0.1),  # RALL
-            mock.call(HEX("1a 0b 0f 01020304"), 0.1),  # WRITE-E
-            mock.call(HEX("1a 70 ff 01020304"), 0.1),  # WRITE-E
-            mock.call(HEX("1a 71 ff 01020304"), 0.1),  # WRITE-E
+            call(HEX("00 00 00 01020304"), 0.1),  # RALL
+            call(HEX("1a 0b 0f 01020304"), 0.1),  # WRITE-E
+            call(HEX("1a 70 ff 01020304"), 0.1),  # WRITE-E
+            call(HEX("1a 71 ff 01020304"), 0.1),  # WRITE-E
         ]
 
     def test_protect_with_password(self, tag):
@@ -237,9 +239,9 @@ class TestTopaz512:
         assert tag.format(version=0x12) is True
         print(tag.clf.exchange.mock_calls)
         assert tag.clf.exchange.mock_calls == [
-            mock.call(HEX("00 00 00 01020304"), 0.1),
-            mock.call(HEX("54 01 e1123f000103f230 01020304"), 0.1),
-            mock.call(HEX("54 02 330203f002030300 01020304"), 0.1),
+            call(HEX("00 00 00 01020304"), 0.1),
+            call(HEX("54 01 e1123f000103f230 01020304"), 0.1),
+            call(HEX("54 02 330203f002030300 01020304"), 0.1),
         ]
 
     def test_format_invalid_version_number(self, tag):
@@ -261,17 +263,17 @@ class TestTopaz512:
         ]
         assert tag.format(wipe=0) is True
         assert tag.clf.exchange.mock_calls == [
-            mock.call(HEX("00 00 00 01020304"), 0.1),
-            mock.call(HEX("02 0f 0000000000000000 01020304"), 0.1),
-            mock.call(HEX("10 10 0000000000000000 01020304"), 0.1),
-            mock.call(HEX("10 20 0000000000000000 01020304"), 0.1),
-            mock.call(HEX("10 30 0000000000000000 01020304"), 0.1),
-            mock.call(HEX("54 02 330203f002030300 01020304"), 0.1),
+            call(HEX("00 00 00 01020304"), 0.1),
+            call(HEX("02 0f 0000000000000000 01020304"), 0.1),
+            call(HEX("10 10 0000000000000000 01020304"), 0.1),
+            call(HEX("10 20 0000000000000000 01020304"), 0.1),
+            call(HEX("10 30 0000000000000000 01020304"), 0.1),
+            call(HEX("54 02 330203f002030300 01020304"), 0.1),
         ] + [
-            mock.call(HEX("54 %02x 0000000000000000 01020304" % b), 0.1)
+            call(HEX("54 %02x 0000000000000000 01020304" % b), 0.1)
             for b in range(3, 13)
         ] + [
-            mock.call(HEX("54 %02x 0000000000000000 01020304" % b), 0.1)
+            call(HEX("54 %02x 0000000000000000 01020304" % b), 0.1)
             for b in range(16, 38)
         ]
 
@@ -289,15 +291,15 @@ class TestTopaz512:
         ] + 30 * [nfc.clf.TimeoutError]
         assert tag.protect() is True
         assert tag.clf.exchange.mock_calls == [
-            mock.call(HEX("00 00 00 01020304"), 0.1),
-            mock.call(HEX("02 0f 0000000000000000 01020304"), 0.1),
-            mock.call(HEX("10 10 0000000000000000 01020304"), 0.1),
-            mock.call(HEX("10 20 0000000000000000 01020304"), 0.1),
-            mock.call(HEX("1a 0b 0f 01020304"), 0.1),
-            mock.call(HEX("1a 70 ff 01020304"), 0.1),
-            mock.call(HEX("1a 71 ff 01020304"), 0.1),
-            mock.call(HEX("1a 78 ff 01020304"), 0.1),
-            mock.call(HEX("1a 79 ff 01020304"), 0.1),
+            call(HEX("00 00 00 01020304"), 0.1),
+            call(HEX("02 0f 0000000000000000 01020304"), 0.1),
+            call(HEX("10 10 0000000000000000 01020304"), 0.1),
+            call(HEX("10 20 0000000000000000 01020304"), 0.1),
+            call(HEX("1a 0b 0f 01020304"), 0.1),
+            call(HEX("1a 70 ff 01020304"), 0.1),
+            call(HEX("1a 71 ff 01020304"), 0.1),
+            call(HEX("1a 78 ff 01020304"), 0.1),
+            call(HEX("1a 79 ff 01020304"), 0.1),
         ]
 
     def test_protect_with_password(self, tag):

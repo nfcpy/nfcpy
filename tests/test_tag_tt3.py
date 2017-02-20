@@ -1,11 +1,21 @@
 # -*- coding: latin-1 -*-
-import nfc
-import nfc.tag
-import nfc.tag.tt3
-import ndef
-import mock
+
+import sys
 import pytest
+from mock import MagicMock, call
 from pytest_mock import mocker  # noqa: F401
+
+import logging
+logging.basicConfig(level=logging.DEBUG)
+logging_level = logging.getLogger().getEffectiveLevel()
+logging.getLogger("nfc.tag").setLevel(logging_level)
+logging.getLogger("nfc.tag.tt3").setLevel(logging_level)
+
+sys.modules['usb1'] = MagicMock
+
+import nfc          # noqa: E402
+import nfc.tag      # noqa: E402
+import nfc.tag.tt3  # noqa: E402
 
 
 def HEX(s):
@@ -244,10 +254,10 @@ class TestType3Tag:
         assert tag.is_present is True
         assert tag.is_present is False
         assert tag.clf.exchange.mock_calls == [
-            mock.call(HEX('060012fc0000'), 0.003625),
-            mock.call(HEX('060012fc0000'), 0.003625),
-            mock.call(HEX('060012fc0000'), 0.003625),
-            mock.call(HEX('060012fc0000'), 0.003625),
+            call(HEX('060012fc0000'), 0.003625),
+            call(HEX('060012fc0000'), 0.003625),
+            call(HEX('060012fc0000'), 0.003625),
+            call(HEX('060012fc0000'), 0.003625),
         ]
 
     def test_polling(self, tag):
@@ -272,14 +282,14 @@ class TestType3Tag:
             tag.polling()
         assert excinfo.value.errno == nfc.tag.tt3.DATA_SIZE_ERROR
         assert tag.clf.exchange.mock_calls == [
-            mock.call(HEX('0600ffff0000'), 0.003625),
-            mock.call(HEX('060012fc0000'), 0.003625),
-            mock.call(HEX('0600ffff0100'), 0.003625),
-            mock.call(HEX('060012fc0001'), 0.0048330000000000005),
-            mock.call(HEX('060012fc0003'), 0.007249),
-            mock.call(HEX('060012fc0007'), 0.012081),
-            mock.call(HEX('060012fc000f'), 0.021745),
-            mock.call(HEX('0600ffff0000'), 0.003625),
+            call(HEX('0600ffff0000'), 0.003625),
+            call(HEX('060012fc0000'), 0.003625),
+            call(HEX('0600ffff0100'), 0.003625),
+            call(HEX('060012fc0001'), 0.0048330000000000005),
+            call(HEX('060012fc0003'), 0.007249),
+            call(HEX('060012fc0007'), 0.012081),
+            call(HEX('060012fc000f'), 0.021745),
+            call(HEX('0600ffff0000'), 0.003625),
         ]
         with pytest.raises(ValueError) as excinfo:
             tag.polling(0xFFFF, request_code=3)
@@ -314,13 +324,13 @@ class TestType3Tag:
         assert excinfo.value.errno == nfc.tag.tt3.DATA_SIZE_ERROR
 
         assert tag.clf.exchange.mock_calls == [
-            mock.call(HEX(
+            call(HEX(
                 '12 06 0102030405060708 010b00 0280008001'),
                       0.46402560000000004),
-            mock.call(HEX(
+            call(HEX(
                 '14 06 0102030405060708 020b000b00 0280008101'),
                       0.46402560000000004),
-            mock.call(HEX(
+            call(HEX(
                 '12 06 0102030405060708 010b00 0280008001'),
                       0.46402560000000004),
         ]
@@ -335,7 +345,7 @@ class TestType3Tag:
         ]
         assert tag.read_from_ndef_service(0, 1) == data
         assert tag.clf.exchange.mock_calls == [
-            mock.call(HEX(
+            call(HEX(
                 '12 06 0102030405060708 010b00 0280008001'),
                       0.46402560000000004),
         ]
@@ -362,10 +372,10 @@ class TestType3Tag:
         tag.write_without_encryption(sc_list, bc_list, data)
 
         assert tag.clf.exchange.mock_calls == [
-            mock.call(HEX(
+            call(HEX(
                 '32 08 0102030405060708 010900 0280008001') + data,
                       0.46402560000000004),
-            mock.call(HEX(
+            call(HEX(
                 '34 08 0102030405060708 0209004900 0280008101') + data,
                       0.46402560000000004),
         ]
@@ -380,7 +390,7 @@ class TestType3Tag:
         ] + 3 * [nfc.clf.TimeoutError]
         tag.write_to_ndef_service(data, 0, 1)
         assert tag.clf.exchange.mock_calls == [
-            mock.call(HEX(
+            call(HEX(
                 '32 08 0102030405060708 010900 0280008001') + data,
                 0.46402560000000004),
         ]
@@ -639,23 +649,25 @@ class TestType3Tag:
             HEX('0c 09 0102030405060708 0000'),  # write block 3
             HEX('0c 09 0102030405060708 0000'),  # write block 0
         ]
-        records = [ndef.SmartposterRecord("http://nfc-forum.org", "NFC Forum")]
-        tag.ndef.records = records
-        print(tag.clf.exchange.mock_calls)
+        tag.ndef.octets = (
+            HEX('d1022253 7091010e 55036e66 632d666f') +  # .."Sp...U.nfc-fo
+            HEX('72756d2e 6f726751 010c5402 656e4e46') +  # rum.orgQ..T.enNF
+            HEX('4320466f 72756d')                        # C Forum|
+        )
         tag.clf.exchange.assert_has_calls([
-            mock.call(  # read attribute data
+            call(  # read attribute data
                 HEX('10 06 0102030405060708 010b00 018000'), 0.3093504),
-            mock.call(  # write attribute data (set WriteFlag)
+            call(  # write attribute data (set WriteFlag)
                 HEX('20 08 0102030405060708 010900 018000'
                     '1002020003000000000f010000000027'), 0.3093504),
-            mock.call(  # write data blocks 1 and 2 (because Nbw is 2)
+            call(  # write data blocks 1 and 2 (because Nbw is 2)
                 HEX('32 08 0102030405060708 010900 0280018002'
                     'd10222537091010e55036e66632d666f'
                     '72756d2e6f726751010c5402656e4e46'), 0.46402560000000004),
-            mock.call(  # write data block 3 (with zero padding)
+            call(  # write data block 3 (with zero padding)
                 HEX('20 08 0102030405060708 010900 018003'
                     '4320466f72756d000000000000000000'), 0.3093504),
-            mock.call(  # write attribute data (unset WriteFlag, set Ln)
+            call(  # write attribute data (unset WriteFlag, set Ln)
                 HEX('20 08 0102030405060708 010900 018000'
                     '1002020003000000000001000027003f'), 0.3093504),
         ])
