@@ -1,4 +1,5 @@
 # -*- coding: latin-1 -*-
+from __future__ import absolute_import, division
 
 import sys
 import pytest
@@ -8,8 +9,8 @@ from pytest_mock import mocker  # noqa: F401
 import logging
 logging.basicConfig(level=logging.DEBUG)
 logging_level = logging.getLogger().getEffectiveLevel()
-logging.getLogger("nfc.tag.tt2").setLevel(logging_level)
 logging.getLogger("nfc.tag").setLevel(logging_level)
+logging.getLogger("nfc.tag.tt2").setLevel(logging_level)
 
 sys.modules['usb1'] = MagicMock
 
