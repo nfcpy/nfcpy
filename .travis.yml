@@ -16,8 +16,8 @@ matrix:
       env: TOXENV=flake8
     - python: "2.7"
       env: TOXENV=manifest
-    - python: "2.7"
-      env: TOXENV=docs
+#    - python: "2.7"
+#      env: TOXENV=docs
     - python: "2.7"
       env: TOXENV=readme
 
