@@ -18,9 +18,6 @@ import nfc          # noqa: E402
 import nfc.tag      # noqa: E402
 import nfc.tag.tt2  # noqa: E402
 
-import nfc.ndef
-import ndef
-
 
 def HEX(s):
     return bytearray.fromhex(s)
@@ -35,12 +32,9 @@ def clf(mocker, target):
     return clf
 
 
-class Type2TagSimulator(nfc.clf.ContactlessFrontend):
-    pass
-
 ###############################################################################
 #
-# TEST MIFARE ULTRALIGHT
+# MIFARE ULTRALIGHT
 #
 ###############################################################################
 class TestUltralight:
@@ -100,11 +94,11 @@ class TestUltralight:
             "  *  00 00 00 00 |....|",
             "00F: 00 00 00 00 |....|",
         ]
-        
+
 
 ###############################################################################
 #
-# TEST MIFARE ULTRALIGHT C
+# MIFARE ULTRALIGHT C
 #
 ###############################################################################
 class TestUltralightC:
@@ -201,66 +195,84 @@ class TestUltralightC:
         b'', b'IEMKAERB!NACUOYF', b'IEMKAERB!NACUOYF+ignored',
     ])
     def test_authenticate(self, tag, password):
-        tag.clf.exchange.side_effect = [
+        commands = [
+            (HEX('1a 00'), 0.1),
+            (HEX('af ab7efbe6 3f403940 10d04f01 8f8f48c3'), 0.1),
+        ]
+        responses = [
             HEX('af f7dfc7fa 617c7f1d'),
             HEX('00 0355f3c1 76dcd1b1'),
         ]
+        tag.clf.exchange.side_effect = responses
         assert tag.authenticate(password) is True
-        assert tag.clf.exchange.mock_calls == [
-            call(HEX('1a 00'), 0.1),
-            call(HEX('af ab7efbe6 3f403940 10d04f01 8f8f48c3'), 0.1),
-        ]
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
 
     def test_authenticate_failure(self, tag):
         with pytest.raises(ValueError) as excinfo:
             tag.authenticate(b'too-short')
         assert str(excinfo.value) == "password must be at least 16 byte"
 
-        tag.clf.exchange.side_effect = [
+        commands = [
+            (HEX('1a 00'), 0.1),
+            (HEX('af ab7efbe6 3f403940 10d04f01 8f8f48c3'), 0.1),
+            (HEX('af ab7efbe6 3f403940 10d04f01 8f8f48c3'), 0.1),
+            (HEX('af ab7efbe6 3f403940 10d04f01 8f8f48c3'), 0.1),
+        ]
+        responses = [
             HEX('af f7dfc7fa 617c7f1d'),
             nfc.clf.TimeoutError,
             nfc.clf.TimeoutError,
             nfc.clf.TimeoutError,
         ]
+        tag.clf.exchange.side_effect = responses
         assert tag.authenticate(b'') is False
-        assert tag.clf.exchange.mock_calls == [
-            call(HEX('1a 00'), 0.1),
-            call(HEX('af ab7efbe6 3f403940 10d04f01 8f8f48c3'), 0.1),
-            call(HEX('af ab7efbe6 3f403940 10d04f01 8f8f48c3'), 0.1),
-            call(HEX('af ab7efbe6 3f403940 10d04f01 8f8f48c3'), 0.1),
-        ]
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
 
     def test_protect_with_lockbits(self, tag):
-        tag.clf.exchange.side_effect = [
+        commands = [
+            (HEX('30 03'), 0.005),
+            (HEX('a2 02 0000ffff'), 0.1),
+            (HEX('a2 28 ffff0000'), 0.1),
+        ]
+        responses = [
             HEX('00000000 00000000 00000000 00000000'),  # Block 3-6
             HEX('0a'), HEX('0a'),  # ACK
         ]
+        tag.clf.exchange.side_effect = responses
         assert tag.protect(None) is True
-        assert tag.clf.exchange.mock_calls == [
-            call(HEX('30 03'), 0.005),
-            call(HEX('a2 02 0000ffff'), 0.1),
-            call(HEX('a2 28 ffff0000'), 0.1),
-        ]
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
 
-        tag.clf.exchange.reset_mock()
-        tag.clf.exchange.side_effect = [
+        commands = [
+            (HEX('30 03'), 0.005),
+            (HEX('a2 03 e110000f'), 0.1),
+            (HEX('a2 02 0000ffff'), 0.1),
+            (HEX('a2 28 ffff0000'), 0.1),
+        ]
+        responses = [
             HEX('E1100000 00000000 00000000 00000000'),  # pages 3-6
             HEX('0a'), HEX('0a'), HEX('0a'),  # ACK
         ]
-        assert tag.protect(None) is True
-        assert tag.clf.exchange.mock_calls == [
-            call(HEX('30 03'), 0.005),
-            call(HEX('a2 03 e110000f'), 0.1),
-            call(HEX('a2 02 0000ffff'), 0.1),
-            call(HEX('a2 28 ffff0000'), 0.1),
-        ]
-
         tag.clf.exchange.reset_mock()
-        tag.clf.exchange.side_effect = 3 * [nfc.clf.TimeoutError]
-        assert tag.protect(None) is False
-        assert tag.clf.exchange.mock_calls == 3 * [call(HEX('30 03'), 0.005)]
+        tag.clf.exchange.side_effect = responses
+        assert tag.protect(None) is True
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
 
-    @pytest.mark.parametrize("pwd, cc, auth", [
+        commands = [
+            (HEX('30 03'), 0.005),
+            (HEX('30 03'), 0.005),
+            (HEX('30 03'), 0.005),
+        ]
+        responses = [
+            nfc.clf.TimeoutError,
+            nfc.clf.TimeoutError,
+            nfc.clf.TimeoutError,
+        ]
+        tag.clf.exchange.reset_mock()
+        tag.clf.exchange.side_effect = responses
+        assert tag.protect(None) is False
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+
+    @pytest.mark.parametrize("pwd, cc, auth", [  # noqa: F811
         (b'', 'E11000', True),
         (b'IEMKAERB!NACUOYF', 'E11000', True),
         (b'IEMKAERB!NACUOYF+ignored', 'E11000', True),
@@ -271,26 +283,29 @@ class TestUltralightC:
         mocker.patch.object(tag, 'authenticate', autospec=True)
         tag.authenticate.return_value = auth
 
-        tag.clf.exchange.side_effect = [
+        commands = [
+            (HEX('a2 2c 42524541'), 0.1),  # write page 44
+            (HEX('a2 2d 4b4d4549'), 0.1),  # write page 45
+            (HEX('a2 2e 46594f55'), 0.1),  # write page 46
+            (HEX('a2 2f 43414e21'), 0.1),  # write page 47
+            (HEX('a2 2a 03000000'), 0.1),  # write page 42
+            (HEX('a2 2b 01000000'), 0.1),  # write page 43
+            (HEX('30 03'), 0.005),         # read page 3-6
+        ]
+        if cc.startswith('E11'):
+            commands.append((HEX('a2 03') + HEX(cc) + HEX('08'), 0.1))
+        responses = [
             HEX('0a'), HEX('0a'), HEX('0a'), HEX('0a'), HEX('0a'), HEX('0a'),
             HEX(cc) + HEX('00 00000000 00000000 00000000'), HEX('0a'),
         ]
+        tag.clf.exchange.side_effect = responses
         assert tag.protect(pwd) is auth
-        mock_calls = [
-            call(HEX('a2 2c 42524541'), 0.1),  # write page 44
-            call(HEX('a2 2d 4b4d4549'), 0.1),  # write page 45
-            call(HEX('a2 2e 46594f55'), 0.1),  # write page 46
-            call(HEX('a2 2f 43414e21'), 0.1),  # write page 47
-            call(HEX('a2 2a 03000000'), 0.1),  # write page 42
-            call(HEX('a2 2b 01000000'), 0.1),  # write page 43
-            call(HEX('30 03'), 0.005),         # read page 3-6
-        ]
-        if cc.startswith('E11'):
-            mock_calls.append(call(HEX('a2 03') + HEX(cc) + HEX('08'), 0.1))
-        assert tag.clf.exchange.mock_calls == mock_calls
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
         tag.authenticate.assert_called_once_with(b'IEMKAERB!NACUOYF')
 
-    @pytest.mark.parametrize("protect_from_page", [1, 2, 3, 4, 48, 49])
+    @pytest.mark.parametrize("protect_from_page", [  # noqa: F811
+        1, 2, 3, 4, 48, 49
+    ])
     def test_protect_from_page(self, mocker, tag, protect_from_page):
         mocker.patch.object(tag, 'authenticate', autospec=True)
         tag.authenticate.return_value = True
@@ -321,7 +336,7 @@ class TestUltralightC:
         assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
         tag.authenticate.assert_called_once_with(b'IEMKAERB!NACUOYF')
 
-    def test_protect_make_read_only(self, mocker, tag):
+    def test_protect_make_read_only(self, mocker, tag):  # noqa: F811
         mocker.patch.object(tag, 'authenticate', autospec=True)
         tag.authenticate.return_value = True
 
@@ -339,7 +354,6 @@ class TestUltralightC:
             HEX('0a'), HEX('0a'), HEX('0a'), HEX('0a'), HEX('0a'), HEX('0a'),
             HEX('E1100000 00000000 00000000 00000000'), HEX('0a'),
         ]
-
         tag.clf.exchange.side_effect = responses
         assert tag.protect('', read_protect=True) is True
         assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
@@ -370,7 +384,7 @@ class TestUltralightC:
         assert tag.ndef.is_readable is False
         assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
 
-    @pytest.mark.parametrize("rw, rf, wf", [
+    @pytest.mark.parametrize("rw, rf, wf", [  # noqa: F811
         ('00', True, True),
         ('08', True, False),
         ('80', False, True),
@@ -393,7 +407,6 @@ class TestUltralightC:
             HEX('792e6f72 67510108 5402656e 6e666370'),
             HEX('79fe0000 00000000 00000000 00000000'),
         ]
-
         tag.clf.exchange.side_effect = responses
         assert tag.ndef is not None
         assert tag.ndef.is_writeable is wf
@@ -416,7 +429,6 @@ class TestUltralightC:
         responses = [
             HEX('04049018 00000001 01480000 00000000'),
         ]
-
         tag.clf.exchange.side_effect = responses
         assert tag.ndef is None
         assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
@@ -424,75 +436,190 @@ class TestUltralightC:
 
 ###############################################################################
 #
-# TEST NTAG 203
+# NTAG 203
 #
 ###############################################################################
-@pytest.mark.skip(reason="not yet converted")
 class TestNTAG203:
-    def setup(self):
-        tag_memory = bytearray.fromhex(
-            "04 51 7C A1  E1 ED 25 80  A9 48 00 00  E1 10 12 00" # 000-003
-            "01 03 A0 10  44 03 00 FE  00 00 00 00  00 00 00 00" # 004-007
-        ) + bytearray(168 - 32)
+    tag_memory = bytearray.fromhex(
+        "04 51 7C A1  E1 ED 25 80  A9 48 00 00  E1 10 12 00" # 000-003
+        "01 03 A0 10  44 03 00 FE  00 00 00 00  00 00 00 00" # 004-007
+    ) + bytearray(168 - 32)
 
-    def __test_activation(self):
-        assert isinstance(self.tag, nfc.tag.tt2_nxp.NTAG203)
-        assert self.tag._product == "NXP NTAG203"
+    @pytest.fixture()
+    def target(self):
+        target = nfc.clf.RemoteTarget("106A")
+        target.sens_res = HEX("4400")
+        target.sel_res = HEX("00")
+        target.sdd_res = HEX("04A8D862BC2B80")
+        return target
 
-    def __test_dump_memory(self):
-        self.clf.memory[14] = 0xFF
-        lines = self.tag.dump()
-        assert len(lines) == 11
-        assert lines[-1] == ' 41: 00 00 00 00 (CNTR0-CNTR1)'
+    @pytest.fixture()
+    def tag(self, clf, target):
+        clf.exchange.side_effect = [
+            HEX('00'), HEX('00'),
+        ]
+        tag = nfc.tag.activate(clf, target)
+        assert isinstance(tag, nfc.tag.tt2_nxp.NTAG203)
+        assert tag.product == "NXP NTAG203"
+        assert clf.exchange.mock_calls == [
+            call(HEX('1A00'), timeout=0.01),
+            call(HEX('60'), timeout=0.01),
+        ]
+        clf.exchange.reset_mock()
+        return tag
+
+    def test_init(self, tag):
+        pass  # tested by tag fixture
+
+    def test_dump(self, tag):
+        tag.clf.exchange.side_effect = [
+            HEX('04a8d8fc62bc2b8075480000e1101200'),
+            HEX('62bc2b8075480000e1101200030bd101'),
+            HEX('75480000e1101200030bd10107540265'),
+            HEX('e1101200030bd101075402656e746573'),
+            HEX('030bd101075402656e74657374fe0000'),
+            HEX('075402656e74657374fe000000000000'),
+            HEX('6e74657374fe00000000000000000000'),
+            HEX('74fe0000000000000000000000000000'),
+            HEX('00000000000000000000000000000000'),
+            HEX('00000000000000000000000000000000'),
+            HEX('00000000000000000000000000000000'),
+            HEX('00000000000000000000000000000000'),
+            HEX('00000000000000000000000000000000'),
+            HEX('00000000000000000000000000000000'),
+            HEX('00000000000000000000000000000000'),
+            HEX('00000000000000000000000000000000'),
+            HEX('00000000000000000000000000000000'),
+            HEX('00000000000000000000000000000000'),
+            HEX('00000000000000000000000000000000'),
+            HEX('00000000000000000000000000000000'),
+            HEX('00000000000000000000000000000000'),
+            HEX('00000000000000000000000000000000'),
+            HEX('00000000000000000000000000000000'),
+            HEX('00000000000000000000000000000000'),
+            HEX('00000000000000000000000000000000'),
+            HEX('00000000000000000000000000000000'),
+            HEX('00000000000000000000000000000000'),
+            HEX('00000000000000000000000000000000'),
+            HEX('00000000000000000000000000000000'),
+            HEX('00000000000000000000000000000000'),
+            HEX('00000000000000000000000000000000'),
+            HEX('00000000000000000000000000000000'),
+            HEX('00000000000000000000000000000000'),
+            HEX('00000000000000000000000000000000'),
+            HEX('00000000000000000000000000000000'),
+            HEX('00000000000000000000000000000000'),
+            HEX('00000000000000000000000000000000'),
+            HEX('00000000000000000000000000000000'),
+            HEX('00000000000000000000000000000000'),
+            HEX('00000000000000000000000004a8d8fc'),
+            nfc.clf.TimeoutError, nfc.clf.TimeoutError, nfc.clf.TimeoutError,
+            HEX('0000000004a8d8fc62bc2b8075480000'),
+        ]
+        assert tag.dump() == [
+            "000: 04 a8 d8 fc (UID0-UID2, BCC0)",
+            "001: 62 bc 2b 80 (UID3-UID6)",
+            "002: 75 48 00 00 (BCC1, INT, LOCK0-LOCK1)",
+            "003: e1 10 12 00 (OTP0-OTP3)",
+            "004: 03 0b d1 01 |....|",
+            "005: 07 54 02 65 |.T.e|",
+            "006: 6e 74 65 73 |ntes|",
+            "007: 74 fe 00 00 |t...|",
+            "008: 00 00 00 00 |....|",
+            "  *  00 00 00 00 |....|",
+            "027: 00 00 00 00 |....|",
+            "028: ?? ?? ?? ?? (LOCK2-LOCK3)",
+            "029: 00 00 00 00 (CNTR0-CNTR1)",
+        ]
+
+    def test_format_blank_tag(self, tag):
+        commands = [
+            (HEX('3000'), 0.005),
+            (HEX('3004'), 0.005),
+            (HEX('a2 04 0103a010'), 0.1),
+            (HEX('a2 05 440300fe'), 0.1),
+            (HEX('3000'), 0.005),
+            (HEX('3004'), 0.005),
+        ]
+        responses = [
+            HEX('04a8d8fc 62bc2b80 75480000 e1101200'),
+            HEX('fe000000 00000000 00000000 00000000'),
+            HEX('0a'),
+            HEX('0a'),
+            HEX('04a8d8fc 62bc2b80 75480000 e1101200'),
+            HEX('0103a010 440300fe 00000000 00000000'),
+        ]
+        tag.clf.exchange.side_effect = responses
+        assert tag.format() is True
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
         
-    def __test_dump_memory_with_error(self):
-        del self.clf.memory[-8:]
-        lines = self.tag.dump()
-        assert len(lines) == 11
-        assert lines[-1] == ' 41: ?? ?? ?? ?? (CNTR0-CNTR1)'
+    def test_format_ndef_tag(self, tag):
+        commands = [
+            (HEX('3000'), 0.005),
+            (HEX('3004'), 0.005),
+            (HEX('a2 04 0300fe00'), 0.1),
+        ]
+        responses = [
+            HEX('04a8d8fc 62bc2b80 75480000 e1101200'),
+            HEX('0303d000 00fe0000 00000000 00000000'),
+            HEX('0a'),
+        ]
+        tag.clf.exchange.side_effect = responses
+        assert tag.format() is True
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
 
-    def __test_protect_without_password(self):
-        assert self.tag.protect() is True
-        assert self.clf.memory[10:12] == "\xFF\xFF"
-        assert self.clf.memory[160:164] == "\xFF\x01\x00\x00"
-        assert self.tag.ndef.is_writeable is False
+    def test_protect_with_password(self, tag):
+        assert tag.protect(password='') is False
 
-    def __test_protect_unformatted_tag(self):
-        self.clf.memory[12:16] = "\1\2\3\4"
-        assert self.tag.protect() is True
-        assert self.clf.memory[12:16] == "\1\2\3\4"
-        assert self.clf.memory[10:12] == "\xFF\xFF"
-        assert self.clf.memory[160:164] == "\xFF\x01\x00\x00"
+    def test_protect_with_ndef(self, tag):
+        commands = [
+            (HEX('3003'), 0.005),
+            (HEX('a2 03 e110120f'), 0.1),
+            (HEX('a2 02 0000ffff'), 0.1),
+            (HEX('a2 28 ff010000'), 0.1),
+        ]
+        responses = [
+            HEX('e1101200 0303d000 00fe0000 00000000'),
+            HEX('0a'),
+            HEX('0a'),
+            HEX('0a'),
+        ]
+        tag.clf.exchange.side_effect = responses
+        assert tag.protect() is True
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
 
-    def __test_protect_with_password(self):
-        assert self.tag.protect("123456") is False
+    def test_protect_with_blank(self, tag):
+        commands = [
+            (HEX('3003'), 0.005),
+            (HEX('a2 02 0000ffff'), 0.1),
+            (HEX('a2 28 ff010000'), 0.1),
+        ]
+        responses = [
+            HEX('00000000 00000000 00000000 00000000'),
+            HEX('0a'),
+            HEX('0a'),
+        ]
+        tag.clf.exchange.side_effect = responses
+        assert tag.protect() is True
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
 
-    def __test_protect_with_read_error(self):
-        self.clf.tag_is_present = False
-        assert self.tag.protect() is False
+    def test_protect_with_read_error(self, tag):
+        commands = [
+            (HEX('3003'), 0.005), (HEX('3003'), 0.005), (HEX('3003'), 0.005),
+        ]
+        responses = [
+            nfc.clf.TimeoutError, nfc.clf.TimeoutError, nfc.clf.TimeoutError,
+        ]
+        tag.clf.exchange.side_effect = responses
+        assert tag.protect() is False
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
 
 
 ################################################################################
 #
-# TEST NTAG 21x
+# NTAG 21x
 #
 ################################################################################
-class NTAG21xSimulator(Type2TagSimulator):
-    def __init__(self, tag_memory, version):
-        super(NTAG21xSimulator, self).__init__(tag_memory)
-        self.version = bytearray(version)
-
-    def unknown_command(self, data, timeout):
-        if data == "\x60": # GET_VERSION COMMAND
-            return bytearray(self.version)
-        if data == "\x3C\x00": # READ_SIG COMMAND
-            return bytearray(32 * "\1")
-        if data[0] == 0x1B: # PWD_AUTH COMMAND
-            pwd = data[1:5]
-            if pwd == self.memory[-8:-4]:
-                return self.memory[-4:-2]
-            else: return bytearray([0x00])
-
 @pytest.mark.skip(reason="not yet converted")
 class TestNTAG21x:
     def setup(self):
@@ -503,8 +630,6 @@ class TestNTAG21x:
             "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 012-015
             "00 00 00 00  00 00 00 00  FF FF FF FF  00 00 00 00" # 016-019
         )
-        #self.clf = NTAG21xSimulator(tag_memory, "\0\4\4\1\1\0\x0B\3")
-        #self.tag = self.clf.connect(rdwr={'on-connect': None})
 
     def __test_activation(self):
         assert isinstance(self.tag, nfc.tag.tt2_nxp.NTAG21x)
@@ -912,32 +1037,3 @@ class TestUltralightEV1UL21:
         assert self.clf.memory[15] == 0x0F
         assert self.clf.memory[152] == 0x40
         assert self.tag.ndef.is_writeable is False
-
-@pytest.mark.skip(reason="not yet converted")
-class TestActivation:
-    def __test_activation_with_digital_error_for_authenticate(self):
-        tag_memory = bytearray.fromhex(
-            "04 51 7C A1  E1 ED 25 80  A9 48 00 00  00 00 00 00"
-        )
-        clf = NTAG21xSimulator(tag_memory, "\0\4\3\1\1\0\x0B\3")
-        clf.crc_error_after = 1
-        tag = clf.connect(rdwr={'on-connect': None})
-        assert type(tag) == nfc.tag.tt2.Type2Tag
-
-    def __test_activation_with_digital_error_for_get_version(self):
-        tag_memory = bytearray.fromhex(
-            "04 51 7C A1  E1 ED 25 80  A9 48 00 00  00 00 00 00"
-        )
-        clf = NTAG21xSimulator(tag_memory, "\0\4\3\1\1\0\x0B\3")
-        clf.crc_error_after = 2
-        tag = clf.connect(rdwr={'on-connect': None})
-        assert type(tag) == nfc.tag.tt2.Type2Tag
-        
-    def __test_activation_with_unknown_version_for_get_version(self):
-        tag_memory = bytearray.fromhex(
-            "04 51 7C A1  E1 ED 25 80  A9 48 00 00  00 00 00 00"
-        )
-        clf = NTAG21xSimulator(tag_memory, "\0\4\3\1\1\0\x0B\3")
-        clf.return_response = bytearray(8)
-        tag = clf.connect(rdwr={'on-connect': None})
-        assert type(tag) == nfc.tag.tt2.Type2Tag
