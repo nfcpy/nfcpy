@@ -2,7 +2,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2009, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -19,40 +19,42 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-
-import logging
-log = logging.getLogger(__name__)
-
-import sys, time
+import time
 from binascii import hexlify
-if sys.hexversion >= 0x020704F0:
-    from struct import pack, unpack
-else: # for Debian Wheezy (and thus Raspbian)
-    from struct import pack, unpack as _unpack
-    unpack = lambda fmt, string: _unpack(fmt, buffer(string))
+from struct import pack, unpack
 
 from nfc.tag import Tag, TagCommandError
 import nfc.clf
 
+import logging
+log = logging.getLogger(__name__)
+
+
 def hexdump(octets, sep=""):
-    return sep.join(("??" if x is None else ("%02x" % x)) for x in octets)
+    return sep.join(
+        ("??" if x is None else ("%02x" % x)) for x in octets)
+
 
 def chrdump(octets, sep=""):
-    return sep.join(("{:c}".format(x) if 32<=x<=126 else ".") for x in octets)
+    return sep.join(
+        ("{:c}".format(x) if 32 <= x <= 126 else ".") for x in octets)
+
 
 def pagedump(page, octets, info=None):
     info = ("|%s|" % chrdump(octets)) if info is None else ("(%s)" % info)
     page = "  * " if page is None else "{0:03X}:".format(page)
     return "{0} {1} {2}".format(page, hexdump(octets, sep=" "), info)
 
+
 TIMEOUT_ERROR, INVALID_SECTOR_ERROR, \
     INVALID_PAGE_ERROR, INVALID_RESPONSE_ERROR = range(4)
 
+
 class Type2TagCommandError(TagCommandError):
-    """Type 2 Tag specific exceptions. Sets 
+    """Type 2 Tag specific exceptions. Sets
     :attr:`~nfc.tag.TagCommandError.errno` to one of:
-    
-    | 1 - INVALID_SECTOR_ERROR 
+
+    | 1 - INVALID_SECTOR_ERROR
     | 2 - INVALID_PAGE_ERROR
     | 3 - INVALID_RESPONSE_ERROR
 
@@ -63,6 +65,7 @@ class Type2TagCommandError(TagCommandError):
         INVALID_RESPONSE_ERROR: "invalid response data",
     }
 
+
 def read_tlv(memory, offset, skip_bytes):
     # Unpack a Type 2 Tag TLV from tag memory and return tag type, tag
     # length and tag value. For tag type 0 there is no length field,
@@ -70,7 +73,8 @@ def read_tlv(memory, offset, skip_bytes):
     # or three bytes, if the first byte is 255 then the next two byte
     # carry the length (big endian).
     tlv_t, offset = (memory[offset], offset+1)
-    if tlv_t in (0x00, 0xFE): return (tlv_t, -1, None)
+    if tlv_t in (0x00, 0xFE):
+        return (tlv_t, -1, None)
     tlv_l, offset = (memory[offset], offset+1)
     if tlv_l == 0xFF:
         tlv_l, offset = (unpack(">H", memory[offset:offset+2])[0], offset+2)
@@ -80,6 +84,7 @@ def read_tlv(memory, offset, skip_bytes):
             offset += 1
         tlv_v[i] = memory[offset+i]
     return (tlv_t, tlv_l, tlv_v)
+
 
 def get_lock_byte_range(data):
     # Extract the lock byte range indicated by a Lock Control TLV. The
@@ -91,6 +96,7 @@ def get_lock_byte_range(data):
     rsvd_from = page_addr * page_size + byte_offs
     return slice(rsvd_from, rsvd_from + rsvd_size)
 
+
 def get_rsvd_byte_range(data):
     # Extract the reserved memory range indicated by a Memory Control
     # TLV. The data argument is the TLV value field.
@@ -100,6 +106,7 @@ def get_rsvd_byte_range(data):
     page_size = 2 ** (data[2] & 0x0F)
     rsvd_from = page_addr * page_size + byte_offs
     return slice(rsvd_from, rsvd_from + rsvd_size)
+
 
 def get_capacity(capacity, offset, skip_bytes):
     # The net capacity is the range of bytes from the current offset
@@ -115,6 +122,7 @@ def get_capacity(capacity, offset, skip_bytes):
     capacity -= 4 if capacity > 256 else 2
     return capacity
 
+
 class Type2Tag(Tag):
     """Implementation of the NFC Forum Type 2 Tag Operation specification.
 
@@ -125,11 +133,11 @@ class Type2Tag(Tag):
 
     """
     TYPE = "Type2Tag"
-    
+
     class NDEF(Tag.NDEF):
         # Type 2 Tag specific implementation of the NDEF access type
         # class that is returned by the Tag.ndef attribute.
-        
+
         def __init__(self, tag):
             super(Type2Tag.NDEF, self).__init__(tag)
             self._ndef_tlv_offset = 0
@@ -164,7 +172,8 @@ class Type2Tag(Tag):
             skip_bytes = set()
             data_area_size = raw_capacity
             while offset < data_area_size + 16:
-                while (offset) in skip_bytes: offset += 1
+                while (offset) in skip_bytes:
+                    offset += 1
                 try:
                     tlv = read_tlv(tag_memory, offset, skip_bytes)
                     tlv_t, tlv_l, tlv_v = tlv
@@ -174,15 +183,20 @@ class Type2Tag(Tag):
                 if tlv_t == 0x00:
                     pass
                 elif tlv_t == 0x01:
-                    try: lock_bytes = get_lock_byte_range(tlv_v)
-                    except IndexError: return None
+                    try:
+                        lock_bytes = get_lock_byte_range(tlv_v)
+                    except IndexError:
+                        return None
                     skip_bytes.update(range(*lock_bytes.indices(0x100000)))
                 elif tlv_t == 0x02:
-                    try: rsvd_bytes = get_rsvd_byte_range(tlv_v)
-                    except IndexError: return None
+                    try:
+                        rsvd_bytes = get_rsvd_byte_range(tlv_v)
+                    except IndexError:
+                        return None
                     skip_bytes.update(range(*rsvd_bytes.indices(0x100000)))
                 elif tlv_t == 0x03:
-                    ndef = tlv_v; break
+                    ndef = tlv_v
+                    break
                 elif tlv_t == 0xFE:
                     break
                 else:
@@ -211,16 +225,16 @@ class Type2Tag(Tag):
             # bytes as needed) and let that be written to the tag, and
             # finally write the new ndef message tlv length.
             log.debug("write ndef data {0}{1}".format(
-                hexlify(data[:10]), '...' if len(data)>10 else ''))
-            
+                hexlify(data[:10]), '...' if len(data) > 10 else ''))
+
             tag_memory = self._tag_memory
             skip_bytes = self._skip_bytes
             offset = self._ndef_tlv_offset
-            
+
             # Set the ndef message tlv length to 0.
             tag_memory[offset+1] = 0
             tag_memory.synchronize()
-            
+
             # Leave room for ndef message length byte(s) and write
             # ndef data into the memory image, but jump over skip
             # bytes. If space permits, write a terminator tlv.
@@ -235,7 +249,7 @@ class Type2Tag(Tag):
             if offset < tag_memory[14] * 8 + 16:
                 tag_memory[offset] = 0xFE
             tag_memory.synchronize()
-            
+
             # Write the ndef message tlv length.
             offset = self._ndef_tlv_offset
             if len(data) < 255:
@@ -279,17 +293,18 @@ class Type2Tag(Tag):
                 data = [None, None, None, None]
             lines.append(pagedump(i, data, info))
 
-        same_data = 0; this_data = last_data = None
+        this_data = last_data = None
+        same_data = 0
 
         def dump_same_data(same_data, last_data, this_data, page):
             if same_data > 1:
                 lines.append(pagedump(None, this_data))
             if same_data > 0:
                 lines.append(pagedump(page, this_data))
-            
+
         for i in xrange(4, stop if stop is not None else 0x40000):
             try:
-                self.sector_select(i>>8)
+                self.sector_select(i >> 8)
                 this_data = self.read(i)[0:4]
             except Type2TagCommandError:
                 dump_same_data(same_data, last_data, this_data, i-1)
@@ -298,13 +313,14 @@ class Type2Tag(Tag):
                     lines.append(pagedump(i, this_data))
                     dump_same_data(stop-i-1, this_data, this_data, stop-1)
                 break
-            
+
             if this_data == last_data:
                 same_data += 1
             else:
                 dump_same_data(same_data, last_data, last_data, i-1)
                 lines.append(pagedump(i, this_data))
-                last_data = this_data; same_data = 0
+                last_data = this_data
+                same_data = 0
         else:
             dump_same_data(same_data, last_data, this_data, i)
 
@@ -379,7 +395,7 @@ class Type2Tag(Tag):
         """
         return super(Type2Tag, self).protect(
             password, read_protect, protect_from)
-        
+
     def _protect(self, password, read_protect, protect_from):
         if password is not None:
             log.debug("this tag can not be protected with password")
@@ -394,7 +410,7 @@ class Type2Tag(Tag):
         tag_memory = self.ndef._tag_memory
         tag_memory[15] |= 0x0F
         tag_memory.synchronize()
-        
+
         # Set the static lock bits.
         tag_memory[10] = 0xFF
         tag_memory[11] = 0xFF
@@ -413,7 +429,7 @@ class Type2Tag(Tag):
                 log.debug("lock control tlv {0}".format(hexlify(tlv_v)))
                 page_addr = tlv_v[0] >> 4
                 byte_offs = tlv_v[0] & 0x0F
-                page_size = 2 ** (tlv_v[2] & 0x0F) # BytesPerPage
+                page_size = 2 ** (tlv_v[2] & 0x0F)  # BytesPerPage
                 lock_byte_addr = page_addr * page_size + byte_offs
                 lock_bits_size = tlv_v[1] if tlv_v[1] > 0 else 256
                 lock_control.append((lock_byte_addr, lock_bits_size))
@@ -440,7 +456,7 @@ class Type2Tag(Tag):
             for i in range(lock_byte_size):
                 tag_memory[lock_byte_addr+i] = 0
             for i in range(lock_bits_size):
-                tag_memory[lock_byte_addr+(i>>3)] |= 1 << (i & 7)
+                tag_memory[lock_byte_addr+(i >> 3)] |= 1 << (i & 7)
 
         # Synchronize to write all lock bits to the tag.
         tag_memory.synchronize()
@@ -455,11 +471,11 @@ class Type2Tag(Tag):
         outside the readable memory range.
 
         Command execution errors raise :exc:`Type2TagCommandError`.
-        
+
         """
         log.debug("read pages {0} to {1}".format(page, page+3))
 
-        data = self.transceive("\x30"+chr(page%256), timeout=0.005)
+        data = self.transceive("\x30"+chr(page % 256), timeout=0.005)
 
         if len(data) == 1 and data[0] & 0xFA == 0x00:
             log.debug("received nak response")
@@ -480,7 +496,7 @@ class Type2Tag(Tag):
         The *page* argument specifies the offset in multiples of 4
         bytes. The *data* argument must be a string or bytearray of
         length 4.
-        
+
         Command execution errors raise :exc:`Type2TagCommandError`.
 
         """
@@ -489,12 +505,12 @@ class Type2Tag(Tag):
 
         log.debug("write {0} to page {1}".format(hexlify(data), page))
         rsp = self.transceive("\xA2" + chr(page % 256) + data)
-        
+
         if len(rsp) != 1:
             log.debug("invalid response " + hexlify(data))
             raise Type2TagCommandError(INVALID_RESPONSE_ERROR)
 
-        if rsp[0] != 0x0A: # NAK
+        if rsp[0] != 0x0A:  # NAK
             log.debug("invalid page, received nak")
             raise Type2TagCommandError(INVALID_PAGE_ERROR)
 
@@ -515,11 +531,11 @@ class Type2Tag(Tag):
         """
         if sector != self._current_sector:
             log.debug("select sector {0} (pages {1} to {2})".format(
-                sector, sector<<10, ((sector+1)<<8)-1))
+                sector, sector << 10, ((sector+1) << 8) - 1))
 
             sector_select_1 = b'\xC2\xFF'
             sector_select_2 = pack('Bxxx', sector)
-            
+
             rsp = self.transceive(sector_select_1)
             if len(rsp) == 1 and rsp[0] == 0x0A:
                 try:
@@ -527,7 +543,7 @@ class Type2Tag(Tag):
                     # and we must make sure there's no retries attempted
                     self.transceive(sector_select_2, timeout=0.001, retries=0)
                 except Type2TagCommandError as error:
-                    assert int(error) == TIMEOUT_ERROR # passive ack
+                    assert int(error) == TIMEOUT_ERROR  # passive ack
                 else:
                     log.debug("sector {0} does not exist".format(sector))
                     raise Type2TagCommandError(INVALID_SECTOR_ERROR)
@@ -541,7 +557,7 @@ class Type2Tag(Tag):
 
     def transceive(self, data, timeout=0.1, retries=2):
         """Send a Type 2 Tag command and receive the response.
-        
+
         :meth:`transceive` is a type 2 tag specific wrapper around the
         :meth:`nfc.ContactlessFrontend.exchange` method. It can be
         used to send custom commands as a sequence of *data* bytes to
@@ -577,11 +593,12 @@ class Type2Tag(Tag):
                 raise Type2TagCommandError(nfc.tag.RECEIVE_ERROR)
             if type(error) is nfc.clf.ProtocolError:
                 raise Type2TagCommandError(nfc.tag.PROTOCOL_ERROR)
-            
+
         elapsed = time.time() - started
         log.debug("<< {0} ({1:f}s)".format(hexlify(data), elapsed))
         return data
-        
+
+
 class Type2TagMemoryReader(object):
     """The memory reader provides a convenient way to read and write
     :class:`Type2Tag` memory. Once instantiated with a proper type
@@ -632,9 +649,9 @@ class Type2TagMemoryReader(object):
     def _read_from_tag(self, stop):
         start = len(self)
         try:
-            for i in xrange((start>>4)<<4, stop, 16):
-                self._tag.sector_select(i>>10)
-                self._data_from_tag[i:i+16] = self._tag.read(i>>2)
+            for i in xrange((start >> 4) << 4, stop, 16):
+                self._tag.sector_select(i >> 10)
+                self._data_from_tag[i:i+16] = self._tag.read(i >> 2)
                 self._data_in_cache[i:i+16] = self._data_from_tag[i:i+16]
         except Type2TagCommandError:
             pass
@@ -644,8 +661,8 @@ class Type2TagMemoryReader(object):
             for i in xrange(0, stop, 4):
                 data = self._data_in_cache[i:i+4]
                 if data != self._data_from_tag[i:i+4]:
-                    self._tag.sector_select(i>>10)
-                    self._tag.write(i>>2, data)
+                    self._tag.sector_select(i >> 10)
+                    self._tag.write(i >> 2, data)
                     self._data_from_tag[i:i+4] = data
         except Type2TagCommandError:
             pass
@@ -654,17 +671,19 @@ class Type2TagMemoryReader(object):
         """Write pages that contain modified data back to tag memory."""
         self._write_to_tag(stop=len(self))
 
+
 def activate(clf, target):
     # Type 2 Tags go mute when they receive an unsupported command. It
     # is then necessary to sense again and by copying sdd_res to
     # sel_req we ensure that only the same tag will be found.
     target.sel_req = target.sdd_res[:]
-    if target.sdd_res[0] == 0x04: # NXP
+    if target.sdd_res[0] == 0x04:  # NXP
         import nfc.tag.tt2_nxp
         tag = nfc.tag.tt2_nxp.activate(clf, target)
-        if tag is not None: return tag
-        # make sure the tag is still alive
-        target = clf.sense(target)
+        if tag is not None:
+            return tag
+        else:
+            # make sure the tag is still alive
+            target = clf.sense(target)
     if target:
         return Type2Tag(clf, target)
-    

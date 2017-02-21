@@ -2,7 +2,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2014, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -19,15 +19,15 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-
-import logging
-log = logging.getLogger(__name__)
-
 import os
 from binascii import hexlify
 
 import nfc.clf
 from . import tt2
+
+import logging
+log = logging.getLogger(__name__)
+
 
 class MifareUltralight(tt2.Type2Tag):
     """Mifare Ultralight is a simple type 2 tag with no specific
@@ -41,7 +41,8 @@ class MifareUltralight(tt2.Type2Tag):
 
     def dump(self):
         return super(MifareUltralight, self)._dump(stop=16)
-        
+
+
 class MifareUltralightC(tt2.Type2Tag):
     """Mifare Ultralight C provides more memory, to store up to 142 byte
     NDEF message data, and can be password protected.
@@ -62,13 +63,13 @@ class MifareUltralightC(tt2.Type2Tag):
     def __init__(self, clf, target):
         super(MifareUltralightC, self).__init__(clf, target)
         self._product = "Mifare Ultralight C (MF01CU2)"
-        
+
     def dump(self):
         lines = super(MifareUltralightC, self)._dump(stop=40)
-        
+
         footer = dict(zip(range(40, 44), (
             "LOCK2-LOCK3", "CTR0-CTR1", "AUTH0", "AUTH1")))
-        
+
         for i in sorted(footer.keys()):
             try:
                 data = self.read(i)[0:4]
@@ -84,7 +85,7 @@ class MifareUltralightC(tt2.Type2Tag):
         A Mifare Ultrlight C Tag can be provisioned with a custom
         password (or the default manufacturer key if the password is
         an empty string or bytearray).
-        
+
         A non-empty *password* must provide at least 128 bit key
         material, in other words it must be a string or bytearray of
         length 16 or more.
@@ -194,7 +195,7 @@ class MifareUltralightC(tt2.Type2Tag):
 
         """
         return super(MifareUltralightC, self).authenticate(password)
-        
+
     def _authenticate(self, password):
         from pyDes import triple_des, CBC
 
@@ -202,26 +203,26 @@ class MifareUltralightC(tt2.Type2Tag):
         # unless the password is empty. If it's empty we use the
         # factory default password.
         key = password[0:16] if password != "" else "IEMKAERB!NACUOYF"
-        
+
         if len(key) != 16:
             raise ValueError("password must be at least 16 byte")
-        
+
         log.debug("authenticate with key " + str(key).encode("hex"))
-        
+
         rsp = self.transceive("\x1A\x00")
         m1 = str(rsp[1:9])
         iv = "\x00\x00\x00\x00\x00\x00\x00\x00"
         rb = triple_des(key, CBC, iv).decrypt(m1)
-        
+
         log.debug("received challenge")
         log.debug("iv = " + str(iv).encode("hex"))
         log.debug("m1 = " + str(m1).encode("hex"))
         log.debug("rb = " + str(rb).encode("hex"))
-        
+
         ra = os.urandom(8)
         iv = str(rsp[1:9])
         m2 = triple_des(key, CBC, iv).encrypt(ra + rb[1:8] + rb[0])
-        
+
         log.debug("sending response")
         log.debug("ra = " + str(ra).encode("hex"))
         log.debug("iv = " + str(iv).encode("hex"))
@@ -230,7 +231,7 @@ class MifareUltralightC(tt2.Type2Tag):
             rsp = self.transceive("\xAF" + m2)
         except tt2.Type2TagCommandError:
             return False
-        
+
         m3 = str(rsp[1:9])
         iv = m2[8:16]
         log.debug("received confirmation")
@@ -238,7 +239,8 @@ class MifareUltralightC(tt2.Type2Tag):
         log.debug("m3 = " + str(m3).encode("hex"))
 
         return triple_des(key, CBC, iv).decrypt(m3) == ra[1:9] + ra[0]
-        
+
+
 class NTAG203(tt2.Type2Tag):
     """The NTAG203 is a plain memory Tag with 144 bytes user data memory
     plus a 16-bit one-way counter. It does not have any security
@@ -249,12 +251,12 @@ class NTAG203(tt2.Type2Tag):
     def __init__(self, clf, target):
         super(NTAG203, self).__init__(clf, target)
         self._product = "NXP NTAG203"
-        
+
     def dump(self):
         lines = super(NTAG203, self)._dump(40)
 
         footer = dict(zip(range(40, 42), ("LOCK2-LOCK3", "CNTR0-CNTR1")))
-        
+
         for i in sorted(footer.keys()):
             try:
                 data = self.read(i)[0:4]
@@ -263,7 +265,7 @@ class NTAG203(tt2.Type2Tag):
             lines.append(tt2.pagedump(i, data, footer[i]))
 
         return lines
-    
+
     def protect(self, password=None, read_protect=False, protect_from=0):
         """Set lock bits to disable future memory modifications.
 
@@ -291,7 +293,8 @@ class NTAG203(tt2.Type2Tag):
                 self.write(2, "\x00\x00\xFF\xFF")
                 self.write(40, "\xFF\x01\x00\x00")
                 return True
-            except tt2.Type2TagCommandError: pass
+            except tt2.Type2TagCommandError:
+                pass
         return False
 
     def _format(self, version, wipe):
@@ -300,6 +303,7 @@ class NTAG203(tt2.Type2Tag):
             self.write(4, b'\x01\x03\xA0\x10')
             self.write(5, b'\x44\x03\x00\xFE')
         return super(NTAG203, self)._format(version, wipe)
+
 
 class NTAG21x(tt2.Type2Tag):
     """Base class for the NTAG21x family (210/212/213/215/216). The
@@ -365,7 +369,7 @@ class NTAG21x(tt2.Type2Tag):
         password protected memory page (one page is 4 byte) with the
         exception that the smallest set value is page 3 even if
         *protect_from* is smaller.
-        
+
         """
         args = (password, read_protect, protect_from)
         return super(NTAG21x, self).protect(*args)
@@ -388,7 +392,7 @@ class NTAG21x(tt2.Type2Tag):
                 self.write(self._cfgpage - 1, "\xFF\xFF\xFF\x00")
             cfgdata = self.read(self._cfgpage)
             if cfgdata[4] & 0x40 == 0:
-                cfgdata[4] |= 0x40 # set CFGLCK bit
+                cfgdata[4] |= 0x40  # set CFGLCK bit
                 self.write(self._cfgpage + 1, cfgdata[4:8])
             return True
         except tt2.Type2TagCommandError:
@@ -451,20 +455,20 @@ class NTAG21x(tt2.Type2Tag):
         send to the tag as the password secret and the following 2
         byte are compared against the password acknowledge that is
         received from the tag.
-        
+
         The authentication result is True if the password was
         confirmed and False if not.
 
         """
         return super(NTAG21x, self).authenticate(password)
-        
+
     def _authenticate(self, password):
         if password and len(password) < 6:
             raise ValueError("password must be at least 6 byte long")
-        
+
         key = password[0:6] if password != "" else "\xFF\xFF\xFF\xFF\0\0"
         log.debug("authenticate with key " + hexlify(key))
-        
+
         try:
             rsp = self.transceive(bytearray("\x1B") + key[0:4])
             return rsp == key[4:6]
@@ -481,6 +485,7 @@ class NTAG21x(tt2.Type2Tag):
             lines.append(tt2.pagedump(i, data, footer[i]))
         return lines
 
+
 class NTAG210(NTAG21x):
     """The NTAG210 provides 48 bytes user data memory, password
     protection, originality signature and a UID mirror function.
@@ -490,7 +495,7 @@ class NTAG210(NTAG21x):
         super(NTAG210, self).__init__(clf, target)
         self._product = "NXP NTAG210"
         self._cfgpage = 16
-        
+
     def _format(self, version, wipe):
         if self.ndef is None:
             log.debug("no management data, writing factory defaults")
@@ -504,16 +509,17 @@ class NTAG210(NTAG21x):
                            "ACCESS", "PWD0-PWD3", "PACK0-PACK1")))
         return super(NTAG210, self)._dump(16, footer)
 
+
 class NTAG212(NTAG21x):
     """The NTAG212 provides 128 bytes user data memory, password
     protection, originality signature and a UID mirror function.
-    
+
     """
     def __init__(self, clf, target):
         super(NTAG212, self).__init__(clf, target)
         self._product = "NXP NTAG212"
         self._cfgpage = 37
-        
+
     def _format(self, version, wipe):
         if self.ndef is None:
             log.debug("no management data, writing factory defaults")
@@ -526,6 +532,7 @@ class NTAG212(NTAG21x):
                 "ACCESS", "PWD0-PWD3", "PACK0-PACK1")
         footer = dict(zip(range(36, 36+len(text)), text))
         return super(NTAG212, self)._dump(36, footer)
+
 
 class NTAG213(NTAG21x):
     """The NTAG213 provides 144 bytes user data memory, password
@@ -551,6 +558,7 @@ class NTAG213(NTAG21x):
         footer = dict(zip(range(40, 40+len(text)), text))
         return super(NTAG213, self)._dump(40, footer)
 
+
 class NTAG215(NTAG21x):
     """The NTAG215 provides 504 bytes user data memory, password
     protection, originality signature, a tag read counter and a mirror
@@ -561,7 +569,7 @@ class NTAG215(NTAG21x):
         super(NTAG215, self).__init__(clf, target)
         self._product = "NXP NTAG215"
         self._cfgpage = 131
-        
+
     def _format(self, version, wipe):
         if self.ndef is None:
             log.debug("no management data, writing factory defaults")
@@ -574,6 +582,7 @@ class NTAG215(NTAG21x):
                 "ACCESS", "PWD0-PWD3", "PACK0-PACK1")
         footer = dict(zip(range(130, 130+len(text)), text))
         return super(NTAG215, self)._dump(130, footer)
+
 
 class NTAG216(NTAG21x):
     """The NTAG216 provides 888 bytes user data memory, password
@@ -599,9 +608,10 @@ class NTAG216(NTAG21x):
         footer = dict(zip(range(226, 226+len(text)), text))
         return super(NTAG216, self)._dump(226, footer)
 
+
 class MifareUltralightEV1(NTAG21x):
     """Mifare Ultralight EV1
-    
+
     """
     def __init__(self, clf, target, product, cfgpage):
         super(MifareUltralightEV1, self).__init__(clf, target)
@@ -627,48 +637,56 @@ class MifareUltralightEV1(NTAG21x):
         footer = dict(zip(range(36, 36+len(text)), text))
         return super(MifareUltralightEV1, self)._dump(36, footer)
 
+
 class MF0UL11(MifareUltralightEV1):
     def __init__(self, clf, target):
         super(MF0UL11, self).__init__(clf, target, "MF0UL11", 16)
-    
+
+
 class MF0ULH11(MifareUltralightEV1):
     def __init__(self, clf, target):
         super(MF0ULH11, self).__init__(clf, target, "MF0ULH11", 16)
-    
+
+
 class MF0UL21(MifareUltralightEV1):
     def __init__(self, clf, target):
         super(MF0UL21, self).__init__(clf, target, "MF0UL21", 37)
-    
+
+
 class MF0ULH21(MifareUltralightEV1):
     def __init__(self, clf, target):
         super(MF0ULH21, self).__init__(clf, target, "MF0ULH21", 37)
-    
+
+
 class NTAGI2C(tt2.Type2Tag):
     def _dump(self, stop):
         s = super(NTAGI2C, self)._dump(stop)
-        
+
         data = self.read(stop)[0:4]
         s.append(tt2.pagedump(stop, data, "LOCK2-LOCK4, CHK"))
-        
+
         data = self.read(232)
         s.append("")
         s.append("Configuration registers:")
-        s.append(tt2.pagedump(stop&256|232, data[0:4], "NC, LD, SM, WDT0"))
-        s.append(tt2.pagedump(stop&256|233, data[4:8], "WDT1, CLK, LOCK, RFU"))
-        
+        s.append(tt2.pagedump(stop & 256 | 232, data[0:4],
+                              "NC, LD, SM, WDT0"))
+        s.append(tt2.pagedump(stop & 256 | 233, data[4:8],
+                              "WDT1, CLK, LOCK, RFU"))
+
         self.sector_select(3)
         data = self.read(248)
         s.append("")
         s.append("Session registers:")
         s.append(tt2.pagedump(0x3F8, data[0:4], "NC, LD, SM, WDT0"))
         s.append(tt2.pagedump(0x3F9, data[4:8], "WDT1, CLK, NS, RFU"))
-        
+
         self.sector_select(0)
         return s
 
+
 class NT3H1101(NTAGI2C):
     """NTAG I2C 1K.
-    
+
     """
     def __init__(self, clf, target):
         super(NTAGI2C, self).__init__(clf, target)
@@ -677,9 +695,10 @@ class NT3H1101(NTAGI2C):
     def dump(self):
         return super(NT3H1101, self)._dump(226)
 
+
 class NT3H1201(NTAGI2C):
     """NTAG I2C 2K.
-    
+
     """
     def __init__(self, clf, target):
         super(NTAGI2C, self).__init__(clf, target)
@@ -687,6 +706,7 @@ class NT3H1201(NTAGI2C):
 
     def dump(self):
         return super(NT3H1101, self)._dump(480)
+
 
 VERSION_MAP = {
     b"\x00\x04\x03\x01\x01\x00\x0B\x03": MF0UL11,
@@ -700,36 +720,43 @@ VERSION_MAP = {
     b"\x00\x04\x04\x02\x01\x00\x13\x03": NTAG216,
     b"\x00\x04\x04\x05\x02\x01\x13\x03": NT3H1101,
     b"\x00\x04\x04\x05\x02\x01\x15\x03": NT3H1201,
-#    b"\x00\x04\x04\x05\x02\x02\x13\x03": NT3H2111,
-#    b"\x00\x04\x04\x05\x02\x02\x15\x03": NT3H2211,
+    # b"\x00\x04\x04\x05\x02\x02\x13\x03": NT3H2111,
+    # b"\x00\x04\x04\x05\x02\x02\x15\x03": NT3H2211,
 }
+
 
 def activate(clf, target):
     log.debug("check if authenticate command is available")
     try:
         rsp = clf.exchange(b'\x1A\x00', timeout=0.01)
-        if clf.sense(target) is None: return
+        if clf.sense(target) is None:
+            return
         if rsp.startswith(b"\xAF"):
             return MifareUltralightC(clf, target)
     except nfc.clf.TimeoutError:
-        if clf.sense(target) is None: return
+        if clf.sense(target) is None:
+            return
     except nfc.clf.CommunicationError as error:
-        log.debug(repr(error)); return
-    
+        log.debug(repr(error))
+        return
+
     log.debug("check if version command is available")
     try:
         rsp = bytes(clf.exchange(b'\x60', timeout=0.01))
         if rsp in VERSION_MAP:
             return VERSION_MAP[rsp](clf, target)
         if rsp == b"\x00":
-            if clf.sense(target) is None: return None
-            else: return NTAG203(clf, target)
+            if clf.sense(target) is None:
+                return None
+            else:
+                return NTAG203(clf, target)
         log.debug("no match for version %s", hexlify(rsp).upper())
         return
     except nfc.clf.TimeoutError:
-        if clf.sense(target) is None: return
+        if clf.sense(target) is None:
+            return
     except nfc.clf.CommunicationError as error:
-        log.debug(repr(error)); return
-    
-    return MifareUltralight(clf, target)
+        log.debug(repr(error))
+        return
 
+    return MifareUltralight(clf, target)

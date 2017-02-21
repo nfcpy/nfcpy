@@ -31,6 +31,7 @@ import nfc.clf
 import logging
 log = logging.getLogger(__name__)
 
+
 CHECKSUM_ERROR, RESPONSE_ERROR, WRITE_ERROR, \
     BLOCK_ERROR, SECTOR_ERROR = range(1, 6)
 
@@ -282,13 +283,12 @@ class Type1Tag(Tag):
         # overwritten with an inverted version of the content and then
         # recovered. Because WRITE8 returns the new data content, a
         # non-existing block can be detected.
-        ispchr = lambda x: x >= 32 and x <= 126  # noqa: E731
 
         def oprint(octets):
             return ' '.join(['??' if x < 0 else '%02x' % x for x in octets])
 
         def cprint(octets):
-            return ''.join([chr(x) if ispchr(x) else '.' for x in octets])
+            return ''.join([chr(x) if 32 <= x <= 126 else '.' for x in octets])
 
         def lprint(fmt, d, i):
             return fmt.format(i, oprint(d), cprint(d))

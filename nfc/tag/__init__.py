@@ -2,7 +2,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2013, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -19,14 +19,13 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-
 import logging
+import warnings
+from ndef import message_decoder, message_encoder
+
+logging.captureWarnings(True)
 log = logging.getLogger(__name__)
 
-import warnings
-logging.captureWarnings(True)
-
-from ndef import message_decoder, message_encoder
 
 class Tag(object):
     """The base class for all NFC Tags/Cards. The methods and attributes
@@ -82,7 +81,7 @@ class Tag(object):
         def length(self):
             """Length of the current NDEF message in bytes."""
             return len(self._data) if self._data else 0
-        
+
         @property
         def capacity(self):
             """Maximum number of bytes for an NDEF message."""
@@ -138,9 +137,12 @@ class Tag(object):
                     print("the tag data differs from what was written")
 
             """
-            old_data, self._data = self._data, self._read_ndef_data()
-            if self._data is None: self._tag._ndef = None
-            return self._data != old_data
+            ndef_data = self._read_ndef_data()
+            different = self._data != ndef_data
+            if ndef_data is None:
+                self._tag._ndef = None
+            self._data = ndef_data
+            return different
 
         @property
         def message(self):
@@ -251,18 +253,20 @@ class Tag(object):
 
     def __str__(self):
         """x.__str__() <==> str(x)"""
-        try: s = self.type + ' ' + repr(self._product)
-        except AttributeError: s = self.type
+        try:
+            s = self.type + ' ' + repr(self._product)
+        except AttributeError:
+            s = self.type
         return s + ' ID=' + self.identifier.encode("hex").upper()
 
     @property
     def clf(self):
         return self._clf
-        
+
     @property
     def target(self):
         return self._target
-        
+
     @property
     def type(self):
         return self.TYPE
@@ -294,14 +298,14 @@ class Tag(object):
     def is_authenticated(self):
         """True if the tag was successfully authenticated."""
         return bool(self._authenticated)
-        
+
     def dump(self):
         """The dump() method returns a list of strings describing the memory
         structure of the tag, suitable for printing with join(). The
         list format makes custom indentation a bit easier. ::
 
             print("\\n".join(["\\t" + line for line in tag.dump]))
-        
+
         """
         return []
 
@@ -342,7 +346,8 @@ class Tag(object):
             args = args.format(version, wipe)
             log.debug("format({0})".format(args))
             status = self._format(version, wipe)
-            if status is True: self._ndef = None
+            if status is True:
+                self._ndef = None
             return status
         else:
             log.debug("this tag can not be formatted with nfcpy")
@@ -374,14 +379,15 @@ class Tag(object):
         :const:`False` depending on whether the operation was
         successful or not, or :const:`None` if the tag does not
         support custom protection (or it is not implemented).
-        
+
         """
         if hasattr(self, "_protect"):
             args = "password={0!r}, read_protect={1!r}, protect_from={2!r}"
             args = args.format(password, read_protect, protect_from)
             log.debug("protect({0})".format(args))
             status = self._protect(password, read_protect, protect_from)
-            if status is True: self._ndef = None
+            if status is True:
+                self._ndef = None
             return status
         else:
             log.error("this tag can not be protected with nfcpy")
@@ -403,15 +409,18 @@ class Tag(object):
             args = "password={0!r}".format(password)
             log.debug("authenticate({0})".format(args))
             self._authenticated = self._authenticate(password)
-            if self._authenticated is True: self._ndef = None
+            if self._authenticated is True:
+                self._ndef = None
             return self._authenticated
         else:
             log.error("this tag can not be authenticated with nfcpy")
             return None
 
+
 TIMEOUT_ERROR = 0
 RECEIVE_ERROR = -1
 PROTOCOL_ERROR = -2
+
 
 class TagCommandError(Exception):
     """The base class for exceptions that are raised when a tag command
@@ -423,11 +432,11 @@ class TagCommandError(Exception):
     type specific error from one of the exception classes derived from
     :exc:`TagCommandError` (per tag type module). Error numbers below
     and including zero indicate general errors::
-    
+
         nfc.tag.TIMEOUT_ERROR  => unrecoverable timeout error
         nfc.tag.RECEIVE_ERROR  => unrecoverable transmission error
         nfc.tag.PROTOCOL_ERROR => unrecoverable protocol error
-    
+
     The :exc:`TagCommandError` exception populates the *message*
     attribute of the general exception class with the appropriate
     error description.
@@ -438,11 +447,13 @@ class TagCommandError(Exception):
         RECEIVE_ERROR: "unrecoverable transmission error",
         PROTOCOL_ERROR: "unrecoverable protocol error",
     }
-    
+
     def __init__(self, errno):
         default = "tag command error {errno} (0x{errno:x})".format(errno=errno)
-        if errno > 0: message = self.errno_str.get(errno, default)
-        else: message = TagCommandError.errno_str.get(errno, default)
+        if errno > 0:
+            message = self.errno_str.get(errno, default)
+        else:
+            message = TagCommandError.errno_str.get(errno, default)
         super(TagCommandError, self).__init__(message)
         self._errno = errno
 
@@ -453,6 +464,7 @@ class TagCommandError(Exception):
 
     def __int__(self):
         return self._errno
+
 
 def activate(clf, target):
     import nfc.clf
@@ -472,29 +484,35 @@ def activate(clf, target):
     except nfc.clf.CommunicationError:
         return None
 
+
 def activate_tt1(clf, target):
     log.debug("trying type 1 tag activation for {0}".format(target.brty))
     import nfc.tag.tt1
     return nfc.tag.tt1.activate(clf, target)
-    
+
+
 def activate_tt2(clf, target):
     log.debug("trying type 2 tag activation for {0}".format(target.brty))
     import nfc.tag.tt2
     return nfc.tag.tt2.activate(clf, target)
-    
+
+
 def activate_tt3(clf, target):
     log.debug("trying type 3 tag activation for {0}".format(target.brty))
     import nfc.tag.tt3
     return nfc.tag.tt3.activate(clf, target)
-    
+
+
 def activate_tt4(clf, target):
     log.debug("trying type 4 tag activation for {0}".format(target.brty))
     import nfc.tag.tt4
     return nfc.tag.tt4.activate(clf, target)
 
+
 class TagEmulation(object):
     """Base class for tag emulation classes."""
     pass
+
 
 def emulate(clf, target):
     import nfc.clf
@@ -504,4 +522,3 @@ def emulate(clf, target):
         return nfc.tag.tt3.Type3TagEmulation(clf, target)
     else:
         log.debug("can't emulate with %s", target)
-
