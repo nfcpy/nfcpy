@@ -593,6 +593,7 @@ class Type2Tag(Tag):
                 raise Type2TagCommandError(nfc.tag.RECEIVE_ERROR)
             if type(error) is nfc.clf.ProtocolError:
                 raise Type2TagCommandError(nfc.tag.PROTOCOL_ERROR)
+            raise RuntimeError("unexpected " + repr(error))
 
         elapsed = time.time() - started
         log.debug("<< {0} ({1:f}s)".format(hexlify(data), elapsed))
