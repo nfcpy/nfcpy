@@ -325,15 +325,12 @@ class TestType3Tag:
         assert excinfo.value.errno == nfc.tag.tt3.DATA_SIZE_ERROR
 
         assert tag.clf.exchange.mock_calls == [
-            call(HEX(
-                '12 06 0102030405060708 010b00 0280008001'),
-                      0.46402560000000004),
-            call(HEX(
-                '14 06 0102030405060708 020b000b00 0280008101'),
-                      0.46402560000000004),
-            call(HEX(
-                '12 06 0102030405060708 010b00 0280008001'),
-                      0.46402560000000004),
+            call(HEX('12 06 0102030405060708 010b00 0280008001'),
+                 0.46402560000000004),
+            call(HEX('14 06 0102030405060708 020b000b00 0280008101'),
+                 0.46402560000000004),
+            call(HEX('12 06 0102030405060708 010b00 0280008001'),
+                 0.46402560000000004),
         ]
 
     def test_read_from_ndef_service(self, tag):
@@ -346,9 +343,8 @@ class TestType3Tag:
         ]
         assert tag.read_from_ndef_service(0, 1) == data
         assert tag.clf.exchange.mock_calls == [
-            call(HEX(
-                '12 06 0102030405060708 010b00 0280008001'),
-                      0.46402560000000004),
+            call(HEX('12 06 0102030405060708 010b00 0280008001'),
+                 0.46402560000000004),
         ]
 
     def test_write_without_encryption(self, tag):
@@ -373,12 +369,10 @@ class TestType3Tag:
         tag.write_without_encryption(sc_list, bc_list, data)
 
         assert tag.clf.exchange.mock_calls == [
-            call(HEX(
-                '32 08 0102030405060708 010900 0280008001') + data,
-                      0.46402560000000004),
-            call(HEX(
-                '34 08 0102030405060708 0209004900 0280008101') + data,
-                      0.46402560000000004),
+            call(HEX('32 08 0102030405060708 010900 0280008001') + data,
+                 0.46402560000000004),
+            call(HEX('34 08 0102030405060708 0209004900 0280008101') + data,
+                 0.46402560000000004),
         ]
 
     def test_write_to_ndef_service(self, tag):
@@ -391,9 +385,8 @@ class TestType3Tag:
         ] + 3 * [nfc.clf.TimeoutError]
         tag.write_to_ndef_service(data, 0, 1)
         assert tag.clf.exchange.mock_calls == [
-            call(HEX(
-                '32 08 0102030405060708 010900 0280008001') + data,
-                0.46402560000000004),
+            call(HEX('32 08 0102030405060708 010900 0280008001') + data,
+                 0.46402560000000004),
         ]
 
     def test_send_cmd_recv_rsp(self, tag):
