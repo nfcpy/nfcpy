@@ -56,7 +56,7 @@ class MifareUltralightC(tt2.Type2Tag):
                     if not self._readable and tag_memory[15] >> 4 == 8:
                         self._readable = True
                     if not self._writeable and tag_memory[15] & 0xF == 8:
-                        self._writeable = bool(tag_memory[10:12] == "\0\0")
+                        self._writeable = bool(tag_memory[10:12] == b"\0\0")
                 return True
             return False
 
@@ -132,8 +132,8 @@ class MifareUltralightC(tt2.Type2Tag):
             if ndef_cc[0] == 0xE1 and ndef_cc[1] >> 4 == 1:
                 ndef_cc[3] = 0x0F
                 self.write(3, ndef_cc)
-            self.write(2, "\x00\x00\xFF\xFF")
-            self.write(40, "\xFF\xFF\x00\x00")
+            self.write(2, b"\x00\x00\xFF\xFF")
+            self.write(40, b"\xFF\xFF\x00\x00")
             return True
         except tt2.Type2TagCommandError:
             return False
@@ -145,7 +145,7 @@ class MifareUltralightC(tt2.Type2Tag):
         # The first 16 password character bytes are taken as key
         # unless the password is empty. If it's empty we use the
         # factory default password.
-        key = password[0:16] if password != "" else "IEMKAERB!NACUOYF"
+        key = password[0:16] if password != b"" else b"IEMKAERB!NACUOYF"
         log.debug("protect with key " + hexlify(key))
 
         # split the key and reverse
@@ -156,7 +156,7 @@ class MifareUltralightC(tt2.Type2Tag):
         self.write(47, key2[4:8])
 
         # protect from memory page
-        self.write(42, chr(max(3, min(protect_from, 0x30))) + "\0\0\0")
+        self.write(42, chr(max(3, min(protect_from, 0x30))) + b"\0\0\0")
 
         # set read protection flag
         self.write(43, "\0\0\0\0" if read_protect else "\x01\0\0\0")
@@ -202,41 +202,41 @@ class MifareUltralightC(tt2.Type2Tag):
         # The first 16 password character bytes are taken as key
         # unless the password is empty. If it's empty we use the
         # factory default password.
-        key = password[0:16] if password != "" else "IEMKAERB!NACUOYF"
+        key = password[0:16] if password != b"" else b"IEMKAERB!NACUOYF"
 
         if len(key) != 16:
             raise ValueError("password must be at least 16 byte")
 
         log.debug("authenticate with key " + str(key).encode("hex"))
 
-        rsp = self.transceive("\x1A\x00")
-        m1 = str(rsp[1:9])
-        iv = "\x00\x00\x00\x00\x00\x00\x00\x00"
+        rsp = self.transceive(b"\x1A\x00")
+        m1 = bytes(rsp[1:9])
+        iv = b"\x00\x00\x00\x00\x00\x00\x00\x00"
         rb = triple_des(key, CBC, iv).decrypt(m1)
 
         log.debug("received challenge")
-        log.debug("iv = " + str(iv).encode("hex"))
-        log.debug("m1 = " + str(m1).encode("hex"))
-        log.debug("rb = " + str(rb).encode("hex"))
+        log.debug("iv = " + bytes(iv).encode("hex"))
+        log.debug("m1 = " + bytes(m1).encode("hex"))
+        log.debug("rb = " + bytes(rb).encode("hex"))
 
         ra = os.urandom(8)
-        iv = str(rsp[1:9])
+        iv = bytes(rsp[1:9])
         m2 = triple_des(key, CBC, iv).encrypt(ra + rb[1:8] + rb[0])
 
         log.debug("sending response")
-        log.debug("ra = " + str(ra).encode("hex"))
-        log.debug("iv = " + str(iv).encode("hex"))
-        log.debug("m2 = " + str(m2).encode("hex"))
+        log.debug("ra = " + bytes(ra).encode("hex"))
+        log.debug("iv = " + bytes(iv).encode("hex"))
+        log.debug("m2 = " + bytes(m2).encode("hex"))
         try:
-            rsp = self.transceive("\xAF" + m2)
+            rsp = self.transceive(b"\xAF" + m2)
         except tt2.Type2TagCommandError:
             return False
 
-        m3 = str(rsp[1:9])
+        m3 = bytes(rsp[1:9])
         iv = m2[8:16]
         log.debug("received confirmation")
-        log.debug("iv = " + str(iv).encode("hex"))
-        log.debug("m3 = " + str(m3).encode("hex"))
+        log.debug("iv = " + bytes(iv).encode("hex"))
+        log.debug("m3 = " + bytes(m3).encode("hex"))
 
         return triple_des(key, CBC, iv).decrypt(m3) == ra[1:9] + ra[0]
 
@@ -290,8 +290,8 @@ class NTAG203(tt2.Type2Tag):
                 if ndef_cc[0] == 0xE1 and ndef_cc[1] >> 4 == 1:
                     ndef_cc[3] = 0x0F
                     self.write(3, ndef_cc)
-                self.write(2, "\x00\x00\xFF\xFF")
-                self.write(40, "\xFF\x01\x00\x00")
+                self.write(2, b"\x00\x00\xFF\xFF")
+                self.write(40, b"\xFF\x01\x00\x00")
                 return True
             except tt2.Type2TagCommandError:
                 pass
@@ -323,7 +323,7 @@ class NTAG21x(tt2.Type2Tag):
                     if not self._readable and tag_memory[15] >> 4 == 8:
                         self._readable = True
                     if not self._writeable and tag_memory[15] & 0xF == 8:
-                        self._writeable = bool(tag_memory[10:12] == "\0\0")
+                        self._writeable = bool(tag_memory[10:12] == b"\0\0")
                 return True
             return False
 
@@ -340,9 +340,9 @@ class NTAG21x(tt2.Type2Tag):
         """
         log.debug("read tag signature")
         try:
-            return str(self.transceive("\x3C\x00"))
+            return bytes(self.transceive(b"\x3C\x00"))
         except tt2.Type2TagCommandError:
-            return 32 * "\0"
+            return 32 * b"\0"
 
     def protect(self, password=None, read_protect=False, protect_from=0):
         """Set password protection or permanent lock bits.
@@ -387,9 +387,9 @@ class NTAG21x(tt2.Type2Tag):
             if ndef_cc[0] == 0xE1 and ndef_cc[1] >> 4 == 1:
                 ndef_cc[3] = 0x0F
                 self.write(3, ndef_cc)
-            self.write(2, "\x00\x00\xFF\xFF")
+            self.write(2, b"\x00\x00\xFF\xFF")
             if self._cfgpage > 16:
-                self.write(self._cfgpage - 1, "\xFF\xFF\xFF\x00")
+                self.write(self._cfgpage - 1, b"\xFF\xFF\xFF\x00")
             cfgdata = self.read(self._cfgpage)
             if cfgdata[4] & 0x40 == 0:
                 cfgdata[4] |= 0x40  # set CFGLCK bit
@@ -400,9 +400,9 @@ class NTAG21x(tt2.Type2Tag):
 
     def _protect_with_password(self, password, read_protect, protect_from):
         if password and len(password) < 6:
-            raise ValueError("password must be at least 6 byte long")
+            raise ValueError("password must be at least 6 bytes")
 
-        key = password[0:6] if password != "" else "\xFF\xFF\xFF\xFF\0\0"
+        key = password[0:6] if password != b"" else b"\xFF\xFF\xFF\xFF\0\0"
         log.debug("protect with key " + hexlify(key))
 
         # read CFG0, CFG1, PWD and PACK
@@ -464,13 +464,13 @@ class NTAG21x(tt2.Type2Tag):
 
     def _authenticate(self, password):
         if password and len(password) < 6:
-            raise ValueError("password must be at least 6 byte long")
+            raise ValueError("password must be at least 6 bytes")
 
-        key = password[0:6] if password != "" else "\xFF\xFF\xFF\xFF\0\0"
+        key = password[0:6] if password != b"" else b"\xFF\xFF\xFF\xFF\0\0"
         log.debug("authenticate with key " + hexlify(key))
 
         try:
-            rsp = self.transceive(bytearray("\x1B") + key[0:4])
+            rsp = self.transceive(b"\x1B" + key[0:4])
             return rsp == key[4:6]
         except tt2.Type2TagCommandError:
             return False
@@ -613,16 +613,9 @@ class MifareUltralightEV1(NTAG21x):
     """Mifare Ultralight EV1
 
     """
-    def __init__(self, clf, target, product, cfgpage):
+    def __init__(self, clf, target, product):
         super(MifareUltralightEV1, self).__init__(clf, target)
         self._product = "Mifare Ultralight EV1 ({0})".format(product)
-        self._cfgpage = cfgpage
-
-    def dump(self):
-        if self._cfgpage == 16:
-            return self._dump_ul11()
-        if self._cfgpage == 37:
-            return self._dump_ul21()
 
     def _dump_ul11(self):
         text = ("MOD, RFU, RFU, AUTH0", "ACCESS, VCTID, RFU, RFU",
@@ -640,22 +633,34 @@ class MifareUltralightEV1(NTAG21x):
 
 class MF0UL11(MifareUltralightEV1):
     def __init__(self, clf, target):
-        super(MF0UL11, self).__init__(clf, target, "MF0UL11", 16)
+        super(MF0UL11, self).__init__(clf, target, "MF0UL11")
+
+    def dump(self):
+        return self._dump_ul11()
 
 
 class MF0ULH11(MifareUltralightEV1):
     def __init__(self, clf, target):
-        super(MF0ULH11, self).__init__(clf, target, "MF0ULH11", 16)
+        super(MF0ULH11, self).__init__(clf, target, "MF0ULH11")
+
+    def dump(self):
+        return self._dump_ul11()
 
 
 class MF0UL21(MifareUltralightEV1):
     def __init__(self, clf, target):
-        super(MF0UL21, self).__init__(clf, target, "MF0UL21", 37)
+        super(MF0UL21, self).__init__(clf, target, "MF0UL21")
+
+    def dump(self):
+        return self._dump_ul21()
 
 
 class MF0ULH21(MifareUltralightEV1):
     def __init__(self, clf, target):
-        super(MF0ULH21, self).__init__(clf, target, "MF0ULH21", 37)
+        super(MF0ULH21, self).__init__(clf, target, "MF0ULH21")
+
+    def dump(self):
+        return self._dump_ul21()
 
 
 class NTAGI2C(tt2.Type2Tag):
@@ -689,7 +694,7 @@ class NT3H1101(NTAGI2C):
 
     """
     def __init__(self, clf, target):
-        super(NTAGI2C, self).__init__(clf, target)
+        super(NT3H1101, self).__init__(clf, target)
         self._product = "NTAG I2C 1K (NT3H1101)"
 
     def dump(self):
@@ -701,11 +706,11 @@ class NT3H1201(NTAGI2C):
 
     """
     def __init__(self, clf, target):
-        super(NTAGI2C, self).__init__(clf, target)
+        super(NT3H1201, self).__init__(clf, target)
         self._product = "NTAG I2C 2K (NT3H1201)"
 
     def dump(self):
-        return super(NT3H1101, self)._dump(480)
+        return super(NT3H1201, self)._dump(480)
 
 
 VERSION_MAP = {
