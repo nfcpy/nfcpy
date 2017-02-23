@@ -3,7 +3,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2013 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -64,7 +64,7 @@ device = sys.argv[1] if len(sys.argv) > 1 else 'udp'
 started = time.time()
 for server, client in test_programs:
     print "*** {0} ***".format(client)
-    
+
     server = examples + "/{0} --device {1} -q".format(server, device)
     print server
     server = Popen(shlex.split(server), stderr=PIPE, stdout=PIPE)
@@ -82,4 +82,4 @@ for server, client in test_programs:
 
 elapsed = int(time.time() - started)
 print("completed tests in {0} minutes {1} seconds"
-      .format(elapsed/60, elapsed%60))
+      .format(elapsed / 60, elapsed % 60))
