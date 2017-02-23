@@ -17,6 +17,7 @@ import nfc
 
 # -- General configuration -----------------------------------------------------
 extensions = [
+    'sphinx.ext.doctest',
     'sphinx.ext.autodoc',
     'sphinx.ext.napoleon',
     'sphinx.ext.intersphinx'
@@ -37,6 +38,13 @@ release = version
 exclude_patterns = ['_build', '.#*', 'topics/.#*', 'examples/.#*']
 pygments_style = 'sphinx'
 linkcheck_timeout = 30
+
+doctest_test_doctest_blocks = ""  # do not test standard reST doctest blocks
+doctest_global_setup = """
+import sys
+import mock
+sys.modules['usb1'] = mock.Mock('usb1')
+"""
 
 # -- Options for HTML output ---------------------------------------------------
 
