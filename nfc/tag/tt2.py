@@ -23,7 +23,7 @@ import time
 from binascii import hexlify
 from struct import pack, unpack
 
-from nfc.tag import Tag, TagCommandError
+from . import Tag, TagCommandError
 import nfc.clf
 
 import logging

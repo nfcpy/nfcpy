@@ -2,7 +2,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2009, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -24,11 +24,10 @@ The nfc.llcp module implements the NFC Forum Logical Link Control
 Protocol (LLCP) specification and provides a socket interface to use
 the connection-less and connection-mode transport facilities of LLCP.
 """
+from .socket import Socket
+from .llc import LOGICAL_DATA_LINK, DATA_LINK_CONNECTION
+from .err import *
+from .opt import *
+
 import logging
 log = logging.getLogger(__name__)
-
-from socket import Socket
-from llc import LOGICAL_DATA_LINK, DATA_LINK_CONNECTION
-from err import *
-from opt import *
-

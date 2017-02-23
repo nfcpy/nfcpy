@@ -59,12 +59,12 @@ class TestServiceCode:
         assert sc.attribute == 9
 
     def test_unpack(self):
-        sc = nfc.tag.tt3.ServiceCode.unpack("\x0B\x01")
+        sc = nfc.tag.tt3.ServiceCode.unpack(b"\x0B\x01")
         assert sc.number == 4
         assert sc.attribute == 11
 
     def test_pack(self):
-        assert nfc.tag.tt3.ServiceCode(4, 11).pack() == "\x0B\x01"
+        assert nfc.tag.tt3.ServiceCode(4, 11).pack() == b"\x0B\x01"
 
     def test_repr(self):
         sc = nfc.tag.tt3.ServiceCode(1, 8)
@@ -106,14 +106,14 @@ class TestBlockCode:
         assert bc.service == 1
 
     def test_pack(self):
-        assert nfc.tag.tt3.BlockCode(12).pack() == "\x80\x0C"
-        assert nfc.tag.tt3.BlockCode(12, 3).pack() == "\xB0\x0C"
-        assert nfc.tag.tt3.BlockCode(12, 3, 1).pack() == "\xB1\x0C"
-        assert nfc.tag.tt3.BlockCode(255).pack() == "\x80\xff"
-        assert nfc.tag.tt3.BlockCode(256).pack() == "\x00\x00\x01"
-        assert nfc.tag.tt3.BlockCode(256, 3).pack() == "\x30\x00\x01"
-        assert nfc.tag.tt3.BlockCode(256, 3, 1).pack() == "\x31\x00\x01"
-        assert nfc.tag.tt3.BlockCode(0xffff).pack() == "\x00\xff\xff"
+        assert nfc.tag.tt3.BlockCode(12).pack() == b"\x80\x0C"
+        assert nfc.tag.tt3.BlockCode(12, 3).pack() == b"\xB0\x0C"
+        assert nfc.tag.tt3.BlockCode(12, 3, 1).pack() == b"\xB1\x0C"
+        assert nfc.tag.tt3.BlockCode(255).pack() == b"\x80\xff"
+        assert nfc.tag.tt3.BlockCode(256).pack() == b"\x00\x00\x01"
+        assert nfc.tag.tt3.BlockCode(256, 3).pack() == b"\x30\x00\x01"
+        assert nfc.tag.tt3.BlockCode(256, 3, 1).pack() == b"\x31\x00\x01"
+        assert nfc.tag.tt3.BlockCode(0xffff).pack() == b"\x00\xff\xff"
 
     def test_repr(self):
         sc = nfc.tag.tt3.BlockCode(1, 3, 7)
