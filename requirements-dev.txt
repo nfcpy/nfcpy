@@ -14,6 +14,7 @@
 #
 # Required packages and typical use:
 #
+mock
 pytest-mock       # run regression tests     "py.test tests/"
 pytest-cov        # check code coverage      "py.test tests/ --cov ndef --cov-report html"
 flake8            # syntax and style checks  "flake8 src/"
