@@ -481,8 +481,18 @@ class TestTagCommands:
     def test_transceive_error(self, tag, exception, message):
         tag.clf.exchange.side_effect = exception
         with pytest.raises(nfc.tag.tt1.Type1TagCommandError) as excinfo:
-            tag.transceive(bytearray(8))
+            tag.transceive(HEX('01'))
         assert str(excinfo.value) == message
+        tag.clf.exchange.assert_called_with(HEX('01'), 0.1)
+        assert tag.clf.exchange.call_count == 3
+
+    def test_transceive_with_runtime_error(self, tag):
+        tag.clf.exchange.side_effect = nfc.clf.CommunicationError
+        with pytest.raises(RuntimeError) as excinfo:
+            tag.transceive(HEX('01'))
+        assert repr(excinfo.value) == \
+            "RuntimeError('unexpected CommunicationError()',)"
+        tag.clf.exchange.assert_called_with(HEX('01'), 0.1)
         assert tag.clf.exchange.call_count == 3
 
 
