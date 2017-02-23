@@ -18,8 +18,6 @@ import nfc          # noqa: E402
 import nfc.tag      # noqa: E402
 import nfc.tag.tt2  # noqa: E402
 
-import nfc.ndef
-
 
 def HEX(s):
     return bytearray.fromhex(s)
@@ -260,29 +258,21 @@ class TestTagCommands:
         (nfc.clf.ProtocolError, nfc.tag.PROTOCOL_ERROR),
     ])
     def test_transceive_communication_errors(self, tag, clf_error, tag_error):
-        commands = [
-            (HEX('01'), 0.1),
-        ]
-        responses = [
-            clf_error,
-        ]
-        tag.clf.exchange.side_effect = responses
+        tag.clf.exchange.side_effect = clf_error
         with pytest.raises(nfc.tag.tt2.Type2TagCommandError) as excinfo:
-            tag.transceive(b'\x01', 0.1, 0)
+            tag.transceive(b'\x01')
         assert excinfo.value.errno == tag_error
+        tag.clf.exchange.assert_called_with(HEX('01'), 0.1)
+        assert tag.clf.exchange.call_count == 3
 
     def test_transceive_with_runtime_error(self, tag):
-        commands = [
-            (HEX('01'), 0.1),
-        ]
-        responses = [
-            nfc.clf.CommunicationError,
-        ]
-        tag.clf.exchange.side_effect = responses
+        tag.clf.exchange.side_effect = nfc.clf.CommunicationError
         with pytest.raises(RuntimeError) as excinfo:
-            tag.transceive(b'\x01', 0.1, 0)
+            tag.transceive(b'\x01')
         assert repr(excinfo.value) == \
             "RuntimeError('unexpected CommunicationError()',)"
+        tag.clf.exchange.assert_called_with(HEX('01'), 0.1)
+        assert tag.clf.exchange.call_count == 3
 
     def test_transceive_target_gone(self, tag):
         tag._target = None
@@ -403,19 +393,22 @@ class TestTagProcedures:
         assert tag.format() is True
         assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
 
-    def _test_format_with_wipe(self, tag):
+    def test_format_with_wipe(self, tag):
         commands = [
             (HEX('30 00'), 0.005),
             (HEX('30 04'), 0.005),
             (HEX('a2 05 020300fe'), 0.1),
+            (HEX('a2 06 000000ff'), 0.1),
+            (HEX('a2 07 ff000000'), 0.1),
         ]
         responses = [
-            HEX("01020304 05060708 00000000 E1100100"),
-#           HEX("0305d500 023132fe 00000000 00000000"),
-            HEX("02036302 020305d5 000231ff 32000000"),
-            HEX('0a'), HEX('0a'),
+            HEX("01020304 05060708 00000000 E1100200"),
+            HEX("02036302 020305d5 000231ff ff320000"),
+            HEX('0a'), HEX('0a'), HEX('0a'),
         ]
         tag.clf.exchange.side_effect = responses
+        assert tag.ndef is not None
+        assert tag.ndef.octets == HEX('d500023132')
         assert tag.format(wipe=0) is True
         assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
 
@@ -430,61 +423,101 @@ class TestTagProcedures:
         assert tag.format() is False
         assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
 
+    def test_protect_blank_tag(self, tag):
+        commands = [
+            (HEX('30 00'), 0.005),
+        ]
+        responses = [
+            HEX("01020304 05060708 00000000 00000000"),
+        ]
+        tag.clf.exchange.side_effect = responses
+        assert tag.protect() is False
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
 
+    def test_protect_static_default_lockbits(self, tag):
+        commands = [
+            (HEX('30 00'), 0.005),
+            (HEX('30 04'), 0.005),
+            (HEX('a2 03 e110020f'), 0.1),
+            (HEX('a2 02 0000ffff'), 0.1),
+        ]
+        responses = [
+            HEX("01020304 05060708 00000000 E1100200"),
+            HEX("000300fe 00000000 00000000 00000000"),
+            HEX("0a"), HEX("0a"),
+        ]
+        tag.clf.exchange.side_effect = responses
+        assert tag.ndef is not None
+        assert tag.ndef.octets == b''
+        assert tag.ndef.is_writeable is True
+        assert tag.ndef.is_readable is True
+        assert tag.protect() is True
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
 
-    def __test_format_wrong_ndef_magic(self):
-        self.clf.memory[12] = 0
-        assert self.tag.format() is False
+    def test_protect_dynamic_default_lockbits(self, tag):
+        commands = [
+            (HEX('30 00'), 0.005),
+            (HEX('30 04'), 0.005),
+            (HEX('a2 03 e110080f'), 0.1),
+            (HEX('30 08'), 0.005),
+            (HEX('30 0c'), 0.005),
+            (HEX('30 10'), 0.005),
+            (HEX('30 14'), 0.005),
+            (HEX('a2 02 0000ffff'), 0.1),
+            (HEX('a2 14 03000000'), 0.1),
+        ]
+        responses = [
+            HEX("01020304 05060708 00000000 E1100800"),
+            HEX("000300fe 00000000 00000000 00000000"),
+            HEX("0a"),
+            HEX("00000000 00000000 00000000 00000000"),
+            HEX("00000000 00000000 00000000 00000000"),
+            HEX("00000000 00000000 00000000 00000000"),
+            HEX("00000000 00000000 00000000 00000000"),
+            HEX("0a"),
+            HEX("0a"),
+        ]
+        tag.clf.exchange.side_effect = responses
+        assert tag.ndef is not None
+        assert tag.ndef.octets == b''
+        assert tag.ndef.is_writeable is True
+        assert tag.ndef.is_readable is True
+        assert tag.protect() is True
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
 
-    def __test_format_wrong_ndef_version(self):
-        self.clf.memory[13] = 0
-        assert self.tag.format() is False
+    def test_protect_dynamic_locktlv_lockbits(self, tag):
+        commands = [
+            (HEX('30 00'), 0.005),
+            (HEX('30 04'), 0.005),
+            (HEX('a2 03 e110080f'), 0.1),
+            (HEX('30 08'), 0.005),
+            (HEX('30 0c'), 0.005),
+            (HEX('30 10'), 0.005),
+            (HEX('30 14'), 0.005),
+            (HEX('a2 02 0000ffff'), 0.1),
+            (HEX('a2 14 ffff0000'), 0.1),
+        ]
+        responses = [
+            HEX("01020304 05060708 00000000 E1100800"),
+            HEX("00000103 a0102300 0300fe00 00000000"),
+            HEX("0a"),
+            HEX("00000000 00000000 00000000 00000000"),
+            HEX("00000000 00000000 00000000 00000000"),
+            HEX("00000000 00000000 00000000 00000000"),
+            HEX("00000000 00000000 00000000 00000000"),
+            HEX("0a"),
+            HEX("0a"),
+        ]
+        tag.clf.exchange.side_effect = responses
+        assert tag.ndef is not None
+        assert tag.ndef.octets == b''
+        assert tag.ndef.is_writeable is True
+        assert tag.ndef.is_readable is True
+        assert tag.protect() is True
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
 
-    def __test_format_no_user_data_area(self):
-        self.clf.memory[14] = 0
-        assert self.tag.format() is False
-
-    def __test_format_ndef_readonly(self):
-        self.clf.memory[15] = 0xFF
-        assert self.tag.format() is False
-
-    def __test_format_args_default(self):
-        assert self.clf.memory[24:32] == "0303D00000FE0000".decode("hex")
-        assert self.tag.format() is True
-        assert self.clf.memory[24:32] == "0300FE0000FE0000".decode("hex")
-
-    def __test_format_wipe_ndef_data(self):
-        assert self.clf.memory[24:32] == "0303D00000FE0000".decode("hex")
-        assert self.tag.format(wipe=1) is True
-        assert self.clf.memory[24:32] == "0300FE0101010101".decode("hex")
-        assert self.clf.memory[32:40] == "0101000000000101".decode("hex")
-        assert self.clf.memory[40:2048] == (2048-40) * "\x01"
-
-    def __test_protect_with_default_lock_bits(self):
-        self.clf.memory += bytearray(32)
-        assert self.tag.protect() is True
-        assert self.clf.memory[   8:  16] == "79C8FFFFE110FE0F".decode("hex")
-        assert self.clf.memory[  16:  24] == "0203820402000000".decode("hex")
-        assert self.clf.memory[  24:  32] == "0303d00000FE0000".decode("hex")
-        assert self.clf.memory[  32:2048] == 2016 * "\x00"
-        assert self.clf.memory[2048:2082] == bytearray(31*"\xFF") + "\x00"
-        assert self.tag.ndef.is_writeable is False
-
-    def __test_protect_with_lock_tlv_lock_bits(self):
-        self.clf.memory[16:21] = bytearray.fromhex("01 03 82 1F 62")
-        assert self.tag.protect() is True
-        assert self.clf.memory[ 8:16] == "79C8FFFFE110FE0F".decode("hex")
-        assert self.clf.memory[16:24] == "0103821F62000000".decode("hex")
-        assert self.clf.memory[24:32] == "0303d00000FE0000".decode("hex")
-        assert self.clf.memory[32:40] == "0000FFFFFF7F0000".decode("hex")
-        assert self.tag.ndef.is_writeable is False
-
-    def __test_protect_with_password_argument(self):
-        assert self.tag.protect("abcdefg") is False
-
-    def __test_protect_without_ndef_magic_byte(self):
-        self.clf.memory[12] = 0
-        assert self.tag.protect() is False
+    def test_protect_with_password(self, tag):
+        assert tag.protect(b'') is False
 
 
 ###############################################################################
@@ -492,97 +525,220 @@ class TestTagProcedures:
 # TEST TYPE 1 TAG NDEF
 #
 ###############################################################################
-@pytest.mark.skip(reason="not yet converted")
 class TestNdef:
-    def setup(self):
-        tag_memory = (bytearray.fromhex(
-            "04 6F D5 36  11 12 7A 00  79 C8 00 00  E1 10 FE 00" # 000-003
-            "00 00 00 01  03 50 10 24  FF 01 00 02  03 52 0E 04" # 004-007
-            "03 FF 07 CC  C1 01 00 00  07 C5 55 01  6E 66 63 2E" # 008-011
-            "63 6F 6D 6D  6D 6D 6D 6D  6D 6D 6D 6D  6D 6D 6D 6D" # 012-015
-            "6D 6D 6D 6D  6D 6D 6D 6D  6D 6D 6D 6D  6D 6D 6D 6D" # 016-019
-            "00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00" # 020-023
-            "6D 6D 6D 6D  6D 6D 6D 6D  6D 6D 6D 6D  6D 6D 6D 6D" # 024-027
-            "6D 6D 6D 6D  6D 6D 6D 6D  6D 6D 6D 6D  6D 6D 6D 6D" # 028-031
-        ) + bytearray(1904 * "\x6D") + bytearray.fromhex(        # 012-509
-            "6D 6D 6D 6D  6D 6D 6D 6D  6D 6D 6D 6D  2E 63 6F 6D" # 508-511
-        ))
-        uri = "http://www.nfc.co{0}.com".format((2010-32) * "m")
-        self.ndef_message = nfc.ndef.Message(nfc.ndef.UriRecord(uri))
-        self.ndef_capacity = 2048 - 52
-        self.ndef_length = 2048 - 52
+    def test_read_unreadable_tag(self, tag):
+        commands = [
+            (HEX('30 00'), 0.005),
+            (HEX('30 00'), 0.005),
+            (HEX('30 00'), 0.005),
+        ]
+        responses = [
+            nfc.clf.TimeoutError,
+            nfc.clf.TimeoutError,
+            nfc.clf.TimeoutError,
+        ]
+        tag.clf.exchange.side_effect = responses
+        assert tag.ndef is None
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
 
-        #self.clf = Type2TagSimulator(tag_memory)
-        #self.tag = self.clf.connect(rdwr={'on-connect': None})
+    @pytest.mark.parametrize("cc", ['E0100100', 'E1200100'])
+    def test_read_unsupported_cc(self, tag, cc):
+        commands = [
+            (HEX('30 00'), 0.005),
+        ]
+        responses = [
+            HEX("01020304 05060708 00000000 " + cc),
+        ]
+        tag.clf.exchange.side_effect = responses
+        assert tag.ndef is None
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
 
-    def __test_ndef_read(self):
-        assert self.tag.ndef is not None
-        assert self.tag.ndef.is_writeable == True
-        assert self.tag.ndef.is_readable == True
-        assert self.tag.ndef.capacity == self.ndef_capacity
-        assert self.tag.ndef.length == self.ndef_length
-        print self.tag.ndef.message.pretty()
-        assert self.tag.ndef.message == self.ndef_message
+    def test_read_until_memory_end(self, tag):
+        commands = [
+            (HEX('30 00'), 0.005),
+            (HEX('30 04'), 0.005),
+        ]
+        responses = [
+            HEX("01020304 05060708 00000000 E1100100"),
+            HEX("00000000 00000000 ffffffff ffffffff"),
+        ]
+        tag.clf.exchange.side_effect = responses
+        assert tag.ndef is None
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
 
-    def __test_ndef_read_no_ndef_magic_byte(self):
-        self.clf.memory[12] = 0
-        assert self.tag.ndef is None
+    def test_read_until_terminator(self, tag):
+        commands = [
+            (HEX('30 00'), 0.005),
+            (HEX('30 04'), 0.005),
+        ]
+        responses = [
+            HEX("01020304 05060708 00000000 E1100100"),
+            HEX("feffffff ffffffff ffffffff ffffffff"),
+        ]
+        tag.clf.exchange.side_effect = responses
+        assert tag.ndef is None
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
 
-    def __test_ndef_read_unknown_major_version(self):
-        self.clf.memory[13] = 0
-        assert self.tag.ndef is None
+    def test_read_over_unknown_tlv(self, tag):
+        commands = [
+            (HEX('30 00'), 0.005),
+            (HEX('30 04'), 0.005),
+        ]
+        responses = [
+            HEX("01020304 05060708 00000000 E1100100"),
+            HEX("f0000303 d0000000 ffffffff ffffffff"),
+        ]
+        tag.clf.exchange.side_effect = responses
+        assert tag.ndef is not None
+        assert tag.ndef.octets == HEX('d00000')
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
 
-    def __test_ndef_read_unknown_minor_version(self):
-        self.clf.memory[13] = 0x1F
-        assert self.tag.ndef is not None
+    def test_read_excessive_length_tlv(self, tag):
+        commands = [
+            (HEX('30 00'), 0.005),
+            (HEX('30 04'), 0.005),
+            (HEX('30 08'), 0.005),
+            (HEX('30 08'), 0.005),
+            (HEX('30 08'), 0.005),
+        ]
+        responses = [
+            HEX("01020304 05060708 00000000 E1100100"),
+            HEX("03ffd000 00000000 ffffffff ffffffff"),
+            nfc.clf.TimeoutError,
+            nfc.clf.TimeoutError,
+            nfc.clf.TimeoutError,
+        ]
+        tag.clf.exchange.side_effect = responses
+        assert tag.ndef is None
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
 
-    def __test_ndef_read_all_data_set_to(self):
-        for value in (0, 1, 2, 4, 254, 255):
-            yield self.check_ndef_read_all_data_set_to, value
+    def test_read_invalid_lock_rsvd_tlv(self, tag):
+        commands = [
+            (HEX('30 00'), 0.005),
+            (HEX('30 04'), 0.005),
+        ]
+        responses = [
+            HEX("01020304 05060708 00000000 E1100200"),
+            HEX("0104ffff ffff0202 ffff0303 d00000fe"),
+        ]
+        tag.clf.exchange.side_effect = responses
+        assert tag.ndef is not None
+        assert tag.ndef.octets == HEX('d00000')
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
 
-    def check_ndef_read_all_data_set_to(self, value):
-        self.clf.memory[16:2048] = bytearray(2032*chr(value))
-        assert self.tag.ndef is None
+    def test_read_with_all_tlv_types(self, tag):
+        commands = [
+            (HEX('30 00'), 0.005),
+            (HEX('30 04'), 0.005),
+            (HEX('30 08'), 0.005),
+            (HEX('30 0c'), 0.005),
+        ]
+        responses = [
+            HEX("01020304 05060708 00000000 E110060f"),
+            HEX("000103c0 10220203 70040200 ffffffff"),
+            HEX("0313d500 10000102 03040506 0708090a"),
+            HEX("ffff0b0c 0d0e0f00 fe000000 00000000"),
+        ]
+        tag.clf.exchange.side_effect = responses
+        assert tag.ndef is not None
+        assert tag.ndef.octets == HEX('d50010000102030405060708090a0b0c0d0e0f')
+        assert tag.ndef.is_readable is True
+        assert tag.ndef.is_writeable is False
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
 
-    def __test_ndef_write_before_skip_bytes(self):
-        assert self.tag.ndef is not None
-        uri = "http://www.nfc.co{0}.com".format(1 * "m")
-        self.tag.ndef.message = nfc.ndef.Message(nfc.ndef.UriRecord(uri))
-        assert self.tag.ndef.capacity == self.ndef_capacity
-        assert self.tag.ndef.length == 16
-        assert self.clf.memory[34:51] == "\xD1\x01\x0C\x55\x01nfc.com.com\xFE"
+    def test_write_with_all_tlv_types(self, tag):
+        commands = [
+            (HEX('30 00'), 0.005),
+            (HEX('30 04'), 0.005),
+            (HEX('30 08'), 0.005),
+            (HEX('30 0c'), 0.005),
+            (HEX('a2 08 0300d500'), 0.1),
+            (HEX('a2 09 11010203'), 0.1),
+            (HEX('a2 0a 04050607'), 0.1),
+            (HEX('a2 0b 08090a0b'), 0.1),
+            (HEX('a2 0c ffff0c0d'), 0.1),
+            (HEX('a2 0d 0e0f1011'), 0.1),
+            (HEX('a2 0f fe000000'), 0.1),
+            (HEX('a2 08 0314d500'), 0.1),
+        ]
+        responses = [
+            HEX("01020304 05060708 00000000 E1100600"),
+            HEX("000103c0 10220203 e0040200 fd020000"),
+            HEX("0313d500 10000102 03040506 0708090a"),
+            HEX("ffff0b0c 0d0e0ffe ffffffff 00000000"),
+            HEX("0a"), HEX("0a"), HEX("0a"), HEX("0a"),
+            HEX("0a"), HEX("0a"), HEX("0a"), HEX("0a"),
+        ]
+        tag.clf.exchange.side_effect = responses
+        assert tag.ndef is not None
+        assert tag.ndef.octets == HEX('d50010000102030405060708090a0b0c0d0e0f')
+        assert tag.ndef.is_readable is True
+        assert tag.ndef.is_writeable is True
+        tag.ndef.octets = HEX('d500110102030405060708090a0b0c0d0e0f1011')
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
 
-    def __test_ndef_write_after_skip_bytes(self):
-        assert self.tag.ndef is not None
-        uri = "http://www.nfc.co{0}.com".format(33 * "m")
-        self.tag.ndef.message = nfc.ndef.Message(nfc.ndef.UriRecord(uri))
-        assert self.tag.ndef.capacity == self.ndef_capacity
-        assert self.tag.ndef.length == 48
-        assert self.clf.memory[32:40] == "\x03\x30\xD1\x01\x2C\x55\x01n"
-        assert self.clf.memory[40:80] == "fc.co" + (33 * "m") + ".c"
-        assert self.clf.memory[80:96] == bytearray(16)
-        assert self.clf.memory[96:99] == "om\xFE"
+    def test_write_without_terminator(self, tag):
+        commands = [
+            (HEX('30 00'), 0.005),
+            (HEX('30 04'), 0.005),
+            (HEX('a2 04 0300d500'), 0.1),
+            (HEX('a2 05 03313233'), 0.1),
+            (HEX('a2 04 0306d500'), 0.1),
+        ]
+        responses = [
+            HEX("01020304 05060708 00000000 E1100100"),
+            HEX("0305d500 023132fe 00000000 00000000"),
+            HEX("0a"), HEX("0a"), HEX("0a"),
+        ]
+        tag.clf.exchange.side_effect = responses
+        assert tag.ndef is not None
+        assert tag.ndef.octets == HEX('d500023132')
+        assert tag.ndef.is_readable is True
+        assert tag.ndef.is_writeable is True
+        tag.ndef.octets = HEX('d50003313233')
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
 
-    def __test_ndef_write_long_ndef_message(self):
-        assert self.tag.ndef is not None
-        uri = "http://www.nfc.co{0}.com".format((33+208) * "m")
-        self.tag.ndef.message = nfc.ndef.Message(nfc.ndef.UriRecord(uri))
-        assert self.tag.ndef.capacity == self.ndef_capacity
-        assert self.tag.ndef.length == 48+208
-        assert self.clf.memory[32:40] == "\x03\xFF\x01\x00\xD1\x01\xFC\x55"
-        assert self.clf.memory[40:80] == "\x01nfc.co" + (33 * "m")
-        assert self.clf.memory[80:96] == bytearray(16)
-        assert self.clf.memory[96:309] == (208 * "m") + ".com\xFE"
-
-    def __test_ndef_write_without_terminator(self):
-        self.clf.memory[14] = 0x0A
-        assert self.tag.ndef is not None
-        uri = "http://www.nfc.co{0}.com".format(31 * "m")
-        self.tag.ndef.message = nfc.ndef.Message(nfc.ndef.UriRecord(uri))
-        assert self.tag.ndef.length == 46
-        assert self.clf.memory[32:40] == "\x03\x2E\xD1\x01\x2A\x55\x01n"
-        assert self.clf.memory[40:80] == "fc.co" + (31 * "m") + ".com"
-        assert self.clf.memory[80:96] == bytearray(16)
+    def test_write_long_length_field(self, tag):
+        commands = [
+            (HEX('30 00'), 0.005),
+            (HEX('30 04'), 0.005),
+            (HEX('a2 04 0300d000'), 0.1),
+            (HEX('30 08'), 0.005),
+            (HEX('30 0c'), 0.005),
+            (HEX('30 10'), 0.005),
+            (HEX('30 14'), 0.005),
+            (HEX('30 18'), 0.005),
+            (HEX('30 1c'), 0.005),
+            (HEX('30 20'), 0.005),
+            (HEX('30 24'), 0.005),
+            (HEX('30 28'), 0.005),
+            (HEX('30 2c'), 0.005),
+            (HEX('30 30'), 0.005),
+            (HEX('30 34'), 0.005),
+            (HEX('30 38'), 0.005),
+            (HEX('30 3c'), 0.005),
+            (HEX('30 40'), 0.005),
+            (HEX('30 44'), 0.005),
+            (HEX('a2 05 d500fc00'), 0.1),
+            (HEX('a2 44 000000fe'), 0.1),
+            (HEX('a2 04 03ff00ff'), 0.1),
+        ]
+        responses = [
+            HEX("01020304 05060708 00000000 E1102100"),
+            HEX("0303d000 00000000 00000000 00000000"),
+            HEX("0a"),
+        ] + 16 * [
+            HEX("00000000 00000000 00000000 00000000"),
+        ] + [
+            HEX("0a"), HEX("0a"), HEX("0a"),
+        ]
+        tag.clf.exchange.side_effect = responses
+        assert tag.ndef is not None
+        assert tag.ndef.octets == HEX('d00000')
+        assert tag.ndef.is_readable is True
+        assert tag.ndef.is_writeable is True
+        tag.ndef.octets = HEX('d500fc') + bytearray(252)
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
 
 
 ###############################################################################
@@ -590,64 +746,101 @@ class TestNdef:
 # TYPE 2 TAG MEMORY READER
 #
 ###############################################################################
-@pytest.mark.skip(reason="not yet converted")
 class TestMemoryReader:
-    def setup(self):
-        tag_memory = bytearray.fromhex(
-            "01 6F D5 36  11 12 7A 00  79 C8 00 00  00 00 00 00"
-        )
-        #self.clf = Type2TagSimulator(tag_memory)
-        #self.tag = self.clf.connect(rdwr={'on-connect': None})
+    def test_getitem(self, tag):
+        commands = [
+            (HEX('30 00'), 0.005),
+            (HEX('30 04'), 0.005),
+        ]
+        responses = [
+            HEX("01020304 05060708 00000000 E1100200"),
+            HEX("0303d000 00000000 00000000 00000000"),
+        ]
+        tag.clf.exchange.side_effect = responses
+        tag_memory = nfc.tag.tt2.Type2TagMemoryReader(tag)
+        assert tag_memory[16] == 0x03
+        assert tag_memory[17] == 0x03
+        assert tag_memory[18] == 0xd0
+        assert tag_memory[19] == 0x00
+        assert tag_memory[16:20] == HEX('0303d000')
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
 
-    def __test_getitem_byte(self):
-        tag_memory = nfc.tag.tt2.Type2TagMemoryReader(self.tag)
-        assert tag_memory[0] == self.clf.memory[0]
-        assert tag_memory[1] == self.clf.memory[1]
-        
-    def __test_getitem_slice(self):
-        tag_memory = nfc.tag.tt2.Type2TagMemoryReader(self.tag)
-        assert tag_memory[0:8] == self.clf.memory[0:8]
-        assert tag_memory[0:4] == self.clf.memory[0:4]
-        assert tag_memory[4:8] == self.clf.memory[4:8]
-        
-    def __test_setitem_byte(self):
-        tag_memory = nfc.tag.tt2.Type2TagMemoryReader(self.tag)
-        tag_memory[0] = 0xFF
+    def test_setitem(self, tag):
+        commands = [
+            (HEX('30 00'), 0.005),
+            (HEX('30 04'), 0.005),
+            (HEX('a2 04 fe03d000'), 0.1),
+        ]
+        responses = [
+            HEX("01020304 05060708 00000000 E1100200"),
+            HEX("0303d000 00000000 00000000 00000000"),
+            HEX("0a"),
+        ]
+        tag.clf.exchange.side_effect = responses
+        tag_memory = nfc.tag.tt2.Type2TagMemoryReader(tag)
+        tag_memory[16] = 0xfe
         tag_memory.synchronize()
-        assert self.clf.memory[0] == 0xFF
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
 
-    def __test_setitem_slice(self):
-        tag_memory = nfc.tag.tt2.Type2TagMemoryReader(self.tag)
-        tag_memory[0:2] = bytearray("\x11\x22")
+        tag.clf.exchange.reset_mock()
+        tag.clf.exchange.side_effect = responses
+        tag_memory = nfc.tag.tt2.Type2TagMemoryReader(tag)
+        tag_memory[16:17] = [0xfe]
         tag_memory.synchronize()
-        assert self.clf.memory[0:2] == bytearray("\x11\x22")
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
 
-    #pytest.raises(ValueError)
-    def __test_setitem_slice_is_shorter(self):
-        tag_memory = nfc.tag.tt2.Type2TagMemoryReader(self.tag)
-        tag_memory[0:3] = bytearray("\x11\x22")
+        tag.clf.exchange.reset_mock()
+        tag.clf.exchange.side_effect = responses[:-1]
+        tag_memory = nfc.tag.tt2.Type2TagMemoryReader(tag)
+        with pytest.raises(ValueError) as excinfo:
+            tag_memory[16:17] = []
+        assert str(excinfo.value) == \
+            "Type2TagMemoryReader requires item assignment of identical length"
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands[:-1]]
 
-    #pytest.raises(ValueError)
-    def __test_setitem_slice_is_longer(self):
-        tag_memory = nfc.tag.tt2.Type2TagMemoryReader(self.tag)
-        tag_memory[0:1] = bytearray("\x11\x22")
+    def test_delitem(self, tag):
+        tag_memory = nfc.tag.tt2.Type2TagMemoryReader(tag)
+        with pytest.raises(TypeError) as excinfo:
+            del tag_memory[0]
+        assert str(excinfo.value) == \
+            "Type2TagMemoryReader object does not support item deletion"
 
-    #pytest.raises(TypeError)
-    def __test_delitem(self):
-        tag_memory = nfc.tag.tt2.Type2TagMemoryReader(self.tag)
-        assert tag_memory[0] == 0x01
-        del tag_memory[0]
+    def test_read_error(self, tag):
+        commands = [
+            (HEX('30 00'), 0.005),
+            (HEX('30 04'), 0.005),
+            (HEX('30 04'), 0.005),
+            (HEX('30 04'), 0.005),
+        ]
+        responses = [
+            HEX("01020304 05060708 00000000 E1100200"),
+            nfc.clf.TimeoutError,
+            nfc.clf.TimeoutError,
+            nfc.clf.TimeoutError,
+        ]
+        tag.clf.exchange.side_effect = responses
+        tag_memory = nfc.tag.tt2.Type2TagMemoryReader(tag)
+        with pytest.raises(IndexError):
+            tag_memory[16] = 0xfe
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
 
-    #pytest.raises(IndexError)
-    def __test_read_from_mute_tag(self):
-        tag_memory = nfc.tag.tt2.Type2TagMemoryReader(self.tag)
-        self.clf.tag_is_present = False
-        value = tag_memory[0]
-
-    def __test_write_to_mute_tag(self):
-        tag_memory = nfc.tag.tt2.Type2TagMemoryReader(self.tag)
-        assert tag_memory[0] == 0x01
-        self.clf.tag_is_present = False
-        tag_memory[0] = 0x00
+    def test_write_error(self, tag):
+        commands = [
+            (HEX('30 00'), 0.005),
+            (HEX('30 04'), 0.005),
+            (HEX('a2 04 fe03d000'), 0.1),
+            (HEX('a2 04 fe03d000'), 0.1),
+            (HEX('a2 04 fe03d000'), 0.1),
+        ]
+        responses = [
+            HEX("01020304 05060708 00000000 E1100200"),
+            HEX("0303d000 00000000 00000000 00000000"),
+            nfc.clf.TimeoutError,
+            nfc.clf.TimeoutError,
+            nfc.clf.TimeoutError,
+        ]
+        tag.clf.exchange.side_effect = responses
+        tag_memory = nfc.tag.tt2.Type2TagMemoryReader(tag)
+        tag_memory[16] = 0xfe
         tag_memory.synchronize()
-        assert self.clf.memory[0] == 0x01
+        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]

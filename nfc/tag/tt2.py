@@ -174,34 +174,39 @@ class Type2Tag(Tag):
             while offset < data_area_size + 16:
                 while (offset) in skip_bytes:
                     offset += 1
+
                 try:
                     tlv = read_tlv(tag_memory, offset, skip_bytes)
                     tlv_t, tlv_l, tlv_v = tlv
                 except IndexError:
                     return None
-                log.debug("tlv type {0} at offset {1}".format(tlv_t, offset))
-                if tlv_t == 0x00:
+                else:
+                    logmsg = "tlv type {0} length {1} at offset {2}"
+                    log.debug(logmsg.format(tlv_t, tlv_l, offset))
+
+                if tlv_t == 0:
                     pass
-                elif tlv_t == 0x01:
-                    try:
+                elif tlv_t == 1:
+                    if tlv_l == 3:
                         lock_bytes = get_lock_byte_range(tlv_v)
-                    except IndexError:
-                        return None
-                    skip_bytes.update(range(*lock_bytes.indices(0x100000)))
-                elif tlv_t == 0x02:
-                    try:
+                        skip_bytes.update(range(*lock_bytes.indices(0x100000)))
+                    else:
+                        log.debug("lock tlv has wrong length")
+                elif tlv_t == 2:
+                    if tlv_l == 3:
                         rsvd_bytes = get_rsvd_byte_range(tlv_v)
-                    except IndexError:
-                        return None
-                    skip_bytes.update(range(*rsvd_bytes.indices(0x100000)))
-                elif tlv_t == 0x03:
+                        skip_bytes.update(range(*rsvd_bytes.indices(0x100000)))
+                    else:
+                        log.debug("memory tlv has wrong length")
+                elif tlv_t == 3:
                     ndef = tlv_v
                     break
-                elif tlv_t == 0xFE:
+                elif tlv_t == 254:
                     break
                 else:
                     logmsg = "unknown tlv {0} at offset {0}"
                     log.debug(logmsg.format(tlv_t, offset))
+
                 offset += tlv_l + 1 + (1 if tlv_l < 255 else 3)
 
             self._capacity = get_capacity(raw_capacity, offset, skip_bytes)
@@ -239,11 +244,11 @@ class Type2Tag(Tag):
             # ndef data into the memory image, but jump over skip
             # bytes. If space permits, write a terminator tlv.
             offset += 2 if len(data) < 255 else 4
-            for i in xrange(len(data)):
-                while offset + i in skip_bytes:
+            for index, octet in enumerate(data):
+                while offset + index in skip_bytes:
                     offset += 1
-                tag_memory[offset+i] = data[i]
-            offset = offset + i + 1
+                tag_memory[offset+index] = octet
+            offset = offset + index + 1
             while offset in skip_bytes:
                 offset += 1
             if offset < tag_memory[14] * 8 + 16:
@@ -423,9 +428,9 @@ class Type2Tag(Tag):
         while offset < data_area_size + 16:
             tlv_t, tlv_l, tlv_v = read_tlv(tag_memory, offset, set())
             log.debug("tlv type {0} at offset {1}".format(tlv_t, offset))
-            if tlv_t == 0:
-                pass
-            elif tlv_t == 0x01:
+            if tlv_t in (0x03, 0xFE, None):
+                break
+            if tlv_t == 0x01:
                 log.debug("lock control tlv {0}".format(hexlify(tlv_v)))
                 page_addr = tlv_v[0] >> 4
                 byte_offs = tlv_v[0] & 0x0F
@@ -433,8 +438,6 @@ class Type2Tag(Tag):
                 lock_byte_addr = page_addr * page_size + byte_offs
                 lock_bits_size = tlv_v[1] if tlv_v[1] > 0 else 256
                 lock_control.append((lock_byte_addr, lock_bits_size))
-            elif tlv_t in (0x03, 0xFE, None):
-                break
             offset += tlv_l + 1 + (1 if tlv_l < 255 else 3)
 
         # If the tag has a dynamic memory layout and we did not find
