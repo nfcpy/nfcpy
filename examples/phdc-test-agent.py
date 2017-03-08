@@ -29,13 +29,11 @@ import sys
 import time
 import string
 import struct
-import os.path
 import inspect
 import argparse
 import Queue as queue
 from threading import Thread, Lock
 
-sys.path.insert(1, os.path.split(sys.path[0])[0])
 from cli import CommandLineInterface, TestFail
 
 import nfc

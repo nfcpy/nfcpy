@@ -21,9 +21,6 @@
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
 
-import os, sys, time
-sys.path.insert(1, os.path.split(sys.path[0])[0])
-
 import re
 import time
 import errno

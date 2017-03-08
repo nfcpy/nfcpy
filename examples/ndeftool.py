@@ -24,10 +24,10 @@
 import logging
 log = logging.getLogger('main')
 
-import sys, os
+import os
+import sys
 import mimetypes
 
-sys.path.insert(1, os.path.split(sys.path[0])[0])
 import nfc
 import nfc.ndef
 

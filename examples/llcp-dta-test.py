@@ -29,14 +29,11 @@
 import logging
 log = logging.getLogger('test')
 
-import os
-import sys
 import time
 import errno
 import struct
 import argparse
 
-sys.path.insert(1, os.path.split(sys.path[0])[0])
 from cli import CommandLineInterface, TestFail, TestSkip
 
 import nfc

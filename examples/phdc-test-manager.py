@@ -24,18 +24,14 @@
 import logging
 log = logging.getLogger('main')
 
-import os
-import sys
 import time
 import string
 import struct
-import os.path
 import inspect
 import argparse
 from threading import Thread
 import Queue as queue
 
-sys.path.insert(1, os.path.split(sys.path[0])[0])
 from cli import CommandLineInterface
 
 import nfc

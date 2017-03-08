@@ -30,7 +30,6 @@ import logging
 log = logging.getLogger('main')
 
 import os
-import sys
 import time
 import errno
 import datetime
@@ -39,7 +38,6 @@ import itertools
 import collections
 from threading import Thread
 
-sys.path.insert(1, os.path.split(sys.path[0])[0])
 from cli import CommandLineInterface, TestFail, TestSkip
 
 import nfc

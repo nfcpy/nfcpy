@@ -43,14 +43,11 @@ based on PN53x and uses nfcpy internal interfaces.
 """
 from __future__ import print_function
 
-import os
 import re
 import sys
 import time
 import errno
 import logging
-
-sys.path.insert(1, os.path.split(sys.path[0])[0])
 
 import nfc
 import nfc.clf

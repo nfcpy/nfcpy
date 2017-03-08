@@ -26,8 +26,6 @@
 # primarily developed for the purpose of validating the LLCP
 # specification before final release by the NFC Forum.
 #
-import os
-import sys
 import time
 import struct
 import argparse
@@ -37,7 +35,6 @@ from threading import Thread
 import logging
 log = logging.getLogger('main')
 
-sys.path.insert(1, os.path.split(sys.path[0])[0])
 from cli import CommandLineInterface
 
 import nfc

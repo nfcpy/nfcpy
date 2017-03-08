@@ -79,8 +79,6 @@ import argparse
 import logging
 from binascii import hexlify
 
-sys.path.insert(1, os.path.split(sys.path[0])[0])
-
 import nfc
 import nfc.clf
 

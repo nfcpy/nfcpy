@@ -24,16 +24,13 @@
 import logging
 log = logging.getLogger('main')
 
-import os
 import io
-import sys
 import time
 import random
 import argparse
 import threading
 import mimetypes
 
-sys.path.insert(1, os.path.split(sys.path[0])[0])
 from cli import CommandLineInterface
 
 import nfc
