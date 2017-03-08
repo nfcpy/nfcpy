@@ -1,13 +1,13 @@
 [run]
 branch = True
-source = nfc/
-omit = nfc/ndef/*
+source = nfc
+omit = */ndef/*
 
 [paths]
 source =
-   nfc
-   .tox/*/lib/python*/site-packages/nfcpy/nfc
-   .tox/pypy/site-packages/nfcpy/nfc
+   src/nfc
+   .tox/*/lib/python*/site-packages/nfc
+   .tox/pypy/site-packages/nfc
 
 [report]
 show_missing = True

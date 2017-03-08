@@ -8,8 +8,8 @@ from setuptools import setup, find_packages
 
 ###############################################################################
 
-PACKAGES = find_packages(exclude=['examples'])
-META_PATH = os.path.join("nfc", "__init__.py")
+PACKAGES = find_packages(where="src")
+META_PATH = os.path.join("src", "nfc", "__init__.py")
 KEYWORDS = ["contactless", "nfc", "llcp", "p2p", "snep"]
 CLASSIFIERS = [
     "Development Status :: 5 - Production/Stable",
@@ -70,6 +70,7 @@ if __name__ == "__main__":
         keywords=KEYWORDS,
         long_description=read("README.rst"),
         packages=PACKAGES,
+        package_dir={"": "src"},
         zip_safe=False,
         classifiers=CLASSIFIERS,
         install_requires=INSTALL_REQUIRES,
