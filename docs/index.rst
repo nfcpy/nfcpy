@@ -20,21 +20,10 @@ framework for applications integrating NFC. The source code is
 licensed under the `EUPL`_ and hosted at `GitHub`_. The latest release
 version can be installed from `PyPI`_ with ``pip install -U nfcpy``.
 
-.. testsetup::
-
-   import nfc, nfc.snep
-   nfc.ContactlessFrontend.open = mock.Mock('nfc.ContactlessFrontend.open')
-   nfc.ContactlessFrontend.open.return_value = True
-   nfc.ContactlessFrontend.exchange = mock.Mock('nfc.ContactlessFrontend.exchange')
-   nfc.ContactlessFrontend.exchange.return_value = "response"
-   nfc.ContactlessFrontend.connect = mock.Mock('nfc.ContactlessFrontend.connect')
-   nfc.ContactlessFrontend.connect.return_value = None
-   nfc.snep.SnepClient.put = mock.Mock('nfc.snep.SnepClient.put')
-   nfc.snep.SnepClient.put.return_value = True
-
 To send a web link to a smartphone:
 
 .. doctest::
+   :options: +SKIP
 
    >>> import nfc, nfc.snep, threading
    >>> connected = lambda llc: threading.Thread(target=llc.run).start()
