@@ -151,6 +151,7 @@ linkcheck_timeout = 30
 
 doctest_test_doctest_blocks = ""  # do not test standard reST doctest blocks
 doctest_global_setup = """
+import nfc
 import sys
 import mock
 sys.modules['usb1'] = mock.Mock('usb1')

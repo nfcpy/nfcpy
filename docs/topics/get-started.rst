@@ -1,3 +1,5 @@
+.. -*- mode: rst; fill-column: 80 -*-
+
 ***************
 Getting started
 ***************
@@ -5,13 +7,11 @@ Getting started
 Installation
 ============
 
-.. _Bazaar: http://bazaar.canonical.com/en/
-.. _Launchpad: https://launchpad.net/
-.. _nfcpy trunk: https://code.launchpad.net/~stephen-tiedemann/nfcpy/trunk
 .. _pip: https://pip.pypa.io/en/stable/
 .. _libusb: http://libusb.info/
 .. _WinUSB: https://msdn.microsoft.com/en-us/library/ff540196.aspx
 .. _Zadig: http://zadig.akeo.ie/
+.. _ndeflib: http://ndeflib.readthedocs.io/en/stable/
 
 **Install libusb**
 
@@ -40,204 +40,381 @@ version, *nfcpy* is not yet ready for Python 3.
 
 With Python installed use `pip`_ to install the latest stable version
 of nfcpy. This will also install the required libusb1 and pyserial
-modules.::
+modules.
 
-  $ pip install -U nfcpy
+.. code-block:: shell
+
+   $ pip install -U nfcpy
 
 Windows users may have to use ``C:\Python27\Scripts\pip.exe``.
 
 **Verify installation**
 
 Check if all is correctly installed and *nfcpy* finds your contactless
-reader (Windows users may have to use``C:\Python27\python.exe``). ::
+reader (Windows users may have to use``C:\Python27\python.exe``).
 
-  $ python -m nfc
+.. code-block:: shell
+
+   $ python -m nfc
 
 If all goes well the output should tell that your your reader was
-found, below is an example of how it may look with an SCL3711:::
+found, below is an example of how it may look with an SCL3711:
 
-  This is the latest version of nfcpy run in Python 2.7.12
-  on Linux-4.4.0-47-generic-x86_64-with-Ubuntu-16.04-xenial
-  I'm now searching your system for contactless devices
-  ** found SCM Micro SCL3711-NFC&RW PN533v2.7 at usb:002:024
-  I'm not trying serial devices because you haven't told me
-  -- add the option '--search-tty' to have me looking
-  -- but beware that this may break existing connections
+.. code-block:: none
+
+   This is the latest version of nfcpy run in Python 2.7.12
+   on Linux-4.4.0-47-generic-x86_64-with-Ubuntu-16.04-xenial
+   I'm now searching your system for contactless devices
+   ** found SCM Micro SCL3711-NFC&RW PN533v2.7 at usb:002:024
+   I'm not trying serial devices because you haven't told me
+   -- add the option '--search-tty' to have me looking
+   -- but beware that this may break existing connections
 
 Common problems on Linux (access rights or other drivers claiming the
-device) should be reported with a possible solution::
+device) should be reported with a possible solution:
 
-  This is the latest version of nfcpy run in Python 2.7.12
-  on Linux-4.4.0-47-generic-x86_64-with-Ubuntu-16.04-xenial
-  I'm now searching your system for contactless devices
-  ** found usb:04e6:5591 at usb:002:025 but access is denied
-  -- the device is owned by 'root' but you are 'stephen'
-  -- also members of the 'root' group would be permitted
-  -- you could use 'sudo' but this is not recommended
-  -- it's better to add the device to the 'plugdev' group
-     sudo sh -c 'echo SUBSYSTEM==\"usb\", ACTION==\"add\", ATTRS{idVendor}==\"04e6\", ATTRS{idProduct}==\"5591\", GROUP=\"plugdev\" >> /etc/udev/rules.d/nfcdev.rules'
-     sudo udevadm control -R # then re-attach device
-  I'm not trying serial devices because you haven't told me
-  -- add the option '--search-tty' to have me looking
-  -- but beware that this may break other serial devs
-  Sorry, but I couldn't find any contactless device
+.. code-block:: none
 
-
-Open a reader
-=============
-
-.. |clf.connect| replace:: :meth:`clf.connect()
-                           <nfc.clf.ContactlessFrontend.connect>`
+   This is the latest version of nfcpy run in Python 2.7.12
+   on Linux-4.4.0-47-generic-x86_64-with-Ubuntu-16.04-xenial
+   I'm now searching your system for contactless devices
+   ** found usb:04e6:5591 at usb:002:025 but access is denied
+   -- the device is owned by 'root' but you are 'stephen'
+   -- also members of the 'root' group would be permitted
+   -- you could use 'sudo' but this is not recommended
+   -- it's better to add the device to the 'plugdev' group
+      sudo sh -c 'echo SUBSYSTEM==\"usb\", ACTION==\"add\", ATTRS{idVendor}==\"04e6\", ATTRS{idProduct}==\"5591\", GROUP=\"plugdev\" >> /etc/udev/rules.d/nfcdev.rules'
+      sudo udevadm control -R # then re-attach device
+   I'm not trying serial devices because you haven't told me
+   -- add the option '--search-tty' to have me looking
+   -- but beware that this may break other serial devs
+   Sorry, but I couldn't find any contactless device
 
 
-The main interface to start programming with *nfcpy* is provided by
-:class:`nfc.ContactlessFrontend`. When initialized with a *path*
-argument it tries to locate and open a contacless reader connected at
-that location, which may be for example the first available reader on
-USB. ::
+Open a local device
+===================
 
-  >>> import nfc
-  >>> clf = nfc.ContactlessFrontend('usb')
-  >>> print(clf)
-  Sony RC-S360/SH on usb:002:005
+Any data exchange with a remote NFC device needs a contactless frontend attached
+and opened for communication. Most commercial devices (also called NFC Reader)
+are physically attached through USB and either provide a native USB interface or
+a virtual serial port.
 
-For more control of where a reader may befound specifiy further
-details of the path string, for example **usb:002:005** to open the
-same reader as above, or **usb:002** to open the first available
-reader on USB bus number 2 (same numbers as shown by **lsusb**). The
-other way to specify a USB reader is by vendor and product ID, like
-**usb:054c:02e1** will open the same reader as before if there's only
-one of them plugged in. ::
+The :class:`nfc.ContactlessFrontend` manages all communication with a local
+device. The :class:`~nfc.clf.ContactlessFrontend.open` method tries to find and
+open a device and returns True for success. The string argument determines the
+device with a sequence of components separated by colon. The first component
+determines where the device is attached (usb, tty, or udp) and what the further
+components may be. This is best explained by example.
 
-  >>> import nfc
-  >>> clf = nfc.ContactlessFrontend('usb:054c')
-  >>> print(clf)
-  Sony RC-S360/SH on usb:002:005
+Suppose a FeliCa S330 Reader is attached to a Linux computer on USB bus number 3
+and got device number 9 (note that device numbers always increment when a device
+is connected):
 
-If you don't have an NFC reader at hand or just want to test your
-application logic a driver that carries NFC frames across a UDP/IP
-link might come handy. ::
+.. code-block:: shell
 
-  >>> import nfc
-  >>> clf = nfc.ContactlessFrontend('udp')
-  >>> print(clf)
-  Linux IP-Stack on udp:localhost:54321
+   $ lsusb
+   ...
+   Bus 003 Device 009: ID 054c:02e1 Sony Corp. FeliCa S330 [PaSoRi]
+   ...
 
-Just for completeness, you can also omit the path argument and later
-open a reader using |clf.connect|. This returns just False when no
-reader was found instead of raising an exception.
+.. testsetup:: clf-usb
+
+   nfc_ContactlessFrontend_open = nfc.ContactlessFrontend.open
+   nfc.ContactlessFrontend.open = mock.Mock('nfc.ContactlessFrontend.open')
+   nfc.ContactlessFrontend.open.return_value = True
+
+.. doctest:: clf-usb
+
+   >>> import nfc
+   >>> clf = nfc.ContactlessFrontend()
+   >>> assert clf.open('usb:003:009') is True    # open device 9 on bus 3
+   >>> assert clf.open('usb:054c:02e1') is True  # open first PaSoRi 330
+   >>> assert clf.open('usb:003') is True        # open first Reader on bus 3
+   >>> assert clf.open('usb:054c') is True       # open first Sony Reader
+   >>> assert clf.open('usb') is True            # open first USB Reader
+   >>> clf.close()  # previous open calls implicitly closed the device
+
+.. testcleanup:: clf-usb
+
+   nfc.ContactlessFrontend.open = nfc_ContactlessFrontend_open
+
+Some devices, especially for embedded projects, have a UART interface that may
+be connected either directly or through a USB UART adapter. Below is an example
+of a Raspberry Pi 3 which has two UART ports (ttyAMA0, ttyS0) and one reader is
+connected with a USB UART adapter (ttyUSB0). On a Raspberry Pi 3 the UART linked
+from /dev/serial1 is available on the GPIO header (the other one is used for
+Bluetooth connectivity). On a Raspberry Pi 2 it is always ttyAMA0.
+
+.. code-block:: shell
+
+   pi@raspberrypi ~ $ ls -l /dev/tty[ASU]* /dev/serial?
+   lrwxrwxrwx 1 root root          5 Dez 21 18:11 /dev/serial0 -> ttyS0
+   lrwxrwxrwx 1 root root          7 Dez 21 18:11 /dev/serial1 -> ttyAMA0
+   crw-rw---- 1 root dialout 204, 64 Dez 21 18:11 /dev/ttyAMA0
+   crw-rw---- 1 root dialout   4, 64 Dez 21 18:11 /dev/ttyS0
+   crw-rw---- 1 root dialout 188,  0 Feb 24 12:17 /dev/ttyUSB0
+
+.. testsetup:: clf-tty
+
+   nfc_ContactlessFrontend_open = nfc.ContactlessFrontend.open
+   nfc.ContactlessFrontend.open = mock.Mock('nfc.ContactlessFrontend.open')
+   nfc.ContactlessFrontend.open.return_value = True
+
+.. doctest:: clf-tty
+
+   >>> import nfc
+   >>> clf = nfc.ContactlessFrontend()
+   >>> assert clf.open('tty:USB0:arygon') is True  # open /dev/ttyUSB0 with arygon driver
+   >>> assert clf.open('tty:AMA0:pn532') is True   # open /dev/ttyUSB0 with pn532 driver
+   >>> assert clf.open('tty:AMA0') is True         # try different drivers on /dev/ttyAMA0
+   >>> assert clf.open('tty') is True              # try all serial ports and drivers
+   >>> clf.close()  # previous open calls implicitly closed the device
+
+.. testcleanup:: clf-tty
+
+   nfc.ContactlessFrontend.open = nfc_ContactlessFrontend_open
+
+
+A special kind of device bus that does not require any physical hardware is
+provided for testing and application prototyping. It works by sending NFC
+communication frames across a UDP/IP connection and can be used to connect two
+processes running an *nfcpy* application either locally or remote.
+
+In the following example the device path is supplied as an init argument. This
+would raise an :exc:`exceptions.IOError` with :data:`errno.ENODEV` if it fails
+to open. The example also demonstrates the use of a :keyword:`with` statement
+for automatic close when leaving the context.
+
+.. doctest:: clf-udp
+      
+   >>> import nfc
+   >>> with nfc.ContactlessFrontend('udp') as clf:
+   ...     print(clf)
+   ... 
+   Linux IP-Stack on udp:localhost:54321
 
 
 Read and write tags
 ===================
 
-With a reader opened the next step to get an NFC communication running
-is to use the |clf.connect| method. We'll start with connecting to a
-tag (a contactless card), which should not be a Mifare Classic.
-Supported are NFC Forum Type 1, 2, 3 and 4 Tags.
+.. |clf.sense| replace:: :meth:`clf.sense() <nfc.clf.ContactlessFrontend.sense>`
+.. |clf.connect| replace:: :meth:`clf.connect() <nfc.clf.ContactlessFrontend.connect>`
+.. |tag.ndef| replace:: :attr:`tag.ndef <nfc.tag.Tag.ndef>`
+.. |tag.ndef.octets| replace:: :attr:`tag.ndef.octets <nfc.tag.Tag.NDEF.octets>`
+.. |tag.ndef.records| replace:: :attr:`tag.ndef.records <nfc.tag.Tag.NDEF.records>`
+.. |tag.ndef.has_changed| replace:: :attr:`tag.ndef.has_changed <nfc.tag.Tag.NDEF.has_changed>`
 
-  >>> import nfc
-  >>> clf = nfc.ContactlessFrontend('usb')
-  >>> clf.connect(rdwr={}) # now touch a tag and remove it
-  True
+NFC Tag Devices are tiny electronics devices with a comparatively large (some
+square centimeters) antenna that serves as both an inductive power receiver and
+for communication. The energy is provided by the NFC Reader Device for as long
+as it wishes to communicate with the Tag.
 
-With the call to |clf.connect| the tag got discovered, activated and
-it's NDEF data read and then, for as long as it has not been moved
-away, the tag presence was continously verified. The return value
-tells that there was an activation and termination was as expected and
-not for any exceptional case like a Ctrl-C keyboard interrupt.
+Most Tags are embedded in plastics or paper and can store data in persistent
+memory. NFC Tags as defined by the NFC Forum have standardized memory format and
+command set to store NFC Data Exchange Format (NDEF) records. Most commercial
+NFC Tags also provide vendor-specific commands for special applications, some of
+those can be used with *nfcpy*. A rather new class of NFC Interface Tags is
+targeted towards providing NFC communication for embedded devices where the
+information exchange is through NFC with the microcontroller of the embedded
+device.
 
-The **rdwr** argument is a dictionary that may carry further options
-to control |clf.connect|. From a set of callback functions we may
-choose ``on-connect`` to be alerted when the tag is activated.
+.. tip::
 
-  >>> def connected(tag): print(tag); return False
-  ...
-  >>> clf = nfc.ContactlessFrontend('usb')
-  >>> tag = clf.connect(rdwr={'on-connect': connected}) # now touch a tag
-  Type3Tag IDm=01010501b00ac30b PMm=03014b024f4993ff SYS=12fc
+   It is quite easy to make an NFC field detector. Just a few turns of copper
+   wire around three fingers and the ends soldered to an LED will do the job.
+   Here's a `video <https://www.youtube.com/watch?v=dTv4U5fotM0>`_.
 
-This simple callback function print some basic information about the
-tag, here it is an NFC Forum Type 3 Tag with system code 12FCh. This
-time the |clf.connect| call returned immediately after the touch with
-an :class:`nfc.tag.tt3.Type3Tag` object. This is because the callback
-did return False to request that the presence loop not be run. With
-the tag object returned we can check if there is an NDEF Message
-stored on the tag.
+NFC Tags are simple slave devices that wait unconditionally for any reader
+command to respond. This makes it easy to interact with them from within a
+Python interpreter session using the local contactless frontend.
 
-  >>> print(tag.ndef.message.pretty() if tag.ndef else "Sorry, no NDEF")
-  record 1
-    type   = 'urn:nfc:wkt:Sp'
-    name   = ''
-    data   = '\xd1\x01\nU\x03nfcpy.org'
+.. testsetup:: tags-open-clf
 
-The logic is simple. If the **tag.ndef** attribute not None then the
-**tag.ndef.message** attribute will be a :class:`nfc.ndef.Message`
-object we can easily print with :meth:`~nfc.ndef.Message.pretty`. This
-prints the list of records in the message, which happens to be just
-one.
+   nfc_ContactlessFrontend_open = nfc.ContactlessFrontend.open
+   nfc.ContactlessFrontend.open = mock.Mock('nfc.ContactlessFrontend.open')
+   nfc.ContactlessFrontend.open.return_value = True
 
-  >>> record_1 = tag.ndef.message[0]
-  >>> print(record_1.pretty())
-  type = 'urn:nfc:wkt:Sp'
-  name = ''
-  data = '\xd1\x01\nU\x03nfcpy.org'
+.. doctest:: tags-open-clf
 
-The type attribute tells that this :class:`nfc.ndef.Record` is an NFC
-Forum Well-Known Smartposter type record. The **nfc.ndef** package has
-a record class for this.
+   >>> import nfc
+   >>> clf = nfc.ContactlessFrontend('usb')
 
-  >>> import nfc.ndef
-  >>> smartposter = nfc.ndef.SmartPosterRecord(record_1)
-  >>> print(smartposter.pretty())
-  resource = http://nfcpy.org
-  action   = default
+.. testcleanup:: tags-open-clf
 
-So far we have only read from the tag, now it's time to write. For an
-NDEF message this is pretty easy and shown by adding a smartposter
-title.
+   nfc.ContactlessFrontend.open = nfc_ContactlessFrontend_open
 
-  >>> smartposter.title = "Python module for near field communication"
-  >>> tag.ndef.message = nfc.ndef.Message(sp)
-  >>> print(nfc.ndef.SmartPosterRecord(tag.ndef.message[0]).pretty())
-  resource  = http://nfcpy.org
-  title[en] = Python module for near field communication
-  action    = default
-  
-The new message was immediately written to the tag with the assignment
-to **tag.ndef.message**. The next line then caused the NDEF message to
-be read back from the tag and converts it into a SmartPoster object
-for pretty print.
+The |clf.sense| method can now be used to search for a proximity target with
+arguments set for the desired communication technologies. The example shows the
+result of a Type F card response for which the :meth:`nfc.tag.activate` function
+then returns a :class:`~nfc.tag.tt3.Type3Tag` instance.
+
+.. testsetup:: memory-tag
+
+   HEX = lambda s: bytearray.fromhex(s)
+   clf = nfc.ContactlessFrontend('udp')
+   clf.sense = mock.Mock('nfc.ContactlessFrontend.sense')
+   sensf_res = bytearray.fromhex('0101010701260CCA020F0D23042F7783FF12FC')
+   clf.sense.return_value = nfc.clf.RemoteTarget('212F', sensf_res=sensf_res)
+   clf.exchange = mock.Mock('nfc.ContactlessFrontend.exchange')
+   clf.exchange.side_effect = [
+       HEX('1d 07 01010701260CCA02 0000 01 100b0a01 89000000 00000100 000e00be'),
+       HEX('1d 07 01010701260CCA02 0000 01 d1010a55 036e6663 70792e6f 72670000'),
+       HEX('1d 07 01010701260CCA02 0000 01 100b0a01 89000000 00000100 000e00be'),
+       HEX('0c 09 01010701260CCA02 0000'),
+       HEX('0c 09 01010701260CCA02 0000'),
+       HEX('0c 09 01010701260CCA02 0000'),
+       HEX('1d 07 01010701260CCA02 0000 01 100b0a01 89000000 00000100 002700d7'),
+       HEX('3d 07 01010701260CCA02 0000 03 d1022253 7091010a 55036e66 6370792e'
+                                          '6f726751 01105402 656e6e66 63707920'
+                                          '70726f6a 65637400 00000000 00000000')
+   ]
+
+.. doctest:: memory-tag
+
+   >>> from nfc.clf import RemoteTarget
+   >>> target = clf.sense(RemoteTarget('106A'), RemoteTarget('106B'), RemoteTarget('212F'))
+   >>> print(target)
+   212F sensf_res=0101010701260CCA020F0D23042F7783FF12FC
+   >>> tag = nfc.tag.activate(clf, target)
+   >>> print(tag)
+   Type3Tag 'FeliCa Standard (RC-S960)' ID=01010701260CCA02 PMM=0F0D23042F7783FF SYS=12FC
+
+The same :class:`~nfc.tag.tt3.Type3Tag` instance can also be acquired with the
+|clf.connect| method. This is the generally preferred way to discover and
+activate contactless targets of any supported type. When configured with the
+*rdwr* dictionary argument the |clf.connect| method will use Reader/Writer mode
+to discover NFC Tags. When a Tag is found and activated, the ``on-connect``
+callback function returning :const:`False` means that the tag presence loop
+shall not be run but the :class:`nfc.tag.Tag` object returned immediately. A
+more useful callback function could do something with the *tag* and return
+:const:`True` for requesting a presence loop that makes |clf.connect| return
+only after the tag is gone.
+
+.. doctest:: memory-tag
+
+   >>> tag = clf.connect(rdwr={'on-connect': lambda tag: False})
+   >>> print(tag)
+   Type3Tag 'FeliCa Standard (RC-S960)' ID=01010701260CCA02 PMM=0F0D23042F7783FF SYS=12FC
+
+An NFC Forum Tag can store NFC Data Exchange Format (NDEF) Records in a
+specifically formatted memory region. NDEF data is found automatically and
+wrapped into an :class:`~nfc.tag.Tag.NDEF` object accessible through the
+|tag.ndef| attribute. When NDEF data is not present the attribute is simply
+:const:`None`.
+
+.. doctest:: memory-tag
+
+   >>> assert tag.ndef is not None
+   >>> for record in tag.ndef.records:
+   ...     print(record)
+   ... 
+   NDEF Uri Record ID '' Resource 'http://nfcpy.org'
+
+The |tag.ndef.records| attribute contains a list of NDEF Records decoded from
+|tag.ndef.octets| with the `ndeflib`_ package. Each record has common and
+type-specific methods and attributes for content access.
+
+.. doctest:: memory-tag
+
+   >>> record = tag.ndef.records[0]
+   >>> print(record.type)
+   urn:nfc:wkt:U
+   >>> print(record.uri)
+   http://nfcpy.org
+
+A list of NDEF Records assigned to |tag.ndef.records| gets encoded and then
+written to the Tag (internally the bytes are assigned to |tag.ndef.octets| to
+trigger the update).
+
+.. doctest:: memory-tag
+
+   >>> import ndef
+   >>> uri, title = 'http://nfcpy.org', 'nfcpy project'
+   >>> tag.ndef.records = [ndef.SmartposterRecord(uri, title)]
+
+When NDEF data bytes are written to a Memory Tag then the |tag.ndef| object
+matches the stored data. In case of an Interface Tag this may not be true
+because the write commands may be handled differently by the device. The only
+way to find out is read back the data and compare. This is the logic behind
+|tag.ndef.has_changed|, which should be :const:`False` for a Memory Tag.
+
+.. doctest:: memory-tag
+
+   >>> assert tag.ndef.has_changed is False
+
+An NFC Interface Tag may be used to realize a device that presents dynamically
+changing NDEF data depending on internal state, for example a sensor device
+returning the current temperature.
+
+.. testsetup:: interface-tag
+
+   HEX = lambda s: bytearray.fromhex(s)
+   clf = nfc.ContactlessFrontend('udp')
+   clf.sense = mock.Mock('nfc.ContactlessFrontend.sense')
+   sensf_res = bytearray.fromhex('0103FEFFFFFFFFFFFF00E1000000FFFF0012FC')
+   clf.sense.return_value = nfc.clf.RemoteTarget('212F', sensf_res=sensf_res)
+   clf.exchange = mock.Mock('nfc.ContactlessFrontend.exchange')
+   clf.exchange.side_effect = [
+       HEX('1d 07 03FEFFFFFFFFFFFF 0000 01 100c0c00 04000000 00000000 000e003a'),
+       HEX('1d 07 03FEFFFFFFFFFFFF 0000 01 d1010a54 02656e2b 32312e33 20430000'),
+       HEX('1d 07 03FEFFFFFFFFFFFF 0000 01 100c0c00 04000000 00000000 000e003a'),
+       HEX('1d 07 03FEFFFFFFFFFFFF 0000 01 d1010a54 02656e2b 32312e30 20430000'),
+       HEX('1d 07 03FEFFFFFFFFFFFF 0000 01 100c0c00 04000000 00000000 000e003a'),
+       HEX('1d 07 03FEFFFFFFFFFFFF 0000 01 d1010a54 02656e2b 32302e35 20430000'),
+       HEX('1d 07 03FEFFFFFFFFFFFF 0000 01 100c0c00 04000000 00000000 000e003a'),
+       HEX('1d 07 03FEFFFFFFFFFFFF 0000 01 d1010a54 02656e2b 32302e31 20430000'),
+   ]
+   import time
+   time.sleep = mock.Mock('time.sleep')
+
+.. doctest:: interface-tag
+
+   >>> tag = clf.connect(rdwr={'on-connect': lambda tag: False})
+   >>> print(tag)
+   Type3Tag 'FeliCa Link (RC-S730) Plug Mode' ID=03FEFFFFFFFFFFFF PMM=00E1000000FFFF00 SYS=12FC
+   >>> assert tag.ndef is not None and tag.ndef.length > 0
+   >>> assert tag.ndef.records[0].type == 'urn:nfc:wkt:T'
+   >>> print('Temperature 0: {}'.format(tag.ndef.records[0].text))
+   Temperature 0: +21.3 C
+   >>> for count in range(1, 4):
+   ...     while not tag.ndef.has_changed: time.sleep(1)
+   ...     print('Temperature {}: {}'.format(count, tag.ndef.records[0].text))
+   ... 
+   Temperature 1: +21.0 C
+   Temperature 2: +20.5 C
+   Temperature 3: +20.1 C
+
+Finally the contactless frontend should be closed.
+
+.. testsetup:: tags-close-clf
+
+   clf = nfc.ContactlessFrontend('udp')
+
+.. doctest:: tags-close-clf
 
    >>> clf.close()
-   
-.. note:: The :mod:`nfc.ndef` package has a lot more than could be
-   covered in this short introduction, feel free to read the API
-   documentation as well as the :ref:`ndef-tutorial` tutorial to learn
-   how *nfcpy* maps the concepts of the NDEF specification. And the
-   :mod:`nfc.tag` package provides more information on the methods
-   that are available for formatting, protecting, authenticating and
-   exchanging raw commands with tags.
+
+Documentation of all available Tag classes as well as NDEF class methods and
+attributes can be found in the :mod:`nfc.tag` module reference. For NDEF Record
+class types, methods and attributes consult the `ndeflib`_ documentation.
 
 
 Emulate a card
 ==============
 
-It is possible to emulate a card (NFC Tag) with *nfcpy* but
-unfortunately it only works with some NFC devices and is limited to
-Type 3 Tag emulation. The RC-S380 fully supports Type 3 Tag
-emulation. Devices based on PN532, PN533, or RC-S956 chipset can also
-be used but an internal frame size limit of 64 byte only allows
-read/write operations with up to 3 data blocks.
+It is possible to emulate a card (NFC Tag) with *nfcpy* but unfortunately this
+only works with some NFC devices and is limited to Type 3 Tag emulation. The
+RC-S380 fully supports Type 3 Tag emulation. Devices based on PN532, PN533, or
+RC-S956 chipset can also be used but an internal frame size limit of 64 byte
+only allows read/write operations with up to 3 data blocks.
 
-Below is an example of an NDEF formatted Type 3 Tag. The first 16 byte
-(first data block) contain the attribute data by which the reader will
-learn the NDEF version, the number of data blocks that can be read or
-written in a single command, the total capacity and the write
-permission state. Bytes 11 to 13 contain the current NDEF message
-length, initialized to zero. The example is made to specifically open
-only an RC-S380 contactless frontend (otherwise the number of blocks
-that may be read or written should not be more than 3).
+Below is an example of an NDEF formatted Type 3 Tag. The first 16 byte (first
+data block) contain the attribute data by which the reader will learn the NDEF
+version, the number of data blocks that can be read or written in a single
+command, the total capacity and the write permission state. Bytes 11 to 13
+contain the current NDEF message length, initialized to zero. The example is
+made to specifically open only an RC-S380 contactless frontend (otherwise the
+number of blocks that may be read or written should not be more than 3).
 
 .. code-block:: python
 
@@ -282,10 +459,10 @@ that may be read or written should not be more than 3).
            print("tag released")
 
 
-This is a fully functional NFC Forum Type 3 Tag. With a separate
-reader or Android apps such as `NXP Tag Info`_ and `NXP Tag Writer`_,
-NDEF data can now be written into the **ndef_data_area** and read back
-until the loop is terminated with the *Ctrl-C* keyboard interrupt.
+This is a fully functional NFC Forum Type 3 Tag. With a separate reader or
+Android apps such as `NXP Tag Info`_ and `NXP Tag Writer`_, NDEF data can now be
+written into the **ndef_data_area** and read back until the loop is terminated
+with :kbd:`Control-C`.
 
 .. _NXP Tag Info:
    https://play.google.com/store/apps/details?id=com.nxp.taginfolite
@@ -307,21 +484,27 @@ application run in one direction.
 An LLCP link between two NFC devices is requested with the **llcp**
 argument to |clf.connect|.
 
-  >>> import nfc
-  >>> clf = ContactlessFrontend('usb')
-  >>> clf.connect(llcp={}) # now touch a phone
-  True
+.. doctest::
+   :options: +SKIP
+
+   >>> import nfc
+   >>> clf = ContactlessFrontend('usb')
+   >>> clf.connect(llcp={}) # now touch a phone
+   True
 
 When the first example got LLCP running there is actually just
 symmetry packets exchanged back and forth until the link is
 broken. We have to use callback functions to add some useful stuff.
 
-  >>> def on_connect(llc):
-  ...     print llc; return True
-  ...
-  >>> clf.connect(llcp={'on-connect': connected})
-  LLC: Local(MIU=128, LTO=100ms) Remote(MIU=1024, LTO=500ms)
-  True
+.. doctest::
+   :options: +SKIP
+
+   >>> def on_connect(llc):
+   ...     print llc; return True
+   ... 
+   >>> clf.connect(llcp={'on-connect': connected})
+   LLC: Local(MIU=128, LTO=100ms) Remote(MIU=1024, LTO=500ms)
+   True
 
 The on_connect function receives a single argument **llc**, which is
 the :class:`~nfc.llcp.llc.LogicalLinkController` instance coordinates
@@ -337,13 +520,16 @@ program in the callback functions so we will start a thread in the
 callback to execute the *llc.run** loop and return with False. This
 tells |clf.connect| to return immediately with the **llc** instance).
 
-  >>> import threading
-  >>> def on_connect(llc):
-  ...     threading.Thread(target=llc.run).start(); return False
-  ...
-  >>> llc = clf.connect(llcp={'on-connect': on_connect})
-  >>> print llc
-  LLC: Local(MIU=128, LTO=100ms) Remote(MIU=1024, LTO=500ms)
+.. doctest::
+   :options: +SKIP
+
+   >>> import threading
+   >>> def on_connect(llc):
+   ...     threading.Thread(target=llc.run).start(); return False
+   ... 
+   >>> llc = clf.connect(llcp={'on-connect': on_connect})
+   >>> print llc
+   LLC: Local(MIU=128, LTO=100ms) Remote(MIU=1024, LTO=500ms)
 
 Application code is not supposed to work directly with the **llc**
 object but use it to create :class:`~nfc.llcp.Socket` objects for the
@@ -366,23 +552,31 @@ socket, connect to the server with the service name known from the
 `NFC Forum Assigned Numbers Register`_ and then send a SNEP PUT
 request with a web link to open.
 
-  >>> socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
-  >>> socket.connect('urn:nfc:sn:snep')
-  >>> msg = nfc.ndef.Message(nfc.ndef.UriRecord("http://nfcpy.org"))
-  >>> socket.send("\x10\x02\x00\x00\x00" + chr(len(str(msg))) + str(msg))
-  >>> socket.recv()
-  '\x10\x81\x00\x00\x00\x00'
-  >>> socket.close()
+.. doctest::
+   :options: +SKIP
+
+   >>> import ndef
+   >>> socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
+   >>> socket.connect('urn:nfc:sn:snep')
+   >>> records = [ndef.UriRecord("http://nfcpy.org")]
+   >>> message = b''.join(ndef.message_encoder(records))
+   >>> socket.send("\x10\x02\x00\x00\x00" + chr(len(message)) + message)
+   >>> socket.recv()
+   '\x10\x81\x00\x00\x00\x00'
+   >>> socket.close()
 
 The phone should now have opened the http://nfcpy.org web page.
 
 The code can be simplified by using the :class:`~nfc.snep.SnepClient`
 from the :mod:`nfc.snep` package.
 
-  >>> import nfc.snep
-  >>> snep = nfc.snep.SnepClient(llc)
-  >>> snep.put(nfc.ndef.Message(nfc.ndef.UriRecord("http://nfcpy.org")))
-  True
+.. doctest::
+   :options: +SKIP
+
+   >>> import nfc.snep
+   >>> snep = nfc.snep.SnepClient(llc)
+   >>> snep.put_records([ndef.UriRecord("http://nfcpy.org")])
+   True
 
 The :meth:`~nfc.snep.SnepClient.put` method is smart enough to
 temporarily connect to ``urn:nfc.sn:snep`` for sending. There are also

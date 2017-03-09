@@ -20,19 +20,22 @@ framework for applications integrating NFC. The source code is
 licensed under the `EUPL`_ and hosted at `GitHub`_. The latest release
 version can be installed from `PyPI`_ with ``pip install -U nfcpy``.
 
-To send a web link to a smartphone:
+To send a web link to a smartphone::
 
-.. doctest::
-   :options: +SKIP
+  import nfc
+  import ndef
+  from threading import Thread
 
-   >>> import nfc, nfc.snep, threading
-   >>> connected = lambda llc: threading.Thread(target=llc.run).start()
-   >>> uri = nfc.ndef.Message(nfc.ndef.UriRecord("http://nfcpy.org"))
-   >>> clf = nfc.ContactlessFrontend('usb')
-   >>> llc = clf.connect(llcp={'on-connect': connected})
-   >>> nfc.snep.SnepClient(llc).put(uri)
-   True
-   >>> clf.close()
+  def beam(llc):
+      snep_client = nfc.snep.SnepClient(llc)
+      snep_client.put_records([ndef.UriRecord('http://nfcpy.org')])
+
+  def connected(llc):
+      Thread(target=beam, args=(llc,)).start()
+      return True
+
+  with nfc.ContactlessFrontend('usb') as clf:
+      clf.connect(llcp={'on-connect': connected})
 
 There are also a number of :doc:`examples/index` that can be used from
 the command line: ::
