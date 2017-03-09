@@ -19,6 +19,11 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
+from . import clf
+from . import tag
+from . import llcp
+from . import snep
+from . import handover
 from .clf import ContactlessFrontend
 
 import logging
