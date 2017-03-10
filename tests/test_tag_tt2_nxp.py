@@ -1,22 +1,22 @@
 # -*- coding: latin-1 -*-
 from __future__ import absolute_import, division
 
+import nfc
+import nfc.tag
+import nfc.tag.tt2
+
 import sys
+import mock
 import pytest
-from mock import MagicMock, call
 from pytest_mock import mocker  # noqa: F401
 
 import logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.WARN)
 logging_level = logging.getLogger().getEffectiveLevel()
 logging.getLogger("nfc.tag").setLevel(logging_level)
 logging.getLogger("nfc.tag.tt2").setLevel(logging_level)
 
-sys.modules['usb1'] = MagicMock
-
-import nfc          # noqa: E402
-import nfc.tag      # noqa: E402
-import nfc.tag.tt2  # noqa: E402
+sys.modules['usb1'] = mock.Mock  # fake usb1 for testing on travis-ci
 
 
 def HEX(s):
@@ -60,8 +60,8 @@ class TestUltralight:
         assert isinstance(tag, nfc.tag.tt2_nxp.MifareUltralight)
         assert tag.product == "Mifare Ultralight (MF01CU1)"
         assert clf.exchange.mock_calls == [
-            call(HEX('1A00'), timeout=0.01),
-            call(HEX('60'), timeout=0.01),
+            mock.call(HEX('1A00'), timeout=0.01),
+            mock.call(HEX('60'), timeout=0.01),
         ]
         clf.exchange.reset_mock()
         return tag
@@ -106,7 +106,7 @@ class TestUltralightC:
         assert isinstance(tag, nfc.tag.tt2_nxp.MifareUltralightC)
         assert tag.product == "Mifare Ultralight C (MF01CU2)"
         assert clf.exchange.mock_calls == [
-            call(HEX('1A00'), timeout=0.01),
+            mock.call(HEX('1A00'), timeout=0.01),
         ]
         clf.exchange.reset_mock()
         return tag
@@ -159,7 +159,7 @@ class TestUltralightC:
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.authenticate(password) is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_authenticate_failure(self, tag):
         with pytest.raises(ValueError) as excinfo:
@@ -180,7 +180,7 @@ class TestUltralightC:
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.authenticate(b'') is False
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_protect_with_lockbits(self, tag):
         commands = [
@@ -194,7 +194,7 @@ class TestUltralightC:
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.protect(None) is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
         commands = [
             (HEX('30 03'), 0.005),
@@ -209,7 +209,7 @@ class TestUltralightC:
         tag.clf.exchange.reset_mock()
         tag.clf.exchange.side_effect = responses
         assert tag.protect(None) is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
         commands = [
             (HEX('30 03'), 0.005),
@@ -224,7 +224,7 @@ class TestUltralightC:
         tag.clf.exchange.reset_mock()
         tag.clf.exchange.side_effect = responses
         assert tag.protect(None) is False
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     @pytest.mark.parametrize("pwd, cc, auth", [  # noqa: F811
         (b'', 'E11000', True),
@@ -254,7 +254,7 @@ class TestUltralightC:
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.protect(pwd) is auth
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
         tag.authenticate.assert_called_once_with(b'IEMKAERB!NACUOYF')
 
     @pytest.mark.parametrize("protect_from_page", [  # noqa: F811
@@ -287,7 +287,7 @@ class TestUltralightC:
 
         tag.clf.exchange.side_effect = responses
         assert tag.protect('', protect_from=protect_from_page) is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
         tag.authenticate.assert_called_once_with(b'IEMKAERB!NACUOYF')
 
     def test_protect_make_read_only(self, mocker, tag):  # noqa: F811
@@ -310,7 +310,7 @@ class TestUltralightC:
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.protect('', read_protect=True) is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
         tag.authenticate.assert_called_once_with(b'IEMKAERB!NACUOYF')
 
     def test_protect_with_short_password(self, tag):
@@ -336,7 +336,7 @@ class TestUltralightC:
         assert tag.ndef is not None
         assert tag.ndef.is_writeable is False
         assert tag.ndef.is_readable is False
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     @pytest.mark.parametrize("rw, rf, wf", [  # noqa: F811
         ('00', True, True),
@@ -365,7 +365,7 @@ class TestUltralightC:
         assert tag.ndef is not None
         assert tag.ndef.is_writeable is wf
         assert tag.ndef.is_readable is rf
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
         tag.clf.exchange.reset_mock()
         tag.clf.exchange.side_effect = responses
@@ -373,7 +373,7 @@ class TestUltralightC:
         assert tag.ndef is not None
         assert tag.ndef.is_writeable is (rf or rw[0] == '8')
         assert tag.ndef.is_readable is (wf or rw[1] == '8')
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
         tag._authenticate.assert_called_once_with(b'')
 
     def test_read_ndef_from_unformatted_tag(self, tag):
@@ -385,7 +385,7 @@ class TestUltralightC:
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.ndef is None
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
 
 ###############################################################################
@@ -403,8 +403,8 @@ class TestUltralightEV1:
         assert isinstance(tag, nfc.tag.tt2_nxp.MF0UL11)
         assert tag.product == "Mifare Ultralight EV1 (MF0UL11)"
         assert clf.exchange.mock_calls == [
-            call(HEX('1A00'), timeout=0.01),
-            call(HEX('60'), timeout=0.01),
+            mock.call(HEX('1A00'), timeout=0.01),
+            mock.call(HEX('60'), timeout=0.01),
         ]
         clf.exchange.reset_mock()
         return tag
@@ -423,8 +423,8 @@ class TestUltralightEV1:
         assert isinstance(tag, eval("nfc.tag.tt2_nxp." + product))
         assert tag.product == "Mifare Ultralight EV1 (%s)" % product
         assert clf.exchange.mock_calls == [
-            call(HEX('1A00'), timeout=0.01),
-            call(HEX('60'), timeout=0.01),
+            mock.call(HEX('1A00'), timeout=0.01),
+            mock.call(HEX('60'), timeout=0.01),
         ]
 
     @pytest.mark.parametrize("version_response, product", [
@@ -495,8 +495,8 @@ class TestNTAG203:
         assert isinstance(tag, nfc.tag.tt2_nxp.NTAG203)
         assert tag.product == "NXP NTAG203"
         assert clf.exchange.mock_calls == [
-            call(HEX('1A00'), timeout=0.01),
-            call(HEX('60'), timeout=0.01),
+            mock.call(HEX('1A00'), timeout=0.01),
+            mock.call(HEX('60'), timeout=0.01),
         ]
         clf.exchange.reset_mock()
         return tag
@@ -566,7 +566,7 @@ class TestNTAG203:
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.format() is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_format_ndef_tag(self, tag):
         commands = [
@@ -581,7 +581,7 @@ class TestNTAG203:
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.format() is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_protect_with_password(self, tag):
         assert tag.protect(password='') is False
@@ -601,7 +601,7 @@ class TestNTAG203:
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.protect() is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_protect_with_blank(self, tag):
         commands = [
@@ -616,7 +616,7 @@ class TestNTAG203:
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.protect() is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_protect_with_read_error(self, tag):
         commands = [
@@ -627,7 +627,7 @@ class TestNTAG203:
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.protect() is False
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
 
 ###############################################################################
@@ -652,7 +652,7 @@ class BaseNTAG21x:
         tag.clf.exchange.side_effect = responses
         assert tag.signature == bytearray(range(32))
         assert tag.signature == bytearray(32)
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
         with pytest.raises(AttributeError):
             tag.signature = bytearray(32)
@@ -675,7 +675,7 @@ class BaseNTAG21x:
         assert tag.authenticate(HEX('ABCDEFFF1234')) is True
         assert tag.authenticate(HEX('0123456789ABCDEF')) is True
         assert tag.authenticate(HEX('')) is False
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
         with pytest.raises(ValueError) as excinfo:
             tag.authenticate(HEX('ffffffff00'))
@@ -702,7 +702,7 @@ class BaseNTAG21x:
             responses.insert(3, HEX('0a'))
         tag.clf.exchange.side_effect = responses
         assert tag.protect(password=None) is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
         commands = [
             (HEX('30 03'), 0.005),
@@ -721,7 +721,7 @@ class BaseNTAG21x:
         tag.clf.exchange.reset_mock()
         tag.clf.exchange.side_effect = responses
         assert tag.protect(password=None) is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
         commands = [
             (HEX('3003'), 0.005), (HEX('3003'), 0.005), (HEX('3003'), 0.005),
@@ -732,7 +732,7 @@ class BaseNTAG21x:
         tag.clf.exchange.reset_mock()
         tag.clf.exchange.side_effect = responses
         assert tag.protect(password=None) is False
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_protect_with_short_password(self, tag):
         with pytest.raises(ValueError) as excinfo:
@@ -764,7 +764,7 @@ class BaseNTAG21x:
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.protect(password=HEX(pwd)) is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
         tag.authenticate.assert_called_once_with(HEX(key))
 
     def test_protect_read_protected(self, mocker, tag):  # noqa: F811
@@ -787,7 +787,7 @@ class BaseNTAG21x:
         tag.authenticate.return_value = True
         tag.clf.exchange.side_effect = responses
         assert tag.protect(b'', read_protect=True) is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
         tag.authenticate.assert_called_once_with(HEX('ffffffff0000'))
 
     def test_protect_unformatted_tag(self, mocker, tag):  # noqa: F811
@@ -808,7 +808,7 @@ class BaseNTAG21x:
         tag.authenticate.return_value = True
         tag.clf.exchange.side_effect = responses
         assert tag.protect(b'') is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
         tag.authenticate.assert_called_once_with(HEX('ffffffff0000'))
 
     @pytest.mark.parametrize("protect_from_page", [4, 255, 256])  # noqa: F811
@@ -829,7 +829,7 @@ class BaseNTAG21x:
         tag.authenticate.return_value = True
         tag.clf.exchange.side_effect = responses
         assert tag.protect(b'', protect_from=protect_from_page) is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
         tag.authenticate.assert_called_once_with(HEX('ffffffff0000'))
 
     @pytest.mark.parametrize("rw, rf, wf, rfa, wfa", [  # noqa: F811
@@ -857,7 +857,7 @@ class BaseNTAG21x:
         assert tag.ndef is not None
         assert tag.ndef.is_writeable is wf
         assert tag.ndef.is_readable is rf
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
         tag._ndef = None
         tag.clf.exchange.reset_mock()
@@ -866,7 +866,7 @@ class BaseNTAG21x:
         assert tag.ndef is not None
         assert tag.ndef.is_writeable is wfa
         assert tag.ndef.is_readable is rfa
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_read_ndef_unformatted_tag(self, tag):
         commands = [
@@ -877,7 +877,7 @@ class BaseNTAG21x:
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.ndef is None
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
 
 ###############################################################################
@@ -897,8 +897,8 @@ class TestNTAG210(BaseNTAG21x):
         assert isinstance(tag, nfc.tag.tt2_nxp.NTAG210)
         assert tag.product == "NXP NTAG210"
         assert clf.exchange.mock_calls == [
-            call(HEX('1A00'), timeout=0.01),
-            call(HEX('60'), timeout=0.01),
+            mock.call(HEX('1A00'), timeout=0.01),
+            mock.call(HEX('60'), timeout=0.01),
         ]
         clf.exchange.reset_mock()
         return tag
@@ -953,7 +953,7 @@ class TestNTAG210(BaseNTAG21x):
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.format() is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_format_ndef_tag(self, tag):
         commands = [
@@ -968,7 +968,7 @@ class TestNTAG210(BaseNTAG21x):
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.format() is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
 
 ###############################################################################
@@ -988,8 +988,8 @@ class TestNTAG212(BaseNTAG21x):
         assert isinstance(tag, nfc.tag.tt2_nxp.NTAG212)
         assert tag.product == "NXP NTAG212"
         assert clf.exchange.mock_calls == [
-            call(HEX('1A00'), timeout=0.01),
-            call(HEX('60'), timeout=0.01),
+            mock.call(HEX('1A00'), timeout=0.01),
+            mock.call(HEX('60'), timeout=0.01),
         ]
         clf.exchange.reset_mock()
         return tag
@@ -1045,7 +1045,7 @@ class TestNTAG212(BaseNTAG21x):
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.format() is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_format_ndef_tag(self, tag):
         commands = [
@@ -1060,7 +1060,7 @@ class TestNTAG212(BaseNTAG21x):
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.format() is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
 
 ###############################################################################
@@ -1080,8 +1080,8 @@ class TestNTAG213(BaseNTAG21x):
         assert isinstance(tag, nfc.tag.tt2_nxp.NTAG213)
         assert tag.product == "NXP NTAG213"
         assert clf.exchange.mock_calls == [
-            call(HEX('1A00'), timeout=0.01),
-            call(HEX('60'), timeout=0.01),
+            mock.call(HEX('1A00'), timeout=0.01),
+            mock.call(HEX('60'), timeout=0.01),
         ]
         clf.exchange.reset_mock()
         return tag
@@ -1137,7 +1137,7 @@ class TestNTAG213(BaseNTAG21x):
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.format() is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_format_ndef_tag(self, tag):
         commands = [
@@ -1152,7 +1152,7 @@ class TestNTAG213(BaseNTAG21x):
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.format() is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
 
 ###############################################################################
@@ -1172,8 +1172,8 @@ class TestNTAG215(BaseNTAG21x):
         assert isinstance(tag, nfc.tag.tt2_nxp.NTAG215)
         assert tag.product == "NXP NTAG215"
         assert clf.exchange.mock_calls == [
-            call(HEX('1A00'), timeout=0.01),
-            call(HEX('60'), timeout=0.01),
+            mock.call(HEX('1A00'), timeout=0.01),
+            mock.call(HEX('60'), timeout=0.01),
         ]
         clf.exchange.reset_mock()
         return tag
@@ -1229,7 +1229,7 @@ class TestNTAG215(BaseNTAG21x):
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.format() is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_format_ndef_tag(self, tag):
         commands = [
@@ -1244,7 +1244,7 @@ class TestNTAG215(BaseNTAG21x):
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.format() is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
 
 ###############################################################################
@@ -1264,8 +1264,8 @@ class TestNTAG216(BaseNTAG21x):
         assert isinstance(tag, nfc.tag.tt2_nxp.NTAG216)
         assert tag.product == "NXP NTAG216"
         assert clf.exchange.mock_calls == [
-            call(HEX('1A00'), timeout=0.01),
-            call(HEX('60'), timeout=0.01),
+            mock.call(HEX('1A00'), timeout=0.01),
+            mock.call(HEX('60'), timeout=0.01),
         ]
         clf.exchange.reset_mock()
         return tag
@@ -1321,7 +1321,7 @@ class TestNTAG216(BaseNTAG21x):
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.format() is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_format_ndef_tag(self, tag):
         commands = [
@@ -1336,7 +1336,7 @@ class TestNTAG216(BaseNTAG21x):
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.format() is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
 
 ###############################################################################
@@ -1354,8 +1354,8 @@ class TestNT3H1101:
         assert isinstance(tag, nfc.tag.tt2_nxp.NT3H1101)
         assert tag.product == "NTAG I2C 1K (NT3H1101)"
         assert clf.exchange.mock_calls == [
-            call(HEX('1A00'), timeout=0.01),
-            call(HEX('60'), timeout=0.01),
+            mock.call(HEX('1A00'), timeout=0.01),
+            mock.call(HEX('60'), timeout=0.01),
         ]
         clf.exchange.reset_mock()
         return tag
@@ -1413,8 +1413,8 @@ class TestNT3H1201:
         assert isinstance(tag, nfc.tag.tt2_nxp.NT3H1201)
         assert tag.product == "NTAG I2C 2K (NT3H1201)"
         assert clf.exchange.mock_calls == [
-            call(HEX('1A00'), timeout=0.01),
-            call(HEX('60'), timeout=0.01),
+            mock.call(HEX('1A00'), timeout=0.01),
+            mock.call(HEX('60'), timeout=0.01),
         ]
         clf.exchange.reset_mock()
         return tag
@@ -1474,7 +1474,7 @@ class TestActivate:
         ]
         assert nfc.tag.activate(clf, target) is None
         assert clf.exchange.mock_calls == [
-            call(HEX('1A00'), timeout=0.01),
+            mock.call(HEX('1A00'), timeout=0.01),
         ]
 
     def test_timeout_and_gone_after_authenticate(self, clf, target):
@@ -1484,7 +1484,7 @@ class TestActivate:
         ]
         assert nfc.tag.activate(clf, target) is None
         assert clf.exchange.mock_calls == [
-            call(HEX('1A00'), timeout=0.01),
+            mock.call(HEX('1A00'), timeout=0.01),
         ]
 
     def test_communication_error_authenticate(self, clf, target):
@@ -1493,7 +1493,7 @@ class TestActivate:
         ]
         assert type(nfc.tag.activate(clf, target)) == nfc.tag.tt2.Type2Tag
         assert clf.exchange.mock_calls == [
-            call(HEX('1A00'), timeout=0.01),
+            mock.call(HEX('1A00'), timeout=0.01),
         ]
 
     def test_target_gone_after_get_version(self, clf, target):
@@ -1505,8 +1505,8 @@ class TestActivate:
         ]
         assert nfc.tag.activate(clf, target) is None
         assert clf.exchange.mock_calls == [
-            call(HEX('1A00'), timeout=0.01),
-            call(HEX('60'), timeout=0.01),
+            mock.call(HEX('1A00'), timeout=0.01),
+            mock.call(HEX('60'), timeout=0.01),
         ]
 
     def test_target_unknown_version_string(self, clf, target):
@@ -1515,8 +1515,8 @@ class TestActivate:
         ]
         assert type(nfc.tag.activate(clf, target)) == nfc.tag.tt2.Type2Tag
         assert clf.exchange.mock_calls == [
-            call(HEX('1A00'), timeout=0.01),
-            call(HEX('60'), timeout=0.01),
+            mock.call(HEX('1A00'), timeout=0.01),
+            mock.call(HEX('60'), timeout=0.01),
         ]
 
     def test_timeout_and_gone_after_get_version(self, clf, target):
@@ -1528,8 +1528,8 @@ class TestActivate:
         ]
         assert nfc.tag.activate(clf, target) is None
         assert clf.exchange.mock_calls == [
-            call(HEX('1A00'), timeout=0.01),
-            call(HEX('60'), timeout=0.01),
+            mock.call(HEX('1A00'), timeout=0.01),
+            mock.call(HEX('60'), timeout=0.01),
         ]
 
     def test_communication_error_get_version(self, clf, target):
@@ -1538,6 +1538,6 @@ class TestActivate:
         ]
         assert type(nfc.tag.activate(clf, target)) == nfc.tag.tt2.Type2Tag
         assert clf.exchange.mock_calls == [
-            call(HEX('1A00'), timeout=0.01),
-            call(HEX('60'), timeout=0.01),
+            mock.call(HEX('1A00'), timeout=0.01),
+            mock.call(HEX('60'), timeout=0.01),
         ]

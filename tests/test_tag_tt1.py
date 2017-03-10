@@ -1,22 +1,22 @@
 # -*- coding: latin-1 -*-
 from __future__ import absolute_import, division
 
+import nfc
+import nfc.tag
+import nfc.tag.tt1
+
 import sys
+import mock
 import pytest
-from mock import MagicMock, call
 from pytest_mock import mocker  # noqa: F401
 
 import logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.WARN)
 logging_level = logging.getLogger().getEffectiveLevel()
 logging.getLogger("nfc.tag").setLevel(logging_level)
 logging.getLogger("nfc.tag.tt1").setLevel(logging_level)
 
-sys.modules['usb1'] = MagicMock
-
-import nfc          # noqa: E402
-import nfc.tag      # noqa: E402
-import nfc.tag.tt1  # noqa: E402
+sys.modules['usb1'] = mock.Mock  # fake usb1 for testing on travis-ci
 
 
 def HEX(s):
@@ -89,7 +89,7 @@ class TestStaticMemoryTagNdef:
         tag.clf.exchange.side_effect = [HEX("0000") + mmap]
         assert tag.ndef is None
         assert tag.clf.exchange.mock_calls == [
-            call(HEX("00 00 00 01020304"), 0.1),  # RALL
+            mock.call(HEX("00 00 00 01020304"), 0.1),  # RALL
         ]
 
     def test_read_unformatted_memory(self, tag, mmap):
@@ -98,7 +98,7 @@ class TestStaticMemoryTagNdef:
         ]
         assert tag.ndef is None
         assert tag.clf.exchange.mock_calls == [
-            call(HEX("00 00 00 01020304"), 0.1),  # RALL
+            mock.call(HEX("00 00 00 01020304"), 0.1),  # RALL
         ]
 
     def test_read_unknown_ndef_version(self, tag, mmap):
@@ -107,14 +107,14 @@ class TestStaticMemoryTagNdef:
         ]
         assert tag.ndef is None
         assert tag.clf.exchange.mock_calls == [
-            call(HEX("00 00 00 01020304"), 0.1),  # RALL
+            mock.call(HEX("00 00 00 01020304"), 0.1),  # RALL
         ]
 
     def test_read_with_read_failure(self, tag):
         tag.clf.exchange.side_effect = 3 * [nfc.clf.TimeoutError]
         assert tag.ndef is None
         assert tag.clf.exchange.mock_calls == 3 * [
-            call(HEX("00 00 00 01020304"), 0.1),  # RALL
+            mock.call(HEX("00 00 00 01020304"), 0.1),  # RALL
         ]
 
     def test_read_ndef_after_null_tlv(self, tag, mmap, ndef_octets):
@@ -158,13 +158,13 @@ class TestStaticMemoryTagNdef:
         ]
         tag.ndef.octets = HEX('d0 00 00')
         assert tag.clf.exchange.mock_calls == [
-            call(HEX('00 00 00 01020304'), 0.1),
-            call(HEX('53 0d 00 01020304'), 0.1),
-            call(HEX('53 0e d0 01020304'), 0.1),
-            call(HEX('53 0f 00 01020304'), 0.1),
-            call(HEX('53 10 00 01020304'), 0.1),
-            call(HEX('53 11 fe 01020304'), 0.1),
-            call(HEX('53 0d 03 01020304'), 0.1),
+            mock.call(HEX('00 00 00 01020304'), 0.1),
+            mock.call(HEX('53 0d 00 01020304'), 0.1),
+            mock.call(HEX('53 0e d0 01020304'), 0.1),
+            mock.call(HEX('53 0f 00 01020304'), 0.1),
+            mock.call(HEX('53 10 00 01020304'), 0.1),
+            mock.call(HEX('53 11 fe 01020304'), 0.1),
+            mock.call(HEX('53 0d 03 01020304'), 0.1),
         ]
         assert tag.ndef.octets == HEX("D00000")
 
@@ -183,11 +183,11 @@ class TestStaticMemoryTagNdef:
         assert tag.ndef.octets == HEX('d1 01 05 54 02 65 6e') + b'ab'
         tag.ndef.octets = HEX('d1 01 06 54 02 65 6e') + b'abc'
         assert tag.clf.exchange.mock_calls == [
-            call(HEX('00 00 00 01020304'), 0.1),
-            call(HEX('53 0d 00 01020304'), 0.1),
-            call(HEX('53 10 06 01020304'), 0.1),
-            call(HEX('53 17 63 01020304'), 0.1),
-            call(HEX('53 0d 0a 01020304'), 0.1),
+            mock.call(HEX('00 00 00 01020304'), 0.1),
+            mock.call(HEX('53 0d 00 01020304'), 0.1),
+            mock.call(HEX('53 10 06 01020304'), 0.1),
+            mock.call(HEX('53 17 63 01020304'), 0.1),
+            mock.call(HEX('53 0d 0a 01020304'), 0.1),
         ]
 
 
@@ -286,17 +286,17 @@ class TestDynamicMemoryTagNdef:
         assert tag.ndef.octets == b''
         tag.ndef.octets = ndef_octets
         assert tag.clf.exchange.mock_calls == [
-            call(HEX('00 00 00 01020304'), 0.1),
-            call(HEX('54 03 0000c101000001c6 01020304'), 0.1),
+            mock.call(HEX('00 00 00 01020304'), 0.1),
+            mock.call(HEX('54 03 0000c101000001c6 01020304'), 0.1),
         ] + [
-            call(bytearray([84, i]) + mmap[i*8:i*8+8] + b'\1\2\3\4', 0.1)
+            mock.call(bytearray([84, i]) + mmap[i*8:i*8+8] + b'\1\2\3\4', 0.1)
             for i in range(4, 13)
         ] + [
-            call(bytearray([84, i]) + mmap[i*8:i*8+8] + b'\1\2\3\4', 0.1)
+            mock.call(bytearray([84, i]) + mmap[i*8:i*8+8] + b'\1\2\3\4', 0.1)
             for i in range(16, 64)
         ] + [
-            call(HEX('54 02 330203f0020303ff 01020304'), 0.1),
-            call(HEX('54 03 01cdc101000001c6 01020304'), 0.1),
+            mock.call(HEX('54 02 330203f0020303ff 01020304'), 0.1),
+            mock.call(HEX('54 03 01cdc101000001c6 01020304'), 0.1),
         ]
 
     def test_write_terminator_after_skip(self, tag):
@@ -319,19 +319,19 @@ class TestDynamicMemoryTagNdef:
         ]
         tag.ndef.octets = HEX('D5 00 4D') + bytearray(5+9*8)
         assert tag.clf.exchange.mock_calls == [
-            call(HEX('54 02 330203f002030300 01020304'), 0.1),
-            call(HEX('54 03 d5004d0000000000 01020304'), 0.1),
-            call(HEX('54 04 0000000000000000 01020304'), 0.1),
-            call(HEX('54 05 0000000000000000 01020304'), 0.1),
-            call(HEX('54 06 0000000000000000 01020304'), 0.1),
-            call(HEX('54 07 0000000000000000 01020304'), 0.1),
-            call(HEX('54 08 0000000000000000 01020304'), 0.1),
-            call(HEX('54 09 0000000000000000 01020304'), 0.1),
-            call(HEX('54 0a 0000000000000000 01020304'), 0.1),
-            call(HEX('54 0b 0000000000000000 01020304'), 0.1),
-            call(HEX('54 0c 0000000000000000 01020304'), 0.1),
-            call(HEX('54 10 fe7475767778797a 01020304'), 0.1),
-            call(HEX('54 02 330203f002030350 01020304'), 0.1),
+            mock.call(HEX('54 02 330203f002030300 01020304'), 0.1),
+            mock.call(HEX('54 03 d5004d0000000000 01020304'), 0.1),
+            mock.call(HEX('54 04 0000000000000000 01020304'), 0.1),
+            mock.call(HEX('54 05 0000000000000000 01020304'), 0.1),
+            mock.call(HEX('54 06 0000000000000000 01020304'), 0.1),
+            mock.call(HEX('54 07 0000000000000000 01020304'), 0.1),
+            mock.call(HEX('54 08 0000000000000000 01020304'), 0.1),
+            mock.call(HEX('54 09 0000000000000000 01020304'), 0.1),
+            mock.call(HEX('54 0a 0000000000000000 01020304'), 0.1),
+            mock.call(HEX('54 0b 0000000000000000 01020304'), 0.1),
+            mock.call(HEX('54 0c 0000000000000000 01020304'), 0.1),
+            mock.call(HEX('54 10 fe7475767778797a 01020304'), 0.1),
+            mock.call(HEX('54 02 330203f002030350 01020304'), 0.1),
         ]
 
 
@@ -631,14 +631,14 @@ class TestTagProcedures:
             " 16: 78 79 7a 61 62 63 64 65 |xyzabcde|",
         ]
         assert tag.clf.exchange.mock_calls == [
-            call(HEX("00 00 00 01020304"), 0.1),
-            call(HEX('02 0f 0000000000000000 01020304'), 0.1),
-            call(HEX('02 10 0000000000000000 01020304'), 0.1),
-            call(HEX('54 10 8786859e9d9c9b9a 01020304'), 0.1),
-            call(HEX('54 10 78797A6162636465 01020304'), 0.1),
-            call(HEX('02 11 0000000000000000 01020304'), 0.1),
-            call(HEX('02 11 0000000000000000 01020304'), 0.1),
-            call(HEX('02 11 0000000000000000 01020304'), 0.1),
+            mock.call(HEX("00 00 00 01020304"), 0.1),
+            mock.call(HEX('02 0f 0000000000000000 01020304'), 0.1),
+            mock.call(HEX('02 10 0000000000000000 01020304'), 0.1),
+            mock.call(HEX('54 10 8786859e9d9c9b9a 01020304'), 0.1),
+            mock.call(HEX('54 10 78797A6162636465 01020304'), 0.1),
+            mock.call(HEX('02 11 0000000000000000 01020304'), 0.1),
+            mock.call(HEX('02 11 0000000000000000 01020304'), 0.1),
+            mock.call(HEX('02 11 0000000000000000 01020304'), 0.1),
         ]
 
     def test_protect_default(self, tag):
@@ -702,13 +702,13 @@ class TestMemoryReader:
         tag_memory = nfc.tag.tt1.Type1TagMemoryReader(tag)
         assert tag_memory[offset] == self.mmap[offset]
         assert tag.clf.exchange.mock_calls[0] == \
-            call(HEX('00 00 00 01020304'), 0.1)
+            mock.call(HEX('00 00 00 01020304'), 0.1)
         if offset >= 120:
             read8 = HEX('02 0f 00000000 00000000 01020304')
-            assert tag.clf.exchange.mock_calls[1] == call(read8, 0.1)
+            assert tag.clf.exchange.mock_calls[1] == mock.call(read8, 0.1)
         if offset >= 128:
             rseg = HEX('10 10 00000000 00000000 01020304')
-            assert tag.clf.exchange.mock_calls[2] == call(rseg, 0.1)
+            assert tag.clf.exchange.mock_calls[2] == mock.call(rseg, 0.1)
 
     @pytest.mark.parametrize("offset", [0, 1, 120, 121, 128, 129, 255])
     def test_slice_access_at_offset(self, tag, offset):
@@ -720,13 +720,13 @@ class TestMemoryReader:
         tag_memory = nfc.tag.tt1.Type1TagMemoryReader(tag)
         assert tag_memory[offset:offset+1] == self.mmap[offset:offset+1]
         assert tag.clf.exchange.mock_calls[0] == \
-            call(HEX('00 00 00 01020304'), 0.1)
+            mock.call(HEX('00 00 00 01020304'), 0.1)
         if offset >= 120:
             read8 = HEX('02 0f 00000000 00000000 01020304')
-            assert tag.clf.exchange.mock_calls[1] == call(read8, 0.1)
+            assert tag.clf.exchange.mock_calls[1] == mock.call(read8, 0.1)
         if offset >= 128:
             rseg = HEX('10 10 00000000 00000000 01020304')
-            assert tag.clf.exchange.mock_calls[2] == call(rseg, 0.1)
+            assert tag.clf.exchange.mock_calls[2] == mock.call(rseg, 0.1)
 
     def test_synchronize_with_small_tag(self, tag):
         tag.clf.exchange.side_effect = [
@@ -739,11 +739,11 @@ class TestMemoryReader:
         tag_memory[15] = 0x5A
         tag_memory.synchronize()
         assert tag.clf.exchange.mock_calls[0] == \
-            call(HEX('00 00 00 01020304'), 0.1)
+            mock.call(HEX('00 00 00 01020304'), 0.1)
         assert tag.clf.exchange.mock_calls[1] == \
-            call(HEX('53 00 A5 01020304'), 0.1)
+            mock.call(HEX('53 00 A5 01020304'), 0.1)
         assert tag.clf.exchange.mock_calls[2] == \
-            call(HEX('53 0F 5A 01020304'), 0.1)
+            mock.call(HEX('53 0F 5A 01020304'), 0.1)
 
     def test_synchronize_with_large_tag(self, tag):
         tag.clf.exchange.side_effect = [
@@ -759,11 +759,11 @@ class TestMemoryReader:
         tag_memory[128] = 0xFF
         tag_memory.synchronize()
         tag.clf.exchange.assert_has_calls([
-            call(HEX('00 00 00 01020304'), 0.1),
-            call(HEX('02 0f 00000000 00000000 01020304'), 0.1),
-            call(HEX('10 10 00000000 00000000 01020304'), 0.1),
-            call(HEX('54 00 FF020304 05060700 01020304'), 0.1),
-            call(HEX('54 10 FF000000 00000000 01020304'), 0.1),
+            mock.call(HEX('00 00 00 01020304'), 0.1),
+            mock.call(HEX('02 0f 00000000 00000000 01020304'), 0.1),
+            mock.call(HEX('10 10 00000000 00000000 01020304'), 0.1),
+            mock.call(HEX('54 00 FF020304 05060700 01020304'), 0.1),
+            mock.call(HEX('54 10 FF000000 00000000 01020304'), 0.1),
         ])
 
     def test_byte_delete_raises_error(self, tag):
@@ -802,8 +802,8 @@ class TestMemoryReader:
         tag_memory[128] = 0x5A
         tag_memory.synchronize()
         tag.clf.exchange.assert_has_calls([
-            call(HEX('00 00 00 01020304'), 0.1),
-            call(HEX('02 0f 00000000 00000000 01020304'), 0.1),
-            call(HEX('10 10 00000000 00000000 01020304'), 0.1),
-            call(HEX('54 10 5A000000 00000000 01020304'), 0.1),
+            mock.call(HEX('00 00 00 01020304'), 0.1),
+            mock.call(HEX('02 0f 00000000 00000000 01020304'), 0.1),
+            mock.call(HEX('10 10 00000000 00000000 01020304'), 0.1),
+            mock.call(HEX('54 10 5A000000 00000000 01020304'), 0.1),
         ])

@@ -1,22 +1,23 @@
 # -*- coding: latin-1 -*-
 from __future__ import absolute_import, division
 
+import nfc
+import nfc.tag
+import nfc.tag.tt3
+
 import sys
+import mock
 import pytest
-from mock import MagicMock, call
 from pytest_mock import mocker  # noqa: F401
 
 import logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.WARN)
 logging_level = logging.getLogger().getEffectiveLevel()
 logging.getLogger("nfc.tag").setLevel(logging_level)
 logging.getLogger("nfc.tag.tt3").setLevel(logging_level)
+logging.getLogger("nfc.tag.tt3_sony").setLevel(logging_level)
 
-sys.modules['usb1'] = MagicMock
-
-import nfc          # noqa: E402
-import nfc.tag      # noqa: E402
-import nfc.tag.tt3  # noqa: E402
+sys.modules['usb1'] = mock.Mock  # fake usb1 for testing on travis-ci
 
 
 def HEX(s):
@@ -540,10 +541,10 @@ class TestFelicaStandard:
         ]
         assert tag.is_present is True
         assert tag.clf.exchange.mock_calls == [
-            call(HEX('0a 04 0102030405060708'), 0.309248),
-            call(HEX('0a 04 0102030405060708'), 0.309248),
-            call(HEX('0a 04 0102030405060708'), 0.309248),
-            call(HEX('06 00 0000 0000'), 0.003625),
+            mock.call(HEX('0a 04 0102030405060708'), 0.309248),
+            mock.call(HEX('0a 04 0102030405060708'), 0.309248),
+            mock.call(HEX('0a 04 0102030405060708'), 0.309248),
+            mock.call(HEX('06 00 0000 0000'), 0.003625),
         ]
 
     def test_request_service(self, tag):
@@ -786,25 +787,25 @@ class TestFelicaLite:
         tag.ndef.octets = HEX('d1 01 05 54 02 65 6e') + b'ab'
         assert tag.clf.exchange.mock_calls == [
             # authenticate
-            call(HEX('20 08 0102030405060708 010900 018080'
-                     '07060504 03020100 0f0e0d0c 0b0a0908'), 0.3093504),
-            call(HEX('12 06 0102030405060708 010b00 0280828081'),
-                 0.46402560000000004),
+            mock.call(HEX('20 08 0102030405060708 010900 018080'
+                          '07060504 03020100 0f0e0d0c 0b0a0908'), 0.3093504),
+            mock.call(HEX('12 06 0102030405060708 010b00 0280828081'),
+                      0.46402560000000004),
             # ndef read
-            call(HEX('06 00 12fc 0000'), 0.003625),
-            call(HEX('12 06 0102030405060708 010b00 0280008081'),
-                 0.46402560000000004),
-            call(HEX('16 06 0102030405060708 010b00 048001800280038081'),
-                 0.7733760000000001),
+            mock.call(HEX('06 00 12fc 0000'), 0.003625),
+            mock.call(HEX('12 06 0102030405060708 010b00 0280008081'),
+                      0.46402560000000004),
+            mock.call(HEX('16 06 0102030405060708 010b00 048001800280038081'),
+                      0.7733760000000001),
             # ndef write
-            call(HEX('12 06 0102030405060708 010b00 0280008081'),
-                 0.46402560000000004),
-            call(HEX('20 08 0102030405060708 010900 018000'
-                     '10040100 03000000 000f0100 0027004f'), 0.3093504),
-            call(HEX('20 08 0102030405060708 010900 018001'
-                     'd1010554 02656e61 62000000 00000000'), 0.3093504),
-            call(HEX('20 08 0102030405060708 010900 018000'
-                     '10040100 03000000 00000100 00090022'), 0.3093504),
+            mock.call(HEX('12 06 0102030405060708 010b00 0280008081'),
+                      0.46402560000000004),
+            mock.call(HEX('20 08 0102030405060708 010900 018000'
+                          '10040100 03000000 000f0100 0027004f'), 0.3093504),
+            mock.call(HEX('20 08 0102030405060708 010900 018001'
+                          'd1010554 02656e61 62000000 00000000'), 0.3093504),
+            mock.call(HEX('20 08 0102030405060708 010900 018000'
+                          '10040100 03000000 00000100 00090022'), 0.3093504),
         ]
 
     @pytest.mark.parametrize("flip_key, mac_result", [
@@ -871,17 +872,17 @@ class TestFelicaLite:
         ]
         assert tag.protect("0123456789abcdef") is True
         assert tag.clf.exchange.mock_calls == [
-            call(HEX('10 06 0102030405060708 010b00 018088'), 0.3093504),
-            call(HEX('20 08 0102030405060708 010900 018087'
-                     '37363534 33323130 66656463 62613938'), 0.3093504),
-            call(HEX('060012fc0000'), 0.003625),
-            call(HEX('10 06 0102030405060708 010b00 018000'), 0.3093504),
-            call(HEX('10 06 0102030405060708 010b00 018001'), 0.3093504),
-            call(HEX('10 06 0102030405060708 010b00 018000'), 0.3093504),
-            call(HEX('20 08 0102030405060708 010900 018000'
-                     '10010100 05000000 00000000 00100027'), 0.3093504),
-            call(HEX('20 08 0102030405060708 010900 018088'
-                     '00400001 07000000 00000000 00000000'), 0.3093504),
+            mock.call(HEX('10 06 0102030405060708 010b00 018088'), 0.3093504),
+            mock.call(HEX('20 08 0102030405060708 010900 018087'
+                          '37363534 33323130 66656463 62613938'), 0.3093504),
+            mock.call(HEX('060012fc0000'), 0.003625),
+            mock.call(HEX('10 06 0102030405060708 010b00 018000'), 0.3093504),
+            mock.call(HEX('10 06 0102030405060708 010b00 018001'), 0.3093504),
+            mock.call(HEX('10 06 0102030405060708 010b00 018000'), 0.3093504),
+            mock.call(HEX('20 08 0102030405060708 010900 018000'
+                          '10010100 05000000 00000000 00100027'), 0.3093504),
+            mock.call(HEX('20 08 0102030405060708 010900 018088'
+                          '00400001 07000000 00000000 00000000'), 0.3093504),
         ]
 
         # not setting ndef rw flag because protect_from > 0
@@ -895,11 +896,11 @@ class TestFelicaLite:
         assert tag.protect("0123456789abcdef", protect_from=1) is True
         print(tag.clf.exchange.mock_calls)
         assert tag.clf.exchange.mock_calls == [
-            call(HEX('10 06 0102030405060708 010b00 018088'), 0.3093504),
-            call(HEX('20 08 0102030405060708 010900 018087'
-                     '37363534 33323130 66656463 62613938'), 0.3093504),
-            call(HEX('20 08 0102030405060708 010900 018088'
-                     '01400001 07000000 00000000 00000000'), 0.3093504),
+            mock.call(HEX('10 06 0102030405060708 010b00 018088'), 0.3093504),
+            mock.call(HEX('20 08 0102030405060708 010900 018087'
+                          '37363534 33323130 66656463 62613938'), 0.3093504),
+            mock.call(HEX('20 08 0102030405060708 010900 018088'
+                          '01400001 07000000 00000000 00000000'), 0.3093504),
         ]
 
     def test_authenticate(self, tag):
@@ -917,10 +918,10 @@ class TestFelicaLite:
         ]
         assert tag.authenticate("0123456789abcdef") is True
         assert tag.clf.exchange.mock_calls == [
-            call(HEX('20 08 0102030405060708 010900 018080'
-                     '07060504 03020100 0f0e0d0c 0b0a0908'), 0.3093504),
-            call(HEX('12 06 0102030405060708 010b00 0280828081'),
-                 0.46402560000000004),
+            mock.call(HEX('20 08 0102030405060708 010900 018080'
+                          '07060504 03020100 0f0e0d0c 0b0a0908'), 0.3093504),
+            mock.call(HEX('12 06 0102030405060708 010b00 0280828081'),
+                      0.46402560000000004),
         ]
 
         # test failed authentication (wrong mac)
@@ -933,10 +934,10 @@ class TestFelicaLite:
         ]
         assert tag.authenticate("0123456789abcdef") is False
         assert tag.clf.exchange.mock_calls == [
-            call(HEX('20 08 0102030405060708 010900 018080'
-                     '07060504 03020100 0f0e0d0c 0b0a0908'), 0.3093504),
-            call(HEX('12 06 0102030405060708 010b00 0280828081'),
-                 0.46402560000000004),
+            mock.call(HEX('20 08 0102030405060708 010900 018080'
+                          '07060504 03020100 0f0e0d0c 0b0a0908'), 0.3093504),
+            mock.call(HEX('12 06 0102030405060708 010b00 0280828081'),
+                      0.46402560000000004),
         ]
 
     def test_format(self, tag):
@@ -957,7 +958,7 @@ class TestFelicaLite:
         ]
         assert tag.format() is False
         assert tag.clf.exchange.mock_calls == [
-            call(HEX('10 06 0102030405060708 010b00 018088'), 0.3093504),
+            mock.call(HEX('10 06 0102030405060708 010b00 018088'), 0.3093504),
         ]
 
         # ndef system code not enabled and MC block is read-only
@@ -968,7 +969,7 @@ class TestFelicaLite:
         ]
         assert tag.format() is False
         assert tag.clf.exchange.mock_calls == [
-            call(HEX('10 06 0102030405060708 010b00 018088'), 0.3093504),
+            mock.call(HEX('10 06 0102030405060708 010b00 018088'), 0.3093504),
         ]
 
         # enable ndef system code, all data blocks writable, version 1.15
@@ -981,11 +982,11 @@ class TestFelicaLite:
         ]
         assert tag.format(version=0x1F) is True
         assert tag.clf.exchange.mock_calls == [
-            call(HEX('10 06 0102030405060708 010b00 018088'), 0.3093504),
-            call(HEX('20 08 0102030405060708 010900 018088'
-                     'FFFFFF01 07000000 00000000 00000000'), 0.3093504),
-            call(HEX('20 08 0102030405060708 010900 018000'
-                     '1F040100 0d000000 00000100 00000032'), 0.3093504),
+            mock.call(HEX('10 06 0102030405060708 010b00 018088'), 0.3093504),
+            mock.call(HEX('20 08 0102030405060708 010900 018088'
+                          'FFFFFF01 07000000 00000000 00000000'), 0.3093504),
+            mock.call(HEX('20 08 0102030405060708 010900 018000'
+                          '1F040100 0d000000 00000100 00000032'), 0.3093504),
         ]
 
         # last user data block is read-only
@@ -997,9 +998,9 @@ class TestFelicaLite:
         ]
         assert tag.format() is True
         assert tag.clf.exchange.mock_calls == [
-            call(HEX('10 06 0102030405060708 010b00 018088'), 0.3093504),
-            call(HEX('20 08 0102030405060708 010900 018000'
-                     '10040100 0c000000 00000100 00000022'), 0.3093504),
+            mock.call(HEX('10 06 0102030405060708 010b00 018088'), 0.3093504),
+            mock.call(HEX('20 08 0102030405060708 010900 018000'
+                          '10040100 0c000000 00000100 00000022'), 0.3093504),
         ]
 
         # only first ndef data block is writable, wipe with 0xA5
@@ -1020,11 +1021,11 @@ class TestFelicaLite:
         assert tag.format(wipe=0xA5) is True
         print(tag.clf.exchange.mock_calls)
         assert tag.clf.exchange.mock_calls == [
-            call(HEX('10 06 0102030405060708 010b00 018088'), 0.3093504),
-            call(HEX('20 08 0102030405060708 010900 018000'
-                     '10040100 01000000 00000100 00000017'), 0.3093504),
-            call(HEX('20 08 0102030405060708 010900 018001'
-                     'a5a5a5a5 a5a5a5a5 a5a5a5a5 a5a5a5a5'), 0.3093504),
+            mock.call(HEX('10 06 0102030405060708 010b00 018088'), 0.3093504),
+            mock.call(HEX('20 08 0102030405060708 010900 018000'
+                          '10040100 01000000 00000100 00000017'), 0.3093504),
+            mock.call(HEX('20 08 0102030405060708 010900 018001'
+                          'a5a5a5a5 a5a5a5a5 a5a5a5a5 a5a5a5a5'), 0.3093504),
         ]
 
 
@@ -1231,7 +1232,7 @@ class TestFelicaLiteS:
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.protect("0123456789abcdef", read_protect=True) is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_protect_unformatted_tag(self, tag):
         commands = [
@@ -1293,7 +1294,7 @@ class TestFelicaLiteS:
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.protect("0123456789abcdef") is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_protect_with_wrong_password(self, tag):
         commands = [
@@ -1324,7 +1325,7 @@ class TestFelicaLiteS:
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.protect("1234567890abcdef") is False
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_mutual_authentication_error(self, tag):
         commands = [
@@ -1358,7 +1359,7 @@ class TestFelicaLiteS:
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.authenticate("0123456789abcdef") is False
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_write_with_mac_wrong_data_size(self, tag):
         with pytest.raises(ValueError) as excinfo:

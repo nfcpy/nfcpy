@@ -1,22 +1,22 @@
 # -*- coding: latin-1 -*-
 from __future__ import absolute_import, division
 
+import nfc
+import nfc.tag
+import nfc.tag.tt2
+
 import sys
+import mock
 import pytest
-from mock import MagicMock, call
 from pytest_mock import mocker  # noqa: F401
 
 import logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.WARN)
 logging_level = logging.getLogger().getEffectiveLevel()
 logging.getLogger("nfc.tag").setLevel(logging_level)
 logging.getLogger("nfc.tag.tt2").setLevel(logging_level)
 
-sys.modules['usb1'] = MagicMock
-
-import nfc          # noqa: E402
-import nfc.tag      # noqa: E402
-import nfc.tag.tt2  # noqa: E402
+sys.modules['usb1'] = mock.Mock  # fake usb1 for testing on travis-ci
 
 
 def HEX(s):
@@ -79,7 +79,7 @@ class TestTagCommands:
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.read(page) == bytearray(range(16))
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_read_with_invalid_response_error(self, tag):
         commands = [
@@ -92,7 +92,7 @@ class TestTagCommands:
         with pytest.raises(nfc.tag.tt2.Type2TagCommandError) as excinfo:
             tag.read(0)
         assert excinfo.value.errno == nfc.tag.tt2.INVALID_RESPONSE_ERROR
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_read_with_invalid_page_error(self, tag):
         commands = [
@@ -105,7 +105,7 @@ class TestTagCommands:
         with pytest.raises(nfc.tag.tt2.Type2TagCommandError) as excinfo:
             tag.read(0)
         assert excinfo.value.errno == nfc.tag.tt2.INVALID_PAGE_ERROR
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_read_with_receive_error(self, tag):
         commands = [
@@ -119,7 +119,7 @@ class TestTagCommands:
         with pytest.raises(nfc.tag.tt2.Type2TagCommandError) as excinfo:
             tag.read(0)
         assert excinfo.value.errno == nfc.tag.RECEIVE_ERROR
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     @pytest.mark.parametrize("page, data", [
         (0, '01020304'), (1, '05060708'), (255, '090a0b0c'), (256, '0d0e0f00'),
@@ -133,7 +133,7 @@ class TestTagCommands:
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.write(page, HEX(data)) is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_write_with_invalid_response_error(self, tag):
         commands = [
@@ -146,7 +146,7 @@ class TestTagCommands:
         with pytest.raises(nfc.tag.tt2.Type2TagCommandError) as excinfo:
             tag.write(0, HEX('01020304'))
         assert excinfo.value.errno == nfc.tag.tt2.INVALID_RESPONSE_ERROR
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_write_with_invalid_page_error(self, tag):
         commands = [
@@ -159,7 +159,7 @@ class TestTagCommands:
         with pytest.raises(nfc.tag.tt2.Type2TagCommandError) as excinfo:
             tag.write(0, HEX('01020304'))
         assert excinfo.value.errno == nfc.tag.tt2.INVALID_PAGE_ERROR
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     @pytest.mark.parametrize("data", ['', '010203', '0405060708'])
     def test_write_with_invalid_data(self, tag, data):
@@ -180,7 +180,7 @@ class TestTagCommands:
         tag.clf.exchange.side_effect = responses
         assert tag.sector_select(sector) == sector
         assert tag.sector_select(sector) == sector
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_sector_select_not_exists(self, tag):
         commands = [
@@ -195,7 +195,7 @@ class TestTagCommands:
         with pytest.raises(nfc.tag.tt2.Type2TagCommandError) as excinfo:
             tag.sector_select(1)
         assert excinfo.value.errno == nfc.tag.tt2.INVALID_SECTOR_ERROR
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     @pytest.mark.parametrize("sector_select_1_response", [
         '00', '', '0a00'
@@ -211,7 +211,7 @@ class TestTagCommands:
         with pytest.raises(nfc.tag.tt2.Type2TagCommandError) as excinfo:
             tag.sector_select(1)
         assert excinfo.value.errno == nfc.tag.tt2.INVALID_SECTOR_ERROR
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     @pytest.mark.parametrize("timeout_value", [0.1, 0.01])
     def test_transceive_timeout_value(self, tag, timeout_value):
@@ -229,7 +229,7 @@ class TestTagCommands:
         assert tag.transceive(HEX('01')) == HEX('10')
         assert tag.transceive(HEX('02'), timeout_value) == HEX('20')
         assert tag.transceive(HEX('03'), timeout=timeout_value) == HEX('30')
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     @pytest.mark.parametrize("number_of_retries", range(4))
     def test_transceive_number_of_retries(self, tag, number_of_retries):
@@ -245,12 +245,12 @@ class TestTagCommands:
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.transceive(b'\x01', retries=number_of_retries) == b'\x10'
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
         tag.clf.exchange.reset_mock()
         tag.clf.exchange.side_effect = responses
         assert tag.transceive(b'\x01', 0.1, number_of_retries) == b'\x10'
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     @pytest.mark.parametrize("clf_error, tag_error", [
         (nfc.clf.TimeoutError, nfc.tag.TIMEOUT_ERROR),
@@ -376,7 +376,7 @@ class TestTagProcedures:
         assert tag.is_present is False
         assert tag.is_present is False
         assert tag.is_present is False
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_format_default(self, tag):
         commands = [
@@ -391,7 +391,7 @@ class TestTagProcedures:
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.format() is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_format_with_wipe(self, tag):
         commands = [
@@ -410,7 +410,7 @@ class TestTagProcedures:
         assert tag.ndef is not None
         assert tag.ndef.octets == HEX('d500023132')
         assert tag.format(wipe=0) is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_format_blank_tag(self, tag):
         commands = [
@@ -421,7 +421,7 @@ class TestTagProcedures:
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.format() is False
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_protect_blank_tag(self, tag):
         commands = [
@@ -432,7 +432,7 @@ class TestTagProcedures:
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.protect() is False
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_protect_static_default_lockbits(self, tag):
         commands = [
@@ -452,7 +452,7 @@ class TestTagProcedures:
         assert tag.ndef.is_writeable is True
         assert tag.ndef.is_readable is True
         assert tag.protect() is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_protect_dynamic_default_lockbits(self, tag):
         commands = [
@@ -483,7 +483,7 @@ class TestTagProcedures:
         assert tag.ndef.is_writeable is True
         assert tag.ndef.is_readable is True
         assert tag.protect() is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_protect_dynamic_locktlv_lockbits(self, tag):
         commands = [
@@ -514,7 +514,7 @@ class TestTagProcedures:
         assert tag.ndef.is_writeable is True
         assert tag.ndef.is_readable is True
         assert tag.protect() is True
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_protect_with_password(self, tag):
         assert tag.protect(b'') is False
@@ -539,7 +539,7 @@ class TestNdef:
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.ndef is None
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     @pytest.mark.parametrize("cc", ['E0100100', 'E1200100'])
     def test_read_unsupported_cc(self, tag, cc):
@@ -551,7 +551,7 @@ class TestNdef:
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.ndef is None
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_read_until_memory_end(self, tag):
         commands = [
@@ -564,7 +564,7 @@ class TestNdef:
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.ndef is None
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_read_until_terminator(self, tag):
         commands = [
@@ -577,7 +577,7 @@ class TestNdef:
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.ndef is None
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_read_over_unknown_tlv(self, tag):
         commands = [
@@ -591,7 +591,7 @@ class TestNdef:
         tag.clf.exchange.side_effect = responses
         assert tag.ndef is not None
         assert tag.ndef.octets == HEX('d00000')
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_read_excessive_length_tlv(self, tag):
         commands = [
@@ -610,7 +610,7 @@ class TestNdef:
         ]
         tag.clf.exchange.side_effect = responses
         assert tag.ndef is None
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_read_invalid_lock_rsvd_tlv(self, tag):
         commands = [
@@ -624,7 +624,7 @@ class TestNdef:
         tag.clf.exchange.side_effect = responses
         assert tag.ndef is not None
         assert tag.ndef.octets == HEX('d00000')
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_read_with_all_tlv_types(self, tag):
         commands = [
@@ -644,7 +644,7 @@ class TestNdef:
         assert tag.ndef.octets == HEX('d50010000102030405060708090a0b0c0d0e0f')
         assert tag.ndef.is_readable is True
         assert tag.ndef.is_writeable is False
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_write_with_all_tlv_types(self, tag):
         commands = [
@@ -675,7 +675,7 @@ class TestNdef:
         assert tag.ndef.is_readable is True
         assert tag.ndef.is_writeable is True
         tag.ndef.octets = HEX('d500110102030405060708090a0b0c0d0e0f1011')
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_write_without_terminator(self, tag):
         commands = [
@@ -696,7 +696,7 @@ class TestNdef:
         assert tag.ndef.is_readable is True
         assert tag.ndef.is_writeable is True
         tag.ndef.octets = HEX('d50003313233')
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_write_long_length_field(self, tag):
         commands = [
@@ -738,7 +738,7 @@ class TestNdef:
         assert tag.ndef.is_readable is True
         assert tag.ndef.is_writeable is True
         tag.ndef.octets = HEX('d500fc') + bytearray(252)
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
 
 ###############################################################################
@@ -763,7 +763,7 @@ class TestMemoryReader:
         assert tag_memory[18] == 0xd0
         assert tag_memory[19] == 0x00
         assert tag_memory[16:20] == HEX('0303d000')
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_setitem(self, tag):
         commands = [
@@ -780,23 +780,25 @@ class TestMemoryReader:
         tag_memory = nfc.tag.tt2.Type2TagMemoryReader(tag)
         tag_memory[16] = 0xfe
         tag_memory.synchronize()
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
         tag.clf.exchange.reset_mock()
         tag.clf.exchange.side_effect = responses
         tag_memory = nfc.tag.tt2.Type2TagMemoryReader(tag)
         tag_memory[16:17] = [0xfe]
         tag_memory.synchronize()
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
+        commands = commands[:-1]
+        responses = responses[:-1]
         tag.clf.exchange.reset_mock()
-        tag.clf.exchange.side_effect = responses[:-1]
+        tag.clf.exchange.side_effect = responses
         tag_memory = nfc.tag.tt2.Type2TagMemoryReader(tag)
         with pytest.raises(ValueError) as excinfo:
             tag_memory[16:17] = []
         assert str(excinfo.value) == \
             "Type2TagMemoryReader requires item assignment of identical length"
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands[:-1]]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_delitem(self, tag):
         tag_memory = nfc.tag.tt2.Type2TagMemoryReader(tag)
@@ -822,7 +824,7 @@ class TestMemoryReader:
         tag_memory = nfc.tag.tt2.Type2TagMemoryReader(tag)
         with pytest.raises(IndexError):
             tag_memory[16] = 0xfe
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_write_error(self, tag):
         commands = [
@@ -843,4 +845,4 @@ class TestMemoryReader:
         tag_memory = nfc.tag.tt2.Type2TagMemoryReader(tag)
         tag_memory[16] = 0xfe
         tag_memory.synchronize()
-        assert tag.clf.exchange.mock_calls == [call(*_) for _ in commands]
+        assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
