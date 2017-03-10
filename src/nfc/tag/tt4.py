@@ -58,7 +58,7 @@ class Type4TagCommandError(nfc.tag.TagCommandError):
         0x6A88: "referenced data or reference data not found",
         0x6A89: "file already exists",
         0x6A8A: "file name already exists",
-        }
+    }
 
     @staticmethod
     def from_status(status):
@@ -241,7 +241,7 @@ class Type4Tag(nfc.tag.Tag):
                 return False
 
             log.debug("select ndef capability file")
-            if not self._select_fid("\xE1\x03"):
+            if not self._select_fid(b"\xE1\x03"):
                 log.warning("no ndef capability file")
                 return False
 
@@ -491,7 +491,7 @@ class Type4Tag(nfc.tag.Tag):
         if not apdu or len(apdu) < 2:
             raise Type4TagCommandError(nfc.tag.PROTOCOL_ERROR)
 
-        if check_status and apdu[-2:] != "\x90\x00":
+        if check_status and apdu[-2:] != b"\x90\x00":
             raise Type4TagCommandError.from_status(apdu[-2:])
 
         return apdu[:-2] if check_status else apdu
@@ -545,9 +545,9 @@ class Type4BTag(Type4Tag):
         log.debug("send ATTRIB command to activate the Type 4B Tag")
         if self.clf.max_recv_data_size < 256:
             log.warning("{0} does not support fsd 256".format(self.clf))
-            attrib_cmd = '\x1D' + self._nfcid + '\x00\x07\x01\x00'
+            attrib_cmd = b'\x1D' + self._nfcid + b'\x00\x07\x01\x00'
         else:
-            attrib_cmd = '\x1D' + self._nfcid + '\x00\x08\x01\x00'
+            attrib_cmd = b'\x1D' + self._nfcid + b'\x00\x08\x01\x00'
         attrib_res = self.clf.exchange(attrib_cmd, timeout=0.03)
         log.debug("rcvd ATTRIB response {0}".format(hexlify(attrib_res)))
 
