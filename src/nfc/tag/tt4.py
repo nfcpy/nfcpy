@@ -87,13 +87,13 @@ class IsoDepInitiator(object):
 
         for offset in range(0, len(command), self.miu):
             more = len(command) - offset > self.miu
-            pfb = chr((0x02, 0x12)[more] | self.pni)
+            pfb = pack('B', (0x02, 0x12)[more] | self.pni)
             data = pfb + command[offset:offset+self.miu]
 
-            for i in itertools.count(start=1):
+            for i in itertools.count(start=1):  # pragma: no branch
                 try:
                     data = self.clf.exchange(data, timeout)
-                    if data is not None and len(data) == 0:
+                    if len(data) == 0:
                         raise nfc.clf.TransmissionError
                     if data[0] == 0xA2 | (~self.pni & 1):
                         log.debug("ISO-DEP retransmit after ack")
@@ -118,10 +118,6 @@ class IsoDepInitiator(object):
                     log.error("ISO-DEP unrecoverable protocol error")
                     raise Type4TagCommandError(nfc.tag.PROTOCOL_ERROR)
 
-            if not data:
-                log.error("ISO-DEP unrecoverable protocol error")
-                raise Type4TagCommandError(nfc.tag.PROTOCOL_ERROR)
-
             while data[0] & 0b11111110 == 0b11110010:  # WTX
                 log.debug("ISO-DEP waiting time extension")
                 data = self.clf.exchange(data, (data[1] & 0x3F) * self.fwt)
@@ -145,12 +141,12 @@ class IsoDepInitiator(object):
                     raise Type4TagCommandError(nfc.tag.PROTOCOL_ERROR)
 
         while bool(data[0] & 0b00010000):
-            data = chr(0xA2 | self.pni)  # ACK
+            data = pack('B', 0xA2 | self.pni)  # ACK
 
-            for i in itertools.count(start=1):
+            for i in itertools.count(start=1):  # pragma: no branch
                 try:
                     data = self.clf.exchange(data, timeout)
-                    if data is not None and len(data) == 0:
+                    if len(data) == 0:
                         raise nfc.clf.TransmissionError
                     break
                 except nfc.clf.TransmissionError:
@@ -214,22 +210,18 @@ class Type4Tag(nfc.tag.Tag):
             except Type4TagCommandError:
                 log.debug("failed to select " + hexlify(fid))
 
-        def _read_binary(self, offset, max_data):
-            p1, p2 = pack(">H", offset)
-            max_data = min(max_data, self._max_le)
-            try:
-                return self.tag.send_apdu(0, 0xB0, p1, p2, mrl=max_data)
-            except Type4TagCommandError:
-                log.debug("read_binary command error")
+        def _read_binary(self, offset, size):
+            (p1, p2) = pack(">H", offset)
+            max_data = min(self._max_le, size)
+            log.debug("read_binary from %d to %d", offset, offset + max_data)
+            return self.tag.send_apdu(0, 0xB0, p1, p2, mrl=max_data)
 
         def _update_binary(self, offset, data):
-            p1, p2 = pack(">H", offset)
-            max_data = min(len(data), self._max_lc)
-            try:
-                self.tag.send_apdu(0, 0xD6, p1, p2, data[0:max_data])
-                return max_data
-            except Type4TagCommandError:
-                log.debug("update_binary command error")
+            (p1, p2) = pack(">H", offset)
+            max_data = min(self._max_lc, len(data))
+            log.debug("update_binary from %d to %d", offset, offset + max_data)
+            self.tag.send_apdu(0, 0xD6, p1, p2, data[:max_data])
+            return max_data
 
         def _discover_ndef(self):
             self._max_lc = 1
@@ -258,7 +250,7 @@ class Type4Tag(nfc.tag.Tag):
                 log.warning("insufficient capability data")
                 return False
 
-            capabilities += (15-len(capabilities)) * "\0"  # for unpack
+            capabilities += (15-len(capabilities)) * b"\0"  # for unpack
             ver, mle, mlc, tag, val = unpack(">BHHB9p", capabilities)
             log.debug("ndef mapping version %d.%d", ver >> 4, ver & 15)
             log.debug("max apdu response length %d", mle)
@@ -293,32 +285,34 @@ class Type4Tag(nfc.tag.Tag):
         def _read_ndef_data(self):
             log.debug("read ndef data")
 
-            if not hasattr(self, "_ndef_file") and not self._discover_ndef():
-                log.debug("no ndef application")
-                return None
-
-            log.debug("select ndef data file")
-            if not self._select_fid(self._ndef_file):
-                log.warning("ndef file select error")
-                return None
-
-            log.debug("read ndef data file")
-            lfmt = ">I" if self._nlen_size == 4 else ">H"
-            nlen = self._read_binary(0, self._nlen_size)
-            if nlen is not None and len(nlen) == self._nlen_size:
-                nlen = unpack(lfmt, nlen)[0]
-            else:
-                return None
-            log.debug("ndef data length is {0}".format(nlen))
-
-            data = bytearray()
-            while len(data) < nlen:
-                offset = self._nlen_size + len(data)
-                part = self._read_binary(offset, nlen-len(data))
-                if not part:
+            try:
+                if not (hasattr(self, "_ndef_file") or self._discover_ndef()):
+                    log.debug("no ndef application")
                     return None
-                data += part
-            return data
+
+                log.debug("select ndef data file")
+                if not self._select_fid(self._ndef_file):
+                    log.warning("ndef file select error")
+                    return None
+
+                log.debug("read ndef data file")
+                lfmt = ">I" if self._nlen_size == 4 else ">H"
+                nlen = self._read_binary(0, self._nlen_size)
+                if len(nlen) != self._nlen_size:
+                    return None
+
+                nlen = unpack(lfmt, nlen)[0]
+                log.debug("ndef data length is {0}".format(nlen))
+
+                data = bytearray()
+                while len(data) < nlen:
+                    offset = self._nlen_size + len(data)
+                    data += self._read_binary(offset, nlen - len(data))
+
+            except Type4TagCommandError:
+                return None
+            else:
+                return data
 
         def _write_ndef_data(self, data):
             log.debug("write ndef data")
@@ -333,38 +327,34 @@ class Type4Tag(nfc.tag.Tag):
 
             offset = 0
             while offset < len(data):
-                sent = self._update_binary(offset, buffer(data, offset))
-                if sent is None:
-                    return False
-                offset += sent
-            else:
-                if nlen:
-                    self._update_binary(0, nlen)
-                return True
+                offset += self._update_binary(offset, buffer(data, offset))
+
+            if nlen:
+                self._update_binary(0, nlen)
+
+            return True
 
         def _wipe_ndef_data(self, wipe=None):
             lfmt = ">I" if self._nlen_size == 4 else ">H"
             nlen = bytearray(pack(lfmt, 0))
             self._update_binary(0, nlen)
-            if wipe is not None:
-                offset = self._nlen_size
-                data = self._capacity * chr(wipe % 256)
-                while offset < len(data):
-                    sent = self._update_binary(offset, buffer(data, offset))
-                    if sent:
-                        offset += sent
-                    else:
-                        return False
-            return True
+            offset = self._nlen_size
+            data = bytearray(self._capacity * [wipe % 256])
+            while offset < self.capacity:
+                offset += self._update_binary(offset, buffer(data, offset))
 
         def _dump_ndef_data(self):
             lines = []
-            for offset in itertools.count(0, 16):
-                line = self._read_binary(offset, 16)
-                if line:
-                    lines.append(line)
-                if line is None or len(line) < 16:
+            for offset in itertools.count(0, 16):  # pragma: no branch
+                try:
+                    line = self._read_binary(offset, 16)
+                    if len(line) > 0:
+                        lines.append(line)
+                    if len(line) < 16:
+                        break
+                except Type4TagCommandError:
                     break
+
             return lines
 
     def _is_present(self):
@@ -419,9 +409,18 @@ class Type4Tag(nfc.tag.Tag):
         return super(Type4Tag, self).format(version, wipe)
 
     def _format(self, version, wipe):
-        if self.ndef and self.ndef.is_writeable:
-            return self.ndef._wipe_ndef_data(wipe)
-        return False
+        if not self.ndef or not self.ndef.is_writeable:
+            log.error("format error: no ndef or not writeable")
+            return False
+
+        if wipe is not None:
+            try:
+                self.ndef._wipe_ndef_data(wipe)
+            except Type4TagCommandError as error:
+                log.error("format error: %s", str(error))
+                return False
+
+        return True
 
     def transceive(self, data, timeout=None):
         """Transmit arbitrary data and receive the response.
@@ -472,9 +471,9 @@ class Type4Tag(nfc.tag.Tag):
             if mrl and mrl > 256:
                 raise ValueError("unsupported max response length")
             if data:
-                apdu += chr(len(data)) + data
+                apdu += pack('>B', len(data)) + data
             if mrl > 0:
-                apdu += chr(0) if mrl == 256 else chr(mrl)
+                apdu += pack('>B', 0 if mrl == 256 else mrl)
         else:
             if data and len(data) > 65535:
                 raise ValueError("invalid command data length")
