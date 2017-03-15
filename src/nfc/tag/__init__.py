@@ -93,19 +93,9 @@ class Tag(object):
             return self._readable
 
         @property
-        def readable(self):
-            log.warning("'ndef.readable' is deprecated, use 'is_readable'")
-            return self.is_readable
-
-        @property
         def is_writeable(self):
             """:const:`True` if the NDEF data area is writeable."""
             return self._writeable
-
-        @property
-        def writeable(self):
-            log.warning("'ndef.writeable' is deprecated, use 'is_writeable'")
-            return self.is_writeable
 
         @property
         def has_changed(self):
@@ -161,13 +151,11 @@ class Tag(object):
             )
             import nfc.ndef
 
-            if len(self.octets) > 3:
-                try:
-                    return nfc.ndef.Message(self.octets)
-                except nfc.ndef.parser_error as error:
-                    log.error(repr(error))
+            try:
+                return nfc.ndef.Message(self.octets)
+            except nfc.ndef.parser_error as error:
+                log.error(repr(error))
 
-            # return an empty record message
             return nfc.ndef.Message(nfc.ndef.Record())
 
         @message.setter
