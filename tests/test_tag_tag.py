@@ -17,6 +17,7 @@ logging.getLogger("nfc.tag").setLevel(logging_level)
 
 sys.modules['usb1'] = mock.Mock  # fake usb1 for testing on travis-ci
 
+
 def HEX(s):
     return bytearray.fromhex(s)
 
@@ -73,6 +74,7 @@ def test_read_ndef(mocker, tag):  # noqa: F811
     assert tag.ndef.has_changed is True
     assert tag.ndef is None
 
+
 def test_write_ndef(mocker, tag):  # noqa: F811
     read_ndef_data = mocker.patch("nfc.tag.Tag.NDEF._read_ndef_data")
     read_ndef_data.return_value = HEX('')
@@ -93,40 +95,47 @@ def test_write_ndef(mocker, tag):  # noqa: F811
     assert str(excinfo.value) == \
         "_write_ndef_data is not implemented for this tag type"
 
-    write_ndef_data = mocker.patch("nfc.tag.Tag.NDEF._write_ndef_data")
+    mocker.patch("nfc.tag.Tag.NDEF._write_ndef_data")
 
     tag.ndef.octets = HEX('D00000')
     assert tag.ndef.octets == HEX('D00000')
-    
+
     tag.ndef.records = [ndef.Record('unknown')]
     assert tag.ndef.octets == HEX('D50000')
-    
+
     tag.ndef.message = nfc.ndef.Message(nfc.ndef.Record())
     assert tag.ndef.octets == HEX('D00000')
+
 
 def test_tag_dump(tag):
     assert tag.dump() == []
 
+
 def test_tag_protect(tag):
     assert tag.protect() is None
+
 
 def test_tag_authenticate(tag):
     assert tag.authenticate(b'password') is None
     assert tag.is_authenticated is False
+
 
 def test_activate_unknown_106A(clf, target):
     target.sens_res = HEX("0000")
     target.sel_res = HEX("C0")
     assert nfc.tag.activate(clf, target) is None
 
+
 def test_activate_unknown_106X(clf, target):
     target._brty_send = '106X'
     assert nfc.tag.activate(clf, target) is None
+
 
 def test_activate(mocker, clf, target):  # noqa: F811
     mocker.patch('nfc.tag.activate_tt3').side_effect = nfc.clf.TimeoutError
     target._brty_send = '106F'
     assert nfc.tag.activate(clf, target) is None
+
 
 @pytest.mark.parametrize("brty", ["106A", "106B"])
 def test_tag_emulate_unsupported(clf, brty):
