@@ -24,10 +24,10 @@ The nfc.llcp module implements the NFC Forum Logical Link Control
 Protocol (LLCP) specification and provides a socket interface to use
 the connection-less and connection-mode transport facilities of LLCP.
 """
-from .socket import Socket
-from .llc import LOGICAL_DATA_LINK, DATA_LINK_CONNECTION
-from .err import *
-from .opt import *
+from .socket import Socket                                     # noqa: F401
+from .llc import LOGICAL_DATA_LINK, DATA_LINK_CONNECTION       # noqa: F401
+from .err import *                                             # noqa: F401,403
+from .opt import *                                             # noqa: F401,403
 
 import logging
 log = logging.getLogger(__name__)

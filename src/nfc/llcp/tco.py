@@ -2,7 +2,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2009, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -19,19 +19,17 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-import logging
-log = logging.getLogger(__name__)
-
-import time
-import errno
-import types
-import threading
-import collections
-
-# local imports
 from . import pdu
 from . import err
 from . import opt
+
+import errno
+import threading
+import collections
+
+import logging
+log = logging.getLogger(__name__)
+
 
 class TransmissionControlObject(object):
     class State(object):
@@ -39,21 +37,26 @@ class TransmissionControlObject(object):
             self.names = ("SHUTDOWN", "CLOSED", "LISTEN", "CONNECT",
                           "ESTABLISHED", "DISCONNECT", "CLOSE_WAIT")
             self.value = self.names.index("SHUTDOWN")
+
         def __str__(self):
             return self.names[self.value]
+
         def __getattr__(self, name):
             return self.value == self.names.index(name)
+
         def __setattr__(self, name, value):
-            if not name in ("names", "value"):
+            if name not in ("names", "value"):
                 value, name = self.names.index(name), "value"
             object.__setattr__(self, name, value)
-        
+
     class Mode(object):
         def __init__(self):
             self.names = ("BLOCK", "SEND_BUSY", "RECV_BUSY", "RECV_BUSY_SENT")
-            self.value = dict([(name,False) for name in self.names])
+            self.value = dict([(name, False) for name in self.names])
+
         def __str__(self):
             return str(self.value)
+
         def __getattr__(self, name):
             return self.value[name]
 
@@ -74,7 +77,7 @@ class TransmissionControlObject(object):
 
     @property
     def is_bound(self):
-        return self.addr != None
+        return self.addr is not None
 
     def setsockopt(self, option, value):
         if option == opt.SO_SNDBUF:
@@ -82,7 +85,8 @@ class TransmissionControlObject(object):
             # adjustable send buffer only with non-blocking socket mode
             raise NotImplemented
         if option == opt.SO_RCVBUF:
-            with self.lock: self.recv_buf = int(value)
+            with self.lock:
+                self.recv_buf = int(value)
 
     def getsockopt(self, option):
         if option == opt.SO_SNDMIU:
@@ -121,8 +125,10 @@ class TransmissionControlObject(object):
 
     def recv(self):
         with self.recv_ready:
-            try: return self.recv_queue.popleft()
-            except IndexError: self.recv_ready.wait()
+            try:
+                return self.recv_queue.popleft()
+            except IndexError:
+                self.recv_ready.wait()
             return self.recv_queue.popleft()
 
     def close(self):
@@ -166,16 +172,18 @@ class TransmissionControlObject(object):
                 pdu_size = len(send_pdu) + icv_size
             else:
                 pdu_size = len(send_pdu)
-                
-            if miu_size != None and pdu_size - send_pdu.header_size > miu_size:
+
+            if ((miu_size is not None and
+                 pdu_size - send_pdu.header_size > miu_size)):
                 log.debug("requeue {0}".format(send_pdu))
                 self.send_queue.appendleft(send_pdu)
                 return None
-            
-            if notify == True:
+
+            if notify is True:
                 self.send_ready.notify()
-                
+
             return send_pdu
+
 
 class RawAccessPoint(TransmissionControlObject):
     """
@@ -206,22 +214,24 @@ class RawAccessPoint(TransmissionControlObject):
     def poll(self, event, timeout):
         if self.state.SHUTDOWN:
             raise err.Error(errno.ESHUTDOWN)
-        if not event in ("recv", "send"):
+        if event not in ("recv", "send"):
             raise err.Error(errno.EINVAL)
         return super(RawAccessPoint, self).poll(event, timeout) is not None
-        
+
     def send(self, send_pdu, flags):
         if self.state.SHUTDOWN:
             raise err.Error(errno.ESHUTDOWN)
         log.debug("{0} send {1}".format(str(self), send_pdu))
         super(RawAccessPoint, self).send(send_pdu, flags)
-        return self.state.ESTABLISHED == True
+        return self.state.ESTABLISHED is True
 
     def recv(self):
         if self.state.SHUTDOWN:
             raise err.Error(errno.ESHUTDOWN)
-        try: return super(RawAccessPoint, self).recv()
-        except IndexError: raise err.Error(errno.EPIPE)
+        try:
+            return super(RawAccessPoint, self).recv()
+        except IndexError:
+            raise err.Error(errno.EPIPE)
 
     def close(self):
         super(RawAccessPoint, self).close()
@@ -272,10 +282,10 @@ class LogicalDataLink(TransmissionControlObject):
     def poll(self, event, timeout):
         if self.state.SHUTDOWN:
             raise err.Error(errno.ESHUTDOWN)
-        if not event in ("recv", "send"):
+        if event not in ("recv", "send"):
             raise err.Error(errno.EINVAL)
         return super(LogicalDataLink, self).poll(event, timeout) is not None
-        
+
     def sendto(self, message, dest, flags):
         if self.state.SHUTDOWN:
             raise err.Error(errno.ESHUTDOWN)
@@ -285,7 +295,7 @@ class LogicalDataLink(TransmissionControlObject):
             raise err.Error(errno.EMSGSIZE)
         send_pdu = pdu.UnnumberedInformation(dest, self.addr, data=message)
         super(LogicalDataLink, self).send(send_pdu, flags)
-        return self.state.ESTABLISHED == True
+        return self.state.ESTABLISHED is True
 
     def recvfrom(self):
         if self.state.SHUTDOWN:
@@ -334,26 +344,26 @@ class DataLinkConnection(TransmissionControlObject):
     CLOSE_WAIT    close()     SHUTDOWN
     ============= =========== ============
     """
-    
+
     DLC_PDU_NAMES = ("CONNECT", "DISC", "CC", "DM", "FRMR", "I", "RR", "RNR")
-    
+
     def __init__(self, recv_miu, recv_win):
         super(DataLinkConnection, self).__init__(128, recv_miu)
         self.state.CLOSED = True
         self.acks_ready = threading.Condition(self.lock)
-        self.acks_recvd = 0 # received acknowledgements
-        self.recv_confs = 0 # outstanding receive confirmations
+        self.acks_recvd = 0  # received acknowledgements
+        self.recv_confs = 0  # outstanding receive confirmations
         self.send_token = threading.Condition(self.lock)
         self.recv_buf = recv_win
-        self.recv_win = recv_win # RW(Local)
-        self.recv_cnt = 0        # V(R)
-        self.recv_ack = 0        # V(RA)
-        self.send_win = None     # RW(Remote)
-        self.send_cnt = 0        # V(S)
-        self.send_ack = 0        # V(SA)
+        self.recv_win = recv_win  # RW(Local)
+        self.recv_cnt = 0         # V(R)
+        self.recv_ack = 0         # V(RA)
+        self.send_win = None      # RW(Remote)
+        self.send_cnt = 0         # V(S)
+        self.send_ack = 0         # V(SA)
 
     def __str__(self):
-        s  = "DLC {dlc.addr:2} <-> {dlc.peer:2} {dlc.state} "
+        s = "DLC {dlc.addr:2} <-> {dlc.peer:2} {dlc.state} "
         s += "RW(R)={dlc.send_win} V(S)={dlc.send_cnt} V(SA)={dlc.send_ack} "
         s += "RW(L)={dlc.recv_win} V(R)={dlc.recv_cnt} V(RA)={dlc.recv_ack}"
         return s.format(dlc=self)
@@ -394,7 +404,7 @@ class DataLinkConnection(TransmissionControlObject):
                 raise err.Error(errno.ESHUTDOWN)
             if not self.state.CLOSED:
                 self.err("listen() but socket state is {0}".format(self.state))
-                raise RuntimeError # should raise err.Error(errno.E???)
+                raise RuntimeError  # should raise err.Error(errno.E???)
             self.state.LISTEN = True
             self.recv_buf = backlog
 
@@ -423,7 +433,7 @@ class DataLinkConnection(TransmissionControlObject):
                 dlc.state.ESTABLISHED = True
                 self.send_queue.append(send_pdu)
                 return dlc
-            raise RuntimeError("only CONNECT expected, not "+ rcvd_pdu.name)
+            raise RuntimeError("only CONNECT expected, not " + rcvd_pdu.name)
 
     def connect(self, dest):
         with self.lock:
@@ -434,28 +444,28 @@ class DataLinkConnection(TransmissionControlObject):
                 if self.state.CONNECT:
                     raise err.Error(errno.EALREADY)
                 raise err.Error(errno.EPIPE)
-            if type(dest) is types.StringType:
+            if isinstance(dest, bytes):
                 send_pdu = pdu.Connect(1, self.addr, self.recv_miu,
                                        self.recv_win, dest)
-            elif type(dest) is types.IntType:
+            elif isinstance(dest, int):
                 send_pdu = pdu.Connect(dest, self.addr, self.recv_miu,
                                        self.recv_win)
             else:
                 raise TypeError("connect() arg *dest* must be int or string")
-            
+
             self.state.CONNECT = True
             self.send_queue.append(send_pdu)
-            
+
             try:
                 rcvd_pdu = super(DataLinkConnection, self).recv()
             except IndexError:
                 raise err.Error(errno.EPIPE)
-            
+
             if rcvd_pdu.name == "DM":
                 self.log("connect rejected with reason %d" % rcvd_pdu.reason)
                 self.state.CLOSED = True
                 raise err.ConnectRefused(rcvd_pdu.reason)
-            
+
             if rcvd_pdu.name == "CC":
                 self.peer = rcvd_pdu.ssap
                 self.recv_buf = self.recv_win
@@ -463,7 +473,7 @@ class DataLinkConnection(TransmissionControlObject):
                 self.send_win = rcvd_pdu.rw
                 self.state.ESTABLISHED = True
                 return
-            
+
             raise RuntimeError("only CC or DM expected, not " + rcvd_pdu.name)
 
     @property
@@ -496,7 +506,7 @@ class DataLinkConnection(TransmissionControlObject):
                 send_pdu.ns = self.send_cnt
                 self.send_cnt = (self.send_cnt + 1) % 16
                 super(DataLinkConnection, self).send(send_pdu, flags)
-            return self.state.ESTABLISHED == True
+            return self.state.ESTABLISHED is True
 
     def recv(self):
         with self.lock:
@@ -507,7 +517,7 @@ class DataLinkConnection(TransmissionControlObject):
                 rcvd_pdu = super(DataLinkConnection, self).recv()
             except IndexError:
                 return None
-            
+
             if rcvd_pdu.name == "I":
                 self.recv_confs += 1
                 if self.recv_confs > self.recv_win:
@@ -515,30 +525,30 @@ class DataLinkConnection(TransmissionControlObject):
                              .format(self.recv_confs, self.recv_win))
                     raise RuntimeError("recv_confs > recv_win")
                 return rcvd_pdu.data
-            
+
             if rcvd_pdu.name == "DISC":
                 self.close()
                 return None
-            
+
             raise RuntimeError("only I or DISC expected, not " + rcvd_pdu.name)
 
     def poll(self, event, timeout):
         if self.state.SHUTDOWN:
             raise err.Error(errno.ESHUTDOWN)
-        if not event in ("recv", "send", "acks"):
+        if event not in ("recv", "send", "acks"):
             raise err.Error(errno.EINVAL)
-        
+
         if event == "recv":
             if self.state.ESTABLISHED or self.state.CLOSE_WAIT:
                 rcvd_pdu = super(DataLinkConnection, self).poll(event, timeout)
                 if self.state.ESTABLISHED or self.state.CLOSE_WAIT:
                     return isinstance(rcvd_pdu, pdu.Information)
-        
+
         if event == "send":
             if self.state.ESTABLISHED:
                 if super(DataLinkConnection, self).poll(event, timeout):
                     return self.state.ESTABLISHED
-        
+
         if event == "acks":
             with self.acks_ready:
                 while not self.acks_recvd > 0:
@@ -546,7 +556,7 @@ class DataLinkConnection(TransmissionControlObject):
                 if self.acks_recvd > 0:
                     self.acks_recvd = self.acks_recvd - 1
                     return True
-        
+
         return False
 
     def close(self):
@@ -558,8 +568,10 @@ class DataLinkConnection(TransmissionControlObject):
                 self.acks_ready.notify_all()
                 send_pdu = pdu.Disconnect(self.peer, self.addr)
                 self.send_queue.append(send_pdu)
-                try: super(DataLinkConnection, self).recv()
-                except IndexError: pass
+                try:
+                    super(DataLinkConnection, self).recv()
+                except IndexError:
+                    pass
             super(DataLinkConnection, self).close()
             self.acks_ready.notify_all()
             self.send_token.notify_all()
@@ -570,10 +582,11 @@ class DataLinkConnection(TransmissionControlObject):
     def enqueue(self, rcvd_pdu):
         self.log("enqueue {pdu.name} PDU".format(pdu=rcvd_pdu))
 
-        if not rcvd_pdu.name in self.DLC_PDU_NAMES:
+        if rcvd_pdu.name not in self.DLC_PDU_NAMES:
             self.err("non connection mode pdu on data link connection")
             send_pdu = pdu.FrameReject.from_pdu(rcvd_pdu, flags="W", dlc=self)
-            self.close(); self.send_queue.append(send_pdu)
+            self.close()
+            self.send_queue.append(send_pdu)
             return
 
         if self.state.CLOSED:
@@ -581,7 +594,7 @@ class DataLinkConnection(TransmissionControlObject):
                 rcvd_pdu.ssap, rcvd_pdu.dsap, reason=1))
 
         elif self.state.LISTEN and rcvd_pdu.name == "CONNECT":
-            if super(DataLinkConnection, self).enqueue(rcvd_pdu) == False:
+            if super(DataLinkConnection, self).enqueue(rcvd_pdu) is False:
                 log.warn("full backlog on listening socket")
                 self.send_queue.append(pdu.DisconnectedMode(
                     rcvd_pdu.ssap, rcvd_pdu.dsap, reason=0x20))
@@ -635,7 +648,7 @@ class DataLinkConnection(TransmissionControlObject):
                     self.acks_recvd += acks
                     self.acks_ready.notify_all()
                     self.send_token.notify()
-                    self.send_ack = rcvd_pdu.nr # V(SA) := N(R)
+                    self.send_ack = rcvd_pdu.nr  # V(SA) := N(R)
                 if rcvd_pdu.name == "RNR":
                     self.mode.SEND_BUSY = True
                 if rcvd_pdu.name == "RR":
@@ -657,7 +670,7 @@ class DataLinkConnection(TransmissionControlObject):
 
             send_pdu = super(DataLinkConnection, self).dequeue(
                 miu_size, icv_size, notify=False)
-            
+
             if send_pdu:
                 self.log("dequeue {0} PDU".format(send_pdu.name))
 
@@ -678,17 +691,17 @@ class DataLinkConnection(TransmissionControlObject):
                         dsap=self.peer, ssap=self.addr))
                     self.recv_ready.notify()
                     self.send_token.notify_all()
-            
+
             else:
-                if (self.state.ESTABLISHED and self.recv_confs
-                    and self.recv_window_slots == 0):
+                if ((self.state.ESTABLISHED and self.recv_confs
+                     and self.recv_window_slots == 0)):
                     # must send acknowledgement to keep going
                     self.log("necessary ack " + str(self))
                     self.recv_ack = (self.recv_ack + self.recv_confs) % 16
                     self.recv_confs = 0
                     ACK = RNR_PDU if self.mode.RECV_BUSY else RR_PDU
                     return ACK(self.peer, self.addr, self.recv_ack)
-            
+
             return send_pdu
 
     def sendack(self):

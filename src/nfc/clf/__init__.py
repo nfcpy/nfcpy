@@ -2,7 +2,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2009, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -19,9 +19,10 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-
-import logging
-log = logging.getLogger(__name__)
+import nfc.tag
+import nfc.dep
+import nfc.llcp
+from . import device
 
 import os
 import re
@@ -29,12 +30,13 @@ import time
 import errno
 import threading
 
-import nfc.tag
-import nfc.dep
-import nfc.llcp
-from . import device
+import logging
+log = logging.getLogger(__name__)
 
-print_data = lambda data: 'None' if data is None else str(data).encode("hex")
+
+def print_data(data):
+    return 'None' if data is None else str(data).encode("hex")
+
 
 class ContactlessFrontend(object):
     """This class is the main interface for working with contactless
@@ -70,7 +72,7 @@ class ContactlessFrontend(object):
         self.lock = threading.Lock()
         if path and not self.open(path):
             raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
-        
+
     def open(self, path):
         """Open a contactless reader identified by the search *path*.
 
@@ -87,18 +89,18 @@ class ContactlessFrontend(object):
         :data:`errno.EACCES` if the calling process has insufficient
         access rights or :data:`errno.EBUSY` if the device is used by
         another process.
-        
+
         A path is constructed as follows:
-        
+
         ``usb[:vendor[:product]]``
-        
+
            with optional *vendor* and *product* as four digit
            hexadecimal numbers. For example, ``usb:054c:06c3`` would
            open the first Sony RC-S380 reader while ``usb:054c`` would
            open the first Sony reader found on USB.
-        
+
         ``usb[:bus[:device]]``
-        
+
            with optional *bus* and *device* number as three-digit
            decimals. For example, ``usb:001:023`` would open the
            device enumerated as number 23 on bus 1 while ``usb:001``
@@ -106,23 +108,23 @@ class ContactlessFrontend(object):
            new device number is generated every time the device is
            plugged into USB. Bus and device numbers are shown by
            ``lsusb``.
-        
+
         ``tty:port:driver``
-        
+
            with mandatory *port* and *driver* name. This is for Posix
            systems to open the serial port ``/dev/tty<port>`` and use
            the driver module ``nfc/dev/<driver>.py`` for access. For
            example, ``tty:USB0:arygon`` would open ``/dev/ttyUSB0``
            and load the Arygon APPx/ADRx driver.
-        
+
         ``com:port:driver``
-        
+
            with mandatory *port* and *driver* name. This is for
            Windows systems to open the serial port ``COM<port>`` and
            use the driver module ``nfc/dev/<driver>.py`` for access.
-        
+
         ``udp[:host][:port]``
-        
+
            with optional *host* name or address and *port*
            number. This will emulate a communication channel over
            UDP/IP. The defaults for *host* and *port* are
@@ -143,16 +145,20 @@ class ContactlessFrontend(object):
         with self.lock:
             log.info("searching for reader on path " + path)
             self.device = device.connect(path)
-            if self.device: log.info("using {0}".format(self.device))
-            else: log.error("no reader available on path " + path)
+            if self.device:
+                log.info("using {0}".format(self.device))
+            else:
+                log.error("no reader available on path " + path)
             return bool(self.device)
 
     def close(self):
         """Close the contacless reader device."""
         with self.lock:
             if self.device is not None:
-                try: self.device.close()
-                except IOError: pass
+                try:
+                    self.device.close()
+                except IOError:
+                    pass
                 self.device = None
 
     def connect(self, **options):
@@ -171,7 +177,7 @@ class ContactlessFrontend(object):
 
         Connect options are given as keyword arguments with dictionary
         values. Possible options are:
-        
+
         * ``rdwr={key: value, ...}`` - options for reader/writer
         * ``llcp={key: value, ...}`` - options for peer to peer
         * ``card={key: value, ...}`` - options for card emulation
@@ -204,7 +210,7 @@ class ContactlessFrontend(object):
            if present then the function returns True only if the
            target does not indicate peer to peer protocol support,
            otherwise it returns True for all targets.
-        
+
         'on-connect' : function(tag)
            This function is called when a remote tag has been
            activated. The *tag* argument is an instance of class
@@ -214,7 +220,7 @@ class ContactlessFrontend(object):
            the tag is no longer present and then return True, any
            false return value implies immediate return of the
            :class:`nfc.tag.Tag` object.
-        
+
         'on-release' : function(tag)
            This function is called when the presence check was run
            (the 'on-connect' function returned a true value) and
@@ -248,7 +254,7 @@ class ContactlessFrontend(object):
         .. sourcecode:: python
 
            import nfc
-           
+
            def on_startup(targets):
                for target in targets:
                    target.sensf_req = bytearray.fromhex("0012FC0000")
@@ -256,7 +262,7 @@ class ContactlessFrontend(object):
 
            def on_connect(tag):
                print(tag)
-        
+
            rdwr_options = {
                'targets': ['212F', '424F'],
                'on-startup': on_startup,
@@ -266,7 +272,7 @@ class ContactlessFrontend(object):
                tag = clf.connect(rdwr=rdwr_options)
                if tag.ndef:
                    print(tag.ndef.message.pretty())
-          
+
         **Peer To Peer Options**
 
         'on-startup' : function(llc)
@@ -277,7 +283,7 @@ class ContactlessFrontend(object):
            services. The function should return the *llc* object if
            activation shall continue. Any other value removes the
            'llcp' option.
-        
+
         'on-connect' : function(llc)
            This function is called when peer to peer communication is
            successfully established. The *llc* argument provides the
@@ -287,7 +293,7 @@ class ContactlessFrontend(object):
            a true value return more or less immediately, unless it
            wishes to handle the logical link controller run loop by
            itself and anytime later return a false value.
-          
+
         'on-release' : function(llc)
            This function is called when the symmetry loop was run (the
            'on-connect' function returned a true value) and determined
@@ -295,19 +301,19 @@ class ContactlessFrontend(object):
            impossible, or when the 'terminate' function returned a
            true value. The *llc* object may be used for cleanup
            actions but not for communication.
-        
+
         'role' : string
            This attribute determines whether the local device will
            restrict itself to either ``'initiator'`` or ``'target'``
            mode of operation. As Initiator the local device will try
            to discover a remote device. As Target it waits for being
            discovered. The default is to alternate between both roles.
-          
+
         'miu' : integer
            This attribute sets the maximum information unit size that
            is announced to the remote device during link activation.
            The default and also smallest possible value is 128 bytes.
-        
+
         'lto' : integer
            This attribute sets the link timeout value (given in
            milliseconds) that is announced to the remote device during
@@ -318,7 +324,7 @@ class ContactlessFrontend(object):
            user experience, it ultimately tells when the user should
            no longer expect communication to continue. The default
            value is 500 millisecond.
-          
+
         'agf' : boolean
            Some early phone implementations did not properly handle
            aggregated protocol data units. This attribute allows to
@@ -358,14 +364,14 @@ class ContactlessFrontend(object):
            information frames. The value may be 0, 1, 2, or 3 for a
            maximum payload size of 64, 128, 192, or 254 bytes,
            respectively. The default value is 3.
-        
+
         'lrt' : integer
            For the local device in Target role this attribute sets
            the length reduction for medium access layer (NFC-DEP)
            information frames. The value may be 0, 1, 2, or 3 for a
            maximum payload size of 64, 128, 192, or 254 bytes,
            respectively. The default value is 3.
-        
+
         .. sourcecode:: python
 
            import nfc
@@ -376,11 +382,11 @@ class ContactlessFrontend(object):
                message, address = socket.recvfrom()
                socket.sendto("It's me!", address)
                socket.close()
-           
+
            def client(socket):
                socket.sendto("Hi there!", address=32)
                socket.close()
-           
+
            def on_startup(llc):
                socket = nfc.llcp.Socket(llc, nfc.llcp.LOGICAL_DATA_LINK)
                socket.bind(address=32)
@@ -391,7 +397,7 @@ class ContactlessFrontend(object):
                socket = nfc.llcp.Socket(llc, nfc.llcp.LOGICAL_DATA_LINK)
                threading.Thread(target=client, args=(socket,)).start()
                return True
-        
+
            llcp_options = {
                'on-startup': on_startup,
                'on-connect': on_connect,
@@ -399,7 +405,7 @@ class ContactlessFrontend(object):
            with nfc.ContactlessFrontend('usb') as clf:
                clf.connect(llcp=llcp_options)
                print("link terminated")
-          
+
         **Card Emulation Options**
 
         'on-startup' : function(target)
@@ -410,14 +416,14 @@ class ContactlessFrontend(object):
            type specific discovery responses (see :meth:`listen` for
            response data that is needed). The fully specified target
            object must then be returned.
-        
+
         'on-discover' : function(target)
            This function is called when the :class:`LocalTarget` has
            been discovered. The *target* argument contains the
            technology type specific discovery commands. The target
            will be further activated only if this function returns a
            true value. The default function always returns True.
-        
+
         'on-connect' : function(tag)
            This function is called when the local target was
            discovered and a :class:`nfc.tag.TagEmulation` object
@@ -430,7 +436,7 @@ class ContactlessFrontend(object):
            the 'terminate' function returns a true value. The function
            should return a false value if the :meth:`connect` method
            shall return immediately with the emulated *tag* object.
-        
+
         'on-release' : function(tag)
            This function is called when the Target was released by the
            Initiator or simply moved away, or if the terminate
@@ -453,11 +459,11 @@ class ContactlessFrontend(object):
            def on_connect(tag):
                print("discovered by remote reader")
                return True
-        
+
            def on_release(tag):
                print("remote reader is gone")
                return True
-        
+
            card_options = {
                'on-startup': on_startup,
                'on-connect': on_connect,
@@ -467,14 +473,14 @@ class ContactlessFrontend(object):
                clf.connect(card=card_options)
 
         **Return Value**
-        
+
         The :meth:`connect` method returns :const:`None` if there were
         no options left after the 'on-startup' functions have been
         executed or when the 'terminate' function returned a true
         value. It returns :const:`False` when terminated by any of the
         following exceptions: :exc:`~exceptions.KeyboardInterrupt`,
         :exc:`~exceptions.IOError`, :exc:`UnsupportedTargetError`.
-        
+
         The :meth:`connect` method returns a :class:`~nfc.tag.Tag`,
         :class:`~nfc.llcp.llc.LogicalLinkController`, or
         :class:`~nfc.tag.TagEmulation` object if the associated
@@ -500,7 +506,7 @@ class ContactlessFrontend(object):
             assert not card_options or isinstance(card_options, dict), "card"
         except AssertionError as error:
             raise TypeError("argument '%s' must be dictionary type" % error)
-        
+
         if llcp_options:
             llcp_options = dict(llcp_options)
             llcp_options.setdefault('on-startup', lambda llc: llc)
@@ -516,10 +522,15 @@ class ContactlessFrontend(object):
                 llcp_options = None
 
         if rdwr_options:
+            def on_discover(target):
+                if target.sel_res and target.sel_res[0] & 0x40:
+                    return False
+                elif target.sensf_res and target.sensf_res[1:3] == b"\x01\xFE":
+                    return False
+                else:
+                    return True
+
             rdwr_options = dict(rdwr_options)
-            on_discover = (lambda t: True) if not llcp_options else (
-                lambda t: not ((t.sel_res and t.sel_res[0] & 0x40) or
-                               (t.sensf_res and t.sensf_res[1:3]=="\x01\xFE")))
             rdwr_options.setdefault('targets', ['106A', '106B', '212F'])
             rdwr_options.setdefault('on-startup', lambda targets: targets)
             rdwr_options.setdefault('on-discover', on_discover)
@@ -536,14 +547,14 @@ class ContactlessFrontend(object):
             else:
                 log.debug("removing rdwr_options after on-startup")
                 rdwr_options = None
-        
+
         if card_options:
             card_options = dict(card_options)
             card_options.setdefault('on-startup', lambda target: None)
             card_options.setdefault('on-discover', lambda target: True)
             card_options.setdefault('on-connect', lambda tag: True)
             card_options.setdefault('on-release', lambda tag: True)
-            
+
             target = nfc.clf.LocalTarget()
             target = card_options['on-startup'](target)
             if isinstance(target, LocalTarget):
@@ -551,7 +562,7 @@ class ContactlessFrontend(object):
             else:
                 log.debug("removing card_options after on-startup")
                 card_options = None
-            
+
         if not (rdwr_options or llcp_options or card_options):
             log.warning("no options to connect")
             return None
@@ -560,18 +571,21 @@ class ContactlessFrontend(object):
                   ', '.join(filter(bool, ["rdwr" if rdwr_options else None,
                                           "llcp" if llcp_options else None,
                                           "card" if card_options else None])))
-        
+
         try:
             while not terminate():
                 if rdwr_options:
                     result = self._rdwr_connect(rdwr_options, terminate)
-                    if bool(result) is True: return result
+                    if bool(result) is True:
+                        return result
                 if llcp_options:
                     result = self._llcp_connect(llcp_options, terminate)
-                    if bool(result) is True: return result
+                    if bool(result) is True:
+                        return result
                 if card_options:
                     result = self._card_connect(card_options, terminate)
-                    if bool(result) is True: return result
+                    if bool(result) is True:
+                        return result
         except IOError as error:
             log.error(error)
             return False
@@ -602,7 +616,7 @@ class ContactlessFrontend(object):
                     else:
                         self.device.turn_off_led_and_buzzer()
                         return tag
-        
+
     def _llcp_connect(self, options, terminate):
         llc = options['llc']
         for role in ('target', 'initiator'):
@@ -617,10 +631,8 @@ class ContactlessFrontend(object):
                         return options['on-release'](llc)
                     else:
                         return llc
-        
+
     def _card_connect(self, options, terminate):
-        tag_cmd_names = ("tt1_cmd", "tt2_cmd", "tt3_cmd", "tt4_cmd")
-        
         timeout = options.get('timeout', 1.0)
         target = self.listen(options['target'], timeout)
         if target and options['on-discover'](target):
@@ -643,10 +655,10 @@ class ContactlessFrontend(object):
                     return options['on-release'](tag)
                 else:
                     return tag
-        
+
     def sense(self, *targets, **options):
         """Discover a contactless card or listening device.
-        
+
         .. note:: The :meth:`sense` method is intended for experts
                   with a good understanding of the commands and
                   responses exchanged during target activation (the
@@ -654,21 +666,21 @@ class ContactlessFrontend(object):
                   NFC Forum Digital Specification). If the greater
                   level of control is not needed it is recommended to
                   use the :meth:`connect` method.
-        
+
         All positional arguments build the list of potential *targets*
         to discover and must be of type :class:`RemoteTarget`. Keyword
         argument *options* may be the number of ``iterations`` of the
         sense loop set by *targets* and the ``interval`` between
         iterations. The return value is either a :class:`RemoteTarget`
         instance or :const:`None`.
-        
+
         >>> import nfc, nfc.clf
         >>> clf = nfc.ContactlessFrontend("usb")
         >>> target1 = nfc.clf.RemoteTarget("106A")
         >>> target2 = nfc.clf.RemoteTarget("212F")
         >>> print(clf.sense(target1, target2, iterations=5, interval=0.2))
         106A(sdd_res=04497622D93881, sel_res=00, sens_res=4400)
-        
+
         A **Type A Target** is specified with the technology letter
         ``A`` following the bitrate to be used for the SENS_REQ
         command (almost always must the bitrate be 106 kbps). To
@@ -693,7 +705,7 @@ class ContactlessFrontend(object):
         first byte of a ``sensb_req`` attribute (the second byte PARAM
         is ignored when it can not be set to local device, 00h is a
         safe value in all cases).
-        
+
         >>> target = nfc.clf.RemoteTarget("106B")
         >>> print(clf.sense(target))
         106B sens_res=50E5DD3DC900000011008185
@@ -703,7 +715,7 @@ class ContactlessFrontend(object):
         >>> target.sensb_req = bytearray.fromhex("FF00")
         >>> print(clf.sense(target))
         None
-        
+
         A **Type F Target** is specified with the technology letter
         ``F`` following the bitrate to be used for the SENSF_REQ
         command (the typically supported bitrates are 212 and 424
@@ -721,7 +733,7 @@ class ContactlessFrontend(object):
         >>> target.sensf_req = bytearray.fromhex("00ABCD0000")
         >>> print(clf.sense(target))
         None
-        
+
         An **Active Communication Mode P2P Target** search is selected
         with an ``atr_req`` attribute. The choice of bitrate and
         modulation type is 106A, 212F, and 424F.
@@ -733,13 +745,13 @@ class ContactlessFrontend(object):
         >>> target = clf.sense(nfc.clf.RemoteTarget("424F", atr_req=atr))
         >>> if target and target.atr_res: print(target.atr_res.encode("hex"))
         d501dc0104f04584e15769700000000e3246666d01011103020013040196
-        
+
         Some drivers must modify the ATR_REQ to cope with hardware
         limitations, for example change length reduction value to
         reduce the maximum size of target responses. The ATR_REQ that
         has been send is given by the ``atr_req`` attribute of the
         returned RemoteTarget object.
-        
+
         A **Passive Communication Mode P2P Target** responds to 106A
         discovery with bit 6 of SEL_RES set to 1, and to 212F/424F
         discovery (when the request code RC is 0 in the SENSF_REQ
@@ -753,18 +765,18 @@ class ContactlessFrontend(object):
         >>> sensf_req = bytearray.fromhex("00FFFF0000")
         >>> print(clf.sense(nfc.clf.RemoteTarget("424F", sensf_req=sensf_req)))
         424F sensf_res=0101FE1444EFB88FD50000000000000000
-        
+
         Errors found in the *targets* argument list raise exceptions
         only if exactly one target is given. If multiple targets are
         provided, any target that is not supported or has invalid
         attributes is just ignored (but is logged as a debug message).
-        
+
         **Exceptions**
-        
+
         * :exc:`~exceptions.IOError` (ENODEV) when a local contacless
           communication device has not been opened or communication
           with the local device is no longer possible.
-        
+
         * :exc:`nfc.clf.UnsupportedTargetError` if the single target
           supplied as input is not supported by the active driver.
           This exception is never raised when :meth:`sense` is called
@@ -779,25 +791,30 @@ class ContactlessFrontend(object):
             log.debug("found %s", target)
             if target and len(target.sens_res) != 2:
                 error = "SENS Response Format Error (wrong length)"
-                log.debug(error); raise ProtocolError(error)
+                log.debug(error)
+                raise ProtocolError(error)
             if target and target.sens_res[0] & 0b00011111 == 0:
                 if target.sens_res[1] & 0b00001111 != 0b1100:
                     error = "SENS Response Data Error (T1T config)"
-                    log.debug(error); raise ProtocolError(error)
+                    log.debug(error)
+                    raise ProtocolError(error)
                 if not target.rid_res:
                     error = "RID Response Error (no response received)"
-                    log.debug(error); raise ProtocolError(error)
+                    log.debug(error)
+                    raise ProtocolError(error)
                 if len(target.rid_res) != 6:
                     error = "RID Response Format Error (wrong length)"
-                    log.debug(error); raise ProtocolError(error)
+                    log.debug(error)
+                    raise ProtocolError(error)
                 if target.rid_res[0] >> 4 != 0b0001:
                     error = "RID Response Data Error (invalid HR0)"
-                    log.debug(error); raise ProtocolError(error)
+                    log.debug(error)
+                    raise ProtocolError(error)
             return target
-        
+
         def sense_ttb(target):
             return self.device.sense_ttb(target)
-        
+
         def sense_ttf(target):
             return self.device.sense_ttf(target)
 
@@ -816,9 +833,9 @@ class ContactlessFrontend(object):
             if self.device is None:
                 raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
 
-            self.target = None # forget captured target
-            self.device.mute() # deactivate the rf field
-            
+            self.target = None  # forget captured target
+            self.device.mute()  # deactivate the rf field
+
             for i in xrange(max(1, options.get('iterations', 1))):
                 started = time.time()
                 for target in targets:
@@ -836,8 +853,10 @@ class ContactlessFrontend(object):
                             info = "unknown technology type in %r"
                             raise UnsupportedTargetError(info % target.brty)
                     except UnsupportedTargetError as error:
-                        if len(targets) == 1: raise
-                        else: log.debug(error)
+                        if len(targets) == 1:
+                            raise error
+                        else:
+                            log.debug(error)
                     except CommunicationError as error:
                         log.debug(error)
                     else:
@@ -845,12 +864,11 @@ class ContactlessFrontend(object):
                             log.debug("found {0}".format(self.target))
                             return self.target
                 if len(targets):
-                    self.device.mute() # deactivate the rf field
+                    self.device.mute()  # deactivate the rf field
                 if i < options.get('iterations', 1) - 1:
                     elapsed = time.time() - started
                     time.sleep(max(0, options.get('interval', 0.1)-elapsed))
 
-        
     def listen(self, target, timeout):
         """Listen *timeout* seconds to become activated as *target*.
 
@@ -904,20 +922,20 @@ class ContactlessFrontend(object):
         >>> target.atr_res = bytearray.fromhex(atr_res)
         >>> print(clf.listen(target, timeout=2.5))
         424F atr_res=D50101FE0102030405060708000000083246666D010110 ...
-        
+
         A **Type A Target** is selected when ``atr_res`` is not
         present and the technology type is ``A``. The bitrate should
         be set to 106 kbps, even if a driver supports higher bitrates
         they would need to be set after activation. The ``sens_res``,
         ``sdd_res`` and ``sel_res`` attributes must all be provided.
-        
+
         >>> target = nfc.clf.Localtarget("106A")
         >>> target.sens_res = bytearray.fromhex("0101"))
         >>> target.sdd_res = bytearray.fromhex("08010203")
         >>> target.sel_res = bytearray.fromhex("00")
         >>> print(clf.listen(target, timeout=2.5))
         106A sdd_res=08010203 sel_res=00 sens_res=0101 tt2_cmd=3000
-        
+
         A **Type B Target** is selected when ``atr_res`` is not
         present and the technology type is ``B``. Unfortunately none
         of the supported devices supports Type B technology for listen
@@ -929,7 +947,7 @@ class ContactlessFrontend(object):
         ... except nfc.clf.UnsupportedTargetError: print("sorry")
         ...
         sorry
-        
+
         A **Type F Target** is selected when ``atr_res`` is not
         present and the technology type is ``F``. The bitrate may be
         212 or 424 kbps. The ``sensf_res`` attribute must be provided.
@@ -941,11 +959,11 @@ class ContactlessFrontend(object):
         212F sensf_req=00FFFF0003 tt3_cmd=0C02FE010203040506 ...
 
         **Exceptions**
-        
+
         * :exc:`~exceptions.IOError` (ENODEV) when a local contacless
           communication device has not been opened or communication
           with the local device is no longer possible.
-        
+
         * :exc:`nfc.clf.UnsupportedTargetError` if the single target
           supplied as input is not supported by the active driver.
           This exception is never raised when :meth:`sense` is called
@@ -955,13 +973,13 @@ class ContactlessFrontend(object):
         """
         def listen_tta(target, timeout):
             return self.device.listen_tta(target, timeout)
-        
+
         def listen_ttb(target, timeout):
             return self.device.listen_ttb(target, timeout)
-        
+
         def listen_ttf(target, timeout):
             return self.device.listen_ttf(target, timeout)
-        
+
         def listen_dep(target, timeout):
             target = self.device.listen_dep(target, timeout)
             if target and target.atr_req:
@@ -978,14 +996,14 @@ class ContactlessFrontend(object):
             "technology can be A/B/F but not %r" % target.brty[-1:]
         assert target.brty[:-1] in ('106', '212', '424', '848'), \
             "bitrate can be 106/212/424/848 but not %r" % target.brty[:-1]
-        
+
         with self.lock:
             if self.device is None:
                 raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
-            
-            self.target = None # forget captured target
-            self.device.mute() # deactivate the rf field
-            
+
+            self.target = None  # forget captured target
+            self.device.mute()  # deactivate the rf field
+
             info = "listen %.3f seconds for %s"
             if target.atr_res is not None:
                 log.debug(info, timeout, "DEP")
@@ -1019,7 +1037,7 @@ class ContactlessFrontend(object):
                 raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
 
             log.debug(">>> %s timeout=%s", print_data(send_data), str(timeout))
-            
+
             if isinstance(self.target, RemoteTarget):
                 exchange = self.device.send_cmd_recv_rsp
             elif isinstance(self.target, LocalTarget):
@@ -1027,11 +1045,11 @@ class ContactlessFrontend(object):
             else:
                 log.error("no target for data exchange")
                 return None
-            
+
             send_time = time.time()
             rcvd_data = exchange(self.target, send_data, timeout)
             recv_time = time.time() - send_time
-            
+
             log.debug("<<< %s %.3fs", print_data(rcvd_data), recv_time)
             return rcvd_data
 
@@ -1069,14 +1087,15 @@ class ContactlessFrontend(object):
         if self.device is not None:
             s = "{dev.vendor_name} {dev.product_name} on {dev.path}"
             return s.format(dev=self.device)
-        else: return self.__repr__()
+        else:
+            return self.__repr__()
+
 
 ###############################################################################
 #
 # Targets
 #
 ###############################################################################
-
 class Target(object):
     def __init__(self, **kwargs):
         for name in kwargs:
@@ -1091,12 +1110,14 @@ class Target(object):
     def __str__(self):
         attrs = []
         for name in sorted(self.__dict__.keys()):
-            if name.startswith('_'): continue
+            if name.startswith('_'):
+                continue
             value = self.__dict__[name]
             if isinstance(value, (bytearray, str)):
                 value = str(value).encode("hex").upper()
             attrs.append("{0}={1}".format(name, value))
         return "{brty} {attrs}".format(brty=self.brty, attrs=' '.join(attrs))
+
 
 class RemoteTarget(Target):
     """A RemoteTarget instance provides bitrate and technology type and
@@ -1108,7 +1129,7 @@ class RemoteTarget(Target):
 
     """
     brty_pattern = re.compile(r'(\d+[A-Z])(?:/(\d+[A-Z])|.*)')
-    
+
     def __init__(self, brty, **kwargs):
         super(RemoteTarget, self).__init__(**kwargs)
         self.brty = brty
@@ -1123,7 +1144,8 @@ class RemoteTarget(Target):
         brty_pattern_match = self.brty_pattern.match(value)
         if brty_pattern_match:
             (self._brty_send, self._brty_recv) = brty_pattern_match.groups()
-            if not self._brty_recv: self._brty_recv = self._brty_send
+            if not self._brty_recv:
+                self._brty_recv = self._brty_send
         else:
             raise ValueError("brty pattern does not match for %r" % value)
 
@@ -1134,6 +1156,7 @@ class RemoteTarget(Target):
     @property
     def brty_recv(self):
         return self._brty_recv
+
 
 class LocalTarget(Target):
     """A LocalTarget instance provides bitrate and technology type and
@@ -1159,25 +1182,25 @@ class LocalTarget(Target):
     def brty(self, value):
         self._brty_send = self._brty_recv = value
 
+
 ###############################################################################
 #
 # Exceptions
 #
 ###############################################################################
-
 class Error(Exception):
     """Base class for exceptions specific to the contacless frontend module.
-    
+
     - UnsupportedTargetError
     - CommunicationError
-    
+
       - ProtocolError
       - TransmissionError
       - TimeoutError
       - BrokenLinkError
-    
+
     """
-    pass
+
 
 class UnsupportedTargetError(Error):
     """The :class:`RemoteTarget` input to
@@ -1186,38 +1209,37 @@ class UnsupportedTargetError(Error):
     device.
 
     """
-    pass
+
 
 class CommunicationError(Error):
     """Base class for communication errors.
 
     """
-    pass
-    
+
+
 class ProtocolError(CommunicationError):
     """Raised when an NFC Forum Digital Specification protocol error
     occured.
 
     """
-    pass
+
 
 class TransmissionError(CommunicationError):
     """Raised when an NFC Forum Digital Specification transmission error
     occured.
 
     """
-    pass
+
 
 class TimeoutError(CommunicationError):
     """Raised when an NFC Forum Digital Specification timeout error
     occured.
 
     """
-    pass
+
 
 class BrokenLinkError(CommunicationError):
     """The remote device (Reader/Writer or P2P Device) has deactivated the
     RF field or is no longer within communication distance.
 
     """
-    pass

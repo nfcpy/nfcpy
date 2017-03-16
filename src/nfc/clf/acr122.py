@@ -2,7 +2,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2011, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -45,17 +45,17 @@ listen_dep  no
 ==========  =======  ============
 
 """
-import logging
-log = logging.getLogger(__name__)
+import nfc.clf
+from . import pn532
 
 import os
-import time
 import errno
 import struct
 from binascii import hexlify
 
-import nfc.clf
-from . import pn532
+import logging
+log = logging.getLogger(__name__)
+
 
 def init(transport):
     device = Device(Chipset(transport))
@@ -63,9 +63,10 @@ def init(transport):
     device._device_name = transport.product_name.split()[0]
     return device
 
+
 class Device(pn532.Device):
     # Device driver class for the ACR122U.
-    
+
     def __init__(self, chipset):
         super(Device, self).__init__(chipset, logger=log)
 
@@ -90,7 +91,7 @@ class Device(pn532.Device):
 
         """
         return super(Device, self).sense_ttb(target)
-    
+
     def sense_ttf(self, target):
         """Activate the RF field and probe for a Type F Target. Bitrates 212
         and 424 kpbs are supported.
@@ -104,7 +105,7 @@ class Device(pn532.Device):
 
         """
         return super(Device, self).sense_dep(target)
-        
+
     def listen_tta(self, target, timeout):
         """Listen as Type A Target is not supported."""
         info = "{device} does not support listen as Type A Target"
@@ -137,44 +138,45 @@ class Device(pn532.Device):
 class Chipset(pn532.Chipset):
     # Maximum size of a host command frame to the contactless chip.
     host_command_frame_max_size = 254
-    
+
     # Supported BrTy (baud rate / modulation type) values for the
     # InListPassiveTarget command. Corresponds to 106 kbps Type A, 212
     # kbps Type F, 424 kbps Type F, and 106 kbps Type B. The value for
     # 106 kbps Innovision Jewel Tag (although supported by PN532) is
     # removed because the RID command can not be send.
     in_list_passive_target_brty_range = (0, 1, 2, 3)
-    
+
     def __init__(self, transport):
         self.transport = transport
-        
+
         # read ACR122U firmware version string
         reader_version = self.ccid_xfr_block(bytearray.fromhex("FF00480000"))
         if not reader_version.startswith("ACR122U"):
             log.error("failed to retrieve ACR122U version string")
             raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
-        
+
         if int(chr(reader_version[7])) < 2:
-            log.error("{0} not supported, need 2.xx".format(frame[10:]))
+            log.error("{0} not supported, need 2.x".format(reader_version[7:]))
             raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
 
         log.debug("initialize " + str(reader_version))
-        
+
         # set icc power on
         log.debug("CCID ICC-POWER-ON")
         frame = bytearray.fromhex("62000000000000000000")
-        transport.write(frame); transport.read(100)
-        
+        transport.write(frame)
+        transport.read(100)
+
         # disable autodetection
         log.debug("Set PICC Operating Parameters")
         self.ccid_xfr_block(bytearray.fromhex("FF00517F00"))
-        
+
         # switch red/green led off/on
         log.debug("Configure Buzzer and LED")
         self.set_buzzer_and_led_to_default()
 
         super(Chipset, self).__init__(transport, logger=log)
-        
+
     def close(self):
         self.ccid_xfr_block(bytearray.fromhex("FF00400C0400000000"))
         self.transport.close()
@@ -190,7 +192,8 @@ class Chipset(pn532.Chipset):
         duration_in_tenths_of_second = min(duration_in_ms / 100, 255)
         timeout_in_seconds = (duration_in_tenths_of_second + 1) / 10.0
         data = "FF00400D04{:02X}000101".format(duration_in_tenths_of_second)
-        self.ccid_xfr_block(bytearray.fromhex(data), timeout=timeout_in_seconds)
+        self.ccid_xfr_block(bytearray.fromhex(data),
+                            timeout=timeout_in_seconds)
 
     def send_ack(self):
         # Send an ACK frame, usually to terminate most recent command.
@@ -215,13 +218,13 @@ class Chipset(pn532.Chipset):
             log.error("RDR_to_PC_DataBlock length mismatch")
             raise IOError(errno.EIO, os.strerror(errno.EIO))
         return frame[10:]
-        
+
     def command(self, cmd_code, cmd_data, timeout):
         """Send a host command and return the chip response.
 
         """
         log.log(logging.DEBUG-1, self.CMD[cmd_code]+" "+hexlify(cmd_data))
-        
+
         frame = bytearray([0xD4, cmd_code]) + bytearray(cmd_data)
         frame = bytearray([0xFF, 0x00, 0x00, 0x00, len(frame)]) + frame
 
@@ -236,4 +239,3 @@ class Chipset(pn532.Chipset):
             log.error("received pseudo apdu with error status")
             raise IOError(errno.EIO, os.strerror(errno.EIO))
         return frame[2:-2]
-        

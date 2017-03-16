@@ -2,7 +2,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2009, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -22,11 +22,13 @@
 #
 # Negotiated Connection Handover - Client Base Class
 #
+import nfc.llcp
+
+import time
+
 import logging
 log = logging.getLogger(__name__)
 
-import nfc.llcp
-import time
 
 class HandoverClient(object):
     """ NFC Forum Connection Handover client
@@ -64,14 +66,15 @@ class HandoverClient(object):
             log.error("message encoding failed: {0}".format(e))
         else:
             return self._send(data, send_miu)
-        
+
     def _send(self, data, miu):
         while len(data) > 0:
             if self.socket.send(data[0:miu]):
                 data = data[miu:]
-            else: break
+            else:
+                break
         return bool(len(data) == 0)
-        
+
     def recv(self, timeout=None):
         """Receive a handover select message from the remote server."""
         message = self._recv(timeout)
@@ -93,19 +96,18 @@ class HandoverClient(object):
                 return message
             except nfc.ndef.LengthError:
                 elapsed = time.time() - started
-                log.debug("message is incomplete ({0} byte)".format(len(data)))
+                log.debug("message is incomplete (%d byte)", len(data))
                 if timeout:
                     timeout = timeout - elapsed
-                    log.debug("{0:.3f} seconds left to timeout".format(timeout))
-                continue # incomplete message
+                    log.debug("%.3f seconds left to timeout", timeout)
+                continue  # incomplete message
             except TypeError:
                 log.debug("data link connection closed")
-                break # recv() returned None
-    
+                break  # recv() returned None
+
     def __enter__(self):
         self.connect()
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.close()
-

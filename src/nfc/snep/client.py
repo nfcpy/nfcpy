@@ -2,7 +2,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2009, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -22,12 +22,13 @@
 #
 # Simple NDEF Exchange Protocol (SNEP) - Client Base Class
 #
-import logging
-log = logging.getLogger(__name__)
-
 import ndef
 import struct
 import nfc.llcp
+
+import logging
+log = logging.getLogger(__name__)
+
 
 def send_request(socket, snep_request, send_miu):
     if len(snep_request) <= send_miu:
@@ -46,6 +47,7 @@ def send_request(socket, snep_request, send_miu):
 
     return True
 
+
 def recv_response(socket, acceptable_length, timeout):
     if socket.poll("recv", timeout):
         snep_response = socket.recv()
@@ -62,7 +64,7 @@ def recv_response(socket, acceptable_length, timeout):
 
         if len(snep_response) - 6 < length:
             # request remaining fragments
-            socket.send("\x10\x00\x00\x00\x00\x00")
+            socket.send(b"\x10\x00\x00\x00\x00\x00")
             while len(snep_response) - 6 < length:
                 if socket.poll("recv", timeout):
                     snep_response += socket.recv()
@@ -70,6 +72,7 @@ def recv_response(socket, acceptable_length, timeout):
                     return None
 
         return bytearray(snep_response)
+
 
 class SnepClient(object):
     """ Simple NDEF exchange protocol - client implementation
@@ -120,7 +123,7 @@ class SnepClient(object):
                 log.error(repr(error))
             else:
                 return response
-        
+
     def _get(self, ndef_message, timeout=1.0):
         """Get an NDEF message from the server. Temporarily connects
         to the default SNEP server if the client is not yet connected.
@@ -135,7 +138,7 @@ class SnepClient(object):
         else:
             self.release_connection = False
         try:
-            snep_request = '\x10\x01'
+            snep_request = b'\x10\x01'
             snep_request += struct.pack('>L', 4 + len(str(ndef_message)))
             snep_request += struct.pack('>L', self.acceptable_length)
             snep_request += str(ndef_message)
@@ -226,14 +229,17 @@ class SnepClient(object):
 
         """
         if not self.socket:
-            try: self.connect('urn:nfc:sn:snep')
-            except nfc.llcp.ConnectRefused: return False
-            else: self.release_connection = True
+            try:
+                self.connect('urn:nfc:sn:snep')
+            except nfc.llcp.ConnectRefused:
+                return False
+            else:
+                self.release_connection = True
         else:
             self.release_connection = False
         try:
             ndef_msgsize = struct.pack('>L', len(str(ndef_message)))
-            snep_request = '\x10\x02' + ndef_msgsize + str(ndef_message)
+            snep_request = b'\x10\x02' + ndef_msgsize + str(ndef_message)
             if send_request(self.socket, snep_request, self.send_miu):
                 response = recv_response(self.socket, 0, timeout)
                 if response is not None:
@@ -273,9 +279,12 @@ class SnepClient(object):
 
         """
         if not self.socket:
-            try: self.connect('urn:nfc:sn:snep')
-            except nfc.llcp.ConnectRefused: return False
-            else: self.release_connection = True
+            try:
+                self.connect('urn:nfc:sn:snep')
+            except nfc.llcp.ConnectRefused:
+                return False
+            else:
+                self.release_connection = True
         else:
             self.release_connection = False
 
@@ -301,6 +310,7 @@ class SnepClient(object):
 
     def __exit__(self, exc_type, exc_value, traceback):
         self.close()
+
 
 class SnepError(Exception):
     strerr = {0xC0: "resource not found",

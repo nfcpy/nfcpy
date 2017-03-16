@@ -2,7 +2,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2009, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -48,18 +48,14 @@ listen_dep  yes      Only passive communication mode
 ==========  =======  ============
 
 """
+import nfc.clf
+from . import pn53x
+
+import time
+
 import logging
 log = logging.getLogger(__name__)
 
-import os
-import sys
-import time
-import errno
-import struct
-from binascii import hexlify
-
-import nfc.clf
-from . import pn53x
 
 class Chipset(pn53x.Chipset):
     CMD = {
@@ -134,8 +130,8 @@ class Chipset(pn53x.Chipset):
     def diagnose(self, test, test_data=None):
         if test == "line":
             size = self.host_command_frame_max_size - 3
-            data = bytearray([x&0xFF for x in range(size)])
-            return self.command(0x00, "\x00" + data, timeout=1.0) == data
+            data = bytearray([x & 0xFF for x in range(size)])
+            return self.command(0x00, b"\x00" + data, timeout=1.0) == data
         return super(Chipset, self).diagnose(test, test_data)
 
     def _read_register(self, data):
@@ -147,11 +143,12 @@ class Chipset(pn53x.Chipset):
         # Max 64 registers can be written to RCS956
         assert len(data) <= 192
         status = self.command(0x08, data, timeout=0.25)
-        if sum(status) != 0: self.chipset_error(0xfe)
-        
+        if sum(status) != 0:
+            self.chipset_error(0xfe)
+
     def reset_mode(self):
         """Send a Reset command to set the operation mode to 0."""
-        self.command(0x18, "\x01", timeout=0.1)
+        self.command(0x18, b"\x01", timeout=0.1)
         self.transport.write(Chipset.ACK)
         time.sleep(0.010)
 
@@ -165,6 +162,7 @@ class Chipset(pn53x.Chipset):
         data = chr(mode) + mifare_params + felica_params + nfcid3t + gt
         return self.command(0x8c, data, timeout)
 
+
 class Device(pn53x.Device):
     # Device driver for Sony RC-S956 based contactless devices.
 
@@ -173,7 +171,7 @@ class Device(pn53x.Device):
         # Reset the RCS956 state machine to Mode 0. We may have left
         # it in some other mode when an error has occured.
         chipset.reset_mode()
-    
+
         super(Device, self).__init__(chipset, logger)
 
         ic, ver, rev, support = self.chipset.get_firmware_version()
@@ -182,17 +180,17 @@ class Device(pn53x.Device):
 
         self.mute()
         # Set timeout for PSL_RES, ATR_RES, InDataExchange/InCommunicateThru
-        self.chipset.rf_configuration(0x02, "\x0B\x0B\x0A")
-        self.chipset.rf_configuration(0x04, "\x00")
-        self.chipset.rf_configuration(0x05, "\x00\x00\x01")
-        
+        self.chipset.rf_configuration(0x02, b"\x0B\x0B\x0A")
+        self.chipset.rf_configuration(0x04, b"\x00")
+        self.chipset.rf_configuration(0x05, b"\x00\x00\x01")
+
         self.log.debug("write rf settings for 106A")
         data = bytearray.fromhex("5A F4 3F 11 4D 85 61 6F 26 62 87")
         self.chipset.rf_configuration(0x0A, data)
-            
+
         self.chipset.set_parameters(0b00001000)
         self.chipset.reset_mode()
-        
+
         # Set the RFCfg value for RAM-07. RF settings in RAM-07 are
         # used for initial target state. During power-up RAM-07 is
         # loaded from EEPROM-07 and the RFCfg value 0xFD stored in
@@ -208,7 +206,7 @@ class Device(pn53x.Device):
     def mute(self):
         self.chipset.reset_mode()
         super(Device, self).mute()
-        
+
     def sense_tta(self, target):
         """Activate the RF field and probe for a Type A Target.
 
@@ -241,8 +239,8 @@ class Device(pn53x.Device):
         activation (which nfcpy does in the tag activation code).
 
         """
-        return super(Device, self).sense_ttb(target, did='\x01')
-    
+        return super(Device, self).sense_ttb(target, did=b'\x01')
+
     def sense_ttf(self, target):
         """Activate the RF field and probe for a Type F Target.
 
@@ -254,7 +252,7 @@ class Device(pn53x.Device):
 
         """
         # Set timeout for PSL_RES and ATR_RES
-        self.chipset.rf_configuration(0x02, "\x0B\x0B\x0A")
+        self.chipset.rf_configuration(0x02, b"\x0B\x0B\x0A")
         return super(Device, self).sense_dep(target)
 
     def listen_tta(self, target, timeout):
@@ -283,7 +281,7 @@ class Device(pn53x.Device):
 
     def listen_dep(self, target, timeout):
         """Listen *timeout* seconds to become initialized as a DEP Target.
-        
+
         The RC-S956 can be set to listen as a DEP Target for passive
         communication mode. Target active communication mode is
         disabled by the driver due to performance issues. It is also
@@ -322,7 +320,7 @@ class Device(pn53x.Device):
         return super(Device, self).listen_dep(target, timeout)
 
     def _init_as_target(self, mode, tta_params, ttf_params, timeout):
-        nfcid3t = ttf_params[0:8] + "\x00\x00"
+        nfcid3t = ttf_params[0:8] + b"\x00\x00"
         args = (mode & 0xFE, tta_params, ttf_params, nfcid3t, '', timeout)
         return self.chipset.tg_init_target(*args)
 
@@ -341,7 +339,7 @@ class Device(pn53x.Device):
 
     def _tt1_send_cmd_recv_rsp(self, data, timeout):
         # Special handling for Tag Type 1 (Jewel/Topaz) card commands.
-        
+
         if data[0] in (0x00, 0x01, 0x1A, 0x53, 0x72):
             # RALL, READ, WRITE-NE, WRITE-E, RID are properly
             # implemented by firmware.
@@ -361,6 +359,7 @@ class Device(pn53x.Device):
         self.log.debug("tt1 command can not be send with this hardware ")
         raise nfc.clf.TransmissionError("tt1 command can not be send")
 
+
 def init(transport):
     # Write ack to see if we can talk to the device. This raises
     # IOError(EACCES) if it's claimed by some other process.
@@ -368,10 +367,10 @@ def init(transport):
 
     chipset = Chipset(transport, logger=log)
     device = Device(chipset, logger=log)
-    
+
     device._vendor_name = transport.manufacturer_name
     device._device_name = transport.product_name
     if device._device_name is None:
         device._device_name = "RC-S330"
-    
+
     return device

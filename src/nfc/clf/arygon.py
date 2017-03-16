@@ -2,7 +2,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2009, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -22,40 +22,44 @@
 #
 # Driver for the Arygon contactless reader with USB serial interface
 #
-import logging
-log = logging.getLogger(__name__)
+from . import pn531
+from . import pn532
 
 import os
-import sys
 import time
 import errno
 
-from . import pn531
-from . import pn532
+import logging
+log = logging.getLogger(__name__)
+
 
 class ChipsetA(pn531.Chipset):
     def write_frame(self, frame):
         self.transport.write("2" + frame)
 
+
 class DeviceA(pn531.Device):
     def close(self):
-        self.chipset.transport.tty.write("0au") # device reset
+        self.chipset.transport.tty.write("0au")  # device reset
         self.chipset.close()
         self.chipset = None
-    
+
+
 class ChipsetB(pn532.Chipset):
     def write_frame(self, frame):
         self.transport.write("2" + frame)
 
+
 class DeviceB(pn532.Device):
     def close(self):
-        self.chipset.transport.tty.write("0au") # device reset
+        self.chipset.transport.tty.write("0au")  # device reset
         self.chipset.close()
         self.chipset = None
-    
+
+
 def init(transport):
     transport.open(transport.port, 115200)
-    transport.tty.write("0av") # read version
+    transport.tty.write("0av")  # read version
     response = transport.tty.readline()
     if response.startswith("FF00000600V"):
         log.debug("Arygon Reader AxxB Version %s", response[11:].strip())
@@ -76,7 +80,7 @@ def init(transport):
                 return device
 
     transport.open(transport.port, 9600)
-    transport.tty.write("0av") # read version
+    transport.tty.write("0av")  # read version
     response = transport.tty.readline()
     if response.startswith("FF00000600V"):
         log.debug("Arygon Reader AxxA Version %s", response[11:].strip())

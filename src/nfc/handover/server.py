@@ -2,7 +2,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2009, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -22,11 +22,13 @@
 #
 # Negotiated Connection Handover - Server Base Class
 #
+import nfc.llcp
+
+from threading import Thread
+
 import logging
 log = logging.getLogger(__name__)
 
-from threading import Thread
-import nfc.llcp
 
 class HandoverServer(Thread):
     """ NFC Forum Connection Handover server
@@ -71,11 +73,13 @@ class HandoverServer(Thread):
                         request_data += data
                         try:
                             request = nfc.ndef.Message(request_data)
-                            break # message complete
+                            break  # message complete
                         except nfc.ndef.LengthError:
-                            continue # need more data
-                    else: return # connection closed
-                else: return # connection closed
+                            continue  # need more data
+                    else:
+                        return  # connection closed
+                else:
+                    return  # connection closed
 
                 log.debug("<<< {0!r}".format(request_data))
                 response = handover_server._process_request(request)
@@ -86,7 +90,7 @@ class HandoverServer(Thread):
                     if socket.send(response_data[0:send_miu]):
                         response_data = response_data[send_miu:]
                     else:
-                        return # connection closed
+                        return  # connection closed
         except nfc.llcp.Error as e:
             (log.debug if e.errno == nfc.llcp.errno.EPIPE else log.error)(e)
         finally:
@@ -109,7 +113,7 @@ class HandoverServer(Thread):
         log.debug("send handover response {0}\n{1}"
                   .format(response.type, response.pretty()))
         return response
-    
+
     def process_request(self, request):
         """Process a handover request message. The *request* argument
         is a :class:`nfc.ndef.HandoverRequestMessage` object. The
@@ -123,4 +127,3 @@ class HandoverServer(Thread):
         """
         log.warning("default process_request method should be overwritten")
         return nfc.ndef.HandoverSelectMessage(version="1.2")
-

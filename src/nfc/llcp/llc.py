@@ -2,7 +2,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2009, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -19,33 +19,30 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-
-import logging
-log = logging.getLogger(__name__)
-
-import time
-import errno
-import types
-import random
-import threading
-import collections
-
-import nfc.clf
-import nfc.dep
-
-# local imports
 from . import tco
 from . import pdu
 from . import err
 from . import opt
 from . import sec
+import nfc.clf
+import nfc.dep
+
+import time
+import errno
+import random
+import threading
+import collections
+
+import logging
+log = logging.getLogger(__name__)
 
 RAW_ACCESS_POINT, LOGICAL_DATA_LINK, DATA_LINK_CONNECTION = range(3)
 
 wks_map = {
-    "urn:nfc:sn:sdp" : 1,
-    "urn:nfc:sn:snep": 4,
+    b"urn:nfc:sn:sdp": 1,
+    b"urn:nfc:sn:snep": 4,
 }
+
 
 class ServiceAccessPoint(object):
     def __init__(self, addr, llc):
@@ -67,24 +64,30 @@ class ServiceAccessPoint(object):
                     return LOGICAL_DATA_LINK
                 if isinstance(self.sock_list[0], tco.DataLinkConnection):
                     return DATA_LINK_CONNECTION
-            except IndexError: return 0
+            except IndexError:
+                return 0
 
     def insert_socket(self, socket):
         with self.llc.lock:
-            try: insertable = type(socket) == type(self.sock_list[0])
-            except IndexError: insertable = True
+            try:
+                insertable = isinstance(socket, type(self.sock_list[0]))
+            except IndexError:
+                insertable = True
             if insertable:
                 socket.bind(self.addr)
                 self.sock_list.appendleft(socket)
-            else: log.error("can't insert socket of different type")
+            else:
+                log.error("can't insert socket of different type")
             return insertable
 
     def remove_socket(self, socket):
         assert socket.addr == self.addr
         socket.close()
         with self.llc.lock:
-            try: self.sock_list.remove(socket)
-            except ValueError: pass
+            try:
+                self.sock_list.remove(socket)
+            except ValueError:
+                pass
             if len(self.sock_list) == 0:
                 # completely remove this sap
                 self.llc.sap[self.addr] = None
@@ -94,10 +97,13 @@ class ServiceAccessPoint(object):
 
     def shutdown(self):
         while True:
-            try: socket = self.sock_list.pop()
-            except IndexError: return
+            try:
+                socket = self.sock_list.pop()
+            except IndexError:
+                return
             log.debug("shutdown socket %s" % str(socket))
-            socket.bind(None); socket.close()
+            socket.bind(None)
+            socket.close()
 
     #
     # enqueue() and dequeue() are called from llc run thread
@@ -128,16 +134,21 @@ class ServiceAccessPoint(object):
         with self.llc.lock:
             for socket in self.sock_list:
                 send_pdu = socket.dequeue(miu_size, icv_size)
-                if send_pdu: return send_pdu
+                if send_pdu:
+                    return send_pdu
             else:
-                try: return self.send_list.popleft()
-                except IndexError: pass
+                try:
+                    return self.send_list.popleft()
+                except IndexError:
+                    pass
 
     def sendack(self):
         with self.llc.lock:
             for socket in self.sock_list:
                 send_pdu = socket.sendack()
-                if send_pdu: return send_pdu
+                if send_pdu:
+                    return send_pdu
+
 
 class ServiceDiscovery(object):
     def __init__(self, llc):
@@ -156,17 +167,20 @@ class ServiceDiscovery(object):
     @property
     def mode(self):
         return LOGICAL_DATA_LINK
-    
+
     def resolve(self, name):
         with self.resp:
-            if self.snl is None: return None
+            if self.snl is None:
+                return None
             log.debug("resolve service name '{0}'".format(name))
-            try: return self.snl[name]
-            except KeyError: pass
+            try:
+                return self.snl[name]
+            except KeyError:
+                pass
             tid = random.choice(self.tids)
             self.tids.remove(tid)
             self.sdreq.append((tid, name))
-            while not self.snl is None and not name in self.snl:
+            while self.snl is not None and name not in self.snl:
                 self.resp.wait()
             return None if self.snl is None else self.snl[name]
 
@@ -175,20 +189,27 @@ class ServiceDiscovery(object):
     #
     def enqueue(self, rcvd_pdu):
         with self.llc.lock:
-            if (isinstance(rcvd_pdu, pdu.ServiceNameLookup)
-                and not self.snl is None):
+            if ((isinstance(rcvd_pdu, pdu.ServiceNameLookup)
+                 and self.snl is not None)):
+
                 for tid, sap in rcvd_pdu.sdres:
-                    try: name = self.sent[tid]
-                    except KeyError: continue
+                    try:
+                        name = self.sent[tid]
+                    except KeyError:
+                        continue
                     log.debug("resolved %r to remote addr %d", name, sap)
                     csn, sap = sap >> 6 & 1, sap & 63
-                    if csn: sap = 1
+                    if csn:
+                        sap = 1
                     self.snl[name] = sap
                     self.tids.append(tid)
                     self.resp.notify_all()
+
                 for tid, name in rcvd_pdu.sdreq:
-                    try: sap = self.llc.snl[name]
-                    except KeyError: sap = 0
+                    try:
+                        sap = self.llc.snl[name]
+                    except KeyError:
+                        sap = 0
                     self.sdres.append((tid, sap))
 
     def dequeue(self, miu_size, icv_size):
@@ -220,20 +241,25 @@ class ServiceDiscovery(object):
             self.snl = None
             self.resp.notify_all()
 
+
 class LogicalLinkController(object):
     class LinkState(object):
         def __init__(self):
             self.names = ("SHUTDOWN", "LISTEN", "CONNECT", "CONNECTED",
                           "ESTABLISHED", "DISCONNECT", "CLOSED")
             self.value = self.names.index("SHUTDOWN")
+
         def __str__(self):
             return self.names[self.value]
+
         def __getattr__(self, name):
             return self.value == self.names.index(name)
+
         def __setattr__(self, name, value):
-            if not name in ("names", "value"):
+            if name not in ("names", "value"):
                 value, name = self.names.index(name), "value"
-            super(LogicalLinkController.LinkState,self).__setattr__(name,value)
+            parent = super(LogicalLinkController.LinkState, self)
+            parent.__setattr__(name, value)
 
     class Counter(object):
         def __init__(self):
@@ -243,11 +269,11 @@ class LogicalLinkController(object):
         @property
         def sent_count(self):
             return sum(self.sent.values())
-        
+
         @property
         def rcvd_count(self):
             return sum(self.rcvd.values())
-        
+
         def __str__(self):
             s = "sent/rcvd {0}/{1}".format(self.sent_count, self.rcvd_count)
             for name in set(self.sent.keys() + self.rcvd.keys()):
@@ -265,10 +291,11 @@ class LogicalLinkController(object):
         self.cfg['send-lsc'] = options.get('lsc', 3)
         self.cfg['send-agf'] = options.get('agf', True)
         self.cfg['llcp-sec'] = options.get('sec', True)
-        if not sec.OpenSSL: self.cfg['llcp-sec'] = False
+        if not sec.OpenSSL:
+            self.cfg['llcp-sec'] = False
         log.debug("llc cfg {0}".format(self.cfg))
         self.sec = None
-        self.snl = dict({"urn:nfc:sn:sdp" : 1})
+        self.snl = dict({"urn:nfc:sn:sdp": 1})
         self.sap = 64 * [None]
         self.sap[0] = ServiceAccessPoint(0, self)
         self.sap[1] = ServiceDiscovery(self)
@@ -283,14 +310,16 @@ class LogicalLinkController(object):
     @property
     def secure_data_transfer(self):
         return self.cfg.get('llcp-dpc', 0) == 1
-    
+
     def activate(self, mac, **options):
         assert type(mac) in (nfc.dep.Initiator, nfc.dep.Target)
         self.mac = None
-        
+
+        wks = 1 + sum([1 << sap for sap in self.snl.values() if sap < 15])
+
         send_pax = pdu.ParameterExchange()
         send_pax.version = (1, 3)
-        send_pax.wks = 1+sum([1<<sap for sap in self.snl.values() if sap<15])
+        send_pax.wks = wks
         if self.cfg['recv-miu'] != 128:
             send_pax.miu = self.cfg['recv-miu']
         if self.cfg['send-lto'] != 100:
@@ -309,7 +338,8 @@ class LogicalLinkController(object):
             self.link.LISTEN = True
             gb = mac.activate(gbt=gb, **options)
             self.run = self.run_as_target
-        else: gb = None
+        else:
+            gb = None
 
         if gb and gb.startswith('Ffm') and len(gb) >= 6:
             if type(mac) == nfc.dep.Target and mac.rwt >= send_pax.lto*1E3:
@@ -317,7 +347,7 @@ class LogicalLinkController(object):
                 log.warning(msg.format(mac.rwt, send_pax.lto*1E3))
 
             rcvd_pax = pdu.decode(b"\x00\x40" + bytes(gb[3:]))
-            
+
             log.debug("SENT {0}".format(send_pax))
             log.debug("RCVD {0}".format(rcvd_pax))
 
@@ -364,9 +394,9 @@ class LogicalLinkController(object):
         if type(self.mac) == nfc.dep.Initiator:
             if self.link.DISCONNECT is True:
                 self.exchange(pdu.Disconnect(0, 0), timeout=0.5)
-            self.mac.deactivate(release=False) # use DESELECT
+            self.mac.deactivate(release=False)  # use DESELECT
         if type(self.mac) == nfc.dep.Target:
-            self.mac.deactivate(data=bytearray("\x01\x40"))
+            self.mac.deactivate(data=bytearray(b"\x01\x40"))
         # shutdown local services
         for i in range(63, -1, -1):
             if not self.sap[i] is None:
@@ -374,7 +404,7 @@ class LogicalLinkController(object):
                 self.sap[i].shutdown()
                 self.sap[i] = None
         self.link.SHUTDOWN = True
-        
+
     def exchange(self, send_pdu, timeout):
         # Send and receive one protocol data unit. The send_pdu is
         # None for the first call when running as target (because the
@@ -405,7 +435,7 @@ class LogicalLinkController(object):
         msg = "starting initiator run loop with a receive timeout of %.3f sec"
         log.debug(msg, recv_timeout)
 
-        symm = 0 # counts the number of consecutive SYMM PDUs
+        symm = 0  # counts the number of consecutive SYMM PDUs
         try:
             if self.cfg['llcp-dpc'] == 1:
                 cipher = sec.cipher_suite("ECDH_anon_WITH_AEAD_AES_128_CCM_4")
@@ -428,7 +458,8 @@ class LogicalLinkController(object):
             send_pdu = self.collect(delay=0.01)
             self.link.ESTABLISHED = True
             while not terminate():
-                if send_pdu is None: send_pdu = pdu.Symmetry()
+                if send_pdu is None:
+                    send_pdu = pdu.Symmetry()
                 rcvd_pdu = self.exchange(send_pdu, recv_timeout)
                 if rcvd_pdu is None:
                     return self.terminate(reason="link disruption")
@@ -444,7 +475,7 @@ class LogicalLinkController(object):
                 self.link.DISCONNECT = True
                 self.terminate(reason="local choice")
         except KeyboardInterrupt:
-            print() # move to new line
+            print()  # move to new line
             self.link.DISCONNECT = True
             self.terminate(reason="local choice")
             raise KeyboardInterrupt
@@ -467,8 +498,8 @@ class LogicalLinkController(object):
         recv_timeout = 1E-3 * (self.cfg['recv-lto'] + 10)
         msg = "starting target run loop with a receive timeout of %.3f sec"
         log.debug(msg, recv_timeout)
-        
-        symm = 0 # counts the number of consecutive SYMM PDUs
+
+        symm = 0  # counts the number of consecutive SYMM PDUs
         try:
             if self.cfg['llcp-dpc'] == 1:
                 cipher = sec.cipher_suite("ECDH_anon_WITH_AEAD_AES_128_CCM_4")
@@ -503,13 +534,14 @@ class LogicalLinkController(object):
                 send_pdu = self.collect(delay=0.001)
                 if send_pdu is None and symm >= 10:
                     send_pdu = self.collect(delay=0.05)
-                if send_pdu is None: send_pdu = pdu.Symmetry()
+                if send_pdu is None:
+                    send_pdu = pdu.Symmetry()
                 rcvd_pdu = self.exchange(send_pdu, recv_timeout)
             else:
                 self.link.DISCONNECT = True
                 self.terminate(reason="local choice")
         except KeyboardInterrupt:
-            print() # move to new line
+            print()  # move to new line
             self.link.DISCONNECT = True
             self.terminate(reason="local choice")
             raise KeyboardInterrupt
@@ -532,22 +564,29 @@ class LogicalLinkController(object):
         # Collect a single PDU or multiple PDUs if aggregation is enabled.
         if delay:
             time.sleep(delay)
-        
+
         def encrypt(send_pdu):
             pdu_type = type(send_pdu)
             a = send_pdu.encode_header()
             c = self.sec.encrypt(a, send_pdu.data)
             return pdu_type(*pdu_type.decode_header(a), data=c)
-        
-        is_sap = lambda sap: sap is not None
-        is_raw = lambda sap: sap and sap.mode == RAW_ACCESS_POINT
-        is_ldl = lambda sap: sap and sap.mode == LOGICAL_DATA_LINK
-        is_dlc = lambda sap: sap and sap.mode == DATA_LINK_CONNECTION
+
+        def is_sap(sap):
+            return sap is not None
+
+        def is_raw(sap):
+            return sap and sap.mode == RAW_ACCESS_POINT
+
+        def is_ldl(sap):
+            return sap and sap.mode == LOGICAL_DATA_LINK
+
+        def is_dlc(sap):
+            return sap and sap.mode == DATA_LINK_CONNECTION
 
         miu_size = self.cfg["send-miu"]
         icv_size = self.sec.icv_size if self.sec else 0
         send_pdu = None
-        
+
         with self.lock:
             # Dequeue from the list of active SAP until a first PDU is
             # returned. The list is sorted to first iterate the raw
@@ -611,7 +650,7 @@ class LogicalLinkController(object):
                         miu_size = self.cfg["send-miu"] - len(agf_pdu) - 3
                         if miu_size < 0:
                             break
-            
+
             return agf_pdu if agf_pdu.count > 1 else agf_pdu.first
 
     def dispatch(self, rcvd_pdu):
@@ -644,11 +683,13 @@ class LogicalLinkController(object):
             a = rcvd_pdu.encode_header()
             p = self.sec.decrypt(a, rcvd_pdu.data)
             rcvd_pdu = pdu_type(*pdu_type.decode_header(a), data=p)
-        
+
         with self.lock:
             sap = self.sap[rcvd_pdu.dsap]
-            if sap: sap.enqueue(rcvd_pdu)
-            else: log.debug("can't dispatch PDU %s", rcvd_pdu)
+            if sap:
+                sap.enqueue(rcvd_pdu)
+            else:
+                log.debug("can't dispatch PDU %s", rcvd_pdu)
 
     def resolve(self, name):
         return self.sap[1].resolve(name)
@@ -683,20 +724,23 @@ class LogicalLinkController(object):
     def bind(self, socket, addr_or_name=None):
         if not isinstance(socket, tco.TransmissionControlObject):
             raise err.Error(errno.ENOTSOCK)
-        if not socket.addr is None:
+        if socket.addr is not None:
             raise err.Error(errno.EINVAL)
         if addr_or_name is None:
             self._bind_by_none(socket)
-        elif type(addr_or_name) is types.IntType:
+        elif isinstance(addr_or_name, int):
             self._bind_by_addr(socket, addr_or_name)
-        elif type(addr_or_name) is types.StringType:
+        elif isinstance(addr_or_name, bytes):
             self._bind_by_name(socket, addr_or_name)
-        else: raise err.Error(errno.EFAULT)
+        else:
+            raise err.Error(errno.EFAULT)
 
     def _bind_by_none(self, socket):
         with self.lock:
-            try: addr = 32 + self.sap[32:64].index(None)
-            except ValueError: raise err.Error(errno.EAGAIN)
+            try:
+                addr = 32 + self.sap[32:64].index(None)
+            except ValueError:
+                raise err.Error(errno.EAGAIN)
             else:
                 socket.bind(addr)
                 self.sap[addr] = ServiceAccessPoint(addr, self)
@@ -721,12 +765,14 @@ class LogicalLinkController(object):
                 name.startswith("urn:nfc:xsn")):
             raise err.Error(errno.EFAULT)
         with self.lock:
-            if self.snl.get(name) != None:
+            if self.snl.get(name) is not None:
                 raise err.Error(errno.EADDRINUSE)
             addr = wks_map.get(name)
             if addr is None:
-                try: addr = 16 + self.sap[16:32].index(None)
-                except ValueError: raise err.Error(errno.EADDRNOTAVAIL)
+                try:
+                    addr = 16 + self.sap[16:32].index(None)
+                except ValueError:
+                    raise err.Error(errno.EADDRNOTAVAIL)
             socket.bind(addr)
             self.sap[addr] = ServiceAccessPoint(addr, self)
             self.sap[addr].insert_socket(socket)
@@ -748,7 +794,7 @@ class LogicalLinkController(object):
             raise err.Error(errno.ENOTSOCK)
         if not isinstance(socket, tco.DataLinkConnection):
             raise err.Error(errno.EOPNOTSUPP)
-        if not type(backlog) == types.IntType:
+        if not isinstance(backlog, int):
             raise TypeError("backlog must be integer")
         if backlog < 0:
             raise ValueError("backlog mmust not be negative")
@@ -770,11 +816,12 @@ class LogicalLinkController(object):
                 log.debug("new data link connection ({0} <=== {1})"
                           .format(client.addr, client.peer))
                 if client.send_miu > self.cfg['send-miu']:
-                    log.warn("reducing outbound miu to not exceed the link miu")
+                    log.warn("reducing outbound miu to comply with link miu")
                     client.send_miu = self.cfg['send-miu']
                 return client
             else:
-                dm = pdu.DisconnectedMode(client.peer, socket.addr, reason=0x20)
+                dm = pdu.DisconnectedMode(
+                    client.peer, socket.addr, reason=0x20)
                 super(tco.DataLinkConnection, socket).send(dm)
 
     def send(self, socket, message, flags):
@@ -791,7 +838,7 @@ class LogicalLinkController(object):
             # FIXME: set socket send miu when activated
             socket.send_miu = self.cfg['send-miu']
             return socket.send(message, flags)
-        if not type(message) == types.StringType:
+        if not isinstance(message, bytes):
             raise TypeError("sendto() argument *message* must be a string")
         if isinstance(socket, tco.LogicalDataLink):
             if dest is None:
@@ -832,7 +879,8 @@ class LogicalLinkController(object):
             raise err.Error(errno.ENOTSOCK)
         if socket.is_bound:
             self.sap[socket.addr].remove_socket(socket)
-        else: socket.close()
+        else:
+            socket.close()
 
     def getsockname(self, socket):
         if not isinstance(socket, tco.TransmissionControlObject):

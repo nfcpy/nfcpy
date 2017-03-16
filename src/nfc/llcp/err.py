@@ -2,7 +2,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2009, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -22,6 +22,7 @@
 import os
 import errno
 
+
 class Error(IOError):
     def __init__(self, errno):
         super(Error, self).__init__(errno, os.strerror(errno))
@@ -29,6 +30,7 @@ class Error(IOError):
     def __str__(self):
         return "nfc.llcp.Error: [{0}] {1}".format(
             errno.errorcode[self.errno], self.strerror)
+
 
 class ConnectRefused(Error):
     def __init__(self, reason):
@@ -38,5 +40,3 @@ class ConnectRefused(Error):
     def __str__(self):
         return "nfc.llcp.ConnectRefused: [{0}] {1} with reason {2}".format(
             errno.errorcode[self.errno], self.strerror, self.reason)
-
-    

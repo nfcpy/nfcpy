@@ -2,7 +2,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2009, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -41,28 +41,28 @@ possible.
 ==========  =======  ============
 function    support  remarks
 ==========  =======  ============
-sense_tta   yes      
-sense_ttb   yes      
+sense_tta   yes
+sense_ttb   yes
 sense_ttf   yes
-sense_dep   yes      
-listen_tta  yes      
+sense_dep   yes
+listen_tta  yes
 listen_ttb  no
 listen_ttf  yes      Maximimum frame size is 64 byte
-listen_dep  yes      
+listen_dep  yes
 ==========  =======  ============
 
 """
-import logging
-log = logging.getLogger(__name__)
+import nfc.clf
+from . import pn53x
 
 import os
 import sys
 import time
 import errno
-from binascii import hexlify
 
-import nfc.clf
-from . import pn53x
+import logging
+log = logging.getLogger(__name__)
+
 
 class Chipset(pn53x.Chipset):
     CMD = {
@@ -143,9 +143,10 @@ class Chipset(pn53x.Chipset):
 
     def _write_register(self, data):
         self.command(0x08, data, timeout=0.25)
-        
+
     def set_serial_baudrate(self, baudrate):
-        br = (9600,19200,38400,57600,115200,230400,460800,921600,1288000)
+        br = (9600, 19200, 38400, 57600, 115200,
+              230400, 460800, 921600, 1288000)
         self.command(0x10, chr(br.index(baudrate)), timeout=0.1)
         self.write_frame(self.ACK)
         time.sleep(0.001)
@@ -154,14 +155,18 @@ class Chipset(pn53x.Chipset):
         mode = ("normal", "virtual", "wired", "dual").index(mode) + 1
         self.command(0x14, bytearray([mode, timeout, int(irq)]), timeout=0.1)
 
-    power_down_wakeup_src = ("INT0","INT1","rfu","RF","HSU","SPI","GPIO","I2C")
+    power_down_wakeup_src = ("INT0", "INT1", "rfu", "RF",
+                             "HSU", "SPI", "GPIO", "I2C")
+
     def power_down(self, wakeup_enable, generate_irq=False):
         wakeup_set = 0
         for i, src in enumerate(self.power_down_wakeup_src):
-            if src in wakeup_enable: wakeup_set |= 1 << i
+            if src in wakeup_enable:
+                wakeup_set |= 1 << i
         cmd_data = bytearray([wakeup_set, int(generate_irq)])
         data = self.command(0x16, cmd_data, timeout=0.1)
-        if data[0] != 0: self.chipset_error(data)
+        if data[0] != 0:
+            self.chipset_error(data)
 
     def in_auto_poll(self, poll_nr, period, *types):
         assert len(types) <= 15
@@ -187,13 +192,14 @@ class Chipset(pn53x.Chipset):
                 chr(len(historical_bytes)) + historical_bytes)
         return self.command(0x8c, data, timeout)
 
+
 class Device(pn53x.Device):
     # Device driver for PN532 based contactless frontends.
 
     def __init__(self, chipset, logger):
         assert isinstance(chipset, Chipset)
         super(Device, self).__init__(chipset, logger)
-        
+
         ic, ver, rev, support = self.chipset.get_firmware_version()
         self._chipset_name = "PN5{0:02x}v{1}.{2}".format(ic, ver, rev)
         self.log.debug("chipset is a {0}".format(self._chipset_name))
@@ -202,7 +208,7 @@ class Device(pn53x.Device):
         self.chipset.rf_configuration(0x02, "\x00\x0B\x0A")
         self.chipset.rf_configuration(0x04, "\x00")
         self.chipset.rf_configuration(0x05, "\x01\x00\x01")
-        
+
         self.log.debug("write analog settings for Type A 106 kbps")
         data = bytearray.fromhex("59 F4 3F 11 4D 85 61 6F 26 62 87")
         self.chipset.rf_configuration(0x0A, data)
@@ -258,7 +264,7 @@ class Device(pn53x.Device):
 
         """
         return super(Device, self).sense_ttb(target, did='\x01')
-    
+
     def sense_ttf(self, target):
         """Search for a Type F Target.
 
@@ -272,10 +278,10 @@ class Device(pn53x.Device):
     def sense_dep(self, target):
         """Search for a DEP Target in active communication mode."""
         return super(Device, self).sense_dep(target)
-        
+
     def _tt1_send_cmd_recv_rsp(self, data, timeout):
         # Special handling for Tag Type 1 (Jewel/Topaz) card commands.
-        
+
         if data[0] in (0x00, 0x01, 0x1A, 0x53, 0x72):
             # These commands are implemented by the chipset.
             return self.chipset.in_data_exchange(data, timeout)[0]
@@ -286,7 +292,7 @@ class Device(pn53x.Device):
             # command to the CIU because the response is 128 byte and
             # we're not fast enough to read it from the 64 byte FIFO.
             rsp = data[1:2]
-            for block in range((data[1]>>4)*16, (data[1]>>4)*16+16):
+            for block in range((data[1] >> 4) * 16, (data[1] >> 4) * 16 + 16):
                 cmd = "\x02" + chr(block) + data[2:]
                 rsp += self._tt1_send_cmd_recv_rsp(cmd, timeout)[1:9]
             return rsp
@@ -304,24 +310,25 @@ class Device(pn53x.Device):
         # afterwards (maybe this could be optimized a bit)
         data = self.add_crc_b(data)
         register_write = []
-        register_write.append(("CIU_FIFOData",   data[0])) # CMD_CODE
-        register_write.append(("CIU_BitFraming",    0x07)) # 7 bits
-        register_write.append(("CIU_Command",       0x04)) # Transmit
-        register_write.append(("CIU_BitFraming",    0x00)) # 8 bits
-        register_write.append(("CIU_ManualRCV",     0x30)) # ParityDisable
+        register_write.append(("CIU_FIFOData",   data[0]))  # CMD_CODE
+        register_write.append(("CIU_BitFraming",    0x07))  # 7 bits
+        register_write.append(("CIU_Command",       0x04))  # Transmit
+        register_write.append(("CIU_BitFraming",    0x00))  # 8 bits
+        register_write.append(("CIU_ManualRCV",     0x30))  # ParityDisable
         for i in range(1, len(data)):
-            register_write.append(("CIU_FIFOData", data[i])) # CMD_DATA
-            register_write.append(("CIU_Command",     0x04)) # Transmit
-            register_write.append(("CIU_Command",     0x07)) # NoCmdChange
-        register_write.append(("CIU_Command",       0x08)) # Receive
+            register_write.append(("CIU_FIFOData", data[i]))  # CMD_DATA
+            register_write.append(("CIU_Command",     0x04))  # Transmit
+            register_write.append(("CIU_Command",     0x07))  # NoCmdChange
+        register_write.append(("CIU_Command",       0x08))    # Receive
         self.chipset.write_register(*register_write)
-        if data[0] == 0x54: # WRITE-E8
-            time.sleep(0.006) # assuming same response time as WRITE-E
-        if data[0] == 0x1B: # WRITE-NE8
-            time.sleep(0.003) # assuming same response time as WRITE-NE
-        self.chipset.write_register(("CIU_ManualRCV", 0x20)) # enable parity
+        if data[0] == 0x54:  # WRITE-E8
+            time.sleep(0.006)  # assuming same response time as WRITE-E
+        if data[0] == 0x1B:  # WRITE-NE8
+            time.sleep(0.003)  # assuming same response time as WRITE-NE
+        self.chipset.write_register(("CIU_ManualRCV", 0x20))  # enable parity
         fifo_level = self.chipset.read_register("CIU_FIFOLevel")
-        if fifo_level == 0: raise nfc.clf.TimeoutError
+        if fifo_level == 0:
+            raise nfc.clf.TimeoutError
         data = self.chipset.read_register(*(fifo_level * ["CIU_FIFOData"]))
         data = ''.join(["{:08b}".format(octet)[::-1] for octet in data])
         data = [int(data[i:i+8][::-1], 2) for i in range(0, len(data)-8, 9)]
@@ -360,7 +367,7 @@ class Device(pn53x.Device):
 
     def listen_dep(self, target, timeout):
         """Listen *timeout* seconds to become initialized as a DEP Target.
-        
+
         The PN532 can be set to listen as a DEP Target for passive and
         active communication mode.
 
@@ -372,9 +379,10 @@ class Device(pn53x.Device):
         args = (mode, tta_params, ttf_params, nfcid3t, '', '', timeout)
         return self.chipset.tg_init_as_target(*args)
 
+
 def init(transport):
     if transport.TYPE == "TTY":
-        baudrate = 115200 # PN532 initial baudrate
+        baudrate = 115200  # PN532 initial baudrate
         transport.open(transport.port, baudrate)
         long_preamble = bytearray(10)
 
@@ -431,7 +439,7 @@ def init(transport):
         if baudrate > 115200:
             set_baudrate_cmd = bytearray.fromhex("0000ff03fdd410000000")
             set_baudrate_rsp = bytearray.fromhex("0000ff02fed5111a00")
-            set_baudrate_cmd[7] = 5+(230400,460800,921600).index(baudrate)
+            set_baudrate_cmd[7] = 5 + (230400, 460800, 921600).index(baudrate)
             set_baudrate_cmd[8] = 256 - sum(set_baudrate_cmd[5:8])
             transport.write(long_preamble + set_baudrate_cmd)
             if not transport.read(timeout=100) == Chipset.ACK:

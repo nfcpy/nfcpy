@@ -2,7 +2,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2009, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -28,26 +28,25 @@ else said about PN532 also applies to PN533.
 ==========  =======  ============
 function    support  remarks
 ==========  =======  ============
-sense_tta   yes      
-sense_ttb   yes      
+sense_tta   yes
+sense_ttb   yes
 sense_ttf   yes
-sense_dep   yes      
-listen_tta  yes      
+sense_dep   yes
+listen_tta  yes
 listen_ttb  no
 listen_ttf  yes      Maximimum frame size is 64 byte
-listen_dep  yes      
+listen_dep  yes
 ==========  =======  ============
 
 """
+import nfc.clf
+from . import pn53x
+
+import time
+
 import logging
 log = logging.getLogger(__name__)
 
-import time
-import errno
-from binascii import hexlify
-
-import nfc.clf
-from . import pn53x
 
 class Chipset(pn53x.Chipset):
     CMD = {
@@ -77,7 +76,7 @@ class Chipset(pn53x.Chipset):
         0x52: "InRelease",
         0x54: "InSelect",
         0x48: "InActivateDeactivatePaypass",
-        # Target 
+        # Target
         0x8C: "TgInitAsTarget",
         0x92: "TgSetGeneralBytes",
         0x86: "TgGetData",
@@ -133,20 +132,22 @@ class Chipset(pn53x.Chipset):
         if data[2] == 1:
             br_rx = (106, 212, 424, 848)[data[4]]
             br_tx = (106, 212, 424, 848)[data[5]]
-            mtype = {0:"A/B", 1:"Active", 2:"Jewel", 16:"FeliCa"}[data[6]]
+            mtype = {0: "A/B", 1: "Active", 2: "Jewel", 16: "FeliCa"}[data[6]]
             return err, field, (data[3], br_rx, br_tx, mtype)
         else:
             return err, field, None
 
     def _read_register(self, data):
         data = self.command(0x06, data, timeout=0.25)
-        if data[0] != 0: self.chipset_error(data)
+        if data[0] != 0:
+            self.chipset_error(data)
         return data[1:]
 
     def _write_register(self, data):
         data = self.command(0x08, data, timeout=0.25)
-        if data[0] != 0: self.chipset_error(data)
-        
+        if data[0] != 0:
+            self.chipset_error(data)
+
     def tg_init_as_target(self, mode, mifare_params, felica_params,
                           nfcid3t, gt, tk, timeout):
         assert type(mode) is int and mode & 0b11111100 == 0
@@ -158,17 +159,18 @@ class Chipset(pn53x.Chipset):
                 chr(len(gt)) + gt + chr(len(tk)) + tk)
         return self.command(0x8c, data, timeout)
 
+
 class Device(pn53x.Device):
     # Device driver for PN533 based contactless frontends.
 
     def __init__(self, chipset, logger):
         assert isinstance(chipset, Chipset)
         super(Device, self).__init__(chipset, logger)
-        
+
         ic, ver, rev, support = self.chipset.get_firmware_version()
         self._chipset_name = "PN5{0:02x}v{1}.{2}".format(ic, ver, rev)
         self.log.debug("chipset is a {0}".format(self._chipset_name))
-        
+
         self.mute()
         self.chipset.rf_configuration(0x02, "\x00\x0B\x0A")
         self.chipset.rf_configuration(0x04, "\x00")
@@ -177,7 +179,7 @@ class Device(pn53x.Device):
 
         self.eeprom = bytearray()
         try:
-            self.chipset.read_register(0xA000) # check access
+            self.chipset.read_register(0xA000)  # check access
             for addr in range(0xA000, 0xA100, 64):
                 data = self.chipset.read_register(*range(addr, addr+64))
                 self.eeprom.extend(data)
@@ -233,7 +235,7 @@ class Device(pn53x.Device):
 
         """
         return super(Device, self).sense_ttb(target)
-    
+
     def sense_ttf(self, target):
         """Activate the RF field and probe for a Type F Target.
 
@@ -256,7 +258,7 @@ class Device(pn53x.Device):
 
     def _tt1_send_cmd_recv_rsp(self, data, timeout):
         # Special handling for Tag Type 1 (Jewel/Topaz) card commands.
-        
+
         if data[0] in (0x00, 0x01, 0x1A, 0x53, 0x72):
             # RALL, READ, WRITE-NE, WRITE-E, RID are properly
             # implemented by the PN533 firmware.
@@ -268,7 +270,7 @@ class Device(pn53x.Device):
             # command to the CIU because the response is 128 byte and
             # we're not fast enough to read it from the 64 byte FIFO.
             rsp = data[1:2]
-            for block in range((data[1]>>4)*16, (data[1]>>4)*16+16):
+            for block in range((data[1] >> 4) * 16, (data[1] >> 4) * 16 + 16):
                 cmd = "\x02" + chr(block) + data[2:]
                 rsp += self._tt1_send_cmd_recv_rsp(cmd, timeout)[1:9]
             return rsp
@@ -286,29 +288,30 @@ class Device(pn53x.Device):
         # afterwards (maybe this could be a bit more optimized).
         data = self.add_crc_b(data)
         self.chipset.write_register(
-            ("CIU_FIFOData", data[0]), # CMD_CODE
-            ("CIU_ManualRCV",  0x10),  # ParityDisable
-            ("CIU_BitFraming", 0x07),  # 7 bits
-            ("CIU_Command",    0x04),  # Transmit
+            ("CIU_FIFOData", data[0]),  # CMD_CODE
+            ("CIU_ManualRCV",  0x10),   # ParityDisable
+            ("CIU_BitFraming", 0x07),   # 7 bits
+            ("CIU_Command",    0x04),   # Transmit
         )
         for i in range(1, len(data)-1):
             self.chipset.write_register(
-                ("CIU_FIFOData", data[i]), # CMD_DATA
-                ("CIU_BitFraming", 0x00),  # 8 bits
-                ("CIU_Command",    0x04),  # Transmit
+                ("CIU_FIFOData", data[i]),  # CMD_DATA
+                ("CIU_BitFraming", 0x00),   # 8 bits
+                ("CIU_Command",    0x04),   # Transmit
             )
         self.chipset.write_register(
-            ("CIU_FIFOData", data[-1]), # CMD_DATA
-            ("CIU_Command",    0x0C),   # Transceive
-            ("CIU_BitFraming", 0x80),   # 8 bits, start send
+            ("CIU_FIFOData", data[-1]),  # CMD_DATA
+            ("CIU_Command",    0x0C),    # Transceive
+            ("CIU_BitFraming", 0x80),    # 8 bits, start send
         )
-        if data[0] == 0x54: # WRITE-E8
-            time.sleep(0.006) # assuming same response time as WRITE-E
-        if data[0] == 0x1B: # WRITE-NE8
-            time.sleep(0.003) # assuming same response time as WRITE-NE
-        self.chipset.write_register(("CIU_ManualRCV", 0x00)) # enable parity
+        if data[0] == 0x54:  # WRITE-E8
+            time.sleep(0.006)  # assuming same response time as WRITE-E
+        if data[0] == 0x1B:  # WRITE-NE8
+            time.sleep(0.003)  # assuming same response time as WRITE-NE
+        self.chipset.write_register(("CIU_ManualRCV", 0x00))  # enable parity
         fifo_level = self.chipset.read_register("CIU_FIFOLevel")
-        if fifo_level == 0: raise nfc.clf.TimeoutError
+        if fifo_level == 0:
+            raise nfc.clf.TimeoutError
         data = self.chipset.read_register(*(fifo_level * ["CIU_FIFOData"]))
         data = ''.join(["{:08b}".format(octet)[::-1] for octet in data])
         data = [int(data[i:i+8][::-1], 2) for i in range(0, len(data)-8, 9)]
@@ -347,7 +350,7 @@ class Device(pn53x.Device):
 
     def listen_dep(self, target, timeout):
         """Listen *timeout* seconds to become initialized as a DEP Target.
-        
+
         The PN533 can be set to listen as a DEP Target for passive and
         active communication mode.
 
@@ -367,22 +370,23 @@ class Device(pn53x.Device):
         args = (mode, tta_params, ttf_params, nfcid3t, '', '', timeout)
         return self.chipset.tg_init_as_target(*args)
 
+
 def init(transport):
     # write ack to perform a soft reset, raises IOError(EACCES) if
     # someone else has already claimed the USB device.
     transport.write(Chipset.ACK)
-    
+
     chipset = Chipset(transport, logger=log)
     device = Device(chipset, logger=log)
-    
+
     # PN533 bug: Manufacturer and product strings are no longer
     # accessible from USB device description after first use with
     # slightly larger command frames. Better read it from EEPROM.
     if device.eeprom:
-        eeprom = device.eeprom; index = 0
-        while index < len(eeprom) and eeprom[index] != 0xFF:
-            tlv_tag, tlv_len = eeprom[index], eeprom[index+1]
-            tlv_data = eeprom[index+2:index+2+tlv_len]
+        index = 0
+        while index < len(device.eeprom) and device.eeprom[index] != 0xFF:
+            tlv_tag, tlv_len = device.eeprom[index], device.eeprom[index+1]
+            tlv_data = device.eeprom[index+2:index+2+tlv_len]
             if tlv_tag == 3:
                 device._device_name = tlv_data[2:].decode("utf-16")
             if tlv_tag == 4:

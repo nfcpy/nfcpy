@@ -2,7 +2,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2009, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -29,28 +29,30 @@ arguments when they are supposed to be valid. The interface may change
 without notice at any time.
 
 """
-import logging
-log = logging.getLogger(__name__)
+from . import transport
 
 import os
 import sys
 import errno
 import importlib
-from . import transport
+
+import logging
+log = logging.getLogger(__name__)
 
 usb_device_map = {
-    (0x054c, 0x0193) : "pn531", # PN531 (Sony VID/PID)
-    (0x04cc, 0x0531) : "pn531", # PN531 (Philips VID/PID), SCM SCL3710
-    (0x04cc, 0x2533) : "pn533", # NXP PN533 demo board
-    (0x04e6, 0x5591) : "pn533", # SCM SCL3711
-    (0x04e6, 0x5593) : "pn533", # SCM SCL3712
-    (0x054c, 0x02e1) : "rcs956", # Sony RC-S330/360/370
-    (0x054c, 0x06c1) : "rcs380", # Sony RC-S380
-    (0x054c, 0x06c3) : "rcs380", # Sony RC-S380
-    (0x072f, 0x2200) : "acr122", # ACS ACR122U
+    (0x054c, 0x0193): "pn531",   # PN531 (Sony VID/PID)
+    (0x04cc, 0x0531): "pn531",   # PN531 (Philips VID/PID), SCM SCL3710
+    (0x04cc, 0x2533): "pn533",   # NXP PN533 demo board
+    (0x04e6, 0x5591): "pn533",   # SCM SCL3711
+    (0x04e6, 0x5593): "pn533",   # SCM SCL3712
+    (0x054c, 0x02e1): "rcs956",  # Sony RC-S330/360/370
+    (0x054c, 0x06c1): "rcs380",  # Sony RC-S380
+    (0x054c, 0x06c3): "rcs380",  # Sony RC-S380
+    (0x072f, 0x2200): "acr122",  # ACS ACR122U
 }
 
 tty_driver_list = ["arygon", "pn532"]
+
 
 def connect(path):
     """Connect to a local device identified by *path* and load the
@@ -62,30 +64,35 @@ def connect(path):
 
     """
     assert isinstance(path, str) and len(path) > 0
- 
+
     found = transport.USB.find(path)
     if found is not None:
         for vid, pid, bus, dev in found:
             module = usb_device_map.get((vid, pid))
-            if module is None: continue
+            if module is None:
+                continue
 
             log.debug("loading {mod} driver for usb:{vid:04x}:{pid:04x}"
                       .format(mod=module, vid=vid, pid=pid))
-            
+
             if sys.platform.startswith("linux"):
                 devnode = "/dev/bus/usb/%03d/%03d" % (int(bus), int(dev))
                 if not os.access(devnode, os.R_OK | os.W_OK):
                     log.debug("access denied to " + devnode)
-                    if len(path.split(':')) < 3: continue
-                    raise IOError(errno.EACCES, os.strerror(errno.EACCES))
+                    if len(path.split(':')) < 3:
+                        continue
+                    else:
+                        raise IOError(errno.EACCES, os.strerror(errno.EACCES))
 
             driver = importlib.import_module("nfc.clf." + module)
             try:
                 device = driver.init(transport.USB(bus, dev))
             except IOError as error:
                 log.debug(error)
-                if len(path.split(':')) < 3: continue
-                raise error
+                if len(path.split(':')) < 3:
+                    continue
+                else:
+                    raise error
 
             device._path = "usb:{0:03}:{1:03}".format(int(bus), int(dev))
             return device
@@ -107,7 +114,8 @@ def connect(path):
                 except IOError as error:
                     log.debug(error)
                     tty.close()
-                    if not globbed: raise
+                    if not globbed:
+                        raise
 
     if path.startswith("udp"):
         path = path.split(':')
@@ -118,6 +126,7 @@ def connect(path):
         device._path = "udp:{0}:{1}".format(host, port)
         return device
 
+
 class Device(object):
     """All device drivers inherit from the :class:`Device` class and must
     implement it's methods.
@@ -126,12 +135,12 @@ class Device(object):
     def __init__(self, *args, **kwargs):
         fname = "__init__"
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError("%s.%s() must be implemented"%(cname,fname))
-        
+        raise NotImplementedError("%s.%s() is required" % (cname, fname))
+
     def __str__(self):
-        n = filter(bool,(self.vendor_name,self.product_name,self.chipset_name))
-        return ' '.join(n) + " at " + self.path
-        
+        strings = (self.vendor_name, self.product_name, self.chipset_name)
+        return ' '.join(filter(bool, strings)) + " at " + self.path
+
     @property
     def vendor_name(self):
         """The device vendor name. An empty string if the vendor name could
@@ -139,7 +148,7 @@ class Device(object):
 
         """
         return self._vendor_name if hasattr(self, "_vendor_name") else ''
-        
+
     @property
     def product_name(self):
         """The device product name. An empty string if the product name could
@@ -147,12 +156,12 @@ class Device(object):
 
         """
         return self._device_name if hasattr(self, "_device_name") else ''
-        
+
     @property
     def chipset_name(self):
         """The name of the chipset embedded in the device."""
         return self._chipset_name
-        
+
     @property
     def path(self):
         return self._path
@@ -165,7 +174,7 @@ class Device(object):
         """
         fname = "mute"
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError("%s.%s() must be implemented"%(cname,fname))
+        raise NotImplementedError("%s.%s() is required" % (cname, fname))
 
     def sense_tta(self, target):
         """Discover a Type A Target.
@@ -174,23 +183,23 @@ class Device(object):
         command at the bitrate set by **target.brty**. If a response
         is received, sends an RID_CMD for a Type 1 Tag or SDD_REQ and
         SEL_REQ for a Type 2/4 Tag and returns the responses.
-        
+
         Arguments:
-        
+
           target (nfc.clf.RemoteTarget): Supplies bitrate and optional
             command data for the target discovery. The only sensible
             command to set is **sel_req** populated with a UID to find
             only that specific target.
 
         Returns:
-        
+
           nfc.clf.RemoteTarget: Response data received from a remote
             target if found. This includes at least **sens_res** and
             either **rid_res** (for a Type 1 Tag) or **sdd_res** and
             **sel_res** (for a Type 2/4 Tag).
 
         Raises:
-        
+
           nfc.clf.UnsupportedTargetError: The method is not supported
             or the *target* argument requested an unsupported bitrate
             (or has a wrong technology type identifier).
@@ -198,7 +207,7 @@ class Device(object):
         """
         fname = "sense_tta"
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError("%s.%s() must be implemented"%(cname,fname))
+        raise NotImplementedError("%s.%s() is required" % (cname, fname))
 
     def sense_ttb(self, target):
         """Discover a Type B Target.
@@ -213,9 +222,9 @@ class Device(object):
         but always unfortunate communication settings. The drivers
         correct that situation by sending S(DESELECT) and WUPB before
         return.
-        
+
         Arguments:
-        
+
           target (nfc.clf.RemoteTarget): Supplies bitrate and the
             optional **sensb_req** for target discovery. Most drivers
             do no not allow a fully customized SENSB_REQ, the only
@@ -223,13 +232,13 @@ class Device(object):
             others may be ignored.
 
         Returns:
-        
+
           nfc.clf.RemoteTarget: Response data received from a remote
             target if found. The only response data attribute is
             **sensb_res**.
 
         Raises:
-        
+
           nfc.clf.UnsupportedTargetError: The method is not supported
             or the *target* argument requested an unsupported bitrate
             (or has a wrong technology type identifier).
@@ -237,7 +246,7 @@ class Device(object):
         """
         fname = "sense_ttb"
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError("%s.%s() must be implemented"%(cname,fname))
+        raise NotImplementedError("%s.%s() is required" % (cname, fname))
 
     def sense_ttf(self, target):
         """Discover a Type F Target.
@@ -248,20 +257,20 @@ class Device(object):
         attribute.
 
         Arguments:
-        
+
           target (nfc.clf.RemoteTarget): Supplies bitrate and the
             optional **sensf_req** for target discovery. The default
             SENSF_REQ invites all targets to respond and requests the
             system code information bytes.
 
         Returns:
-        
+
           nfc.clf.RemoteTarget: Response data received from a remote
             target if found. The only response data attribute is
             **sensf_res**.
 
         Raises:
-        
+
           nfc.clf.UnsupportedTargetError: The method is not supported
             or the *target* argument requested an unsupported bitrate
             (or has a wrong technology type identifier).
@@ -269,7 +278,7 @@ class Device(object):
         """
         fname = "sense_ttf"
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError("%s.%s() must be implemented"%(cname,fname))
+        raise NotImplementedError("%s.%s() is required" % (cname, fname))
 
     def sense_dep(self, target):
         """Discover a NFC-DEP Target in active communication mode.
@@ -284,20 +293,20 @@ class Device(object):
         to hardware limitations.
 
         Arguments:
-        
+
           target (nfc.clf.RemoteTarget): Supplies bitrate and the
             mandatory **atr_req** for target discovery. The bitrate
             may be one of '106A', '212F', or '424F'.
 
         Returns:
-        
+
           nfc.clf.RemoteTarget: Response data received from a remote
             target if found. The only response data attribute is
             **atr_res**. The actually sent and potentially modified
             ATR_REQ is also included as **atr_req** attribute.
 
         Raises:
-        
+
           nfc.clf.UnsupportedTargetError: The method is not supported
             or the *target* argument requested an unsupported bitrate
             (or has a wrong technology type identifier).
@@ -305,7 +314,7 @@ class Device(object):
         """
         fname = "sense_dep"
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError("%s.%s() must be implemented"%(cname,fname))
+        raise NotImplementedError("%s.%s() is required" % (cname, fname))
 
     def listen_tta(self, target, timeout):
         """Listen as Type A Target.
@@ -321,17 +330,17 @@ class Device(object):
         Note that none of the currently supported hardware can
         actually receive an RID_CMD, thus Type 1 Tag emulation is
         impossible.
-        
+
         Arguments:
-        
+
           target (nfc.clf.LocalTarget): Supplies bitrate and mandatory
-            response data to reply when being discovered. 
+            response data to reply when being discovered.
 
           timeout (float): The maximum number of seconds to wait for a
             discovery command.
 
         Returns:
-        
+
           nfc.clf.LocalTarget: Command data received from the remote
             Initiator if being discovered and to the extent supported
             by the device. The first command received after discovery
@@ -340,7 +349,7 @@ class Device(object):
             always None).
 
         Raises:
-        
+
           nfc.clf.UnsupportedTargetError: The method is not supported
             or the *target* argument requested an unsupported bitrate
             (or has a wrong technology type identifier).
@@ -352,7 +361,7 @@ class Device(object):
         """
         fname = "listen_tta"
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError("%s.%s() must be implemented"%(cname,fname))
+        raise NotImplementedError("%s.%s() is required" % (cname, fname))
 
     def listen_ttb(self, target, timeout):
         """Listen as Type A Target.
@@ -363,24 +372,24 @@ class Device(object):
 
         Note that none of the currently supported hardware can
         actually listen as Type B target.
-        
+
         Arguments:
-        
+
           target (nfc.clf.LocalTarget): Supplies bitrate and mandatory
-            response data to reply when being discovered. 
+            response data to reply when being discovered.
 
           timeout (float): The maximum number of seconds to wait for a
             discovery command.
 
         Returns:
-        
+
           nfc.clf.LocalTarget: Command data received from the remote
             Initiator if being discovered and to the extent supported
             by the device. The first command received after discovery
             is returned as **tt4_cmd** attribute.
 
         Raises:
-        
+
           nfc.clf.UnsupportedTargetError: The method is not supported
             or the *target* argument requested an unsupported bitrate
             (or has a wrong technology type identifier).
@@ -392,7 +401,7 @@ class Device(object):
         """
         fname = "listen_ttb"
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError("%s.%s() must be implemented"%(cname,fname))
+        raise NotImplementedError("%s.%s() is required" % (cname, fname))
 
     def listen_ttf(self, target, timeout):
         """Listen as Type A Target.
@@ -403,22 +412,22 @@ class Device(object):
         SENSF_REQ and returns this as the **tt3_cmd** attribute.
 
         Arguments:
-        
+
           target (nfc.clf.LocalTarget): Supplies bitrate and mandatory
-            response data to reply when being discovered. 
+            response data to reply when being discovered.
 
           timeout (float): The maximum number of seconds to wait for a
             discovery command.
 
         Returns:
-        
+
           nfc.clf.LocalTarget: Command data received from the remote
             Initiator if being discovered and to the extent supported
             by the device. The first command received after discovery
             is returned as **tt3_cmd** attribute.
 
         Raises:
-        
+
           nfc.clf.UnsupportedTargetError: The method is not supported
             or the *target* argument requested an unsupported bitrate
             (or has a wrong technology type identifier).
@@ -430,7 +439,7 @@ class Device(object):
         """
         fname = "listen_ttf"
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError("%s.%s() must be implemented"%(cname,fname))
+        raise NotImplementedError("%s.%s() is required" % (cname, fname))
 
     def listen_dep(self, target, timeout):
         """Listen as NFC-DEP Target.
@@ -445,9 +454,9 @@ class Device(object):
         parameter selection. The **sens_res** or **sensf_res**
         attributes are returned when activation was in passive
         communication mode.
-        
+
         Arguments:
-        
+
           target (nfc.clf.LocalTarget): Supplies mandatory response
             data to reply when being discovered. All of **sens_res**,
             **sdd_res**, **sel_res**, **sensf_res**, and **atr_res**
@@ -459,14 +468,14 @@ class Device(object):
             discovery command.
 
         Returns:
-        
+
           nfc.clf.LocalTarget: Command data received from the remote
             Initiator if being discovered and to the extent supported
             by the device. The first command received after discovery
             is returned as **dep_req** attribute.
 
         Raises:
-        
+
           nfc.clf.UnsupportedTargetError: The method is not supported
             by the local hardware.
 
@@ -477,7 +486,7 @@ class Device(object):
         """
         fname = "listen_dep"
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError("%s.%s() must be implemented"%(cname,fname))
+        raise NotImplementedError("%s.%s() is required" % (cname, fname))
 
     def send_cmd_recv_rsp(self, target, data, timeout):
         """Exchange data with a remote Target
@@ -486,9 +495,9 @@ class Device(object):
         most recent call to one of the sense_xxx() methods. Note that
         *target* becomes invalid with any call to mute(), sense_xxx()
         or listen_xxx()
-        
+
         Arguments:
-        
+
           target (nfc.clf.RemoteTarget): The target returned by the
             last successful call of a sense_xxx() method.
 
@@ -499,17 +508,17 @@ class Device(object):
             response data from the remote device.
 
         Returns:
-        
+
           bytearray: Response data received from the remote device.
 
         Raises:
-        
+
           nfc.clf.CommunicationError: When no data was received.
 
         """
         fname = "send_cmd_recv_rsp"
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError("%s.%s() must be implemented"%(cname,fname))
+        raise NotImplementedError("%s.%s() is required" % (cname, fname))
 
     def send_rsp_recv_cmd(self, target, data, timeout=None):
         """Exchange data with a remote Initiator
@@ -518,9 +527,9 @@ class Device(object):
         in the most recent call to one of the listen_xxx() methods.
         Note that *target* becomes invalid with any call to mute(),
         sense_xxx() or listen_xxx()
-        
+
         Arguments:
-        
+
           target (nfc.clf.LocalTarget): The target returned by the
             last successful call of a listen_xxx() method.
 
@@ -531,17 +540,17 @@ class Device(object):
             command data from the remote device.
 
         Returns:
-        
+
           bytearray: Command data received from the remote device.
 
         Raises:
-        
+
           nfc.clf.CommunicationError: When no data was received.
 
         """
         fname = "send_rsp_recv_cmd"
         cname = self.__class__.__module__ + '.' + self.__class__.__name__
-        raise NotImplementedError("%s.%s() must be implemented"%(cname,fname))
+        raise NotImplementedError("%s.%s() is required" % (cname, fname))
 
     def get_max_send_data_size(self, target):
         """Returns the maximum number of data bytes for sending.
@@ -551,20 +560,20 @@ class Device(object):
         The value reflects the local device capabilities for sending
         in the mode determined by *target*. It does not relate to any
         protocol capabilities and negotiations.
-        
+
         Arguments:
-        
+
           target (nfc.clf.Target): The current local or remote
             communication target.
 
         Returns:
-        
+
           int: Maximum number of data bytes supported for sending.
 
         """
-        cname = self.__class__.__module__ + '.' + self.__class__.__name__
         fname = "get_max_send_data_size"
-        raise NotImplementedError("%s.%s() must be implemented"%(cname,fname))
+        cname = self.__class__.__module__ + '.' + self.__class__.__name__
+        raise NotImplementedError("%s.%s() is required" % (cname, fname))
 
     def get_max_recv_data_size(self, target):
         """Returns the maximum number of data bytes for receiving.
@@ -574,20 +583,20 @@ class Device(object):
         The value reflects the local device capabilities for receiving
         in the mode determined by *target*. It does not relate to any
         protocol capabilities and negotiations.
-        
+
         Arguments:
-        
+
           target (nfc.clf.Target): The current local or remote
             communication target.
 
         Returns:
-        
+
           int: Maximum number of data bytes supported for receiving.
 
         """
-        cname = self.__class__.__module__ + '.' + self.__class__.__name__
         fname = "get_max_recv_data_size"
-        raise NotImplementedError("%s.%s() must be implemented"%(cname,fname))
+        cname = self.__class__.__module__ + '.' + self.__class__.__name__
+        raise NotImplementedError("%s.%s() is required" % (cname, fname))
 
     def turn_on_led_and_buzzer(self):
         """If a device has an LED and/or a buzzer, this method can be
@@ -633,10 +642,12 @@ class Device(object):
         crc = ~calculate_crc(data, len(data)-2, 0xFFFF) & 0xFFFF
         return (data[-2], data[-1]) == (crc & 0xff, crc >> 8)
 
+
 def calculate_crc(data, size, reg):
     for octet in data[:size]:
         for pos in range(8):
             bit = (reg ^ ((octet >> pos) & 1)) & 1
             reg = reg >> 1
-            if bit: reg = reg ^ 0x8408
+            if bit:
+                reg = reg ^ 0x8408
     return reg

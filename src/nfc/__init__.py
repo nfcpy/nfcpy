@@ -2,7 +2,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2009, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -19,12 +19,12 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-from . import clf
-from . import tag
-from . import llcp
-from . import snep
-from . import handover
-from .clf import ContactlessFrontend
+from . import clf                                                  # noqa: F401
+from . import tag                                                  # noqa: F401
+from . import llcp                                                 # noqa: F401
+from . import snep                                                 # noqa: F401
+from . import handover                                             # noqa: F401
+from .clf import ContactlessFrontend                               # noqa: F401
 
 import logging
 logging.getLogger(__name__).addHandler(logging.NullHandler())

@@ -2,7 +2,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2009, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -19,8 +19,7 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-import logging
-log = logging.getLogger(__name__)
+
 
 class Socket(object):
     """
@@ -29,10 +28,10 @@ class Socket(object):
 
     * :const:`nfc.llcp.LOGICAL_DATA_LINK` for best-effort
       communication using LLCP connection-less PDU exchange
-        
+
     * :const:`nfc.llcp.DATA_LINK_CONNECTION` for reliable
       communication using LLCP connection-mode PDU exchange
-        
+
     * :const:`nfc.llcp.llc.RAW_ACCESS_POINT` for unregulated LLCP PDU
       exchange (useful to implement test programs)
     """
@@ -67,7 +66,7 @@ class Socket(object):
         current value which may have been corrected if it was out of
         bounds."""
         return self.llc.setsockopt(self._tco, option, value)
-        
+
     def getsockopt(self, option):
         """Return the value of the given socket option."""
         return self.llc.getsockopt(self._tco, option)
@@ -85,12 +84,12 @@ class Socket(object):
         argument is omitted the socket will be bound to the next
         available service access point address between 32 and 63."""
         return self.llc.bind(self._tco, address)
-        
+
     def connect(self, address):
         """Connect to a remote socket at address. Address may be a
         service name string or a service access point number."""
         return self.llc.connect(self._tco, address)
-    
+
     def listen(self, backlog):
         """Mark a socket as a socket that will be used to accept
         incoming connection requests using accept(). The *backlog*
@@ -99,7 +98,7 @@ class Socket(object):
         disables queuing of connection requests.
         """
         return self.llc.listen(self._tco, backlog)
-    
+
     def accept(self):
         """Accept a connection. The socket must be bound to an address
         and listening for connections. The return value is a new
@@ -108,7 +107,7 @@ class Socket(object):
         socket = Socket(self._llc, None)
         socket._tco = self.llc.accept(self._tco)
         return socket
-    
+
     def send(self, data, flags=0):
         """Send data to the socket. The socket must be connected to a remote
         socket. Returns a boolean value that indicates success or

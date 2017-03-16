@@ -2,7 +2,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2012 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -19,13 +19,11 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-
 """
 The nfc.handover module implements the NFC Forum Connection Handover
 1.2 protocol as a server and client class that simplify realization of
 handover selector and requester functionality.
 
 """
-
-from nfc.handover.server import HandoverServer
-from nfc.handover.client import HandoverClient
+from nfc.handover.server import HandoverServer                     # noqa: F401
+from nfc.handover.client import HandoverClient                     # noqa: F401

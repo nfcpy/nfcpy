@@ -2,7 +2,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2009, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -41,26 +41,23 @@ commands (ATR, PSL) when needed.
 function    support  remarks
 ==========  =======  ============
 sense_tta   yes      Type 1 Tag is not supported
-sense_ttb   no      
+sense_ttb   no
 sense_ttf   yes
 sense_dep   yes      Reduced transport data byte length (max 192)
-listen_tta  yes      
+listen_tta  yes
 listen_ttb  no
 listen_ttf  yes      Maximimum frame size is 64 byte
-listen_dep  yes      
+listen_dep  yes
 ==========  =======  ============
 
 """
+import nfc.clf
+from . import pn53x
+
 import logging
 log = logging.getLogger(__name__)
 
-import time
-import errno
-from binascii import hexlify
 
-import nfc.clf
-from . import pn53x
-            
 class Chipset(pn53x.Chipset):
     CMD = {
         # Miscellaneous
@@ -129,7 +126,7 @@ class Chipset(pn53x.Chipset):
 
     in_list_passive_target_max_target = 2
     """Maximum number of targets for the InListPassiveTarget command."""
-    
+
     in_list_passive_target_brty_range = (0, 1, 2)
     """Possible values for the brty parameter to InListPassiveTarget."""
 
@@ -141,7 +138,7 @@ class Chipset(pn53x.Chipset):
 
     sam_configuration_modes = ("normal", "virtual", "wired", "dual")
     """Possible SAM configuration modes."""
-    
+
     def sam_configuration(self, mode, timeout=0):
         """Send the SAMConfiguration command to configure the Security Access
         Module. The *mode* argument must be one of the string values
@@ -154,7 +151,7 @@ class Chipset(pn53x.Chipset):
 
     power_down_wakeup_sources = ("INT0", "INT1", "USB", "RF", "HSU", "SPI")
     """Possible wake up sources for the :meth:`power_down` method."""
-    
+
     def power_down(self, wakeup_enable):
         """Send the PowerDown command to put the PN531 (including the
         contactless analog front end) into power down mode in order to
@@ -165,9 +162,11 @@ class Chipset(pn53x.Chipset):
         """
         wakeup_set = 0
         for i, src in enumerate(self.power_down_wakeup_sources):
-            if src in wakeup_enable: wakeup_set |= 1 << i
+            if src in wakeup_enable:
+                wakeup_set |= 1 << i
         data = self.command(0x16, chr(wakeup_set), timeout=0.1)
-        if data[0] != 0: self.chipset_error(data)
+        if data[0] != 0:
+            self.chipset_error(data)
 
     def tg_init_tama_target(self, mode, mifare_params, felica_params,
                             nfcid3t, gt, timeout):
@@ -180,13 +179,14 @@ class Chipset(pn53x.Chipset):
         data = chr(mode) + mifare_params + felica_params + nfcid3t + gt
         return self.command(0x8c, data, timeout)
 
+
 class Device(pn53x.Device):
     # Device driver for PN531 based contactless frontends.
 
     def __init__(self, chipset, logger):
         assert isinstance(chipset, Chipset)
         super(Device, self).__init__(chipset, logger)
-        
+
         ver, rev = self.chipset.get_firmware_version()
         self._chipset_name = "PN531v{0}.{1}".format(ver, rev)
         self.log.debug("chipset is a {0}".format(self._chipset_name))
@@ -253,14 +253,15 @@ class Device(pn53x.Device):
             target.atr_req[15] = (target.atr_req[15] & 0xCF) | 0x20
 
         target = super(Device, self).sense_dep(target)
-        if target is None: return
-        
+        if target is None:
+            return
+
         if target.atr_res[16] & 0x30 == 0x30:
             self.log.warning("must reduce the max payload size in atr_res")
             target.atr_res[16] = (target.atr_res[16] & 0xCF) | 0x20
-            
+
         return target
-        
+
     def listen_tta(self, target, timeout):
         """Listen *timeout* seconds for a Type A activation at 106 kbps. The
         ``sens_res``, ``sdd_res``, and ``sel_res`` response data must
@@ -292,7 +293,7 @@ class Device(pn53x.Device):
 
     def listen_dep(self, target, timeout):
         """Listen *timeout* seconds to become initialized as a DEP Target.
-        
+
         The PN531 can be set to listen as a DEP Target for passive and
         active communication mode.
 
@@ -303,6 +304,7 @@ class Device(pn53x.Device):
         nfcid3t = ttf_params[0:8] + "\x00\x00"
         args = (mode, tta_params, ttf_params, nfcid3t, '', timeout)
         return self.chipset.tg_init_tama_target(*args)
+
 
 def init(transport):
     chipset = Chipset(transport, logger=log)
