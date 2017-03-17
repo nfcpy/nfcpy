@@ -11,7 +11,7 @@ import pytest
 from pytest_mock import mocker  # noqa: F401
 
 import logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.WARN)
 logging_level = logging.getLogger().getEffectiveLevel()
 logging.getLogger("nfc.tag").setLevel(logging_level)
 logging.getLogger("nfc.tag.tt4").setLevel(logging_level)

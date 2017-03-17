@@ -53,11 +53,11 @@ class Type1TagCommandError(TagCommandError):
 
 
 def read_tlv(memory, offset, skip_bytes):
-    # Unpack a Type 2 Tag TLV from tag memory and return tag type, tag
-    # length and tag value. For tag type 0 there is no length field,
-    # this is returned as length -1. The tlv length field can be one
-    # or three bytes, if the first byte is 255 then the next two byte
-    # carry the length (big endian).
+    # Unpack a TLV from tag memory and return tag type, tag length and
+    # tag value. For tag type 0 there is no length field, this is
+    # returned as length -1. The tlv length field can be one or three
+    # bytes, if the first byte is 255 then the next two byte carry the
+    # length (big endian).
     try:
         tlv_t, offset = (memory[offset], offset+1)
     except IndexError:
@@ -173,8 +173,9 @@ class Type1Tag(Tag):
             skip_end = 120 if tag_memory_size == 120 else 128
             skip_bytes = set(range(104, skip_end))
             while offset < tag_memory_size:
-                while (offset) in skip_bytes:
+                if offset in skip_bytes:
                     offset += 1
+                    continue
 
                 tlv_t, tlv_l, tlv_v = read_tlv(tag_memory, offset, skip_bytes)
                 log.debug("tlv type {0} at address {1}".format(tlv_t, offset))
@@ -195,6 +196,7 @@ class Type1Tag(Tag):
                 else:
                     logmsg = "unknown tlv {0} at offset {0}"
                     log.debug(logmsg.format(tlv_t, offset))
+
                 offset += tlv_l + 1 + (1 if tlv_l < 255 else 3)
 
             self._capacity = get_capacity(tag_memory_size, offset, skip_bytes)

@@ -137,6 +137,12 @@ class TestStaticMemoryTagNdef:
         ]
         assert tag.ndef is None
 
+    def test_read_until_end_of_memory(self, tag, mmap):
+        tag.clf.exchange.side_effect = [
+            tag.target.rid_res[:2] + mmap[:12] + bytearray(108)
+        ]
+        assert tag.ndef is None
+
     def test_read_beyond_end_of_memory(self, tag, mmap):
         tag.clf.exchange.side_effect = [
             tag.target.rid_res[:2] + mmap[:8]
@@ -265,6 +271,16 @@ class TestDynamicMemoryTagNdef:
         assert tag.ndef.capacity == 462
         assert tag.ndef.length == 461
         assert tag.ndef.octets == ndef_octets
+
+    def test_read_null_tlv_until_key_error(self, tag, mmap):
+        tag.clf.exchange.side_effect = [
+            tag.target.rid_res[:2] + mmap[:12] + bytearray(108),  # RALL
+            HEX("0F") + bytearray(8),  # READ8(15)
+            nfc.clf.TimeoutError,
+            nfc.clf.TimeoutError,
+            nfc.clf.TimeoutError,
+        ]
+        tag.ndef is None
 
     def test_write_to_dynamic_memory(self, tag, mmap, ndef_octets):
         tag.clf.exchange.side_effect = [

@@ -842,10 +842,10 @@ class TestFelicaLite:
             tag.protect("0123456789abcdef", protect_from=-1)
         assert str(excinfo.value) == "protect_from can not be negative"
 
-        # this tag can not be made read protected
+        print("step: this tag can not be made read protected")
         assert tag.protect("0123456789abcdef", read_protect=True) is False
 
-        # system block protected, can't write key
+        print("step: system block protected, can't write key")
         tag.clf.exchange.side_effect = [
             HEX("1d 07 0102030405060708 0000 01"
                 "FF FF 00 01  07 00 00 00  00 00 00 00  00 00 00 00"),
@@ -854,7 +854,7 @@ class TestFelicaLite:
         tag.clf.exchange.assert_called_with(
             HEX('10 06 0102030405060708 010b00 018088'), 0.3093504)
 
-        # also set ndef rw flag because tag has ndef
+        print("step: also set ndef rw flag because tag has ndef")
         tag.clf.exchange.reset_mock()
         tag.clf.exchange.side_effect = [
             HEX('1d 07 0102030405060708 0000 01'
@@ -885,7 +885,7 @@ class TestFelicaLite:
                           '00400001 07000000 00000000 00000000'), 0.3093504),
         ]
 
-        # not setting ndef rw flag because protect_from > 0
+        print("step: not setting ndef rw flag because protect_from > 0")
         tag.clf.exchange.reset_mock()
         tag.clf.exchange.side_effect = [
             HEX('1d 07 0102030405060708 0000 01'
@@ -894,13 +894,27 @@ class TestFelicaLite:
             HEX('0c 09 0102030405060708 0000'),
         ]
         assert tag.protect("0123456789abcdef", protect_from=1) is True
-        print(tag.clf.exchange.mock_calls)
         assert tag.clf.exchange.mock_calls == [
             mock.call(HEX('10 06 0102030405060708 010b00 018088'), 0.3093504),
             mock.call(HEX('20 08 0102030405060708 010900 018087'
                           '37363534 33323130 66656463 62613938'), 0.3093504),
             mock.call(HEX('20 08 0102030405060708 010900 018088'
                           '01400001 07000000 00000000 00000000'), 0.3093504),
+        ]
+
+        print("step: not setting ndef rw flag because protect_from > 0")
+        tag.clf.exchange.reset_mock()
+        tag.clf.exchange.side_effect = [
+            HEX('1d 07 0102030405060708 0000 01'
+                'FF FF FF 01  07 00 00 00  00 00 00 00  00 00 00 00'),
+            HEX('0c 09 0102030405060708 0000'),
+        ]
+        assert tag.protect(None, protect_from=14) is True
+        print(tag.clf.exchange.mock_calls)
+        assert tag.clf.exchange.mock_calls == [
+            mock.call(HEX('10 06 0102030405060708 010b00 018088'), 0.3093504),
+            mock.call(HEX('20 08 0102030405060708 010900 018088'
+                          'ffff0001 07000000 00000000 00000000'), 0.3093504),
         ]
 
     def test_authenticate(self, tag):

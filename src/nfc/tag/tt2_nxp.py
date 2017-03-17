@@ -19,11 +19,12 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-import os
-from binascii import hexlify
-
 import nfc.clf
 from . import tt2
+
+import os
+from binascii import hexlify
+from pyDes import triple_des, CBC
 
 import logging
 log = logging.getLogger(__name__)
@@ -197,8 +198,6 @@ class MifareUltralightC(tt2.Type2Tag):
         return super(MifareUltralightC, self).authenticate(password)
 
     def _authenticate(self, password):
-        from pyDes import triple_des, CBC
-
         # The first 16 password character bytes are taken as key
         # unless the password is empty. If it's empty we use the
         # factory default password.

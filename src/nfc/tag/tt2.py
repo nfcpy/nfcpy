@@ -425,7 +425,7 @@ class Type2Tag(Tag):
         offset = 16
         lock_control = []
         data_area_size = tag_memory[14] * 8
-        while offset < data_area_size + 16:
+        while offset < data_area_size + 16:  # pragma: no branch
             tlv_t, tlv_l, tlv_v = read_tlv(tag_memory, offset, set())
             log.debug("tlv type {0} at offset {1}".format(tlv_t, offset))
             if tlv_t in (0x03, 0xFE, None):

@@ -44,6 +44,12 @@ def tag(clf, target):
     return tag
 
 
+def test_activate_with_wrong_idm_returns_none(clf):
+    target = nfc.clf.RemoteTarget("212F")
+    target.sensf_res = HEX("01 01FE000000000000 FFFFFFFFFFFFFFFF")
+    assert nfc.tag.activate(clf, target) is None
+
+
 ###############################################################################
 #
 # TEST SERVICE CODE CLASS
@@ -245,6 +251,14 @@ class TestType3Tag:
         s = "Type3Tag ID=0102030405060708 PMM=FFFFFFFFFFFFFFFF SYS=12FC"
         assert str(tag) == s
 
+    def test_init_without_system_code(self, clf, target):
+        target.sensf_res = target.sensf_res[0:17]
+        tag = nfc.tag.activate(clf, target)
+        assert isinstance(tag, nfc.tag.tt3.Type3Tag)
+        assert tag.sys == 0xFFFF
+        assert tag.idm == HEX("01 02 03 04 05 06 07 08")
+        assert tag.pmm == HEX("FF FF FF FF FF FF FF FF")
+
     def test_is_present(self, tag):
         tag.clf.exchange.side_effect = [
             HEX("12 01 0102030405060708 FFFFFFFFFFFFFFFF"),
@@ -346,6 +360,10 @@ class TestType3Tag:
             mock.call(HEX('12 06 0102030405060708 010b00 0280008001'),
                       0.46402560000000004),
         ]
+        tag.sys = 0x0000
+        tag.clf.exchange.reset_mock()
+        assert tag.read_from_ndef_service(0, 1) is None
+        assert tag.clf.exchange.called is False
 
     def test_write_without_encryption(self, tag):
         data = HEX(
@@ -383,11 +401,15 @@ class TestType3Tag:
         tag.clf.exchange.side_effect = [
             HEX('0c 09 0102030405060708 0000'),
         ] + 3 * [nfc.clf.TimeoutError]
-        tag.write_to_ndef_service(data, 0, 1)
+        assert tag.write_to_ndef_service(data, 0, 1) is None
         assert tag.clf.exchange.mock_calls == [
             mock.call(HEX('32 08 0102030405060708 010900 0280008001') + data,
                       0.46402560000000004),
         ]
+        tag.sys = 0x0000
+        tag.clf.exchange.reset_mock()
+        assert tag.write_to_ndef_service(data, 0, 1) is None
+        assert tag.clf.exchange.called is False
 
     def test_send_cmd_recv_rsp(self, tag):
         xxx = tag.clf.exchange
@@ -476,13 +498,16 @@ class TestType3Tag:
         tag.sys = 0x0000
         assert tag.dump() == ["This is not an NFC Forum Tag."]
 
-    def test_format(self, tag):
-        tag.clf.exchange.side_effect = 13 * [
-            # Read block 0x7fff, 0x3fff, 0x1fff, 0x0fff, 0x07ff, 0x03ff,
-            # 0x01ff, 0x00ff, 0x007f, 0x003f, 0x001f, 0x000f, 0x0007 fails.
+    def test_format_nbr_3_and_nbw_2_and_wipe(self, tag):
+        tag.clf.exchange.side_effect = [
+            # Read block 0 succeeds.
+            HEX('1d 07 0102030405060708 0000 01') + bytearray(16),
+        ] + 13 * [
+            # Read block 0x8000, 0x4000, 0x2000, 0x1000, 0x0800, 0x0400,
+            # 0x0200, 0x0100, 0x0080, 0x0040, 0x0020, 0x0010, 0x0008 fails.
             HEX('0c 07 0102030405060708 FFFF'),
         ] + 3 * [
-            # Read block 0x0003, 0x0005, 0x0006 succeeds.
+            # Read block 0x0004, 0x0006, 0x0007 succeeds.
             HEX('1d 07 0102030405060708 0000 01') + bytearray(16),
         ] + [
             # number of blocks that can be read in one command
@@ -499,33 +524,112 @@ class TestType3Tag:
         ] + [
             # response to write attribute information block
             HEX('0c 09 0102030405060708 0000'),
-        ] + 6 * [
-            # Wipe NmaxB (6) data blocks
+        ] + 7 * [
+            # Wipe NmaxB (7) data blocks
             HEX('0c 09 0102030405060708 0000'),
         ]
         assert tag.format(version=0x1F, wipe=0x5A) is True
         tag.clf.exchange.assert_any_call(HEX(
             '20 08 0102030405060708 010900 018000'
             # Ver Nbr Nbw NmaxB reserved WF RW Length Check
-            ' 1f  03  02  0006  00000000 00 01 000000 002b'), 0.3093504)
+            ' 1f  03  02  0007  00000000 00 01 000000 002c'), 0.3093504)
         tag.clf.exchange.assert_called_with(HEX(
             '20 08 0102030405060708 010900 018001'
             '5a5a5a5a 5a5a5a5a 5a5a5a5a 5a5a5a5a'), 0.3093504)
 
-        # Test no data block can be read.
-        tag.clf.exchange.reset_mock()
-        tag.clf.exchange.side_effect = 16 * [
-            # Read block 0x7fff, 0x3fff, 0x1fff, 0x0fff, 0x07ff, 0x03ff,
-            # 0x01ff, 0x00ff, 0x007f, 0x003f, 0x001f, 0x000f, 0x0007,
-            # 0x0003, 0x0001, 0x0000 fails.
+    def test_format_nbr_15_and_nbw_13_not_wipe(self, tag):
+        tag.clf.exchange.side_effect = [
+            # Read block 0 succeeds.
+            HEX('1d 07 0102030405060708 0000 01') + bytearray(16),
+        ] + 13 * [
+            # Read block 0x8000, 0x4000, 0x2000, 0x1000, 0x0800, 0x0400,
+            # 0x0200, 0x0100, 0x0080, 0x0040, 0x0020, 0x0010, 0x0008 fails.
+            HEX('0c 07 0102030405060708 FFFF'),
+        ] + 3 * [
+            # Read block 0x0004, 0x0006, 0x0007 succeeds.
+            HEX('1d 07 0102030405060708 0000 01') + bytearray(16),
+        ] + [
+            # number of blocks that can be read in one command
+            HEX('%xD 07 0102030405060708 0000 %02x' % (i, i)) + bytearray(i*16)
+            for i in range(1, 16)
+        ] + [
+            # number of blocks that can be written in one command
+            HEX('1d 07 0102030405060708 0000 01') + bytearray(16),  # 0
+        ] + 13 * [
+            HEX('0c 09 0102030405060708 0000'),  # write N blocks ok
+        ] + [
+            # response to write attribute information block
+            HEX('0c 09 0102030405060708 0000'),
+        ]
+        assert tag.format(version=0x1F) is True
+        tag.clf.exchange.assert_called_with(HEX(
+            '20 08 0102030405060708 010900 018000'
+            # Ver Nbr Nbw NmaxB reserved WF RW Length Check
+            ' 1f  0F  0D  0007  00000000 00 01 000000 0043'), 0.3093504)
+
+    def test_format_with_max_data_blocks(self, tag):
+        tag.clf.exchange.side_effect = [
+            # read block 0 succeeds
+            HEX('1d 07 0102030405060708 0000 01') + bytearray(16),
+        ] + 16 * [
+            # read all blocks succeeds
+            HEX('1d 07 0102030405060708 0000 01') + bytearray(16),
+        ] + [
+            # number of blocks that can be read in one command
+            HEX('%xD 07 0102030405060708 0000 %02x' % (i, i)) + bytearray(i*16)
+            for i in range(1, 16)
+        ] + [
+            # number of blocks that can be written in one command
+            HEX('1d 07 0102030405060708 0000 01') + bytearray(16),  # 0
+        ] + 13 * [
+            HEX('0c 09 0102030405060708 0000'),  # write N blocks ok
+        ] + [
+            # response to write attribute information block
+            HEX('0c 09 0102030405060708 0000'),
+        ]
+        assert tag.format(version=0x1F) is True
+        tag.clf.exchange.assert_called_with(HEX(
+            '20 08 0102030405060708 010900 018000'
+            # Ver Nbr Nbw NmaxB reserved WF RW Length Check
+            ' 1f  0F  0C  FFFF  00000000 00 01 000000 0239'), 0.3093504)
+
+    def test_format_with_one_data_block(self, tag):
+        tag.clf.exchange.side_effect = [
+            # read block 0 succeeds
+            HEX('1d 07 0102030405060708 0000 01') + bytearray(16),
+        ] + 16 * [
+            # fail read all other blocks
+            HEX('0c 07 0102030405060708 FFFF'),
+        ] + [
+            # number of blocks that can be read in one command
+            HEX('%xD 07 0102030405060708 0000 %02x' % (i, i)) + bytearray(i*16)
+            for i in range(1, 16)
+        ] + [
+            # number of blocks that can be written in one command
+            HEX('1d 07 0102030405060708 0000 01') + bytearray(16),  # 0
+        ] + 13 * [
+            HEX('0c 09 0102030405060708 0000'),  # write N blocks ok
+        ] + [
+            # response to write attribute information block
+            HEX('0c 09 0102030405060708 0000'),
+        ]
+        assert tag.format(version=0x1F) is True
+        tag.clf.exchange.assert_called_with(HEX(
+            '20 08 0102030405060708 010900 018000'
+            # Ver Nbr Nbw NmaxB reserved WF RW Length Check
+            ' 1f  0F  0D  0000  00000000 00 01 000000 003C'), 0.3093504)
+
+    def test_format_with_zero_data_blocks(self, tag):
+        tag.clf.exchange.side_effect = [
+            # read block 0 fails
             HEX('0c 07 0102030405060708 FFFF'),
         ]
         assert tag.format() is False
 
-        # Test invalid version number.
+    def test_format_invalid_version_number(self, tag):
         assert tag.format(version=0xF0) is False
 
-        # Test wrong system code.
+    def test_format_wrong_system_code(self, tag):
         tag.sys = 0x0000
         assert tag.format() is False
 
@@ -665,3 +769,184 @@ class TestType3Tag:
                 HEX('20 08 0102030405060708 010900 018000'
                     '1002020003000000000001000027003f'), 0.3093504),
         ])
+
+
+###############################################################################
+#
+# TEST TYPE 3 TAG EMULATION
+#
+###############################################################################
+def BLOCK_DATA(value):
+    return bytearray(16 * [value] if isinstance(value, int) else value)
+
+
+class TestTagEmulation:
+    @pytest.fixture()
+    def target(self):
+        target = nfc.clf.LocalTarget('212F')
+        target.sensf_req = HEX('0012FC0103')
+        target.sensf_res = HEX('0102FE010203040506FFFFFFFFFFFFFFFF12FC')
+        target.tt3_cmd = HEX('0602fe010203040506010b00018000')
+        return target
+
+    @pytest.fixture()
+    def tag(self, clf, target):
+        tag = nfc.tag.emulate(clf, target)
+        assert isinstance(tag, nfc.tag.tt3.Type3TagEmulation)
+        return tag
+
+    def test_init(self, tag, clf, target):
+        assert tag.services == {}
+        assert tag.target == target
+        assert tag.cmd == HEX('100602fe010203040506010b00018000')
+        assert tag.idm == HEX('02FE010203040506')
+        assert tag.pmm == HEX('FFFFFFFFFFFFFFFF')
+        assert tag.sys == HEX('12FC')
+        assert tag.clf == clf
+
+    def test_str(self, tag):
+        assert str(tag) == ("Type3TagEmulation IDm=02fe010203040506"
+                            " PMm=ffffffffffffffff SYS=12fc")
+
+    def test_send_response(self, tag):
+        tag.clf.exchange.side_effect = [HEX('040506')]
+        assert tag.send_response(HEX('010203'), 0.5) == HEX('040506')
+        assert tag.clf.exchange.mock_calls == [mock.call(HEX('010203'), 0.5)]
+
+    def test_polling(self, tag):
+        rsp = tag.process_command(HEX('06 00 12FC0003'))
+        assert rsp == HEX('12 01 02FE010203040506 FFFFFFFFFFFFFFFF')
+        rsp = tag.process_command(HEX('06 0012FC0103'))
+        assert rsp == HEX('14 01 02FE010203040506 FFFFFFFFFFFFFFFF 12FC')
+
+    def test_request_response(self, tag):
+        rsp = tag.process_command(HEX('0A 04 02FE010203040506'))
+        assert rsp == HEX('0B 05 02FE010203040506 00')
+
+    @pytest.mark.parametrize("bn, be", [
+        # (block_number, block_element)
+        (0, '8000'), (1, '8001'), (0, '000000'), (1, '000100'),
+    ])
+    def test_read_service_check_block_data(self, tag, bn, be):
+        def read(block_number, rb, re):
+            assert rb is True and re is True
+            return BLOCK_DATA(block_number % 256)
+
+        tag.add_service(0x000B, read, lambda: False)
+
+        cmd_fmt = '{:02x} 06 02fe010203040506 010b00 01 {:s}'
+        cmd = HEX(cmd_fmt.format(14 + len(HEX(be)), be))
+        rsp = HEX('1d 07 02fe010203040506 0000 01') + BLOCK_DATA(bn)
+        assert tag.process_command(cmd) == rsp
+
+    @pytest.mark.parametrize("nob, bel", [
+        # (number_of_blocks, block_element_list)
+        (1, '01 8000'), (2, '02 8000 8001'), (3, '03 8000 000100 8002'),
+    ])
+    def test_read_service_multiple_blocks(self, tag, nob, bel):
+        def read(block_number, rb, re):
+            assert rb is (True if block_number == 0 else False)
+            assert re is (True if block_number == nob-1 else False)
+            return BLOCK_DATA(0)
+
+        tag.add_service(0x000B, read, lambda: False)
+
+        cmd_fmt = '{:02x} 06 02fe010203040506 010b00 {:s}'
+        rsp_fmt = '{:x}D  07 02fe010203040506 0000 {:02x} {:s}'
+        cmd = HEX(cmd_fmt.format(13 + len(HEX(bel)), bel))
+        rsp = HEX(rsp_fmt.format(nob, nob, nob * 16 * '00'))
+        assert tag.process_command(cmd) == rsp
+
+    @pytest.mark.parametrize("bn, be", [
+        # (block_number, block_element)
+        (0, '8000'), (1, '8001'), (0, '000000'), (1, '000100'),
+    ])
+    def test_write_service_check_block_data(self, tag, bn, be):
+        def write(block_number, block_data, wb, we):
+            assert block_data == BLOCK_DATA(block_number % 256)
+            assert wb is True and we is True
+            return True
+
+        tag.add_service(0x0009, lambda: False, write)
+
+        cmd = '{:02x} 08 02fe010203040506 010900 01 {:s}'
+        cmd = HEX(cmd.format(14 + len(HEX(be)) + 16, be)) + BLOCK_DATA(bn)
+        assert tag.process_command(cmd) == HEX('0C 09 02fe010203040506 0000')
+
+    @pytest.mark.parametrize("nob, bel", [
+        # (number_of_blocks, block_element_list)
+        (1, '01 8000'), (2, '02 8000 8001'), (3, '03 8000 000100 8002'),
+    ])
+    def test_write_service_multiple_blocks(self, tag, nob, bel):
+        def write(block_number, block_data, wb, we):
+            assert block_data == BLOCK_DATA(0)
+            assert wb is (True if block_number == 0 else False)
+            assert we is (True if block_number == nob-1 else False)
+            return True
+
+        tag.add_service(0x0009, lambda: False, write)
+
+        cmd_fmt = '{:02x} 08 02fe010203040506 010900 {:s} {:s}'
+        rsp_fmt = '{:02x} 09 02fe010203040506 0000'
+        cmd = HEX(cmd_fmt.format(13+len(HEX(bel))+nob*16, bel, nob*16*'00'))
+        rsp = HEX(rsp_fmt.format(12))
+        assert tag.process_command(cmd) == rsp
+
+    def test_request_system_code(self, tag):
+        rsp = tag.process_command(HEX('0A 0C 02FE010203040506'))
+        assert rsp == HEX('0D 0D 02FE010203040506 01 12FC')
+
+    def test_process_unknown_command(self, tag):
+        assert tag.process_command(HEX('0A FF 02FE010203040506')) is None
+
+    def test_process_command_length_error(self, tag):
+        assert tag.process_command(HEX('0B 0C 02FE010203040506')) is None
+
+    def test_process_command_idm_error(self, tag):
+        assert tag.process_command(HEX('0A 0C F2FE010203040506')) is None
+
+    def test_read_from_unknown_service(self, tag):
+        cmd = HEX('10 06 02fe010203040506 010b00 018000')
+        rsp = HEX('0C 07 02fe010203040506 FFA1')
+        assert tag.process_command(cmd) == rsp
+
+    def test_read_more_blocks_than_possible(self, tag):
+        tag.add_service(0x000B, None, None)
+        cmd = HEX('2E 06 02fe010203040506 010b00 10' + 16 * '8000')
+        rsp = HEX('0C 07 02fe010203040506 FFA2')
+        assert tag.process_command(cmd) == rsp
+
+    def test_read_from_non_existing_block(self, tag):
+        tag.add_service(0x000B, None, None)
+        cmd = HEX('10 06 02fe010203040506 010b00 018000')
+        rsp = HEX('0C 07 02fe010203040506 01A2')
+        assert tag.process_command(cmd) == rsp
+
+    def test_read_wrong_service_list_index(self, tag):
+        tag.add_service(0x000B, None, None)
+        cmd = HEX('10 06 02fe010203040506 010b00 018100')
+        rsp = HEX('0C 07 02fe010203040506 01A3')
+        assert tag.process_command(cmd) == rsp
+
+    def test_write_to_unknown_service(self, tag):
+        cmd = HEX('20 08 02fe010203040506 010b00 018000') + bytearray(16)
+        rsp = HEX('0C 09 02fe010203040506 FFA1')
+        assert tag.process_command(cmd) == rsp
+
+    def test_write_insufficient_block_data(self, tag):
+        tag.add_service(0x000B, None, None)
+        cmd = HEX('1F 08 02fe010203040506 010b00 018000') + bytearray(15)
+        rsp = HEX('0C 09 02fe010203040506 FFA2')
+        assert tag.process_command(cmd) == rsp
+
+    def test_write_to_non_existing_block(self, tag):
+        tag.add_service(0x000B, None, None)
+        cmd = HEX('20 08 02fe010203040506 010b00 018000') + bytearray(16)
+        rsp = HEX('0C 09 02fe010203040506 01A2')
+        assert tag.process_command(cmd) == rsp
+
+    def test_write_wrong_service_list_index(self, tag):
+        tag.add_service(0x000B, None, None)
+        cmd = HEX('20 08 02fe010203040506 010b00 018100') + bytearray(16)
+        rsp = HEX('0C 09 02fe010203040506 01A3')
+        assert tag.process_command(cmd) == rsp

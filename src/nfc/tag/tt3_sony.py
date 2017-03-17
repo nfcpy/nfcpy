@@ -19,13 +19,14 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
+import nfc.tag
+from . import tt3
+
 import os
 from binascii import hexlify
 from pyDes import triple_des, CBC
 from struct import pack, unpack
-
-import nfc.tag
-from . import tt3
+import itertools
 
 import logging
 log = logging.getLogger(__name__)
@@ -183,7 +184,8 @@ class FelicaStandard(tt3.Type3Tag):
             # Walk through the list of services by index. The first
             # index for which there is no service returns None and
             # terminate the loop.
-            for service_index in xrange(0, 0x10000):
+            for service_index in itertools.count():  # pragma: no branch
+                assert service_index < 0x10000
                 depth = len(area_stack)
                 area_or_service = self.search_service_code(service_index)
                 if area_or_service is None:
@@ -197,8 +199,8 @@ class FelicaStandard(tt3.Type3Tag):
                     # Found a service definition. Add as overlap
                     # service if it is either the first or same type
                     # (Random, Cyclic, Purse) as the previous one. If
-                    # it is differnt then print the current overlap
-                    # services and add remember this for next round.
+                    # it is different then print the current overlap
+                    # services and remember this for the next round.
                     service = area_or_service[0]
                     end_overlap_services = False
                     if len(overlap_services) == 0:
@@ -227,8 +229,6 @@ class FelicaStandard(tt3.Type3Tag):
                         area_stack.pop()
                     lines.extend(print_area(area_from, area_last, depth))
                     area_stack.append((area_from, area_last))
-            else:  # pragma: no cover
-                pass  # never reached
 
         return lines
 
