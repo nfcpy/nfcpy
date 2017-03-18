@@ -271,7 +271,7 @@ class Chipset(object):
         if test == "ram":
             data = self.command(0x00, b'\x02', timeout=1.0)
             return data and data[0] == 0
-        return self.command(0x00, chr(test), test_data, timeout=1.0)
+        return self.command(0x00, pack('B', test) + test_data, timeout=1.0)
 
     def get_firmware_version(self):
         """Send a GetFirmwareVersion command and return the response data
