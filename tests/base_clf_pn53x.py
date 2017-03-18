@@ -5,13 +5,10 @@ import nfc
 import nfc.clf
 import nfc.clf.pn53x
 
-import sys
 import pytest
 from pytest_mock import mocker  # noqa: F401
-from mock import Mock, call
+from mock import call
 from binascii import hexlify
-
-sys.modules['usb1'] = Mock  # fake usb1 for testing on travis-ci
 
 
 def HEX(s):

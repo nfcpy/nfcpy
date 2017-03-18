@@ -1,14 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, division
 
-import sys
 import time
 import pytest
-from mock import MagicMock
-
-sys.modules['usb1'] = MagicMock
-
-import nfc.llcp.sec  # noqa: E402
+import nfc.llcp.sec
 
 
 # =============================================================================

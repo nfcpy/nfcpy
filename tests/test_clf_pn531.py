@@ -5,10 +5,9 @@ import nfc
 import nfc.clf
 import nfc.clf.pn531
 
-import sys
 import pytest
 from pytest_mock import mocker  # noqa: F401
-from mock import Mock, call
+from mock import call
 from binascii import hexlify
 
 import base_clf_pn53x
@@ -19,8 +18,6 @@ logging.basicConfig(level=logging.DEBUG-1)  # WARN)
 logging_level = logging.getLogger().getEffectiveLevel()
 logging.getLogger("nfc.clf").setLevel(logging_level)
 logging.getLogger("nfc.clf.pn531").setLevel(logging_level)
-
-sys.modules['usb1'] = Mock  # fake usb1 for testing on travis-ci
 
 
 @pytest.fixture()  # noqa: F811

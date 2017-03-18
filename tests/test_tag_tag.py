@@ -4,8 +4,6 @@ from __future__ import absolute_import, division
 import nfc
 import nfc.tag
 
-import sys
-import mock
 import ndef
 import pytest
 from pytest_mock import mocker  # noqa: F401
@@ -14,8 +12,6 @@ import logging
 logging.basicConfig(level=logging.WARN)
 logging_level = logging.getLogger().getEffectiveLevel()
 logging.getLogger("nfc.tag").setLevel(logging_level)
-
-sys.modules['usb1'] = mock.Mock  # fake usb1 for testing on travis-ci
 
 
 def HEX(s):
