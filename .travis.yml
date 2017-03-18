@@ -22,6 +22,12 @@ matrix:
       env: TOXENV=readme
 
 
+addons:
+  apt:
+    packages:
+    - libusb-1.0-0
+
+
 install:
   - pip install tox
 
