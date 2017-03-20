@@ -473,13 +473,65 @@ class TestChipset:
 
 
 class TestDevice:
-    def test_sense_tta_no_target_found(self, device):
+    def pn53x_test_sense_tta_no_target_found(self, device):
         device.chipset.transport.read.side_effect = [
-            ACK(), RSP('4B 00'),  # InListPassiveTarget
-            ACK(), RSP('07 26'),  # ReadRegister
+            ACK(), RSP('4B 00'),                          # InListPassiveTarget
+            ACK(), self.reg_rsp('26'),                    # ReadRegister
         ]
         assert device.sense_tta(nfc.clf.RemoteTarget('106A')) is None
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
-            CMD('4A 0100'),  # InListPassiveTarget
-            CMD('06 6339'),  # ReadRegister
+            CMD('4A 0100'),                               # InListPassiveTarget
+            CMD('06 6339'),                               # ReadRegister
+        ]]
+
+    def pn53x_test_sense_ttb_no_target_found(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('4B 00'),                          # InListPassiveTarget
+        ]
+        assert device.sense_ttb(nfc.clf.RemoteTarget('106B')) is None
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('4A 010300'),                             # InListPassiveTarget
+        ]]
+
+    def pn53x_test_sense_ttf_no_target_found(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), self.reg_rsp('03'),                    # ReadRegister
+            ACK(), RSP('4B 00'),                          # InListPassiveTarget
+        ]
+        assert device.sense_ttf(nfc.clf.RemoteTarget('212F')) is None
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('06 6304'),                               # ReadRegister
+            CMD('4A 010100ffff0100'),                     # InListPassiveTarget
+        ]]
+
+    def pn53x_test_sense_dep_no_target_found(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('47 01'),                          # InJumpForPSL
+            ACK(), RSP('09 00'),                          # WriteRegister
+        ]
+        atr_req = HEX('D400 30313233343536373839 00000000')
+        target = nfc.clf.RemoteTarget('106A', atr_req=atr_req)
+        assert device.sense_dep(target) is None
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('46 01000230313233343536373839'),         # InJumpForPSL
+            CMD('08 63013b'),                             # WriteRegister
+        ]]
+
+    def pn53x_test_listen_tta_not_activated(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), IOError(errno.ETIMEDOUT, ""),          # WriteRegister
+        ]
+        target = nfc.clf.LocalTarget('106A')
+        target.sens_res = HEX("4400")
+        target.sel_res = HEX("00")
+        target.sdd_res = HEX("08010203")
+        assert device.listen_tta(target, 1.0) is None
+        print(device.chipset.transport.write.mock_calls)
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('08 63013f'),                             # WriteRegister
+            CMD('8c 0144000102030000 0102030405060708'
+                '   090a0b0c0d0e0f10 1100010203040506'
+                '   0700000000'),                         # TgInitAsTarget
+            ACK(),
         ]]

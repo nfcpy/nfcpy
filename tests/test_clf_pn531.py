@@ -5,6 +5,7 @@ import nfc
 import nfc.clf
 import nfc.clf.pn531
 
+import errno
 import pytest
 from pytest_mock import mocker  # noqa: F401
 from mock import call
@@ -26,8 +27,8 @@ def transport(mocker):
     transport = nfc.clf.transport.USB(1, 1)
     mocker.patch.object(transport, 'write', autospec=True)
     mocker.patch.object(transport, 'read', autospec=True)
-    transport._manufacturer_name = "Manufacturer Name"
-    transport._product_name = "Product Name"
+    transport._manufacturer_name = "Company"
+    transport._product_name = "Reader"
     transport.context = None
     transport.usb_dev = None
     return transport
@@ -80,7 +81,7 @@ class TestChipset(base_clf_pn53x.TestChipset):
         ]
 
 
-class TestDevice:
+class TestDevice(base_clf_pn53x.TestDevice):
     @pytest.fixture()
     def device(self, transport):
         transport.write.return_value = None
@@ -95,6 +96,7 @@ class TestDevice:
             ACK(), RSP('33'),       # RFConfiguration
         ]
         device = nfc.clf.pn531.init(transport)
+        device._path = 'usb:001:001'
         assert isinstance(device, nfc.clf.pn531.Device)
         assert isinstance(device.chipset, nfc.clf.pn531.Chipset)
         assert transport.write.mock_calls == [call(_) for _ in [
@@ -120,13 +122,43 @@ class TestDevice:
             call(CMD('32 0102')),  # RFConfiguration
         ]
 
+    def reg_rsp(self, hexdata):
+        return RSP('07' + hexdata)
+
     def test_sense_tta_no_target_found(self, device):
+        self.pn53x_test_sense_tta_no_target_found(device)
+
+    def test_sense_ttb_is_not_supported(self, device):
+        with pytest.raises(nfc.clf.UnsupportedTargetError) as excinfo:
+            device.sense_ttb(nfc.clf.RemoteTarget('106B'))
+        assert "does not support sense for Type B Target" in str(excinfo.value)
+
+    def test_sense_ttf_no_target_found(self, device):
+        self.pn53x_test_sense_ttf_no_target_found(device)
+
+    def test_sense_dep_no_target_found(self, device):
+        self.pn53x_test_sense_dep_no_target_found(device)
+
+    def test_listen_tta_not_activated(self, device):
         device.chipset.transport.read.side_effect = [
-            ACK(), RSP('4B 00'),  # InListPassiveTarget
-            ACK(), RSP('07 26'),  # ReadRegister
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), IOError(errno.ETIMEDOUT, ""),          # WriteRegister
         ]
-        assert device.sense_tta(nfc.clf.RemoteTarget('106A')) is None
+        target = nfc.clf.LocalTarget('106A')
+        target.sens_res = HEX("4400")
+        target.sel_res = HEX("00")
+        target.sdd_res = HEX("08010203")
+        assert device.listen_tta(target, 1.0) is None
+        print(device.chipset.transport.write.mock_calls)
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
-            CMD('4A 0100'),  # InListPassiveTarget
-            CMD('06 6339'),  # ReadRegister
+            CMD('08 63013f'),                             # WriteRegister
+            CMD('8c 0144000102030000 0102030405060708'
+                '   090a0b0c0d0e0f10 1100010203040506'
+                '   070000'),                             # TgInitAsTarget
+            ACK(),
         ]]
+
+    def test_listen_ttb_is_not_supported(self, device):
+        with pytest.raises(nfc.clf.UnsupportedTargetError) as excinfo:
+            device.listen_ttb(nfc.clf.LocalTarget('106B'), 1.0)
+        assert "does not support listen as Type B Target" in str(excinfo.value)

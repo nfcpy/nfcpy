@@ -454,7 +454,7 @@ class TestDevice(base_clf_pn53x.TestDevice):
             nfc.clf.pn532.init(transport)
         assert excinfo.value.errno == errno.ENODEV
 
-    def test_close(self, device):
+    def test_close_transport_type_not_tty(self, device):
         device.chipset.transport.TYPE = "test"
         transport = device.chipset.transport
         chipset = device.chipset
@@ -464,3 +464,21 @@ class TestDevice(base_clf_pn53x.TestDevice):
         device.chipset = chipset
         device.chipset.transport = transport
         device.chipset.transport.TYPE = "TTY"
+
+    def reg_rsp(self, hexdata):
+        return RSP('07' + hexdata)
+
+    def test_sense_tta_no_target_found(self, device):
+        self.pn53x_test_sense_tta_no_target_found(device)
+
+    def test_sense_ttb_no_target_found(self, device):
+        self.pn53x_test_sense_ttb_no_target_found(device)
+
+    def test_sense_ttf_no_target_found(self, device):
+        self.pn53x_test_sense_ttf_no_target_found(device)
+
+    def test_listen_tta_not_activated(self, device):
+        self.pn53x_test_listen_tta_not_activated(device)
+
+    def test_sense_dep_no_target_found(self, device):
+        self.pn53x_test_sense_dep_no_target_found(device)

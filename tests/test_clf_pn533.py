@@ -92,3 +92,106 @@ class TestChipset(base_clf_pn53x.TestChipset):
             call(CMD('8C 03 010203040506 010203040506070809101112131415161718'
                      '01020304050607080910 03 313233 00'))
         ]
+
+
+class TestDevice(base_clf_pn53x.TestDevice):
+    @pytest.fixture()
+    def device(self, transport):
+        transport.write.return_value = None
+        transport.read.side_effect = [
+            ACK(), RSP('01 00'
+                       '000102030405060708090a0b0c0d0e0f'
+                       '101112131415161718191a1b1c1d1e1f'
+                       '202122232425262728292a2b2c2d2e2f'
+                       '303132333435363738393a3b3c3d3e3f'
+                       '404142434445464748494a4b4c4d4e4f'
+                       '505152535455565758595a5b5c5d5e5f'
+                       '606162636465666768696a6b6c6d6e6f'
+                       '707172737475767778797a7b7c7d7e7f'
+                       '808182838485868788898a8b8c8d8e8f'
+                       '909192939495969798999a9b9c9d9e9f'
+                       'a0a1a2a3a4a5a6a7a8a9aaabacadaeaf'
+                       'b0b1b2b3b4b5b6b7b8b9babbbcbdbebf'
+                       'c0c1c2c3c4c5c6c7c8c9cacbcccdcecf'
+                       'd0d1d2d3d4d5d6d7d8d9dadbdcdddedf'
+                       'e0e1e2e3e4e5e6e7e8e9eaebecedeeef'
+                       'f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff'
+                       '000102030405'),                   # Diagnose
+            ACK(), RSP('03 33020707'),                    # GetFirmwareVersion
+            ACK(), RSP('33'),                             # RFConfiguration
+            ACK(), RSP('33'),                             # RFConfiguration
+            ACK(), RSP('33'),                             # RFConfiguration
+            ACK(), RSP('33'),                             # RFConfiguration
+            ACK(), RSP('13'),                             # SetParameters
+            ACK(), RSP('07 ff'),                          # ReadRegister
+            ACK(), RSP('33'),                             # RFConfiguration
+            ACK(), RSP('33'),                             # RFConfiguration
+            ACK(), RSP('33'),                             # RFConfiguration
+            ACK(), RSP('33'),                             # RFConfiguration
+        ]
+        device = nfc.clf.pn533.init(transport)
+        device._path = 'usb:001:001'
+        assert isinstance(device, nfc.clf.pn533.Device)
+        assert isinstance(device.chipset, nfc.clf.pn533.Chipset)
+        assert transport.write.mock_calls == [call(_) for _ in [
+            ACK(),
+            CMD('00 00'
+                '000102030405060708090a0b0c0d0e0f'
+                '101112131415161718191a1b1c1d1e1f'
+                '202122232425262728292a2b2c2d2e2f'
+                '303132333435363738393a3b3c3d3e3f'
+                '404142434445464748494a4b4c4d4e4f'
+                '505152535455565758595a5b5c5d5e5f'
+                '606162636465666768696a6b6c6d6e6f'
+                '707172737475767778797a7b7c7d7e7f'
+                '808182838485868788898a8b8c8d8e8f'
+                '909192939495969798999a9b9c9d9e9f'
+                'a0a1a2a3a4a5a6a7a8a9aaabacadaeaf'
+                'b0b1b2b3b4b5b6b7b8b9babbbcbdbebf'
+                'c0c1c2c3c4c5c6c7c8c9cacbcccdcecf'
+                'd0d1d2d3d4d5d6d7d8d9dadbdcdddedf'
+                'e0e1e2e3e4e5e6e7e8e9eaebecedeeef'
+                'f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff'
+                '000102030405'),                          # Diagnose
+            CMD('02'),                                    # GetFirmwareVersion
+            CMD('32 0102'),                               # RFConfiguration
+            CMD('32 02000b0a'),                           # RFConfiguration
+            CMD('32 0400'),                               # RFConfiguration
+            CMD('32 05010001'),                           # RFConfiguration
+            CMD('12 00'),                                 # SetParameters
+            CMD('06 a000'),                               # ReadRegister
+            CMD('32 0a5af43f114d85616f266287'),           # RFConfiguration
+            CMD('32 0b6aff3f104185616f'),                 # RFConfiguration
+            CMD('32 0cff0485'),                           # RFConfiguration
+            CMD('32 0d85158a850ab28504da'),               # RFConfiguration
+        ]]
+        transport.write.reset_mock()
+        transport.read.reset_mock()
+        yield device
+        transport.write.reset_mock()
+        transport.read.reset_mock()
+        transport.read.side_effect = [
+            ACK(), RSP('33'),                             # RFConfiguration
+        ]
+        device.close()
+        assert transport.write.mock_calls == [
+            call(CMD('32 0102')),                         # RFConfiguration
+        ]
+
+    def reg_rsp(self, hexdata):
+        return RSP('07 00' + hexdata)
+
+    def test_sense_tta_no_target_found(self, device):
+        self.pn53x_test_sense_tta_no_target_found(device)
+
+    def test_sense_ttb_no_target_found(self, device):
+        self.pn53x_test_sense_ttb_no_target_found(device)
+
+    def test_sense_ttf_no_target_found(self, device):
+        self.pn53x_test_sense_ttf_no_target_found(device)
+
+    def test_sense_dep_no_target_found(self, device):
+        self.pn53x_test_sense_dep_no_target_found(device)
+
+    def test_listen_tta_not_activated(self, device):
+        self.pn53x_test_listen_tta_not_activated(device)
