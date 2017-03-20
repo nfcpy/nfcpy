@@ -168,18 +168,6 @@ class Chipset(pn53x.Chipset):
         if data[0] != 0:
             self.chipset_error(data)
 
-    def in_auto_poll(self, poll_nr, period, *types):
-        assert len(types) <= 15
-        timeout = poll_nr * len(types) * period * 0.15 + 0.1
-        data = chr(poll_nr) + chr(period) + bytearray(types)
-        data = self.command(0x60, data, timeout=timeout)
-        targets = []
-        for i in data.pop(0):
-            tg_type = data.pop(0)
-            tg_data = data[:data.pop(0)]
-            targets.append((tg_type, tg_data))
-        return targets
-
     def tg_init_as_target(self, mode, mifare_params, felica_params, nfcid3t,
                           general_bytes='', historical_bytes='', timeout=None):
         assert type(mode) is int and mode & 0b11111000 == 0

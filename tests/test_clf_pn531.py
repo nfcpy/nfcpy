@@ -45,7 +45,7 @@ class TestChipset(base_clf_pn53x.TestChipset):
         ("dual", 3, CMD('14 04 03')),
     ])
     def test_sam_configuration(self, chipset, mode, timeout, command):
-        chipset.transport.read.side_effect = [ACK, RSP('15')]
+        chipset.transport.read.side_effect = [ACK(), RSP('15')]
         assert chipset.sam_configuration(mode, timeout) is None
         assert chipset.transport.write.mock_calls == [call(command)]
         assert chipset.transport.read.mock_calls == [call(100), call(100)]
@@ -56,17 +56,17 @@ class TestChipset(base_clf_pn53x.TestChipset):
         ("INT0, INT1, RF", '16 0B'), ("SPI, HSU, USB", '16 34'),
     ])
     def test_power_down(self, chipset, wakeup_enable, command):
-        chipset.transport.read.side_effect = [ACK, RSP('17 00')]
+        chipset.transport.read.side_effect = [ACK(), RSP('17 00')]
         assert chipset.power_down(wakeup_enable) is None
         assert chipset.transport.write.mock_calls == [call(CMD(command))]
         assert chipset.transport.read.mock_calls == [call(100), call(100)]
-        chipset.transport.read.side_effect = [ACK, RSP('17 01')]
-        with pytest.raises(nfc.clf.pn531.Chipset.Error) as excinfo:
+        chipset.transport.read.side_effect = [ACK(), RSP('17 01')]
+        with pytest.raises(chipset.Error) as excinfo:
             chipset.power_down(wakeup_enable)
         assert excinfo.value.errno == 1
 
     def test_tg_init_tama_target(self, chipset):
-        chipset.transport.read.side_effect = [ACK, RSP('8D 01 02 03')]
+        chipset.transport.read.side_effect = [ACK(), RSP('8D 01 02 03')]
         mifare = HEX('010203040506')
         felica = HEX('010203040506070809101112131415161718')
         nfcid3 = HEX('01020304050607080910')
@@ -85,14 +85,14 @@ class TestDevice:
     def device(self, transport):
         transport.write.return_value = None
         transport.read.side_effect = [
-            ACK, RSP('01 00' + hexlify(bytearray(range(251)))),  # Diagnose
-            ACK, RSP('03 0304'),  # GetFirmwareVersion
-            ACK, RSP('15'),       # SAMConfiguration
-            ACK, RSP('13'),       # SetTAMAParameters
-            ACK, RSP('33'),       # RFConfiguration
-            ACK, RSP('33'),       # RFConfiguration
-            ACK, RSP('33'),       # RFConfiguration
-            ACK, RSP('33'),       # RFConfiguration
+            ACK(), RSP('01 00' + hexlify(bytearray(range(251)))),  # Diagnose
+            ACK(), RSP('03 0304'),  # GetFirmwareVersion
+            ACK(), RSP('15'),       # SAMConfiguration
+            ACK(), RSP('13'),       # SetTAMAParameters
+            ACK(), RSP('33'),       # RFConfiguration
+            ACK(), RSP('33'),       # RFConfiguration
+            ACK(), RSP('33'),       # RFConfiguration
+            ACK(), RSP('33'),       # RFConfiguration
         ]
         device = nfc.clf.pn531.init(transport)
         assert isinstance(device, nfc.clf.pn531.Device)
@@ -113,7 +113,7 @@ class TestDevice:
         transport.write.reset_mock()
         transport.read.reset_mock()
         transport.read.side_effect = [
-            ACK, RSP('33'),  # RFConfiguration
+            ACK(), RSP('33'),  # RFConfiguration
         ]
         device.close()
         assert transport.write.mock_calls == [
@@ -122,8 +122,8 @@ class TestDevice:
 
     def test_sense_tta_no_target_found(self, device):
         device.chipset.transport.read.side_effect = [
-            ACK, RSP('4B 00'),  # InListPassiveTarget
-            ACK, RSP('07 26'),  # ReadRegister
+            ACK(), RSP('4B 00'),  # InListPassiveTarget
+            ACK(), RSP('07 26'),  # ReadRegister
         ]
         assert device.sense_tta(nfc.clf.RemoteTarget('106A')) is None
         assert device.chipset.transport.write.mock_calls == [

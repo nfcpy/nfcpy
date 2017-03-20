@@ -44,7 +44,7 @@ class TestChipset(base_clf_pn53x.TestChipset):
          ("Internal buffer overflow", "", None)),
     ])
     def test_get_general_status(self, chipset, response, result):
-        chipset.transport.read.side_effect = [ACK, response]
+        chipset.transport.read.side_effect = [ACK(), response]
         assert chipset.get_general_status() == result
         assert chipset.transport.read.mock_calls == [call(100), call(100)]
         assert chipset.transport.write.mock_calls == [call(CMD('04'))]
@@ -55,9 +55,9 @@ class TestChipset(base_clf_pn53x.TestChipset):
         ((0x0102, "CIU_TMode"), '06 0102631A', '07 00 AABB', [0xAA, 0xBB]),
     ])
     def test_read_register(self, chipset, args, command, response, value):
-        chipset.transport.read.side_effect = [ACK, RSP(response)]
+        chipset.transport.read.side_effect = [ACK(), RSP(response)]
         assert chipset.read_register(*args) == value
-        chipset.transport.read.side_effect = [ACK, RSP('07 01')]
+        chipset.transport.read.side_effect = [ACK(), RSP('07 01')]
         with pytest.raises(nfc.clf.pn533.Chipset.Error) as excinfo:
             chipset.read_register(*args)
         assert excinfo.value.errno == 1
@@ -70,11 +70,25 @@ class TestChipset(base_clf_pn53x.TestChipset):
         (((0x0102, 0x10), ("CIU_Mode", 0x11)), '08 0102 10 6301 11'),
     ])
     def test_write_register(self, chipset, args, command):
-        chipset.transport.read.side_effect = [ACK, RSP('09 00')]
+        chipset.transport.read.side_effect = [ACK(), RSP('09 00')]
         assert chipset.write_register(*args) is None
-        chipset.transport.read.side_effect = [ACK, RSP('09 01')]
+        chipset.transport.read.side_effect = [ACK(), RSP('09 01')]
         with pytest.raises(nfc.clf.pn533.Chipset.Error) as excinfo:
             chipset.write_register(*args)
         assert excinfo.value.errno == 1
         assert chipset.transport.read.mock_calls == 2 * [call(100), call(250)]
         assert chipset.transport.write.mock_calls == 2 * [call(CMD(command))]
+
+    def test_tg_init_as_target(self, chipset):
+        chipset.transport.read.side_effect = [ACK(), RSP('8D 01 02 03')]
+        mifare = HEX('010203040506')
+        felica = HEX('010203040506070809101112131415161718')
+        nfcid3 = HEX('01020304050607080910')
+        gbytes = HEX('313233')
+        args = (0x03, mifare, felica, nfcid3, gbytes, HEX(''), 0.5)
+        assert chipset.tg_init_as_target(*args) == HEX('01 02 03')
+        assert chipset.transport.read.mock_calls == [call(100), call(500)]
+        assert chipset.transport.write.mock_calls == [
+            call(CMD('8C 03 010203040506 010203040506070809101112131415161718'
+                     '01020304050607080910 03 313233 00'))
+        ]
