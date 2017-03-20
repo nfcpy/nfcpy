@@ -99,13 +99,13 @@ class TestDevice:
         assert isinstance(device.chipset, nfc.clf.pn531.Chipset)
         assert transport.write.mock_calls == [call(_) for _ in [
             CMD('00 00' + hexlify(bytearray(range(251)))),  # Diagnose
-            CMD('02'),            # GetFirmwareVersion
-            CMD('14 0100'),       # SAMConfiguration
-            CMD('12 00'),         # SetTAMAParameters
-            CMD('32 02000b0a'),   # RFConfiguration
-            CMD('32 0400'),       # RFConfiguration
-            CMD('32 05010001'),   # RFConfiguration
-            CMD('32 0102'),       # RFConfiguration
+            CMD('02'),              # GetFirmwareVersion
+            CMD('14 0100'),         # SAMConfiguration
+            CMD('12 00'),           # SetTAMAParameters
+            CMD('32 02000b0a'),     # RFConfiguration
+            CMD('32 0400'),         # RFConfiguration
+            CMD('32 05010001'),     # RFConfiguration
+            CMD('32 0102'),         # RFConfiguration
         ]]
         transport.write.reset_mock()
         transport.read.reset_mock()
@@ -126,8 +126,7 @@ class TestDevice:
             ACK(), RSP('07 26'),  # ReadRegister
         ]
         assert device.sense_tta(nfc.clf.RemoteTarget('106A')) is None
-        assert device.chipset.transport.write.mock_calls == [
-            call(CMD('4A 0100')),  # InListPassiveTarget
-            call(CMD('06 6339')),  # ReadRegister
-        ]
-        pass
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('4A 0100'),  # InListPassiveTarget
+            CMD('06 6339'),  # ReadRegister
+        ]]

@@ -16,18 +16,28 @@ def HEX(s):
     return bytearray.fromhex(s)
 
 
-def SFRAME(hexstr):
-    data = HEX(hexstr)
-    return (bytearray([0, 0, 255, len(data), 256-len(data)]) + data +
-            bytearray([256 - sum(data) & 255, 0]))
+def STD_FRAME(data):
+    LEN = bytearray([len(data)])
+    LCS = bytearray([256 - sum(LEN) & 255])
+    DCS = bytearray([256 - sum(data) & 255])
+    return HEX('0000ff') + LEN + LCS + data + DCS + HEX('00')
+
+
+def EXT_FRAME(data):
+    LEN = bytearray([len(data) // 256, len(data) % 256])
+    LCS = bytearray([256 - sum(LEN) & 255])
+    DCS = bytearray([256 - sum(data) & 255])
+    return HEX('0000ffffff') + LEN + LCS + data + DCS + HEX('00')
 
 
 def CMD(hexstr):
-    return SFRAME('D4' + hexstr)
+    data = HEX('D4' + hexstr)
+    return STD_FRAME(data) if len(data) < 256 else EXT_FRAME(data)
 
 
 def RSP(hexstr):
-    return SFRAME('D5' + hexstr)
+    data = HEX('D5' + hexstr)
+    return STD_FRAME(data) if len(data) < 256 else EXT_FRAME(data)
 
 
 def ACK():
@@ -460,3 +470,16 @@ class TestChipset:
         assert chipset.tg_get_target_status() == (0, 0, 0)
         assert chipset.transport.read.mock_calls == 4 * [call(100), call(100)]
         assert chipset.transport.write.mock_calls == 4 * [call(CMD('8A'))]
+
+
+class TestDevice:
+    def test_sense_tta_no_target_found(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('4B 00'),  # InListPassiveTarget
+            ACK(), RSP('07 26'),  # ReadRegister
+        ]
+        assert device.sense_tta(nfc.clf.RemoteTarget('106A')) is None
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('4A 0100'),  # InListPassiveTarget
+            CMD('06 6339'),  # ReadRegister
+        ]]
