@@ -223,7 +223,7 @@ class Device(pn53x.Device):
             if len(target.sdd_res) == 8:
                 target.sdd_res = target.sdd_res[1:]
             elif len(target.sdd_res) == 12:
-                target.sdd_res = target.sdd_res[1:4] + target.sdd_res[4:]
+                target.sdd_res = target.sdd_res[1:4] + target.sdd_res[5:]
             # Also the SENS_RES bytes are reversed compared to PN532/533
             target.sens_res = bytearray(reversed(target.sens_res))
         return target

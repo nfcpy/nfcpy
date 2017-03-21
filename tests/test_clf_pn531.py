@@ -136,6 +136,27 @@ class TestDevice(base_clf_pn53x.TestDevice):
             CMD('08 63037f'),                             # WriteRegister
         ]]
 
+    @pytest.mark.parametrize("sdd, sdd_res", [
+        ('088801020304050607', '01020304050607'),
+        ('0c880102038804050607080910', '01020304050607080910'),
+    ])
+    def test_sense_tta_target_tt2_ct1(self, device, sdd, sdd_res):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('4B 01 01 0044 00' + sdd),         # InListPassiveTarget
+            ACK(), self.reg_rsp('FF'),                    # ReadRegister
+            ACK(), RSP('09 00'),                          # WriteRegister
+        ]
+        target = device.sense_tta(nfc.clf.RemoteTarget('106A'))
+        assert isinstance(target, nfc.clf.RemoteTarget)
+        assert target.sel_res == HEX('00')
+        assert target.sdd_res == HEX(sdd_res)
+        assert target.sens_res == HEX('0044')             # reversed for PN531
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('4A 0100'),                               # InListPassiveTarget
+            CMD('06 6303'),                               # ReadRegister
+            CMD('08 63037f'),                             # WriteRegister
+        ]]
+
     def test_sense_ttb_is_not_supported(self, device):
         with pytest.raises(nfc.clf.UnsupportedTargetError) as excinfo:
             device.sense_ttb(nfc.clf.RemoteTarget('106B'))
