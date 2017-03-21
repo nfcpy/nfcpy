@@ -563,7 +563,7 @@ class TestDevice:
             CMD('4A 010300'),                             # InListPassiveTarget
         ]]
 
-    def pn53x_test_sense_ttf_no_target_found(self, device):
+    def test_sense_ttf_no_target_found(self, device):
         device.chipset.transport.read.side_effect = [
             ACK(), self.reg_rsp('03'),                    # ReadRegister
             ACK(), RSP('4B 00'),                          # InListPassiveTarget
@@ -573,6 +573,39 @@ class TestDevice:
             CMD('06 6304'),                               # ReadRegister
             CMD('4A 010100ffff0100'),                     # InListPassiveTarget
         ]]
+
+    def test_sense_ttf_target_found(self, device):
+        sensf_res = '01 0102030405060708 F1F2F3F4F5F6F7F8 AABB'
+        device.chipset.transport.read.side_effect = [
+            ACK(), self.reg_rsp('03'),                    # ReadRegister
+            ACK(), RSP('4B 0101 14' + sensf_res),         # InListPassiveTarget
+        ]
+        target = device.sense_ttf(nfc.clf.RemoteTarget('212F'))
+        assert isinstance(target, nfc.clf.RemoteTarget)
+        assert target.brty == "212F"
+        assert target.sensf_res == HEX(sensf_res)
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('06 6304'),                               # ReadRegister
+            CMD('4A 010100ffff0100'),                     # InListPassiveTarget
+        ]]
+
+    def test_sense_ttf_more_rf_on_time(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), self.reg_rsp('00'),                    # ReadRegister
+            ACK(), RSP('33'),                             # RFConfiguration
+            ACK(), RSP('4B 00'),                          # InListPassiveTarget
+        ]
+        assert device.sense_ttf(nfc.clf.RemoteTarget('212F')) is None
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('06 6304'),                               # ReadRegister
+            CMD('32 0101'),                               # RFConfiguration
+            CMD('4A 010100ffff0100'),                     # InListPassiveTarget
+        ]]
+
+    def test_sense_ttf_unsupported_bitrate(self, device):
+        with pytest.raises(ValueError) as excinfo:
+            device.sense_ttf(nfc.clf.RemoteTarget('100F'))
+        assert str(excinfo.value) == "unsupported bitrate 100F"
 
     def pn53x_test_sense_dep_no_target_found(self, device):
         device.chipset.transport.read.side_effect = [

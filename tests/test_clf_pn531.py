@@ -182,9 +182,6 @@ class TestDevice(base_clf_pn53x.TestDevice):
             device.sense_ttb(nfc.clf.RemoteTarget('106B'))
         assert "does not support sense for Type B Target" in str(excinfo.value)
 
-    def test_sense_ttf_no_target_found(self, device):
-        self.pn53x_test_sense_ttf_no_target_found(device)
-
     def test_sense_dep_no_target_found(self, device):
         self.pn53x_test_sense_dep_no_target_found(device)
 

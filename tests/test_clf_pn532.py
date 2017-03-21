@@ -513,9 +513,6 @@ class TestDevice(base_clf_pn53x.TestDevice):
     def test_sense_ttb_no_target_found(self, device):
         self.pn53x_test_sense_ttb_no_target_found(device)
 
-    def test_sense_ttf_no_target_found(self, device):
-        self.pn53x_test_sense_ttf_no_target_found(device)
-
     def test_sense_dep_no_target_found(self, device):
         self.pn53x_test_sense_dep_no_target_found(device)
 
