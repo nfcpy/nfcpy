@@ -142,7 +142,7 @@ class TestDevice(base_clf_pn53x.TestDevice):
     def test_listen_tta_not_activated(self, device):
         device.chipset.transport.read.side_effect = [
             ACK(), RSP('09 00'),                          # WriteRegister
-            ACK(), IOError(errno.ETIMEDOUT, ""),          # WriteRegister
+            ACK(), IOError(errno.ETIMEDOUT, ""),          # TgInitAsTarget
         ]
         target = nfc.clf.LocalTarget('106A')
         target.sens_res = HEX("4400")
@@ -158,7 +158,10 @@ class TestDevice(base_clf_pn53x.TestDevice):
             ACK(),
         ]]
 
-    def test_listen_ttb_is_not_supported(self, device):
+    def test_listen_ttf_not_activated(self, device):
+        self.pn53x_test_listen_ttf_not_activated(device)
+
+    def test_listen_ttb_not_supported(self, device):
         with pytest.raises(nfc.clf.UnsupportedTargetError) as excinfo:
             device.listen_ttb(nfc.clf.LocalTarget('106B'), 1.0)
         assert "does not support listen as Type B Target" in str(excinfo.value)

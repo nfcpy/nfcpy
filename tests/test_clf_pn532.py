@@ -143,6 +143,7 @@ class TestDevice(base_clf_pn53x.TestDevice):
             ACK(), RSP('33'),                             # RFConfiguration
         ]
         device = nfc.clf.pn532.init(transport)
+        device._path = '/dev/ttyS0'
         assert isinstance(device, nfc.clf.pn532.Device)
         assert isinstance(device.chipset, nfc.clf.pn532.Chipset)
         assert transport.write.mock_calls == [call(_) for _ in [
@@ -477,8 +478,16 @@ class TestDevice(base_clf_pn53x.TestDevice):
     def test_sense_ttf_no_target_found(self, device):
         self.pn53x_test_sense_ttf_no_target_found(device)
 
+    def test_sense_dep_no_target_found(self, device):
+        self.pn53x_test_sense_dep_no_target_found(device)
+
     def test_listen_tta_not_activated(self, device):
         self.pn53x_test_listen_tta_not_activated(device)
 
-    def test_sense_dep_no_target_found(self, device):
-        self.pn53x_test_sense_dep_no_target_found(device)
+    def test_listen_ttb_not_supported(self, device):
+        with pytest.raises(nfc.clf.UnsupportedTargetError) as excinfo:
+            device.listen_ttb(nfc.clf.LocalTarget('106B'), 1.0)
+        assert "does not support listen as Type B Target" in str(excinfo.value)
+
+    def test_listen_ttf_not_activated(self, device):
+        self.pn53x_test_listen_ttf_not_activated(device)

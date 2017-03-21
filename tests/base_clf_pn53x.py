@@ -520,18 +520,41 @@ class TestDevice:
     def pn53x_test_listen_tta_not_activated(self, device):
         device.chipset.transport.read.side_effect = [
             ACK(), RSP('09 00'),                          # WriteRegister
-            ACK(), IOError(errno.ETIMEDOUT, ""),          # WriteRegister
+            ACK(), IOError(errno.ETIMEDOUT, ""),          # TgInitAsTarget
         ]
         target = nfc.clf.LocalTarget('106A')
         target.sens_res = HEX("4400")
         target.sel_res = HEX("00")
         target.sdd_res = HEX("08010203")
         assert device.listen_tta(target, 1.0) is None
-        print(device.chipset.transport.write.mock_calls)
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
             CMD('08 63013f'),                             # WriteRegister
             CMD('8c 0144000102030000 0102030405060708'
                 '   090a0b0c0d0e0f10 1100010203040506'
                 '   0700000000'),                         # TgInitAsTarget
             ACK(),
+        ]]
+
+    def pn53x_test_listen_ttf_not_activated(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), self.reg_rsp('00 00 00 00'),           # ReadRegister
+            ACK(), RSP('09 00'),                          # WriteRegister
+        ]
+        target = nfc.clf.LocalTarget('212F')
+        target.sensf_res = HEX("01 3132333435363738 FFFFFFFFFFFFFFFF 12FC")
+        assert device.listen_ttf(target, 0.001) is None
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('08 633100633a806339 0063390063390063'
+                '   3900633900633900 6339316339326339'
+                '   3363393463393563 3936633937633938'
+                '   6339ff6339ff6339 ff6339ff6339ff63'
+                '   39ff6339ff6339ff 6339126339fc6339'
+                '   00633101'),                           # WriteRegister
+            CMD('08 633c0063013f630b 8063029263039a63'
+                '   0480630520630961 63347f63357f6331'
+                '   0d'),                                 # WriteRegister
+            CMD('06 6337633863346335'),                   # ReadRegister
+            CMD('08 633100'),                             # WriteRegister
         ]]
