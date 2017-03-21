@@ -181,6 +181,16 @@ class TestDevice(base_clf_pn53x.TestDevice):
     def reg_rsp(self, hexdata):
         return RSP('07 00' + hexdata)
 
+    def test_chipset_communication_fails(self, transport):
+        transport.write.return_value = None
+        transport.read.side_effect = [ACK(), ERR()]       # Diagnose
+        chipset = nfc.clf.pn533.Chipset(transport, logger=nfc.clf.pn533.log)
+        with pytest.raises(IOError):
+            nfc.clf.pn533.Device(chipset, logger=nfc.clf.pn533.log)
+        assert chipset.transport.write.mock_calls == [call(
+            CMD('00 00' + ''.join(["%02x" % (x % 256) for x in range(262)])))
+        ]
+
     def test_sense_tta_no_target_found(self, device):
         self.pn53x_test_sense_tta_no_target_found(device)
 

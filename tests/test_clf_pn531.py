@@ -86,13 +86,13 @@ class TestDevice(base_clf_pn53x.TestDevice):
         transport.write.return_value = None
         transport.read.side_effect = [
             ACK(), RSP('01 00' + hexlify(bytearray(range(251)))),  # Diagnose
-            ACK(), RSP('03 0304'),  # GetFirmwareVersion
-            ACK(), RSP('15'),       # SAMConfiguration
-            ACK(), RSP('13'),       # SetTAMAParameters
-            ACK(), RSP('33'),       # RFConfiguration
-            ACK(), RSP('33'),       # RFConfiguration
-            ACK(), RSP('33'),       # RFConfiguration
-            ACK(), RSP('33'),       # RFConfiguration
+            ACK(), RSP('03 0304'),                        # GetFirmwareVersion
+            ACK(), RSP('15'),                             # SAMConfiguration
+            ACK(), RSP('13'),                             # SetTAMAParameters
+            ACK(), RSP('33'),                             # RFConfiguration
+            ACK(), RSP('33'),                             # RFConfiguration
+            ACK(), RSP('33'),                             # RFConfiguration
+            ACK(), RSP('33'),                             # RFConfiguration
         ]
         device = nfc.clf.pn531.init(transport)
         device._path = 'usb:001:001'
@@ -100,13 +100,13 @@ class TestDevice(base_clf_pn53x.TestDevice):
         assert isinstance(device.chipset, nfc.clf.pn531.Chipset)
         assert transport.write.mock_calls == [call(_) for _ in [
             CMD('00 00' + hexlify(bytearray(range(251)))),  # Diagnose
-            CMD('02'),              # GetFirmwareVersion
-            CMD('14 0100'),         # SAMConfiguration
-            CMD('12 00'),           # SetTAMAParameters
-            CMD('32 02000b0a'),     # RFConfiguration
-            CMD('32 0400'),         # RFConfiguration
-            CMD('32 05010001'),     # RFConfiguration
-            CMD('32 0102'),         # RFConfiguration
+            CMD('02'),                                    # GetFirmwareVersion
+            CMD('14 0100'),                               # SAMConfiguration
+            CMD('12 00'),                                 # SetTAMAParameters
+            CMD('32 02000b0a'),                           # RFConfiguration
+            CMD('32 0400'),                               # RFConfiguration
+            CMD('32 05010001'),                           # RFConfiguration
+            CMD('32 0102'),                               # RFConfiguration
         ]]
         transport.write.reset_mock()
         transport.read.reset_mock()
@@ -114,15 +114,25 @@ class TestDevice(base_clf_pn53x.TestDevice):
         transport.write.reset_mock()
         transport.read.reset_mock()
         transport.read.side_effect = [
-            ACK(), RSP('33'),  # RFConfiguration
+            ACK(), RSP('33'),                             # RFConfiguration
         ]
         device.close()
         assert transport.write.mock_calls == [
-            call(CMD('32 0102')),  # RFConfiguration
+            call(CMD('32 0102')),                         # RFConfiguration
         ]
 
     def reg_rsp(self, hexdata):
         return RSP('07' + hexdata)
+
+    def test_chipset_communication_fails(self, transport):
+        transport.write.return_value = None
+        transport.read.side_effect = [ACK(), ERR()]       # Diagnose
+        chipset = nfc.clf.pn531.Chipset(transport, logger=nfc.clf.pn531.log)
+        with pytest.raises(IOError):
+            nfc.clf.pn531.Device(chipset, logger=nfc.clf.pn531.log)
+        assert chipset.transport.write.mock_calls == [call(
+            CMD('00 00' + ''.join(["%02x" % x for x in range(251)])))
+        ]
 
     def test_sense_tta_no_target_found(self, device):
         self.pn53x_test_sense_tta_no_target_found(device)
