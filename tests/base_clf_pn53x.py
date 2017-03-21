@@ -505,6 +505,55 @@ class TestDevice:
         assert target.sdd_res == HEX('0416C6C2D73881')
         return target
 
+    def pn53x_test_sense_tta_target_is_dep(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('4B 0101004440070416c6c2d73881'),  # InListPassiveTarget
+        ]
+        target = device.sense_tta(nfc.clf.RemoteTarget('106A'))
+        assert isinstance(target, nfc.clf.RemoteTarget)
+        assert target.sel_res == HEX('40')
+        assert target.sdd_res == HEX('0416C6C2D73881')
+        return target
+
+    def test_sense_tta_unsupported_bitrate(self, device):
+        with pytest.raises(ValueError) as excinfo:
+            device.sense_tta(nfc.clf.RemoteTarget('100A'))
+        assert str(excinfo.value) == "unsupported bitrate 100A"
+
+    @pytest.mark.parametrize("uid, initiator_data", [
+        ('01020304', '01020304'),
+        ('01020304050607', '8801020304050607'),
+        ('01020304050607080910', '880102038804050607080910'),
+    ])
+    def test_sense_tta_send_with_uid(self, device, uid, initiator_data):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('4B 00'),                          # InListPassiveTarget
+            ACK(), self.reg_rsp('26'),                    # ReadRegister
+        ]
+        target = nfc.clf.RemoteTarget('106A', sel_req=HEX(uid))
+        assert device.sense_tta(target) is None
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('4A 0100' + initiator_data),              # InListPassiveTarget
+            CMD('06 6339'),                               # ReadRegister
+        ]]
+
+    def test_sense_tta_rid_response_error(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('4B 00'),                          # InListPassiveTarget
+            ACK(), self.reg_rsp('93'),                    # ReadRegister
+            ACK(), RSP('4B 01010c00b2565400'),            # InListPassiveTarget
+            ACK(), RSP('41 01'),                          # InDataExchange
+        ]
+        assert device.sense_tta(nfc.clf.RemoteTarget('106A')) is None
+
+    def test_sense_tta_tt1_response_timeout(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('4B 00'),                          # InListPassiveTarget
+            ACK(), self.reg_rsp('93'),                    # ReadRegister
+            ACK(), RSP('4B 00'),                          # InListPassiveTarget
+        ]
+        assert device.sense_tta(nfc.clf.RemoteTarget('106A')) is None
+
     def pn53x_test_sense_ttb_no_target_found(self, device):
         device.chipset.transport.read.side_effect = [
             ACK(), RSP('4B 00'),                          # InListPassiveTarget

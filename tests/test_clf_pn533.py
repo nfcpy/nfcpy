@@ -205,6 +205,13 @@ class TestDevice(base_clf_pn53x.TestDevice):
             CMD('08 63037f'),                             # WriteRegister
         ]]
 
+    def test_sense_tta_target_is_dep(self, device):
+        target = self.pn53x_test_sense_tta_target_is_dep(device)
+        assert target.sens_res == HEX('4400')
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('4A 0100'),                               # InListPassiveTarget
+        ]]
+
     def test_sense_ttb_no_target_found(self, device):
         self.pn53x_test_sense_ttb_no_target_found(device)
 
