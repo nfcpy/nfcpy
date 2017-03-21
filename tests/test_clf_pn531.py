@@ -5,7 +5,6 @@ import nfc
 import nfc.clf
 import nfc.clf.pn531
 
-import errno
 import pytest
 from pytest_mock import mocker  # noqa: F401
 from mock import call
@@ -127,6 +126,15 @@ class TestDevice(base_clf_pn53x.TestDevice):
 
     def test_sense_tta_no_target_found(self, device):
         self.pn53x_test_sense_tta_no_target_found(device)
+
+    def test_sense_tta_target_is_tt2(self, device):
+        target = self.pn53x_test_sense_tta_target_is_tt2(device)
+        assert target.sens_res == HEX('0044')             # reversed for PN531
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('4A 0100'),                               # InListPassiveTarget
+            CMD('06 6303'),                               # ReadRegister
+            CMD('08 63037f'),                             # WriteRegister
+        ]]
 
     def test_sense_ttb_is_not_supported(self, device):
         with pytest.raises(nfc.clf.UnsupportedTargetError) as excinfo:

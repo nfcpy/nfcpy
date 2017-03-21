@@ -484,6 +484,18 @@ class TestDevice:
             CMD('06 6339'),                               # ReadRegister
         ]]
 
+    def pn53x_test_sense_tta_target_is_tt2(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('4B 0101004400070416c6c2d73881'),  # InListPassiveTarget
+            ACK(), self.reg_rsp('FF'),                    # ReadRegister
+            ACK(), RSP('09 00'),                          # WriteRegister
+        ]
+        target = device.sense_tta(nfc.clf.RemoteTarget('106A'))
+        assert isinstance(target, nfc.clf.RemoteTarget)
+        assert target.sel_res == HEX('00')
+        assert target.sdd_res == HEX('0416C6C2D73881')
+        return target
+
     def pn53x_test_sense_ttb_no_target_found(self, device):
         device.chipset.transport.read.side_effect = [
             ACK(), RSP('4B 00'),                          # InListPassiveTarget
