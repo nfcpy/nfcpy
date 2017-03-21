@@ -140,16 +140,7 @@ class TestDevice(base_clf_pn53x.TestDevice):
         self.pn53x_test_sense_dep_no_target_found(device)
 
     def test_listen_tta_not_activated(self, device):
-        device.chipset.transport.read.side_effect = [
-            ACK(), RSP('09 00'),                          # WriteRegister
-            ACK(), IOError(errno.ETIMEDOUT, ""),          # TgInitAsTarget
-        ]
-        target = nfc.clf.LocalTarget('106A')
-        target.sens_res = HEX("4400")
-        target.sel_res = HEX("00")
-        target.sdd_res = HEX("08010203")
-        assert device.listen_tta(target, 1.0) is None
-        print(device.chipset.transport.write.mock_calls)
+        self.pn53x_test_listen_tta_not_activated(device)
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
             CMD('08 63013f'),                             # WriteRegister
             CMD('8c 0144000102030000 0102030405060708'
@@ -158,10 +149,20 @@ class TestDevice(base_clf_pn53x.TestDevice):
             ACK(),
         ]]
 
-    def test_listen_ttf_not_activated(self, device):
-        self.pn53x_test_listen_ttf_not_activated(device)
-
     def test_listen_ttb_not_supported(self, device):
         with pytest.raises(nfc.clf.UnsupportedTargetError) as excinfo:
             device.listen_ttb(nfc.clf.LocalTarget('106B'), 1.0)
         assert "does not support listen as Type B Target" in str(excinfo.value)
+
+    def test_listen_ttf_not_activated(self, device):
+        self.pn53x_test_listen_ttf_not_activated(device)
+
+    def test_listen_dep_not_activated(self, device):
+        self.pn53x_test_listen_dep_not_activated(device)
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('08 63017b6302b06303b0'),                 # WriteRegister
+            CMD('8c 0201010102034001 fe01020304050600'
+                '   0000000000000000 0001fe0102030405'
+                '   060000'),                             # TgInitAsTarget
+            ACK(),
+        ]]

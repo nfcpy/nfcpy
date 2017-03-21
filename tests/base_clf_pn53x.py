@@ -527,13 +527,6 @@ class TestDevice:
         target.sel_res = HEX("00")
         target.sdd_res = HEX("08010203")
         assert device.listen_tta(target, 1.0) is None
-        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
-            CMD('08 63013f'),                             # WriteRegister
-            CMD('8c 0144000102030000 0102030405060708'
-                '   090a0b0c0d0e0f10 1100010203040506'
-                '   0700000000'),                         # TgInitAsTarget
-            ACK(),
-        ]]
 
     def pn53x_test_listen_ttf_not_activated(self, device):
         device.chipset.transport.read.side_effect = [
@@ -558,3 +551,16 @@ class TestDevice:
             CMD('06 6337633863346335'),                   # ReadRegister
             CMD('08 633100'),                             # WriteRegister
         ]]
+
+    def pn53x_test_listen_dep_not_activated(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), IOError(errno.ETIMEDOUT, ""),          # TgInitAsTarget
+        ]
+        target = nfc.clf.LocalTarget()
+        target.sensf_res = HEX("01 01fe010203040506 0000000000000000 0000")
+        target.sens_res = HEX("0101")
+        target.sel_res = HEX("40")
+        target.sdd_res = HEX("08010203")
+        target.atr_res = HEX("D501 d0d1d2d3d4d5d6d7d8d9 0000000800")
+        assert device.listen_dep(target, 0.001) is None

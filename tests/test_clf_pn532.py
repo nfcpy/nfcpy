@@ -483,6 +483,13 @@ class TestDevice(base_clf_pn53x.TestDevice):
 
     def test_listen_tta_not_activated(self, device):
         self.pn53x_test_listen_tta_not_activated(device)
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('08 63013f'),                             # WriteRegister
+            CMD('8c 0144000102030000 0102030405060708'
+                '   090a0b0c0d0e0f10 1100010203040506'
+                '   0700000000'),                         # TgInitAsTarget
+            ACK(),
+        ]]
 
     def test_listen_ttb_not_supported(self, device):
         with pytest.raises(nfc.clf.UnsupportedTargetError) as excinfo:
@@ -491,3 +498,13 @@ class TestDevice(base_clf_pn53x.TestDevice):
 
     def test_listen_ttf_not_activated(self, device):
         self.pn53x_test_listen_ttf_not_activated(device)
+
+    def test_listen_dep_not_activated(self, device):
+        self.pn53x_test_listen_dep_not_activated(device)
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('08 63017b6302b06303b0'),                 # WriteRegister
+            CMD('8c 0201010102034001 fe01020304050600'
+                '   0000000000000000 0001fe0102030405'
+                '   0600000000'),                         # TgInitAsTarget
+            ACK(),
+        ]]
