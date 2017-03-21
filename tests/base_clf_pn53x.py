@@ -484,6 +484,15 @@ class TestDevice:
             CMD('06 6339'),                               # ReadRegister
         ]]
 
+    def pn53x_test_sense_tta_target_is_tt1(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('4B 00'),                          # InListPassiveTarget
+            ACK(), self.reg_rsp('93'),                    # ReadRegister
+            ACK(), RSP('4B 01010c00b2565400'),            # InListPassiveTarget
+            ACK(), RSP('41 001148b2565400'),              # InDataExchange
+        ]
+        return device.sense_tta(nfc.clf.RemoteTarget('106A'))
+
     def pn53x_test_sense_tta_target_is_tt2(self, device):
         device.chipset.transport.read.side_effect = [
             ACK(), RSP('4B 0101004400070416c6c2d73881'),  # InListPassiveTarget

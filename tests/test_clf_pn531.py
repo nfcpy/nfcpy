@@ -127,6 +127,9 @@ class TestDevice(base_clf_pn53x.TestDevice):
     def test_sense_tta_no_target_found(self, device):
         self.pn53x_test_sense_tta_no_target_found(device)
 
+    def test_sense_tta_target_is_tt1(self, device):
+        assert self.pn53x_test_sense_tta_target_is_tt1(device) is None
+
     def test_sense_tta_target_is_tt2(self, device):
         target = self.pn53x_test_sense_tta_target_is_tt2(device)
         assert target.sens_res == HEX('0044')             # reversed for PN531
