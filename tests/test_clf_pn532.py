@@ -530,6 +530,12 @@ class TestDevice(base_clf_pn53x.TestDevice):
     def test_sense_ttb_no_target_found(self, device):
         self.pn53x_test_sense_ttb_no_target_found(device)
 
+    def test_sense_ttb_target_found(self, device):
+        self.pn53x_test_sense_ttb_target_found(device, '42 CA 01')
+
+    def test_sense_ttb_deselect_timeout(self, device):
+        self.pn53x_test_sense_ttb_deselect_timeout(device, '42 CA 01')
+
     def test_sense_ttb_unsupported_bitrate(self, device):
         self.pn53x_test_sense_ttb_unsupported_bitrate(device)
 

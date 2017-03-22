@@ -558,6 +558,36 @@ class TestDevice:
             CMD('4A 010300'),                             # InListPassiveTarget
         ]]
 
+    def pn53x_test_sense_ttb_target_found(self, device, deselect_cmd):
+        sensb_res = '50E8253EEC00000011008185'
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('4B 0101' + sensb_res + '0100'),   # InListPassiveTarget
+            ACK(), RSP('43 00c2'),                        # InCommunicateThru
+            ACK(), RSP('43 00' + sensb_res),              # InCommunicateThru
+        ]
+        target = device.sense_ttb(nfc.clf.RemoteTarget('106B'))
+        assert isinstance(target, nfc.clf.RemoteTarget)
+        assert target.sensb_res == HEX(sensb_res)
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('4A 010300'),                             # InListPassiveTarget
+            CMD(deselect_cmd),                            # InCommunicateThru
+            CMD('42 050008'),                             # InCommunicateThru
+        ]]
+
+    def pn53x_test_sense_ttb_deselect_timeout(self, device, deselect_cmd):
+        sensb_res = '50E8253EEC00000011008185'
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('4B 0101' + sensb_res + '0100'),   # InListPassiveTarget
+            ACK(), RSP('43 00c2'),                        # InCommunicateThru
+            ACK(), RSP('43 01'),                          # InCommunicateThru
+        ]
+        assert device.sense_ttb(nfc.clf.RemoteTarget('106B')) is None
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('4A 010300'),                             # InListPassiveTarget
+            CMD(deselect_cmd),                            # InCommunicateThru
+            CMD('42 050008'),                             # InCommunicateThru
+        ]]
+
     def pn53x_test_sense_ttb_unsupported_bitrate(self, device):
         with pytest.raises(ValueError) as excinfo:
             device.sense_ttb(nfc.clf.RemoteTarget('100B'))

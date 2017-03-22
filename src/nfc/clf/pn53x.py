@@ -556,11 +556,10 @@ class Device(device.Device):
             # code in tags/tt4.py.
             try:
                 deselect_command = (b'\xCA' + did) if did else b'\xC2'
+                wupb_command = b'\x05' + afi + b'\x08'
                 self.chipset.in_communicate_thru(deselect_command, 0.5)
-                rsp = self.chipset.in_communicate_thru(
-                    b'\x05' + afi + b'\x08', 0.5)
-                if rsp is not None:
-                    return nfc.clf.RemoteTarget(target.brty, sensb_res=rsp)
+                rsp = self.chipset.in_communicate_thru(wupb_command, 0.5)
+                return nfc.clf.RemoteTarget(target.brty, sensb_res=rsp)
             except (Chipset.Error, IOError) as error:
                 self.log.debug(error)
 
