@@ -515,17 +515,12 @@ class TestDevice:
         assert target.sdd_res == HEX('0416C6C2D73881')
         return target
 
-    def test_sense_tta_unsupported_bitrate(self, device):
+    def pn53x_test_sense_tta_unsupported_bitrate(self, device):
         with pytest.raises(ValueError) as excinfo:
             device.sense_tta(nfc.clf.RemoteTarget('100A'))
         assert str(excinfo.value) == "unsupported bitrate 100A"
 
-    @pytest.mark.parametrize("uid, initiator_data", [
-        ('01020304', '01020304'),
-        ('01020304050607', '8801020304050607'),
-        ('01020304050607080910', '880102038804050607080910'),
-    ])
-    def test_sense_tta_send_with_uid(self, device, uid, initiator_data):
+    def pn53x_test_sense_tta_send_with_uid(self, device, uid, initiator_data):
         device.chipset.transport.read.side_effect = [
             ACK(), RSP('4B 00'),                          # InListPassiveTarget
             ACK(), self.reg_rsp('26'),                    # ReadRegister
@@ -537,7 +532,7 @@ class TestDevice:
             CMD('06 6339'),                               # ReadRegister
         ]]
 
-    def test_sense_tta_rid_response_error(self, device):
+    def pn53x_test_sense_tta_rid_response_error(self, device):
         device.chipset.transport.read.side_effect = [
             ACK(), RSP('4B 00'),                          # InListPassiveTarget
             ACK(), self.reg_rsp('93'),                    # ReadRegister
@@ -546,7 +541,7 @@ class TestDevice:
         ]
         assert device.sense_tta(nfc.clf.RemoteTarget('106A')) is None
 
-    def test_sense_tta_tt1_response_timeout(self, device):
+    def pn53x_test_sense_tta_tt1_response_timeout(self, device):
         device.chipset.transport.read.side_effect = [
             ACK(), RSP('4B 00'),                          # InListPassiveTarget
             ACK(), self.reg_rsp('93'),                    # ReadRegister
@@ -563,7 +558,12 @@ class TestDevice:
             CMD('4A 010300'),                             # InListPassiveTarget
         ]]
 
-    def test_sense_ttf_no_target_found(self, device):
+    def pn53x_test_sense_ttb_unsupported_bitrate(self, device):
+        with pytest.raises(ValueError) as excinfo:
+            device.sense_ttb(nfc.clf.RemoteTarget('100B'))
+        assert str(excinfo.value) == "unsupported bitrate 100B"
+
+    def pn53x_test_sense_ttf_no_target_found(self, device):
         device.chipset.transport.read.side_effect = [
             ACK(), self.reg_rsp('03'),                    # ReadRegister
             ACK(), RSP('4B 00'),                          # InListPassiveTarget
@@ -574,7 +574,7 @@ class TestDevice:
             CMD('4A 010100ffff0100'),                     # InListPassiveTarget
         ]]
 
-    def test_sense_ttf_target_found(self, device):
+    def pn53x_test_sense_ttf_target_found(self, device):
         sensf_res = '01 0102030405060708 F1F2F3F4F5F6F7F8 AABB'
         device.chipset.transport.read.side_effect = [
             ACK(), self.reg_rsp('03'),                    # ReadRegister
@@ -589,7 +589,7 @@ class TestDevice:
             CMD('4A 010100ffff0100'),                     # InListPassiveTarget
         ]]
 
-    def test_sense_ttf_more_rf_on_time(self, device):
+    def pn53x_test_sense_ttf_more_rf_on_time(self, device):
         device.chipset.transport.read.side_effect = [
             ACK(), self.reg_rsp('00'),                    # ReadRegister
             ACK(), RSP('33'),                             # RFConfiguration
@@ -602,7 +602,7 @@ class TestDevice:
             CMD('4A 010100ffff0100'),                     # InListPassiveTarget
         ]]
 
-    def test_sense_ttf_unsupported_bitrate(self, device):
+    def pn53x_test_sense_ttf_unsupported_bitrate(self, device):
         with pytest.raises(ValueError) as excinfo:
             device.sense_ttf(nfc.clf.RemoteTarget('100F'))
         assert str(excinfo.value) == "unsupported bitrate 100F"

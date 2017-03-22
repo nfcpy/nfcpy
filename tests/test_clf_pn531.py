@@ -177,10 +177,39 @@ class TestDevice(base_clf_pn53x.TestDevice):
             CMD('08 63037f'),                             # WriteRegister
         ]]
 
+    def test_sense_tta_unsupported_bitrate(self, device):
+        self.pn53x_test_sense_tta_unsupported_bitrate(device)
+
+    @pytest.mark.parametrize("uid, initiator_data", [
+        ('01020304', '01020304'),
+        ('01020304050607', '8801020304050607'),
+        ('01020304050607080910', '880102038804050607080910'),
+    ])
+    def test_sense_tta_send_with_uid(self, device, uid, initiator_data):
+        self.pn53x_test_sense_tta_send_with_uid(device, uid, initiator_data)
+
+    def test_sense_tta_rid_response_error(self, device):
+        self.pn53x_test_sense_tta_rid_response_error(device)
+
+    def test_sense_tta_tt1_response_timeout(self, device):
+        self.pn53x_test_sense_tta_tt1_response_timeout(device)
+
     def test_sense_ttb_is_not_supported(self, device):
         with pytest.raises(nfc.clf.UnsupportedTargetError) as excinfo:
             device.sense_ttb(nfc.clf.RemoteTarget('106B'))
         assert "does not support sense for Type B Target" in str(excinfo.value)
+
+    def test_sense_ttf_no_target_found(self, device):
+        self.pn53x_test_sense_ttf_no_target_found(device)
+
+    def test_sense_ttf_target_found(self, device):
+        self.pn53x_test_sense_ttf_target_found(device)
+
+    def test_sense_ttf_more_rf_on_time(self, device):
+        self.pn53x_test_sense_ttf_more_rf_on_time(device)
+
+    def test_sense_ttf_unsupported_bitrate(self, device):
+        self.pn53x_test_sense_ttf_unsupported_bitrate(device)
 
     def test_sense_dep_no_target_found(self, device):
         self.pn53x_test_sense_dep_no_target_found(device)
