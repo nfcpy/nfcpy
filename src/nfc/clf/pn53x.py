@@ -585,13 +585,9 @@ class Device(device.Device):
 
     def sense_dep(self, target):
         # Attempt active communication mode target activation.
-        try:
-            assert target.atr_req, "the target.atr_req attribute is required"
-            assert len(target.atr_req) >= 16, "minimum lenght of atr_req is 16"
-            assert len(target.atr_req) <= 64, "maximum lenght of atr_req is 64"
-        except AssertionError as error:
-            # log error but continue, we also allow dirty stuff
-            log.error(str(error))
+        assert target.atr_req, "the target.atr_req attribute is required"
+        assert len(target.atr_req) >= 16, "minimum lenght of atr_req is 16"
+        assert len(target.atr_req) <= 64, "maximum lenght of atr_req is 64"
 
         # bitrate and modulation type for send/recv must be set and equal
         assert target.brty_send and target.brty_recv

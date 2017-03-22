@@ -266,6 +266,9 @@ class TestDevice(base_clf_pn53x.TestDevice):
     def test_sense_dep_no_target_found(self, device):
         self.pn53x_test_sense_dep_no_target_found(device)
 
+    def test_sense_dep_target_found(self, device):
+        self.pn53x_test_sense_dep_target_found(device)
+
     def test_listen_tta_not_activated(self, device):
         self.pn53x_test_listen_tta_not_activated(device)
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [

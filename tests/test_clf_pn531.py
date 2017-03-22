@@ -214,6 +214,34 @@ class TestDevice(base_clf_pn53x.TestDevice):
     def test_sense_dep_no_target_found(self, device):
         self.pn53x_test_sense_dep_no_target_found(device)
 
+    def test_sense_dep_target_found(self, device):
+        self.pn53x_test_sense_dep_target_found(device)
+
+    def test_sense_dep_reduce_frame_size(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('47 0001 66f6e98d1c13dfe56de4'
+                       '0000000732 46666d 010112'
+                       '020207ff 040164 070103'),         # InJumpForPSL
+            ACK(), RSP('09 00'),                          # WriteRegister
+        ]
+        target = nfc.clf.RemoteTarget('106A', atr_req=HEX(
+            'D400 30313233343536373839 00000032'
+            '46666d 010113 020207ff 040132 070107'))
+        target = device.sense_dep(target)
+        assert isinstance(target, nfc.clf.RemoteTarget)
+        assert target.brty == '106A'
+        assert target.atr_req == HEX(
+            'D400 30313233343536373839 00000022'
+            '46666d 010113 020207ff 040132 070107')
+        assert target.atr_res == HEX(
+            'D501 66f6e98d1c13dfe56de4 0000000722'
+            '46666d 010112 020207ff 040164 070103')
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('46 010006 30313233343536373839 46666d'
+                '010113 020207ff 040132 070107'),         # InJumpForPSL
+            CMD('08 63013b'),                             # WriteRegister
+        ]]
+
     def test_listen_tta_not_activated(self, device):
         self.pn53x_test_listen_tta_not_activated(device)
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
