@@ -269,3 +269,9 @@ class TestDevice(base_clf_pn53x.TestDevice):
                 '   060000'),                             # TgInitAsTarget
             ACK(),
         ]]
+
+    def test_get_max_send_data_size(self, device):
+        assert device.get_max_send_data_size(target=None) == 252
+
+    def test_get_max_recv_data_size(self, device):
+        assert device.get_max_recv_data_size(target=None) == 251
