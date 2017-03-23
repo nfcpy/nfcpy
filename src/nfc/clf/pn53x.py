@@ -653,6 +653,7 @@ class Device(device.Device):
         # Send the command data and return the response. All cases
         # where a response is not received raise either an IOError
         # or one of the nfc.clf.CommunicationError specializations.
+        data = bytearray(data) if not isinstance(data, bytearray) else data
         try:
             if target.sens_res and not target.atr_res:
                 if target.rid_res:  # TT1

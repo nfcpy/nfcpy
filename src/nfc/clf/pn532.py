@@ -316,7 +316,7 @@ class Device(pn53x.Device):
         self.chipset.write_register(("CIU_ManualRCV", 0x20))  # enable parity
         fifo_level = self.chipset.read_register("CIU_FIFOLevel")
         if fifo_level == 0:
-            raise nfc.clf.TimeoutError
+            raise nfc.clf.TimeoutError("no tt1 response data in ciu fifo")
         data = self.chipset.read_register(*(fifo_level * ["CIU_FIFOData"]))
         data = ''.join(["{:08b}".format(octet)[::-1] for octet in data])
         data = [int(data[i:i+8][::-1], 2) for i in range(0, len(data)-8, 9)]

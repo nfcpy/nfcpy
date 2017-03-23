@@ -10,6 +10,7 @@ import errno
 import pytest
 from pytest_mock import mocker  # noqa: F401
 from mock import call, MagicMock, PropertyMock
+import itertools
 
 import base_clf_pn53x
 from base_clf_pn53x import CMD, RSP, ACK, NAK, ERR, HEX  # noqa: F401
@@ -31,8 +32,6 @@ def transport(mocker):
     transport.tty = MagicMock()
     type(transport.tty).port = PropertyMock(return_value='/dev/ttyS0')
     type(transport.tty).baudrate = PropertyMock(return_value=115200)
-#    transport._manufacturer_name = "Manufacturer Name"
-#    transport._product_name = "Product Name"
     return transport
 
 
@@ -485,7 +484,7 @@ class TestDevice(base_clf_pn53x.TestDevice):
     def test_sense_tta_target_is_tt1(self, device):
         target = self.pn53x_test_sense_tta_target_is_tt1(device)
         assert isinstance(target, nfc.clf.RemoteTarget)
-        assert target.rid_res == HEX('1148B2565400')
+        assert target.rid_res == HEX('1148 B2565400')
         assert target.sens_res == HEX('000C')
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
             CMD('4A 0100'),                               # InListPassiveTarget
@@ -493,6 +492,111 @@ class TestDevice(base_clf_pn53x.TestDevice):
             CMD('4A 0104'),                               # InListPassiveTarget
             CMD('40 0178000000000000'),                   # InDataExchange
         ]]
+        return target
+
+    @pytest.mark.parametrize("cmd_code", ['00', '01', '1A', '53', '72'])
+    def test_send_cmd_recv_rsp_tt1_cmd(self, device, cmd_code):
+        target = self.test_sense_tta_target_is_tt1(device)
+        self.pn53x_test_send_cmd_recv_rsp_tt1_cmd(device, target, cmd_code)
+
+    @pytest.mark.parametrize("cmd_code, crcb1, crcb2", [
+        ('02', '29', 'b7'),
+        ('1B', '77', 'f0'),
+        ('54', 'fc', '2c'),
+    ])
+    def test_send_cmd_recv_rsp_tt1_fifo(self, device, cmd_code, crcb1, crcb2):
+        target = self.test_sense_tta_target_is_tt1(device)
+        device.chipset.transport.write.reset_mock()
+        device.chipset.transport.read.reset_mock()
+        device.chipset.transport.read.side_effect = [
+            ACK(), self.reg_rsp('00 00 00'),              # ReadRegister
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), RSP('33'),                             # RFConfiguration
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), self.reg_rsp('05'),                    # ReadRegister
+            ACK(), self.reg_rsp('00 01 1E 7D 08'),        # ReadRegister
+        ]
+        cmd = HEX('%s 10 0000000000000000' % cmd_code) + target.rid_res[2:6]
+        assert device.send_cmd_recv_rsp(target, cmd, 1.0) == HEX('0000')
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('06 6302 6303 6305'),                     # ReadRegister
+            CMD('08 630200 630300 630540'),               # WriteRegister
+            CMD('32 020a0b0f'),                           # RFConfiguration
+            CMD('08 6339%s 633d07 633104 633d00 630d30'
+                '   633910 633104 633107'
+                '   633900 633104 633107'
+                '   633900 633104 633107'
+                '   633900 633104 633107'
+                '   633900 633104 633107'
+                '   633900 633104 633107'
+                '   633900 633104 633107'
+                '   633900 633104 633107'
+                '   633900 633104 633107'
+                '   6339b2 633104 633107'
+                '   633956 633104 633107'
+                '   633954 633104 633107'
+                '   633900 633104 633107'
+                '   6339%s 633104 633107'
+                '   6339%s 633104 633107'
+                '   633108' % (cmd_code, crcb1, crcb2)),  # WriteRegister
+            CMD('08 630d20'),                             # WriteRegister
+            CMD('06 633a'),                               # ReadRegister
+            CMD('06 6339 6339 6339 6339 6339'),           # ReadRegister
+        ]]
+
+    def test_send_cmd_recv_rsp_tt1_rseg(self, device):
+        target = self.test_sense_tta_target_is_tt1(device)
+        device.chipset.transport.write.reset_mock()
+        device.chipset.transport.read.reset_mock()
+        device.chipset.transport.read.side_effect = [
+            ACK(), self.reg_rsp('00 00 00'),              # ReadRegister
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), RSP('33'),                             # RFConfiguration
+        ] + list(itertools.chain.from_iterable([[
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), self.reg_rsp('05'),                    # ReadRegister
+            ACK(), self.reg_rsp('00 01 1E 7D 08'),        # ReadRegister
+        ] for _ in range(16)]))
+        cmd = HEX('10 10 0000000000000000') + target.rid_res[2:6]
+        rsp = device.send_cmd_recv_rsp(target, cmd, 1.0)
+        assert rsp == HEX('10 00000000 00000000 00000000 00000000')
+
+    def test_send_cmd_recv_rsp_tt1_fifo_with_timeout(self, device):
+        target = self.test_sense_tta_target_is_tt1(device)
+        device.chipset.transport.write.reset_mock()
+        device.chipset.transport.read.reset_mock()
+        device.chipset.transport.read.side_effect = [
+            ACK(), self.reg_rsp('00 00 00'),              # ReadRegister
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), RSP('33'),                             # RFConfiguration
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), self.reg_rsp('00'),                    # ReadRegister
+        ]
+        cmd = HEX('02 10 0000000000000000') + target.rid_res[2:6]
+        with pytest.raises(nfc.clf.TimeoutError) as excinfo:
+            device.send_cmd_recv_rsp(target, cmd, 1.0)
+        assert str(excinfo.value) == "no tt1 response data in ciu fifo"
+
+    def test_send_cmd_recv_rsp_tt1_fifo_with_crc_error(self, device):
+        target = self.test_sense_tta_target_is_tt1(device)
+        device.chipset.transport.write.reset_mock()
+        device.chipset.transport.read.reset_mock()
+        device.chipset.transport.read.side_effect = [
+            ACK(), self.reg_rsp('00 00 00'),              # ReadRegister
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), RSP('33'),                             # RFConfiguration
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), self.reg_rsp('05'),                    # ReadRegister
+            ACK(), self.reg_rsp('00 01 1E 00 00'),        # ReadRegister
+        ]
+        cmd = HEX('02 10 0000000000000000') + target.rid_res[2:6]
+        with pytest.raises(nfc.clf.TransmissionError) as excinfo:
+            device.send_cmd_recv_rsp(target, cmd, 1.0)
+        assert str(excinfo.value) == "crc_b check error"
 
     def test_sense_tta_target_is_tt2(self, device):
         target = self.pn53x_test_sense_tta_target_is_tt2(device)

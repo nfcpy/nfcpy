@@ -493,6 +493,25 @@ class TestDevice:
         ]
         return device.sense_tta(nfc.clf.RemoteTarget('106A'))
 
+    def pn53x_test_send_cmd_recv_rsp_tt1_cmd(self, device, target, cmd_code):
+        assert target and target.sens_res and target.rid_res
+        device.chipset.transport.write.reset_mock()
+        device.chipset.transport.read.reset_mock()
+        device.chipset.transport.read.side_effect = [
+            ACK(), self.reg_rsp('00 00 00'),              # ReadRegister
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), RSP('33'),                             # RFConfiguration
+            ACK(), RSP('41 00343536'),                    # InDataExchange
+        ]
+        cmd = bytes(HEX(cmd_code) + b'123')
+        assert device.send_cmd_recv_rsp(target, cmd, 1.0) == b'456'
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('06 6302 6303 6305'),                     # ReadRegister
+            CMD('08 630200 630300 630540'),               # WriteRegister
+            CMD('32 020a0b0f'),                           # RFConfiguration
+            CMD('40 01' + cmd_code + '313233'),           # InDataExchange
+        ]]
+
     def pn53x_test_sense_tta_target_is_tt2(self, device):
         device.chipset.transport.read.side_effect = [
             ACK(), RSP('4B 0101004400070416c6c2d73881'),  # InListPassiveTarget
