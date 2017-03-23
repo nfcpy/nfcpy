@@ -493,6 +493,11 @@ class TestDevice:
         ]
         return device.sense_tta(nfc.clf.RemoteTarget('106A'))
 
+    def test_pn53x_tt1_send_cmd_recv_rsp(self, device):
+        device = super(type(device), device)
+        with pytest.raises(NotImplementedError):
+            device._tt1_send_cmd_recv_rsp(b'\x00', 1.0)
+
     def pn53x_test_send_cmd_recv_rsp_tt1_cmd(self, device, target, cmd_code):
         assert target and target.sens_res and target.rid_res
         device.chipset.transport.write.reset_mock()
@@ -523,6 +528,49 @@ class TestDevice:
         assert target.sel_res == HEX('00')
         assert target.sdd_res == HEX('0416C6C2D73881')
         return target
+
+    def pn53x_test_send_cmd_recv_rsp_tt2_crc_pass(self, device, target):
+        assert target and target.sens_res and target.sel_res and target.sdd_res
+        four_page_data = '00010203 04050607 08090a0b 0c0d0e0f'
+        read_rsp_frame = four_page_data + '77 f5'
+        device.chipset.transport.write.reset_mock()
+        device.chipset.transport.read.reset_mock()
+        device.chipset.transport.read.side_effect = [
+            ACK(), self.reg_rsp('00 00 00'),              # ReadRegister
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), RSP('33'),                             # RFConfiguration
+            ACK(), RSP('43 00' + read_rsp_frame),         # InCommunicateThru
+        ]
+        rsp = device.send_cmd_recv_rsp(target, HEX('30 00'), 1.0)
+        assert rsp == HEX(four_page_data)
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('06 6302 6303 6305'),                     # ReadRegister
+            CMD('08 630200 630300 630540'),               # WriteRegister
+            CMD('32 020a0b0f'),                           # RFConfiguration
+            CMD('42 3000'),                               # InCommunicateThru
+        ]]
+
+    def pn53x_test_send_cmd_recv_rsp_tt2_crc_fail(self, device, target):
+        assert target and target.sens_res and target.sel_res and target.sdd_res
+        four_page_data = '00010203 04050607 08090a0b 0c0d0e0f'
+        read_rsp_frame = four_page_data + '00 00'
+        device.chipset.transport.write.reset_mock()
+        device.chipset.transport.read.reset_mock()
+        device.chipset.transport.read.side_effect = [
+            ACK(), self.reg_rsp('00 00 00'),              # ReadRegister
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), RSP('33'),                             # RFConfiguration
+            ACK(), RSP('43 00' + read_rsp_frame),         # InCommunicateThru
+        ]
+        with pytest.raises(nfc.clf.TransmissionError) as excinfo:
+            device.send_cmd_recv_rsp(target, HEX('30 00'), 1.0)
+        assert str(excinfo.value) == "crc_a check error"
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('06 6302 6303 6305'),                     # ReadRegister
+            CMD('08 630200 630300 630540'),               # WriteRegister
+            CMD('32 020a0b0f'),                           # RFConfiguration
+            CMD('42 3000'),                               # InCommunicateThru
+        ]]
 
     def pn53x_test_sense_tta_target_is_dep(self, device):
         device.chipset.transport.read.side_effect = [

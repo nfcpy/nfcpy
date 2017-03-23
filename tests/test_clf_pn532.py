@@ -606,6 +606,15 @@ class TestDevice(base_clf_pn53x.TestDevice):
             CMD('06 6303'),                               # ReadRegister
             CMD('08 63037f'),                             # WriteRegister
         ]]
+        return target
+
+    def test_send_cmd_recv_rsp_tt2_crc_pass(self, device):
+        target = self.test_sense_tta_target_is_tt2(device)
+        self.pn53x_test_send_cmd_recv_rsp_tt2_crc_pass(device, target)
+
+    def test_send_cmd_recv_rsp_tt2_crc_fail(self, device):
+        target = self.test_sense_tta_target_is_tt2(device)
+        self.pn53x_test_send_cmd_recv_rsp_tt2_crc_fail(device, target)
 
     def test_sense_tta_target_is_dep(self, device):
         target = self.pn53x_test_sense_tta_target_is_dep(device)
