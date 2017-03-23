@@ -9,7 +9,6 @@ import pytest
 from pytest_mock import mocker  # noqa: F401
 from mock import call
 import itertools
-import errno
 
 import base_clf_pn53x
 from base_clf_pn53x import CMD, RSP, ACK, NAK, ERR, HEX  # noqa: F401
