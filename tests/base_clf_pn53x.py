@@ -663,7 +663,7 @@ class TestDevice:
         ]]
 
     def pn53x_test_sense_dep_target_found(self, device):
-        atr_req = HEX('D400 30313233343536373839 00000000'
+        atr_req = HEX('D400 30313233343536373839 00000002'
                       '46666d 010113 020207ff 040132 070107')
         device.chipset.transport.read.side_effect = [
             ACK(), RSP('47 0001 66f6e98d1c13dfe56de4'
@@ -683,6 +683,33 @@ class TestDevice:
             CMD('46 010006 30313233343536373839 46666d'
                 '010113 020207ff 040132 070107'),         # InJumpForPSL
             CMD('08 63013b'),                             # WriteRegister
+        ]]
+
+    def pn53x_test_send_cmd_recv_rsp_with_dep_target(self, device):
+        atr_req = HEX('D400 30313233343536373839 00000000')
+        nfcid3t = '01020304050607080910'
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('47 0001' + nfcid3t + '0000000700'),  # InJumpForPSL
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), self.reg_rsp('00 00 00'),              # ReadRegister
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), RSP('33'),                             # RFConfiguration
+            ACK(), RSP('43 00343536'),                    # InCommunicateThru
+        ]
+        target = nfc.clf.RemoteTarget('106A', atr_req=atr_req)
+        target = device.sense_dep(target)
+        assert isinstance(target, nfc.clf.RemoteTarget)
+        assert target.brty == '106A'
+        assert target.atr_req == atr_req
+        assert target.atr_res == HEX('D501' + nfcid3t + '0000000700')
+        assert device.send_cmd_recv_rsp(target, b'123', 1.0) == b'456'
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('46 010002 30313233343536373839'),        # InJumpForPSL
+            CMD('08 63013b'),                             # WriteRegister
+            CMD('06 6302 6303 6305'),                     # ReadRegister
+            CMD('08 630201 630301 630540'),               # WriteRegister
+            CMD('32 020a0b0f'),                           # RFConfiguration
+            CMD('42 313233'),                             # InCommunicateThru
         ]]
 
     def pn53x_test_listen_tta_not_activated(self, device):
