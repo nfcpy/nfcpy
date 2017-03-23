@@ -9,6 +9,7 @@ import pytest
 from pytest_mock import mocker  # noqa: F401
 from mock import call
 from binascii import hexlify
+import errno
 
 import base_clf_pn53x
 from base_clf_pn53x import CMD, RSP, ACK, NAK, ERR, HEX  # noqa: F401
@@ -164,6 +165,11 @@ class TestDevice(base_clf_pn53x.TestDevice):
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
             CMD('4A 0100'),                               # InListPassiveTarget
         ]]
+        return target
+
+    def test_send_cmd_recv_rsp_passive_dep_target(self, device):
+        target = self.test_sense_tta_target_is_dep(device)
+        self.pn53x_test_send_cmd_recv_rsp_passive_dep_target(device, target)
 
     @pytest.mark.parametrize("sdd, sdd_res", [
         ('088801020304050607', '01020304050607'),
@@ -253,6 +259,20 @@ class TestDevice(base_clf_pn53x.TestDevice):
 
     def test_send_cmd_recv_rsp_with_dep_target(self, device):
         self.pn53x_test_send_cmd_recv_rsp_with_dep_target(device)
+
+    @pytest.mark.parametrize("err, exc", [
+        ('01', nfc.clf.TimeoutError),
+        ('02', nfc.clf.TransmissionError),
+    ])
+    def test_send_cmd_recv_rsp_chipset_error(self, device, err, exc):
+        self.pn53x_test_send_cmd_recv_rsp_chipset_error(device, err, exc)
+
+    @pytest.mark.parametrize("err, exc", [
+        (errno.ETIMEDOUT, nfc.clf.TimeoutError),
+        (errno.EIO, IOError),
+    ])
+    def test_send_cmd_recv_rsp_transport_error(self, device, err, exc):
+        self.pn53x_test_send_cmd_recv_rsp_transport_error(device, err, exc)
 
     def test_listen_tta_not_activated(self, device):
         self.pn53x_test_listen_tta_not_activated(device)

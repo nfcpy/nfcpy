@@ -582,6 +582,25 @@ class TestDevice:
         assert target.sdd_res == HEX('0416C6C2D73881')
         return target
 
+    def pn53x_test_send_cmd_recv_rsp_passive_dep_target(self, device, target):
+        # Also tests for very large timeout that results in index 16
+        assert target and target.sens_res and target.sel_res and target.sdd_res
+        device.chipset.transport.write.reset_mock()
+        device.chipset.transport.read.reset_mock()
+        device.chipset.transport.read.side_effect = [
+            ACK(), self.reg_rsp('00 00 00'),              # ReadRegister
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), RSP('33'),                             # RFConfiguration
+            ACK(), RSP('43 00 343536'),                   # InCommunicateThru
+        ]
+        assert device.send_cmd_recv_rsp(target, b'123', 10.0) == b'456'
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('06 6302 6303 6305'),                     # ReadRegister
+            CMD('08 630200 630300 630540'),               # WriteRegister
+            CMD('32 020a0b10'),                           # RFConfiguration
+            CMD('42 313233'),                             # InCommunicateThru
+        ]]
+
     def pn53x_test_sense_tta_unsupported_bitrate(self, device):
         with pytest.raises(ValueError) as excinfo:
             device.sense_tta(nfc.clf.RemoteTarget('100A'))
@@ -778,6 +797,40 @@ class TestDevice:
             CMD('32 020a0b0f'),                           # RFConfiguration
             CMD('42 313233'),                             # InCommunicateThru
         ]]
+
+    def pn53x_test_send_cmd_recv_rsp_chipset_error(self, device, err, exc):
+        device.chipset.transport.read.side_effect = [
+            ACK(), self.reg_rsp('00 00 00'),              # ReadRegister
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), RSP('33'),                             # RFConfiguration
+            ACK(), RSP('43 %s' % err),                    # InCommunicateThru
+        ]
+        target = nfc.clf.RemoteTarget('106A')
+        with pytest.raises(exc):
+            device.send_cmd_recv_rsp(target, b'123', 1.0)
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('06 6302 6303 6305'),                     # ReadRegister
+            CMD('08 630200 630300 630540'),               # WriteRegister
+            CMD('32 020a0b0f'),                           # RFConfiguration
+            CMD('42 313233'),                             # InCommunicateThru
+        ]]
+
+    def pn53x_test_send_cmd_recv_rsp_transport_error(self, device, err, exc):
+        device.chipset.transport.read.side_effect = [
+            ACK(), self.reg_rsp('00 00 00'),              # ReadRegister
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), RSP('33'),                             # RFConfiguration
+            ACK(), IOError(err, "test"),                  # InCommunicateThru
+        ]
+        target = nfc.clf.RemoteTarget('106A')
+        with pytest.raises(exc):
+            device.send_cmd_recv_rsp(target, b'123', 1.0)
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('06 6302 6303 6305'),                     # ReadRegister
+            CMD('08 630200 630300 630540'),               # WriteRegister
+            CMD('32 020a0b0f'),                           # RFConfiguration
+            CMD('42 313233'),                             # InCommunicateThru
+        ] + ([ACK()] if err == errno.ETIMEDOUT else [])]
 
     def pn53x_test_listen_tta_not_activated(self, device):
         device.chipset.transport.read.side_effect = [

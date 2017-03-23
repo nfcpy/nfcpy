@@ -576,9 +576,8 @@ class TestDevice(base_clf_pn53x.TestDevice):
             ACK(), self.reg_rsp('00'),                    # ReadRegister
         ]
         cmd = HEX('02 10 0000000000000000') + target.rid_res[2:6]
-        with pytest.raises(nfc.clf.TimeoutError) as excinfo:
+        with pytest.raises(nfc.clf.TimeoutError):
             device.send_cmd_recv_rsp(target, cmd, 1.0)
-        assert str(excinfo.value) == "no tt1 response data in ciu fifo"
 
     def test_send_cmd_recv_rsp_tt1_fifo_with_crc_error(self, device):
         target = self.test_sense_tta_target_is_tt1(device)
@@ -622,6 +621,11 @@ class TestDevice(base_clf_pn53x.TestDevice):
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
             CMD('4A 0100'),                               # InListPassiveTarget
         ]]
+        return target
+
+    def test_send_cmd_recv_rsp_passive_dep_target(self, device):
+        target = self.test_sense_tta_target_is_dep(device)
+        self.pn53x_test_send_cmd_recv_rsp_passive_dep_target(device, target)
 
     def test_sense_tta_unsupported_bitrate(self, device):
         self.pn53x_test_sense_tta_unsupported_bitrate(device)
@@ -669,6 +673,20 @@ class TestDevice(base_clf_pn53x.TestDevice):
 
     def test_send_cmd_recv_rsp_with_dep_target(self, device):
         self.pn53x_test_send_cmd_recv_rsp_with_dep_target(device)
+
+    @pytest.mark.parametrize("err, exc", [
+        ('01', nfc.clf.TimeoutError),
+        ('02', nfc.clf.TransmissionError),
+    ])
+    def test_send_cmd_recv_rsp_chipset_error(self, device, err, exc):
+        self.pn53x_test_send_cmd_recv_rsp_chipset_error(device, err, exc)
+
+    @pytest.mark.parametrize("err, exc", [
+        (errno.ETIMEDOUT, nfc.clf.TimeoutError),
+        (errno.EIO, IOError),
+    ])
+    def test_send_cmd_recv_rsp_transport_error(self, device, err, exc):
+        self.pn53x_test_send_cmd_recv_rsp_transport_error(device, err, exc)
 
     def test_listen_tta_not_activated(self, device):
         self.pn53x_test_listen_tta_not_activated(device)
