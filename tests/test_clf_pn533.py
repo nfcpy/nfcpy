@@ -193,13 +193,10 @@ class TestDevice(base_clf_pn53x.TestDevice):
             CMD('00 00' + ''.join(["%02x" % (x % 256) for x in range(262)])))
         ]
 
-    def test_sense_tta_no_target_found(self, device):
-        self.pn53x_test_sense_tta_no_target_found(device)
-
     def test_sense_tta_target_is_tt1(self, device):
-        target = self.pn53x_test_sense_tta_target_is_tt1(device)
+        target = super(TestDevice, self).test_sense_tta_target_is_tt1(device)
         assert isinstance(target, nfc.clf.RemoteTarget)
-        assert target.rid_res == HEX('1148B2565400')
+        assert target.rid_res == HEX('1148 B2565400')
         assert target.sens_res == HEX('000C')
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
             CMD('4A 0100'),                               # InListPassiveTarget
@@ -208,11 +205,6 @@ class TestDevice(base_clf_pn53x.TestDevice):
             CMD('40 0178000000000000'),                   # InDataExchange
         ]]
         return target
-
-    @pytest.mark.parametrize("cmd_code", ['00', '01', '1A', '53', '72'])
-    def test_send_cmd_recv_rsp_tt1_cmd(self, device, cmd_code):
-        target = self.test_sense_tta_target_is_tt1(device)
-        self.pn53x_test_send_cmd_recv_rsp_tt1_cmd(device, target, cmd_code)
 
     @pytest.mark.parametrize("cmd, crcb1, crcb2", [
         ('02', '29', 'b7'),
@@ -372,7 +364,7 @@ class TestDevice(base_clf_pn53x.TestDevice):
         assert str(excinfo.value) == "crc_b check error"
 
     def test_sense_tta_target_is_tt2(self, device):
-        target = self.pn53x_test_sense_tta_target_is_tt2(device)
+        target = super(TestDevice, self).test_sense_tta_target_is_tt2(device)
         assert target.sens_res == HEX('4400')
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
             CMD('4A 0100'),                               # InListPassiveTarget
@@ -381,92 +373,23 @@ class TestDevice(base_clf_pn53x.TestDevice):
         ]]
         return target
 
-    def test_send_cmd_recv_rsp_tt2_crc_pass(self, device):
-        target = self.test_sense_tta_target_is_tt2(device)
-        self.pn53x_test_send_cmd_recv_rsp_tt2_crc_pass(device, target)
-
-    def test_send_cmd_recv_rsp_tt2_crc_fail(self, device):
-        target = self.test_sense_tta_target_is_tt2(device)
-        self.pn53x_test_send_cmd_recv_rsp_tt2_crc_fail(device, target)
-
     def test_sense_tta_target_is_dep(self, device):
-        target = self.pn53x_test_sense_tta_target_is_dep(device)
+        target = super(TestDevice, self).test_sense_tta_target_is_dep(device)
         assert target.sens_res == HEX('4400')
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
             CMD('4A 0100'),                               # InListPassiveTarget
         ]]
         return target
 
-    def test_send_cmd_recv_rsp_passive_dep_target(self, device):
-        target = self.test_sense_tta_target_is_dep(device)
-        self.pn53x_test_send_cmd_recv_rsp_passive_dep_target(device, target)
-
-    def test_sense_tta_unsupported_bitrate(self, device):
-        self.pn53x_test_sense_tta_unsupported_bitrate(device)
-
-    @pytest.mark.parametrize("uid, initiator_data", [
-        ('01020304', '01020304'),
-        ('01020304050607', '8801020304050607'),
-        ('01020304050607080910', '880102038804050607080910'),
-    ])
-    def test_sense_tta_send_with_uid(self, device, uid, initiator_data):
-        self.pn53x_test_sense_tta_send_with_uid(device, uid, initiator_data)
-
-    def test_sense_tta_rid_response_error(self, device):
-        self.pn53x_test_sense_tta_rid_response_error(device)
-
-    def test_sense_tta_tt1_response_timeout(self, device):
-        self.pn53x_test_sense_tta_tt1_response_timeout(device)
-
-    def test_sense_ttb_no_target_found(self, device):
-        self.pn53x_test_sense_ttb_no_target_found(device)
-
-    def test_sense_ttb_unsupported_bitrate(self, device):
-        self.pn53x_test_sense_ttb_unsupported_bitrate(device)
-
     def test_sense_ttb_target_found(self, device):
-        self.pn53x_test_sense_ttb_target_found(device, '42 C2')
+        super(TestDevice, self).test_sense_ttb_target_found(device, '42 C2')
 
     def test_sense_ttb_deselect_timeout(self, device):
-        self.pn53x_test_sense_ttb_deselect_timeout(device, '42 C2')
-
-    def test_sense_ttf_no_target_found(self, device):
-        self.pn53x_test_sense_ttf_no_target_found(device)
-
-    def test_sense_ttf_target_found(self, device):
-        self.pn53x_test_sense_ttf_target_found(device)
-
-    def test_sense_ttf_more_rf_on_time(self, device):
-        self.pn53x_test_sense_ttf_more_rf_on_time(device)
-
-    def test_sense_ttf_unsupported_bitrate(self, device):
-        self.pn53x_test_sense_ttf_unsupported_bitrate(device)
-
-    def test_sense_dep_no_target_found(self, device):
-        self.pn53x_test_sense_dep_no_target_found(device)
-
-    def test_sense_dep_target_found(self, device):
-        self.pn53x_test_sense_dep_target_found(device)
-
-    def test_send_cmd_recv_rsp_with_dep_target(self, device):
-        self.pn53x_test_send_cmd_recv_rsp_with_dep_target(device)
-
-    @pytest.mark.parametrize("err, exc", [
-        ('01', nfc.clf.TimeoutError),
-        ('02', nfc.clf.TransmissionError),
-    ])
-    def test_send_cmd_recv_rsp_chipset_error(self, device, err, exc):
-        self.pn53x_test_send_cmd_recv_rsp_chipset_error(device, err, exc)
-
-    @pytest.mark.parametrize("err, exc", [
-        (errno.ETIMEDOUT, nfc.clf.TimeoutError),
-        (errno.EIO, IOError),
-    ])
-    def test_send_cmd_recv_rsp_transport_error(self, device, err, exc):
-        self.pn53x_test_send_cmd_recv_rsp_transport_error(device, err, exc)
+        base = super(TestDevice, self)
+        base.test_sense_ttb_deselect_timeout(device, '42 C2')
 
     def test_listen_tta_not_activated(self, device):
-        self.pn53x_test_listen_tta_not_activated(device)
+        super(TestDevice, self).test_listen_tta_not_activated(device)
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
             CMD('08 63013f'),                             # WriteRegister
             CMD('8c 0144000102030000 0102030405060708'
@@ -475,16 +398,8 @@ class TestDevice(base_clf_pn53x.TestDevice):
             ACK(),
         ]]
 
-    def test_listen_ttb_not_supported(self, device):
-        with pytest.raises(nfc.clf.UnsupportedTargetError) as excinfo:
-            device.listen_ttb(nfc.clf.LocalTarget('106B'), 1.0)
-        assert "does not support listen as Type B Target" in str(excinfo.value)
-
-    def test_listen_ttf_not_activated(self, device):
-        self.pn53x_test_listen_ttf_not_activated(device)
-
     def test_listen_dep_not_activated(self, device):
-        self.pn53x_test_listen_dep_not_activated(device)
+        super(TestDevice, self).test_listen_dep_not_activated(device)
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
             CMD('08 63017b6302b06303b0'),                 # WriteRegister
             CMD('8c 0201010102034001 fe01020304050600'
