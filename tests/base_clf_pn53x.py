@@ -1048,7 +1048,7 @@ class TestDevice(object):
             '106A', sens_res=b'12', sdd_res=b'1234', sel_res=b'1'),
          "sdd_res[0] must be 08h"),
     ])
-    def test_listen_tta_target_value_error_temp(self, device, target, errstr):
+    def test_listen_tta_target_value_error(self, device, target, errstr):
         with pytest.raises(ValueError) as excinfo:
             device.listen_tta(target, 1.0)
         assert str(excinfo.value) == errstr

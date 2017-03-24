@@ -388,9 +388,9 @@ def init(transport):
             tlv_tag, tlv_len = device.eeprom[index], device.eeprom[index+1]
             tlv_data = device.eeprom[index+2:index+2+tlv_len]
             if tlv_tag == 3:
-                device._device_name = tlv_data[2:].decode("utf-16")
+                device._device_name = tlv_data[2:].decode("utf-16-le")
             if tlv_tag == 4:
-                device._vendor_name = tlv_data[2:].decode("utf-16")
+                device._vendor_name = tlv_data[2:].decode("utf-16-le")
             index += 2 + tlv_len
     else:
         device._vendor_name = "SensorID"
