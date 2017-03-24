@@ -977,6 +977,19 @@ class TestDevice(object):
     def test_listen_tta_as_dep_wrong_start_byte(self, device):
         device.chipset.transport.read.side_effect = [
             ACK(), RSP('09 00'),                        # WriteRegister
+            ACK(), RSP('8D 00 E0 80'),                  # TgInitAsTarget
+            ACK(), IOError(errno.ETIMEDOUT, ""),        # TgInitAsTarget
+        ]
+        target = nfc.clf.LocalTarget('106A')
+        target.sens_res = HEX("4400")
+        target.sel_res = HEX("40")
+        target.sdd_res = HEX("08010203")
+        assert device.listen_tta(target, 1.0) is None
+        assert device.chipset.transport.read.call_count == 6
+
+    def test_listen_tta_while_loop_timeout(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('09 00'),                        # WriteRegister
         ]
         target = nfc.clf.LocalTarget('106A')
         target.sens_res = HEX("4400")
@@ -1081,6 +1094,95 @@ class TestDevice(object):
             CMD('06 6337633863346335'),                   # ReadRegister
             CMD('08 633100'),                             # WriteRegister
         ]]
+
+    def test_listen_ttf_get_activated(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), self.reg_rsp('00 00 30 00'),           # ReadRegister
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), self.reg_rsp('0a'),                    # ReadRegister
+            ACK(), self.reg_rsp('0a003132333435363738'),  # ReadRegister
+        ]
+        sensf_res = HEX("01 3132333435363738 FFFFFFFFFFFFFFFF 12FC")
+        target = nfc.clf.LocalTarget('212F')
+        target.sensf_res = sensf_res
+        target = device.listen_ttf(target, 1.0)
+        assert isinstance(target, nfc.clf.LocalTarget)
+        assert target.brty == "212F"
+        assert target.sensf_res == sensf_res
+        assert target.tt3_cmd == HEX('003132333435363738')
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('08 633100633a806339 0063390063390063'
+                '   3900633900633900 6339316339326339'
+                '   3363393463393563 3936633937633938'
+                '   6339ff6339ff6339 ff6339ff6339ff63'
+                '   39ff6339ff6339ff 6339126339fc6339'
+                '   00633101'),                           # WriteRegister
+            CMD('08 633c0063013f630b 8063029263039a63'
+                '   0480630520630961 63347f63357f6331'
+                '   0d'),                                 # WriteRegister
+            CMD('06 6337633863346335'),                   # ReadRegister
+            CMD('08 633430'),                             # WriteRegister
+            CMD('06 633a'),                               # ReadRegister
+            CMD('06 6339 6339 6339 6339 6339'
+                '   6339 6339 6339 6339 6339'),           # ReadRegister
+        ]]
+        return target
+
+    @pytest.mark.parametrize("tt3_cmd", [
+        '00003132333435363738', '0a000000000000000000',
+    ])
+    def test_listen_ttf_frame_length_error(self, device, tt3_cmd):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), self.reg_rsp('00 00 30 00'),           # ReadRegister
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), self.reg_rsp('0a'),                    # ReadRegister
+            ACK(), self.reg_rsp(tt3_cmd),                 # ReadRegister
+            ACK(), RSP('09 00'),                          # WriteRegister
+            ACK(), RSP('09 00'),                          # WriteRegister
+        ]
+        sensf_res = HEX("01 3132333435363738 FFFFFFFFFFFFFFFF 12FC")
+        target = nfc.clf.LocalTarget('212F')
+        target.sensf_res = sensf_res
+        assert device.listen_ttf(target, 0.001) is None
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('08 633100633a806339 0063390063390063'
+                '   3900633900633900 6339316339326339'
+                '   3363393463393563 3936633937633938'
+                '   6339ff6339ff6339 ff6339ff6339ff63'
+                '   39ff6339ff6339ff 6339126339fc6339'
+                '   00633101'),                           # WriteRegister
+            CMD('08 633c0063013f630b 8063029263039a63'
+                '   0480630520630961 63347f63357f6331'
+                '   0d'),                                 # WriteRegister
+            CMD('06 6337633863346335'),                   # ReadRegister
+            CMD('08 633430'),                             # WriteRegister
+            CMD('06 633a'),                               # ReadRegister
+            CMD('06 6339 6339 6339 6339 6339'
+                '   6339 6339 6339 6339 6339'),           # ReadRegister
+            CMD('08 63310d'),                             # WriteRegister
+            CMD('08 633100'),                             # WriteRegister
+        ]]
+
+    def test_listen_ttf_unsupported_bitrate(self, device):
+        target = nfc.clf.LocalTarget('106A')
+        with pytest.raises(nfc.clf.UnsupportedTargetError) as excinfo:
+            device.listen_ttf(target, 1.0)
+        assert str(excinfo.value) == "unsupported bitrate/type: '106A'"
+
+    @pytest.mark.parametrize("target, errstr", [
+        (nfc.clf.LocalTarget('212F'),
+         "sensf_res is required"),
+        (nfc.clf.LocalTarget('424F', sensf_res=b''),
+         "sensf_res must be 19 byte"),
+    ])
+    def test_listen_ttf_target_value_error(self, device, target, errstr):
+        with pytest.raises(ValueError) as excinfo:
+            device.listen_ttf(target, 1.0)
+        assert str(excinfo.value) == errstr
 
     def test_listen_dep_not_activated(self, device):
         device.chipset.transport.read.side_effect = [
