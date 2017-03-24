@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, division
 
-import time
 import pytest
 import nfc.llcp.sec
 
@@ -81,20 +80,45 @@ def test_bv_cs1_initialize_by_name():
     assert len(cipher.public_key_y) == 32
 
 
+@pytest.fixture(scope="module")
+def local_cipher_suite():
+    return nfc.llcp.sec.CipherSuite1()
+
+
+@pytest.fixture(scope="module")
+def local_ecpk(local_cipher_suite):
+    return local_cipher_suite.public_key_x + local_cipher_suite.public_key_y
+
+
+@pytest.fixture(scope="module")
+def local_nonce(local_cipher_suite):
+    return local_cipher_suite.random_nonce
+
+
+@pytest.fixture(scope="module")
+def remote_cipher_suite():
+    return nfc.llcp.sec.CipherSuite1()
+
+
+@pytest.fixture(scope="module")
+def remote_ecpk(remote_cipher_suite):
+    return remote_cipher_suite.public_key_x + remote_cipher_suite.public_key_y
+
+
+@pytest.fixture(scope="module")
+def remote_nonce(remote_cipher_suite):
+    return remote_cipher_suite.random_nonce
+
+
 def test_bi_cs1_initialize_by_name():
     cipher = nfc.llcp.sec.cipher_suite("ECDH_anon_WITH_AEAD_AES_128_CCM_5")
     assert cipher is None
 
 
-def test_bv_cs1_calculate_session_key():
-    cs_1 = nfc.llcp.sec.CipherSuite1()
-    time.sleep(0.1)
-    cs_2 = nfc.llcp.sec.CipherSuite1()
-    ecpk = cs_2.public_key_x + cs_2.public_key_y
-    rn_i = cs_2.random_nonce
-    rn_t = cs_2.random_nonce
-    assert cs_1.calculate_session_key(ecpk, rn_i=rn_i)
-    assert cs_1.calculate_session_key(ecpk, rn_t=rn_t)
+def test_bv_cs1_calculate_session_key(remote_ecpk, remote_nonce):
+    cs = nfc.llcp.sec.CipherSuite1()
+    assert cs.calculate_session_key(remote_ecpk, rn_i=remote_nonce)
+    assert cs.calculate_session_key(remote_ecpk, rn_t=remote_nonce)
 
 
 @pytest.mark.parametrize("ecpk_len", [None, 0, 63, 65])
@@ -132,10 +156,9 @@ def test_bi_cs1_public_key_not_on_curve():
     (b'ADATA', b''),
     (b'', b''),
 ])
-def test_bv_cs1_encrypt_decrypt(a, p):
-    cs_i = nfc.llcp.sec.CipherSuite1()
-    time.sleep(0.1)
-    cs_t = nfc.llcp.sec.CipherSuite1()
+def test_bv_cs1_encrypt_decrypt(local_cipher_suite, remote_cipher_suite, a, p):
+    cs_i = local_cipher_suite
+    cs_t = remote_cipher_suite
     pk_i = cs_i.public_key_x + cs_i.public_key_y
     pk_t = cs_t.public_key_x + cs_t.public_key_y
     rn_i = cs_i.random_nonce
@@ -148,79 +171,61 @@ def test_bv_cs1_encrypt_decrypt(a, p):
     assert cs_t.decrypt(a, c) == p
 
 
-def test_bv_cs1_last_packet_send_counter():
-    cs_a = nfc.llcp.sec.CipherSuite1()
-    time.sleep(0.1)
-    cs_b = nfc.llcp.sec.CipherSuite1()
-    pk_b = cs_b.public_key_x + cs_b.public_key_y
-    cs_a.calculate_session_key(pk_b, cs_b.random_nonce)
-    assert cs_a._pcs == 0
-    cs_a._pcs = (1 << 64) - 2
-    assert cs_a.encrypt(b'ADATA', b'PLAINTEXT')
+def test_bv_cs1_last_packet_send_counter(remote_ecpk, remote_nonce):
+    cs = nfc.llcp.sec.CipherSuite1()
+    cs.calculate_session_key(remote_ecpk, remote_nonce)
+    assert cs._pcs == 0
+    cs._pcs = (1 << 64) - 2
+    assert cs.encrypt(b'ADATA', b'PLAINTEXT')
 
 
-def test_bv_cs1_packet_send_counter_overflow():
+def test_bv_cs1_packet_send_counter_overflow(remote_ecpk, remote_nonce):
     with pytest.raises(nfc.llcp.sec.EncryptionError):
-        cs_a = nfc.llcp.sec.CipherSuite1()
-        time.sleep(0.1)
-        cs_b = nfc.llcp.sec.CipherSuite1()
-        pk_b = cs_b.public_key_x + cs_b.public_key_y
-        cs_a.calculate_session_key(pk_b, cs_b.random_nonce)
-        assert cs_a._pcs == 0
-        assert cs_a._pcr == 0
-        cs_a._pcs = (1 << 64) - 1
-        cs_a.encrypt(b'ADATA', b'PLAINTEXT')
+        cs = nfc.llcp.sec.CipherSuite1()
+        cs.calculate_session_key(remote_ecpk, remote_nonce)
+        assert cs._pcs == 0
+        assert cs._pcr == 0
+        cs._pcs = (1 << 64) - 1
+        cs.encrypt(b'ADATA', b'PLAINTEXT')
 
 
-def test_bv_cs1_last_packet_recv_counter():
-    cs_a = nfc.llcp.sec.CipherSuite1()
-    time.sleep(0.1)
-    cs_b = nfc.llcp.sec.CipherSuite1()
-    pk_b = cs_b.public_key_x + cs_b.public_key_y
-    cs_a.calculate_session_key(pk_b, cs_b.random_nonce)
-    assert cs_a._pcr == 0
-    cs_a._pcr = (1 << 64) - 2
+def test_bv_cs1_last_packet_recv_counter(remote_ecpk, remote_nonce):
+    cs = nfc.llcp.sec.CipherSuite1()
+    cs.calculate_session_key(remote_ecpk, remote_nonce)
+    assert cs._pcr == 0
+    cs._pcr = (1 << 64) - 2
     nonce = bytes(bytearray.fromhex("00 00000000 FFFFFFFF FFFFFFFE"))
-    c = nfc.llcp.sec.CipherSuite1._encrypt(b'A', b'P', cs_a._k_encr, nonce, 4)
-    assert cs_a.decrypt(b'A', c)
+    c = nfc.llcp.sec.CipherSuite1._encrypt(b'A', b'P', cs._k_encr, nonce, 4)
+    assert cs.decrypt(b'A', c)
 
 
-def test_bv_cs1_packet_recv_counter_overflow():
+def test_bv_cs1_packet_recv_counter_overflow(remote_ecpk, remote_nonce):
     with pytest.raises(nfc.llcp.sec.DecryptionError):
-        cs_a = nfc.llcp.sec.CipherSuite1()
-        time.sleep(0.1)
-        cs_b = nfc.llcp.sec.CipherSuite1()
-        pk_b = cs_b.public_key_x + cs_b.public_key_y
-        cs_a.calculate_session_key(pk_b, cs_b.random_nonce)
-        assert cs_a._pcr == 0
-        cs_a._pcr = (1 << 64) - 1
+        cs = nfc.llcp.sec.CipherSuite1()
+        cs.calculate_session_key(remote_ecpk, remote_nonce)
+        assert cs._pcr == 0
+        cs._pcr = (1 << 64) - 1
         nonce = bytes(bytearray.fromhex("00 00000000 FFFFFFFF FFFFFFFF"))
         c = nfc.llcp.sec.CipherSuite1._encrypt(
-            b'A', b'P', cs_a._k_encr, nonce, 4)
-        cs_a.decrypt(b'A', c)
+            b'A', b'P', cs._k_encr, nonce, 4)
+        cs.decrypt(b'A', c)
 
 
-def test_bi_cs1_packet_recv_counter_mismatch():
+def test_bi_cs1_packet_recv_counter_mismatch(remote_ecpk, remote_nonce):
     with pytest.raises(nfc.llcp.sec.DecryptionError):
-        cs_a = nfc.llcp.sec.CipherSuite1()
-        time.sleep(0.1)
-        cs_b = nfc.llcp.sec.CipherSuite1()
-        pk_b = cs_b.public_key_x + cs_b.public_key_y
-        cs_a.calculate_session_key(pk_b, cs_b.random_nonce)
-        assert cs_a._pcr == 0
+        cs = nfc.llcp.sec.CipherSuite1()
+        cs.calculate_session_key(remote_ecpk, remote_nonce)
+        assert cs._pcr == 0
         nonce = bytes(bytearray.fromhex("00 00000000 00000000 00000001"))
         c = nfc.llcp.sec.CipherSuite1._encrypt(
-            b'A', b'P', cs_a._k_encr, nonce, 4)
-        cs_a.decrypt(b'A', c)
+            b'A', b'P', cs._k_encr, nonce, 4)
+        cs.decrypt(b'A', c)
 
 
-def test_bi_cs1_set_invalid_tag_size():
+def test_bi_cs1_set_invalid_tag_size(remote_ecpk, remote_nonce):
     with pytest.raises(nfc.llcp.sec.EncryptionError):
-        cs_a = nfc.llcp.sec.CipherSuite1()
-        time.sleep(0.1)
-        cs_b = nfc.llcp.sec.CipherSuite1()
-        pk_b = cs_b.public_key_x + cs_b.public_key_y
-        cs_a.calculate_session_key(pk_b, cs_b.random_nonce)
-        assert cs_a._ccm_t == 4
-        cs_a._ccm_t = 5
-        cs_a.encrypt(b'A', b'P')
+        cs = nfc.llcp.sec.CipherSuite1()
+        cs.calculate_session_key(remote_ecpk, remote_nonce)
+        assert cs._ccm_t == 4
+        cs._ccm_t = 5
+        cs.encrypt(b'A', b'P')
