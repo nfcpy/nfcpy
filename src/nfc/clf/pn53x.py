@@ -732,6 +732,7 @@ class Device(device.Device):
             brty = ("106A", "212F", "424F")[(data[0] & 0x70) >> 4]
             self.log.debug("%s rcvd %s", brty, hexlify(buffer(data, 1)))
             if brty != target.brty or len(data) < 2:
+                log.debug("received bitrate does not match %s", target.brty)
                 continue
 
             if target.sel_res[0] & 0x60 == 0x00:
@@ -768,14 +769,14 @@ class Device(device.Device):
                     return target
 
             elif (target.sel_res[0] & 0x40 and data[1] == 0xF0
-                  and len(data) >= 19):
-                if data[2] == len(data)-2 and data[3:5] == b'\xD4\x00':
-                    self.log.debug("rcvd ATR_REQ %s", hexlify(buffer(data, 3)))
-                    target = nfc.clf.LocalTarget(brty, atr_req=data[3:])
-                    target.sens_res = nfca_params[0:2]
-                    target.sdd_res = b'\x08' + nfca_params[2:5]
-                    target.sel_res = nfca_params[5:6]
-                    return target
+                  and len(data) >= 19 and data[2] == len(data)-2
+                  and data[3:5] == b'\xD4\x00'):
+                self.log.debug("rcvd ATR_REQ %s", hexlify(buffer(data, 3)))
+                target = nfc.clf.LocalTarget(brty, atr_req=data[3:])
+                target.sens_res = nfca_params[0:2]
+                target.sdd_res = b'\x08' + nfca_params[2:5]
+                target.sel_res = nfca_params[5:6]
+                return target
 
     def listen_ttf(self, target, timeout):
         # For NFC-F listen we can not use TgInitAsTarget because it
