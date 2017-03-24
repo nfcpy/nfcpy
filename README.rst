@@ -13,6 +13,14 @@ Python module for near field communication
    :target: http://nfcpy.readthedocs.io/en/latest/?badge=latest
    :alt: Documentation
 
+.. image:: https://travis-ci.org/nfcpy/nfcpy.svg?branch=master
+   :target: https://travis-ci.org/nfcpy/nfcpy
+   :alt: Build Status
+
+.. image:: https://codecov.io/gh/nfcpy/nfcpy/branch/master/graph/badge.svg
+   :target: https://codecov.io/gh/nfcpy/nfcpy
+   :alt: Code Coverage
+
 .. _Python: https://www.python.org
 .. _EUPL: https://joinup.ec.europa.eu/software/page/eupl
 .. _GitHub: https://github.com/nfcpy/nfcpy
