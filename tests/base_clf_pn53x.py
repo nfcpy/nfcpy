@@ -1222,3 +1222,38 @@ class TestDevice(object):
         assert target.psl_req is None
         assert target.psl_res is None
         assert target.dep_req == HEX(dep_req)
+        assert device.chipset.transport.read.call_count == 10
+
+    def test_listen_dep_activated_at_424F(self, device):
+        atr_req = 'D400 30313233343536373839 00000000'
+        atr_res = 'D501 d0d1d2d3d4d5d6d7d8d9 0000000800'
+        psl_req = 'D404 00 12 03'
+        psl_res = 'D505 00'
+        dep_req = 'D406000000'
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('09 00'),                        # WriteRegister
+            ACK(), RSP('8D 04 11' + atr_req),           # TgInitAsTarget
+            ACK(), RSP('91 00'),                        # TgResponseToInitiator
+            ACK(), RSP('89 00 06' + psl_req),           # TgGetInitiatorCommand
+            ACK(), self.reg_rsp('00'),                  # ReadRegister
+            ACK(), RSP('09 00'),                        # WriteRegister
+            ACK(), RSP('91 00'),                        # TgResponseToInitiator
+            ACK(), self.reg_rsp('00'),                  # ReadRegister
+            ACK(), RSP('09 00'),                        # WriteRegister
+            ACK(), RSP('89 00 06' + dep_req),           # TgGetInitiatorCommand
+            ACK(), RSP('09 00'),                        # WriteRegister
+        ]
+        target = nfc.clf.LocalTarget()
+        target.sensf_res = HEX("01 01fe010203040506 0000000000000000 0000")
+        target.sens_res = HEX("0101")
+        target.sel_res = HEX("40")
+        target.sdd_res = HEX("08010203")
+        target.atr_res = HEX(atr_res)
+        target = device.listen_dep(target, 0.001)
+        assert isinstance(target, nfc.clf.LocalTarget)
+        assert target.brty == "424F"
+        assert target.atr_req == HEX(atr_req)
+        assert target.atr_res == HEX(atr_res)
+        assert target.psl_req == HEX(psl_req)
+        assert target.psl_res == HEX(psl_res)
+        assert target.dep_req == HEX(dep_req)
