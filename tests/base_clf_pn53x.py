@@ -1196,8 +1196,10 @@ class TestDevice(object):
         target.sdd_res = HEX("08010203")
         target.atr_res = HEX("D501 d0d1d2d3d4d5d6d7d8d9 0000000800")
         assert device.listen_dep(target, 0.001) is None
+        assert device.chipset.transport.read.call_count == 4
 
-    def test_listen_dep_activated_at_106A(self, device):
+    def test_listen_dep_passive_106A(self, device):
+        sensf_res = '01 01fe010203040506 0000000000000000 0000'
         atr_req = 'D400 30313233343536373839 00000000'
         atr_res = 'D501 d0d1d2d3d4d5d6d7d8d9 0000000800'
         dep_req = 'D406000000'
@@ -1209,14 +1211,18 @@ class TestDevice(object):
             ACK(), RSP('09 00'),                        # WriteRegister
         ]
         target = nfc.clf.LocalTarget()
-        target.sensf_res = HEX("01 01fe010203040506 0000000000000000 0000")
+        target.sensf_res = HEX(sensf_res)
         target.sens_res = HEX("0101")
         target.sel_res = HEX("40")
         target.sdd_res = HEX("08010203")
         target.atr_res = HEX(atr_res)
-        target = device.listen_dep(target, 0.001)
+        target = device.listen_dep(target, 1.0)
         assert isinstance(target, nfc.clf.LocalTarget)
         assert target.brty == "106A"
+        assert target.sensf_res is None
+        assert target.sens_res == HEX("0101")
+        assert target.sel_res == HEX("40")
+        assert target.sdd_res == HEX("08010203")
         assert target.atr_req == HEX(atr_req)
         assert target.atr_res == HEX(atr_res)
         assert target.psl_req is None
@@ -1224,7 +1230,39 @@ class TestDevice(object):
         assert target.dep_req == HEX(dep_req)
         assert device.chipset.transport.read.call_count == 10
 
-    def test_listen_dep_activated_at_424F(self, device):
+    def test_listen_dep_passive_424F(self, device):
+        sensf_res = '01 01fe010203040506 0000000000000000 0000'
+        atr_req = 'D400 30313233343536373839 00000000'
+        atr_res = 'D501 d0d1d2d3d4d5d6d7d8d9 0000000800'
+        dep_req = 'D406000000'
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('09 00'),                        # WriteRegister
+            ACK(), RSP('8D 26 11' + atr_req),           # TgInitAsTarget
+            ACK(), RSP('91 00'),                        # TgResponseToInitiator
+            ACK(), RSP('89 00 06' + dep_req),           # TgGetInitiatorCommand
+            ACK(), RSP('09 00'),                        # WriteRegister
+        ]
+        target = nfc.clf.LocalTarget()
+        target.sensf_res = HEX(sensf_res)
+        target.sens_res = HEX("0101")
+        target.sel_res = HEX("40")
+        target.sdd_res = HEX("08010203")
+        target.atr_res = HEX(atr_res)
+        target = device.listen_dep(target, 1.0)
+        assert isinstance(target, nfc.clf.LocalTarget)
+        assert target.brty == "424F"
+        assert target.sensf_res == HEX(sensf_res)
+        assert target.sens_res is None
+        assert target.sel_res is None
+        assert target.sdd_res is None
+        assert target.atr_req == HEX(atr_req)
+        assert target.atr_res == HEX(atr_res)
+        assert target.psl_req is None
+        assert target.psl_res is None
+        assert target.dep_req == HEX(dep_req)
+        assert device.chipset.transport.read.call_count == 10
+
+    def test_listen_dep_passive_106A_psl_to_424F(self, device):
         atr_req = 'D400 30313233343536373839 00000000'
         atr_res = 'D501 d0d1d2d3d4d5d6d7d8d9 0000000800'
         psl_req = 'D404 00 12 03'
@@ -1249,7 +1287,7 @@ class TestDevice(object):
         target.sel_res = HEX("40")
         target.sdd_res = HEX("08010203")
         target.atr_res = HEX(atr_res)
-        target = device.listen_dep(target, 0.001)
+        target = device.listen_dep(target, 1.0)
         assert isinstance(target, nfc.clf.LocalTarget)
         assert target.brty == "424F"
         assert target.atr_req == HEX(atr_req)
@@ -1257,3 +1295,237 @@ class TestDevice(object):
         assert target.psl_req == HEX(psl_req)
         assert target.psl_res == HEX(psl_res)
         assert target.dep_req == HEX(dep_req)
+        assert target.sensf_res is None
+        assert target.sens_res == HEX("0101")
+        assert target.sel_res == HEX("40")
+        assert target.sdd_res == HEX("08010203")
+        assert device.chipset.transport.read.call_count == 22
+
+    def test_listen_dep_active_106A_psl_to_424F(self, device):
+        atr_req = 'D400 30313233343536373839 00000000'
+        atr_res = 'D501 d0d1d2d3d4d5d6d7d8d9 0000000800'
+        psl_req = 'D404 00 12 03'
+        psl_res = 'D505 00'
+        dep_req = 'D406000000'
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('09 00'),                        # WriteRegister
+            ACK(), RSP('8D 05 11' + atr_req),           # TgInitAsTarget
+            ACK(), RSP('91 00'),                        # TgResponseToInitiator
+            ACK(), RSP('89 00 06' + psl_req),           # TgGetInitiatorCommand
+            ACK(), self.reg_rsp('FD'),                  # ReadRegister
+            ACK(), RSP('09 00'),                        # WriteRegister
+            ACK(), RSP('91 00'),                        # TgResponseToInitiator
+            ACK(), self.reg_rsp('FD'),                  # ReadRegister
+            ACK(), RSP('09 00'),                        # WriteRegister
+            ACK(), RSP('89 00 06' + dep_req),           # TgGetInitiatorCommand
+            ACK(), RSP('09 00'),                        # WriteRegister
+        ]
+        target = nfc.clf.LocalTarget()
+        target.sensf_res = HEX("01 01fe010203040506 0000000000000000 0000")
+        target.sens_res = HEX("0101")
+        target.sel_res = HEX("40")
+        target.sdd_res = HEX("08010203")
+        target.atr_res = HEX(atr_res)
+        target = device.listen_dep(target, 1.0)
+        assert isinstance(target, nfc.clf.LocalTarget)
+        assert target.brty == "424F"
+        assert target.atr_req == HEX(atr_req)
+        assert target.atr_res == HEX(atr_res)
+        assert target.psl_req == HEX(psl_req)
+        assert target.psl_res == HEX(psl_res)
+        assert target.dep_req == HEX(dep_req)
+        assert target.sensf_res is None
+        assert target.sens_res is None
+        assert target.sel_res is None
+        assert target.sdd_res is None
+        assert device.chipset.transport.read.call_count == 22
+
+    @pytest.mark.parametrize("dep_req", ['D405000000ff', '0000000000'])
+    def test_listen_dep_command_data_error(self, device, dep_req):
+        atr_req = 'D400 30313233343536373839 00000000'
+        atr_res = 'D501 d0d1d2d3d4d5d6d7d8d9 0000000800'
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('09 00'),                        # WriteRegister
+            ACK(), RSP('8D 04 11' + atr_req),           # TgInitAsTarget
+            ACK(), RSP('91 00'),                        # TgResponseToInitiator
+            ACK(), RSP('89 00 06' + dep_req),           # TgGetInitiatorCommand
+        ]
+        target = nfc.clf.LocalTarget()
+        target.sensf_res = HEX('01 01fe010203040506 0000000000000000 0000')
+        target.sens_res = HEX("0101")
+        target.sel_res = HEX("40")
+        target.sdd_res = HEX("08010203")
+        target.atr_res = HEX(atr_res)
+        assert device.listen_dep(target, 1.0) is None
+        assert device.chipset.transport.read.call_count == 8
+
+    def test_listen_dep_chipset_timeout_after_psl(self, device):
+        atr_req = 'D400 30313233343536373839 00000000'
+        atr_res = 'D501 d0d1d2d3d4d5d6d7d8d9 0000000800'
+        psl_req = 'D404 00 12 03'
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('09 00'),                        # WriteRegister
+            ACK(), RSP('8D 05 11' + atr_req),           # TgInitAsTarget
+            ACK(), RSP('91 00'),                        # TgResponseToInitiator
+            ACK(), RSP('89 00 06' + psl_req),           # TgGetInitiatorCommand
+            ACK(), self.reg_rsp('FD'),                  # ReadRegister
+            ACK(), RSP('09 00'),                        # WriteRegister
+            ACK(), RSP('91 00'),                        # TgResponseToInitiator
+            ACK(), self.reg_rsp('FD'),                  # ReadRegister
+            ACK(), RSP('09 00'),                        # WriteRegister
+            ACK(), RSP('89 01'),                        # TgGetInitiatorCommand
+        ]
+        target = nfc.clf.LocalTarget()
+        target.sensf_res = HEX("01 01fe010203040506 0000000000000000 0000")
+        target.sens_res = HEX("0101")
+        target.sel_res = HEX("40")
+        target.sdd_res = HEX("08010203")
+        target.atr_res = HEX(atr_res)
+        assert device.listen_dep(target, 1.0) is None
+        assert device.chipset.transport.read.call_count == 20
+
+    def test_listen_dep_ioerror_timeout_after_psl(self, device):
+        atr_req = 'D400 30313233343536373839 00000000'
+        atr_res = 'D501 d0d1d2d3d4d5d6d7d8d9 0000000800'
+        psl_req = 'D404 00 12 03'
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('09 00'),                        # WriteRegister
+            ACK(), RSP('8D 05 11' + atr_req),           # TgInitAsTarget
+            ACK(), RSP('91 00'),                        # TgResponseToInitiator
+            ACK(), RSP('89 00 06' + psl_req),           # TgGetInitiatorCommand
+            ACK(), self.reg_rsp('FD'),                  # ReadRegister
+            ACK(), RSP('09 00'),                        # WriteRegister
+            ACK(), RSP('91 00'),                        # TgResponseToInitiator
+            ACK(), self.reg_rsp('FD'),                  # ReadRegister
+            ACK(), RSP('09 00'),                        # WriteRegister
+            ACK(), IOError(errno.ETIMEDOUT, ""),        # TgGetInitiatorCommand
+        ]
+        target = nfc.clf.LocalTarget()
+        target.sensf_res = HEX("01 01fe010203040506 0000000000000000 0000")
+        target.sens_res = HEX("0101")
+        target.sel_res = HEX("40")
+        target.sdd_res = HEX("08010203")
+        target.atr_res = HEX(atr_res)
+        assert device.listen_dep(target, 1.0) is None
+        assert device.chipset.transport.read.call_count == 20
+
+    def test_listen_dep_ioerror_exception_after_psl(self, device):
+        atr_req = 'D400 30313233343536373839 00000000'
+        atr_res = 'D501 d0d1d2d3d4d5d6d7d8d9 0000000800'
+        psl_req = 'D404 00 12 03'
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('09 00'),                        # WriteRegister
+            ACK(), RSP('8D 05 11' + atr_req),           # TgInitAsTarget
+            ACK(), RSP('91 00'),                        # TgResponseToInitiator
+            ACK(), RSP('89 00 06' + psl_req),           # TgGetInitiatorCommand
+            ACK(), self.reg_rsp('FD'),                  # ReadRegister
+            ACK(), RSP('09 00'),                        # WriteRegister
+            ACK(), RSP('91 00'),                        # TgResponseToInitiator
+            ACK(), self.reg_rsp('FD'),                  # ReadRegister
+            ACK(), RSP('09 00'),                        # WriteRegister
+            ACK(), IOError(errno.EIO, ""),              # TgGetInitiatorCommand
+        ]
+        target = nfc.clf.LocalTarget()
+        target.sensf_res = HEX("01 01fe010203040506 0000000000000000 0000")
+        target.sens_res = HEX("0101")
+        target.sel_res = HEX("40")
+        target.sdd_res = HEX("08010203")
+        target.atr_res = HEX(atr_res)
+        with pytest.raises(IOError):
+            device.listen_dep(target, 1.0)
+        assert device.chipset.transport.read.call_count == 20
+
+    def test_listen_dep_chipset_timeout_after_atr(self, device):
+        atr_req = 'D400 30313233343536373839 00000000'
+        atr_res = 'D501 d0d1d2d3d4d5d6d7d8d9 0000000800'
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('09 00'),                        # WriteRegister
+            ACK(), RSP('8D 05 11' + atr_req),           # TgInitAsTarget
+            ACK(), RSP('91 00'),                        # TgResponseToInitiator
+            ACK(), RSP('89 01'),                        # TgGetInitiatorCommand
+        ]
+        target = nfc.clf.LocalTarget()
+        target.sensf_res = HEX("01 01fe010203040506 0000000000000000 0000")
+        target.sens_res = HEX("0101")
+        target.sel_res = HEX("40")
+        target.sdd_res = HEX("08010203")
+        target.atr_res = HEX(atr_res)
+        assert device.listen_dep(target, 1.0) is None
+        assert device.chipset.transport.read.call_count == 8
+
+    def test_listen_dep_ioerror_timeout_after_atr(self, device):
+        atr_req = 'D400 30313233343536373839 00000000'
+        atr_res = 'D501 d0d1d2d3d4d5d6d7d8d9 0000000800'
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('09 00'),                        # WriteRegister
+            ACK(), RSP('8D 05 11' + atr_req),           # TgInitAsTarget
+            ACK(), RSP('91 00'),                        # TgResponseToInitiator
+            ACK(), IOError(errno.ETIMEDOUT, ""),        # TgGetInitiatorCommand
+        ]
+        target = nfc.clf.LocalTarget()
+        target.sensf_res = HEX("01 01fe010203040506 0000000000000000 0000")
+        target.sens_res = HEX("0101")
+        target.sel_res = HEX("40")
+        target.sdd_res = HEX("08010203")
+        target.atr_res = HEX(atr_res)
+        assert device.listen_dep(target, 1.0) is None
+        assert device.chipset.transport.read.call_count == 8
+
+    def test_listen_dep_ioerror_exception_after_atr(self, device):
+        atr_req = 'D400 30313233343536373839 00000000'
+        atr_res = 'D501 d0d1d2d3d4d5d6d7d8d9 0000000800'
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('09 00'),                        # WriteRegister
+            ACK(), RSP('8D 05 11' + atr_req),           # TgInitAsTarget
+            ACK(), RSP('91 00'),                        # TgResponseToInitiator
+            ACK(), IOError(errno.EIO, ""),              # TgGetInitiatorCommand
+        ]
+        target = nfc.clf.LocalTarget()
+        target.sensf_res = HEX("01 01fe010203040506 0000000000000000 0000")
+        target.sens_res = HEX("0101")
+        target.sel_res = HEX("40")
+        target.sdd_res = HEX("08010203")
+        target.atr_res = HEX(atr_res)
+        with pytest.raises(IOError):
+            device.listen_dep(target, 1.0)
+        assert device.chipset.transport.read.call_count == 8
+
+    def test_listen_dep_not_atr_and_then_ioerror(self, device):
+        atr_req = 'D4FF 30313233343536373839 00000000'
+        atr_res = 'D501 d0d1d2d3d4d5d6d7d8d9 0000000800'
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('09 00'),                        # WriteRegister
+            ACK(), RSP('8D 05 11' + atr_req),           # TgInitAsTarget
+            ACK(), IOError(errno.ETIMEDOUT, ""),        # TgInitAsTarget
+            ACK(), IOError(errno.EIO, ""),              # TgInitAsTarget
+        ]
+        target = nfc.clf.LocalTarget()
+        target.sensf_res = HEX("01 01fe010203040506 0000000000000000 0000")
+        target.sens_res = HEX("0101")
+        target.sel_res = HEX("40")
+        target.sdd_res = HEX("08010203")
+        target.atr_res = HEX(atr_res)
+        with pytest.raises(IOError):
+            device.listen_dep(target, 1.0)
+        assert device.chipset.transport.read.call_count == 8
+
+    @pytest.mark.parametrize("psl_req", [
+        'D404 00 12 03 FF', 'D404 01 12 03'
+    ])
+    def test_listen_dep_active_106A_psl_req_error(self, device, psl_req):
+        atr_req = 'D400 30313233343536373839 00000000'
+        atr_res = 'D501 d0d1d2d3d4d5d6d7d8d9 0000000800'
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('09 00'),                        # WriteRegister
+            ACK(), RSP('8D 05 11' + atr_req),           # TgInitAsTarget
+            ACK(), RSP('91 00'),                        # TgResponseToInitiator
+            ACK(), RSP('89 00 06' + psl_req),           # TgGetInitiatorCommand
+        ]
+        target = nfc.clf.LocalTarget()
+        target.sensf_res = HEX("01 01fe010203040506 0000000000000000 0000")
+        target.sens_res = HEX("0101")
+        target.sel_res = HEX("40")
+        target.sdd_res = HEX("08010203")
+        target.atr_res = HEX(atr_res)
+        assert device.listen_dep(target, 1.0) is None
+        assert device.chipset.transport.read.call_count == 8
