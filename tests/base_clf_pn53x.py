@@ -1229,6 +1229,7 @@ class TestDevice(object):
         assert target.psl_res is None
         assert target.dep_req == HEX(dep_req)
         assert device.chipset.transport.read.call_count == 10
+        return target
 
     def test_listen_dep_passive_424F(self, device):
         sensf_res = '01 01fe010203040506 0000000000000000 0000'
@@ -1261,6 +1262,7 @@ class TestDevice(object):
         assert target.psl_res is None
         assert target.dep_req == HEX(dep_req)
         assert device.chipset.transport.read.call_count == 10
+        return target
 
     def test_listen_dep_passive_106A_psl_to_424F(self, device):
         atr_req = 'D400 30313233343536373839 00000000'
@@ -1300,6 +1302,7 @@ class TestDevice(object):
         assert target.sel_res == HEX("40")
         assert target.sdd_res == HEX("08010203")
         assert device.chipset.transport.read.call_count == 22
+        return target
 
     def test_listen_dep_active_106A_psl_to_424F(self, device):
         atr_req = 'D400 30313233343536373839 00000000'
@@ -1339,6 +1342,7 @@ class TestDevice(object):
         assert target.sel_res is None
         assert target.sdd_res is None
         assert device.chipset.transport.read.call_count == 22
+        return target
 
     @pytest.mark.parametrize("dep_req", ['D405000000ff', '0000000000'])
     def test_listen_dep_command_data_error(self, device, dep_req):
@@ -1529,3 +1533,177 @@ class TestDevice(object):
         target.atr_res = HEX(atr_res)
         assert device.listen_dep(target, 1.0) is None
         assert device.chipset.transport.read.call_count == 8
+
+    def test_send_rsp_recv_cmd_with_dep_target(self, device):
+        target = self.test_listen_dep_passive_106A(device)
+        assert isinstance(target, nfc.clf.LocalTarget)
+        device.chipset.transport.write.reset_mock()
+        device.chipset.transport.read.reset_mock()
+        dep_cmd_frame = '06 D406 00 3334'
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('91 00'),                        # TgResponseToInitiator
+            ACK(), RSP('89 00' + dep_cmd_frame),        # TgGetInitiatorCommand
+        ]
+        cmd = device.send_rsp_recv_cmd(target, b'12', 1.0)
+        assert cmd == HEX(dep_cmd_frame)
+        assert device.chipset.transport.read.call_count == 4
+
+    def test_send_rsp_recv_cmd_receive_only(self, device):
+        target = self.test_listen_dep_passive_106A(device)
+        assert isinstance(target, nfc.clf.LocalTarget)
+        device.chipset.transport.write.reset_mock()
+        device.chipset.transport.read.reset_mock()
+        dep_cmd_frame = '06 D406 00 3334'
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('89 00' + dep_cmd_frame),        # TgGetInitiatorCommand
+        ]
+        cmd = device.send_rsp_recv_cmd(target, b'', 1.0)
+        assert cmd == HEX(dep_cmd_frame)
+        assert device.chipset.transport.read.call_count == 2
+
+    def test_send_rsp_recv_cmd_timeout_error(self, device):
+        target = self.test_listen_dep_passive_106A(device)
+        assert isinstance(target, nfc.clf.LocalTarget)
+        device.chipset.transport.write.reset_mock()
+        device.chipset.transport.read.reset_mock()
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('91 00'),                        # TgResponseToInitiator
+            ACK(), IOError(errno.ETIMEDOUT, ""),        # TgGetInitiatorCommand
+        ]
+        with pytest.raises(nfc.clf.TimeoutError):
+            device.send_rsp_recv_cmd(target, b'12', 1.0)
+        assert device.chipset.transport.read.call_count == 4
+
+    def test_send_rsp_recv_cmd_input_out_error(self, device):
+        target = self.test_listen_dep_passive_106A(device)
+        assert isinstance(target, nfc.clf.LocalTarget)
+        device.chipset.transport.write.reset_mock()
+        device.chipset.transport.read.reset_mock()
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('91 00'),                        # TgResponseToInitiator
+            ACK(), IOError(errno.EIO, ""),              # TgGetInitiatorCommand
+        ]
+        with pytest.raises(IOError):
+            device.send_rsp_recv_cmd(target, b'12', 1.0)
+        assert device.chipset.transport.read.call_count == 4
+
+    @pytest.mark.parametrize("err, exc", [
+        ('01', nfc.clf.TransmissionError),
+        ('0A', nfc.clf.BrokenLinkError),
+        ('29', nfc.clf.BrokenLinkError),
+        ('31', nfc.clf.BrokenLinkError),
+    ])
+    def test_send_rsp_recv_cmd_broken_link_error(self, device, err, exc):
+        target = self.test_listen_dep_passive_106A(device)
+        assert isinstance(target, nfc.clf.LocalTarget)
+        device.chipset.transport.write.reset_mock()
+        device.chipset.transport.read.reset_mock()
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('91 00'),                        # TgResponseToInitiator
+            ACK(), RSP('89' + err),                     # TgGetInitiatorCommand
+        ]
+        with pytest.raises(exc):
+            device.send_rsp_recv_cmd(target, b'12', 1.0)
+        assert device.chipset.transport.read.call_count == 4
+
+    def test_send_rsp_recv_cmd_with_tt3_target(self, device):
+        target = self.test_listen_ttf_get_activated(device)
+        assert isinstance(target, nfc.clf.LocalTarget)
+        device.chipset.transport.read.reset_mock()
+        dep_cmd_frame = '06 D406 00 3334'
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('09 00'),                        # WriteRegister
+            ACK(), self.reg_rsp('20 00'),               # ReadRegister
+            ACK(), RSP('09 00'),                        # WriteRegister
+            ACK(), self.reg_rsp('06'),                  # ReadRegister
+            ACK(), self.reg_rsp(dep_cmd_frame),         # ReadRegister
+        ]
+        cmd = device.send_rsp_recv_cmd(target, HEX('3132'), 1.0)
+        assert cmd == HEX(dep_cmd_frame)
+        assert device.chipset.transport.read.call_count == 10
+
+    def test_send_rsp_recv_cmd_tt3_not_send_data(self, device):
+        target = self.test_listen_ttf_get_activated(device)
+        assert isinstance(target, nfc.clf.LocalTarget)
+        device.chipset.transport.read.reset_mock()
+        dep_cmd_frame = '06 D406 00 3334'
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('09 00'),                        # WriteRegister
+            ACK(), self.reg_rsp('20 00'),               # ReadRegister
+            ACK(), RSP('09 00'),                        # WriteRegister
+            ACK(), self.reg_rsp('06'),                  # ReadRegister
+            ACK(), self.reg_rsp(dep_cmd_frame),         # ReadRegister
+        ]
+        cmd = device.send_rsp_recv_cmd(target, None, 1.0)
+        assert cmd == HEX(dep_cmd_frame)
+        assert device.chipset.transport.read.call_count == 10
+
+    def test_send_rsp_recv_cmd_tt3_timeout_error(self, device):
+        target = self.test_listen_ttf_get_activated(device)
+        assert isinstance(target, nfc.clf.LocalTarget)
+        device.chipset.transport.read.reset_mock()
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('09 00'),                        # WriteRegister
+            ACK(), self.reg_rsp('00 00'),               # ReadRegister
+        ]
+        with pytest.raises(nfc.clf.TimeoutError):
+            device.send_rsp_recv_cmd(target, None, 0.001)
+        assert device.chipset.transport.read.call_count == 4
+
+    def test_send_rsp_recv_cmd_tt3_broken_link(self, device):
+        target = self.test_listen_ttf_get_activated(device)
+        assert isinstance(target, nfc.clf.LocalTarget)
+        device.chipset.transport.read.reset_mock()
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('09 00'),                        # WriteRegister
+            ACK(), self.reg_rsp('00 01'),               # ReadRegister
+        ]
+        with pytest.raises(nfc.clf.BrokenLinkError):
+            device.send_rsp_recv_cmd(target, None, 0.001)
+        assert device.chipset.transport.read.call_count == 4
+
+    def test_send_rsp_recv_cmd_tt3_frame_error(self, device):
+        target = self.test_listen_ttf_get_activated(device)
+        assert isinstance(target, nfc.clf.LocalTarget)
+        device.chipset.transport.read.reset_mock()
+        dep_cmd_frame = '03 D406 00 3334'
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('09 00'),                        # WriteRegister
+            ACK(), self.reg_rsp('20 00'),               # ReadRegister
+            ACK(), RSP('09 00'),                        # WriteRegister
+            ACK(), self.reg_rsp('06'),                  # ReadRegister
+            ACK(), self.reg_rsp(dep_cmd_frame),         # ReadRegister
+        ]
+        with pytest.raises(nfc.clf.TransmissionError):
+            device.send_rsp_recv_cmd(target, None, 0.001)
+        assert device.chipset.transport.read.call_count == 10
+
+    def test_send_rsp_recv_cmd_tt3_timeout_zero(self, device):
+        target = self.test_listen_ttf_get_activated(device)
+        assert isinstance(target, nfc.clf.LocalTarget)
+        device.chipset.transport.read.reset_mock()
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('09 00'),                        # WriteRegister
+        ]
+        assert device.send_rsp_recv_cmd(target, None, 0) is None
+        assert device.chipset.transport.read.call_count == 2
+
+    def test_print_ciu_register_page(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), self.reg_rsp(16 * '00'),             # ReadRegister
+            ACK(), self.reg_rsp(16 * '00'),             # ReadRegister
+            ACK(), self.reg_rsp(16 * '00'),             # ReadRegister
+            ACK(), self.reg_rsp(16 * '00'),             # ReadRegister
+        ]
+        assert len(device._print_ciu_register_page(0, 1, 2, 3)) == 59
+        assert device.chipset.transport.read.call_count == 8
+
+    def test_pn53x_init_as_target_not_implemented(self, device):
+        device = super(type(device), device)
+        with pytest.raises(NotImplementedError):
+            device._init_as_target(1, 2, 3, 4)
+
+    def test_pn53x_init_as_driver_raises_ioerror(self, transport):
+        with pytest.raises(IOError) as excinfo:
+            nfc.clf.pn53x.init(transport)
+        assert excinfo.value.errno == errno.ENODEV
