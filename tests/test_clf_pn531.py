@@ -14,7 +14,7 @@ import base_clf_pn53x
 from base_clf_pn53x import CMD, RSP, ACK, NAK, ERR, HEX  # noqa: F401
 
 import logging
-logging.basicConfig(level=logging.DEBUG-1)  # WARN)
+logging.basicConfig(level=logging.WARN)
 logging_level = logging.getLogger().getEffectiveLevel()
 logging.getLogger("nfc.clf").setLevel(logging_level)
 logging.getLogger("nfc.clf.pn531").setLevel(logging_level)
