@@ -1,6 +1,17 @@
 Changelog for nfcpy
 ===================
 
+0.13.0 (2017-03-27)
+-------------------
+
+* This is a maintenance release to further replace the ndef submodule
+  with ndeflib, now used by a couple of documentation examples
+  verified with doctest.
+
+* Part of this release is a large number of regression tests run with
+  pytest. Some minor source code changes are the result of testing and
+  preparative work towards future Python 3 compatibility.
+
 0.12.0 (2017-01-04)
 -------------------
 
