@@ -264,7 +264,7 @@ class Device(pn53x.Device):
         Type 4A Tag activation is not supported.
 
         """
-        if target.sel_res[0] & 0x20:
+        if target.sel_res and target.sel_res[0] & 0x20:
             info = "{device} does not support listen as Type 4A Target"
             raise nfc.clf.UnsupportedTargetError(info.format(device=self))
         return super(Device, self).listen_tta(target, timeout)
@@ -348,7 +348,7 @@ class Device(pn53x.Device):
         # The other commands can not be executed. The workaround found
         # for PN531, PN532 and PN533 fails with RCS956. While it is
         # possible to properly send a TT1 command and the tag answers
-        # as expeczted, there is no way to get the response data from
+        # as expected, there is no way to get the response data from
         # the CIU FIFO. For whatever reason the FIFO is empty, maybe
         # the firmware constantly polls for new data and just removes
         # it. That the response data was received can be guessed from

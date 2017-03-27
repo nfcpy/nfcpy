@@ -608,7 +608,8 @@ class TestDevice(base_clf_pn53x.TestDevice):
         return target
 
     def test_sense_ttb_target_found(self, device):
-        super(TestDevice, self).test_sense_ttb_target_found(device, '42 CA 01')
+        base = super(TestDevice, self)
+        base.test_sense_ttb_target_found(device, '42 CA 01')
 
     def test_sense_ttb_deselect_timeout(self, device):
         base = super(TestDevice, self)
