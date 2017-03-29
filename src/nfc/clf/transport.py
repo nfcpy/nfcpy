@@ -26,17 +26,17 @@ import os
 import re
 import errno
 import termios
-import serial.tools.list_ports
 from binascii import hexlify
 
 try:
     import usb1 as libusb
-except ImportError:
+except ImportError:  # pragma: no cover
     raise ImportError("missing usb1 module, try 'pip install libusb1'")
 
 try:
     import serial
-except ImportError:
+    import serial.tools.list_ports
+except ImportError:  # pragma: no cover
     raise ImportError("missing serial module, try 'pip install pyserial'")
 
 import logging
@@ -220,7 +220,7 @@ class USB(object):
 
     def __del__(self):
         self.close()
-        if self.context:
+        if self.context:  # pragma: no branch
             self.context.exit()
 
     def open(self, usb_bus, dev_adr):
