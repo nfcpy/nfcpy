@@ -25,6 +25,8 @@
 import os
 import re
 import errno
+import termios
+import serial.tools.list_ports
 from binascii import hexlify
 
 try:
@@ -54,7 +56,6 @@ class TTY(object):
         match = PATH.match(path)
 
         if match and match.group(1) == "tty":
-            import termios
             if re.match(r'^\D+\d+$', match.group(2)):
                 TTYS = re.compile(r'^tty{0}$'.format(match.group(2)))
             elif re.match(r'^\D+$', match.group(2)):
@@ -100,7 +101,6 @@ class TTY(object):
             if re.match(r'^\d+$', match.group(2)):
                 return ["COM" + match.group(2)], match.group(3), False
             if re.match(r'^$', match.group(2)):
-                import serial.tools.list_ports
                 ports = [p[0] for p in serial.tools.list_ports.comports()]
                 log.debug('serial ports: %s', ' '.join([p for p in ports]))
                 return ports, match.group(3), True

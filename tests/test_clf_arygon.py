@@ -11,11 +11,10 @@ from mock import call, MagicMock
 from base_clf_pn53x import HEX, RSP, ACK, STD_FRAME, EXT_FRAME
 
 import logging
-logging.basicConfig(level=logging.DEBUG-1)
+logging.basicConfig(level=logging.WARN)
 logging_level = logging.getLogger().getEffectiveLevel()
 logging.getLogger("nfc.clf").setLevel(logging_level)
 logging.getLogger("nfc.clf.arygon").setLevel(logging_level)
-logging.getLogger("nfc.clf.transport").setLevel(logging_level)
 
 
 def CMD(hexstr):
