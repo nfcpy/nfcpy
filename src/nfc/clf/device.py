@@ -166,6 +166,11 @@ class Device(object):
     def path(self):
         return self._path
 
+    def close(self):
+        fname = "close"
+        cname = self.__class__.__module__ + '.' + self.__class__.__name__
+        raise NotImplementedError("%s.%s() is required" % (cname, fname))
+
     def mute(self):
         """Mutes all existing communication, most notably the device will no
         longer generate a 13.56 MHz carrier signal when operating as

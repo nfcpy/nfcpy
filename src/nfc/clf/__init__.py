@@ -501,13 +501,13 @@ class ContactlessFrontend(object):
         card_options = options.get('card')
 
         try:
-            assert not rdwr_options or isinstance(rdwr_options, dict), "rdwr"
-            assert not llcp_options or isinstance(llcp_options, dict), "llcp"
-            assert not card_options or isinstance(card_options, dict), "card"
+            assert isinstance(rdwr_options, (dict, type(None))), "rdwr"
+            assert isinstance(llcp_options, (dict, type(None))), "llcp"
+            assert isinstance(card_options, (dict, type(None))), "card"
         except AssertionError as error:
-            raise TypeError("argument '%s' must be dictionary type" % error)
+            raise TypeError("argument '%s' must be a dictionary" % error)
 
-        if llcp_options:
+        if llcp_options is not None:
             llcp_options = dict(llcp_options)
             llcp_options.setdefault('on-startup', lambda llc: llc)
             llcp_options.setdefault('on-connect', lambda llc: True)
@@ -521,7 +521,7 @@ class ContactlessFrontend(object):
                 log.debug("removing llcp_options after on-startup")
                 llcp_options = None
 
-        if rdwr_options:
+        if rdwr_options is not None:
             def on_discover(target):
                 if target.sel_res and target.sel_res[0] & 0x40:
                     return False
@@ -548,7 +548,7 @@ class ContactlessFrontend(object):
                 log.debug("removing rdwr_options after on-startup")
                 rdwr_options = None
 
-        if card_options:
+        if card_options is not None:
             card_options = dict(card_options)
             card_options.setdefault('on-startup', lambda target: None)
             card_options.setdefault('on-discover', lambda target: True)
