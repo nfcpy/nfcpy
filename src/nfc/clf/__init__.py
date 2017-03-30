@@ -1169,7 +1169,7 @@ class LocalTarget(Target):
     """
     def __init__(self, brty='106A', **kwargs):
         super(LocalTarget, self).__init__(**kwargs)
-        self._brty_send = self._brty_recv = brty
+        self.brty = brty
 
     @property
     def brty(self):
