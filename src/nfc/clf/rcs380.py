@@ -56,9 +56,10 @@ import logging
 log = logging.getLogger(__name__)
 
 
-class Frame():
+class Frame(object):
     def __init__(self, data):
         self._data = None
+        self._type = None
         self._frame = None
 
         if data[0:3] == bytearray(b"\x00\x00\xff"):
@@ -113,14 +114,15 @@ class CommunicationError:
         self.errno = struct.unpack('<L', str(status_bytes))[0]
 
     def __eq__(self, strerr):
-        return self.errno & CommunicationError.str2err[strerr]
+        errno = CommunicationError.str2err[strerr]
+        return bool(self.errno & errno) if self.errno or errno else True
 
     def __ne__(self, strerr):
         return not self.__eq__(strerr)
 
     def __str__(self):
         return self.__class__.__name__ + ' ' + CommunicationError.err2str.get(
-            self.errno, "{0:08x}".format(self.errno))
+            self.errno, "0x{0:08X}".format(self.errno))
 
 
 class StatusError:
@@ -135,7 +137,7 @@ class StatusError:
         try:
             return StatusError.err2str[self.errno]
         except IndexError:
-            return "UNKNOWN STATUS ERROR {0:02x}".format(self.errno)
+            return "UNKNOWN STATUS ERROR 0x{:02X}".format(self.errno)
 
 
 class Chipset(object):
