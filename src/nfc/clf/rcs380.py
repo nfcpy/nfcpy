@@ -248,7 +248,7 @@ class Chipset(object):
                 "check_sof", "add_eof", "check_eof", "rfu", "deaf_time",
                 "continuous_receive_mode", "min_len_for_crm",
                 "type_1_tag_rrdd", "rfca", "guard_time")
-        for key, value in kwargs.iteritems():
+        for key, value in sorted(kwargs.iteritems()):
             data.extend(bytearray([KEYS.index(key), int(value)]))
         if len(data) > 0:
             data = self.send_command(0x02, data)
