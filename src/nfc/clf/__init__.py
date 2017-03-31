@@ -863,7 +863,7 @@ class ContactlessFrontend(object):
                         if self.target is not None:
                             log.debug("found {0}".format(self.target))
                             return self.target
-                if len(targets):
+                if len(targets) > 0:
                     self.device.mute()  # deactivate the rf field
                 if i < options.get('iterations', 1) - 1:
                     elapsed = time.time() - started
