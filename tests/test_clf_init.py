@@ -12,6 +12,7 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 logging_level = logging.getLogger().getEffectiveLevel()
 logging.getLogger("nfc.clf").setLevel(logging_level)
+logging.getLogger("nfc.tag").setLevel(logging_level)
 
 
 def HEX(s):
@@ -138,14 +139,107 @@ class TestContactlessFrontend(object):
         llcp_options = {'role': 'initiator'}
         assert clf.connect(llcp=llcp_options) is False
 
-    def test_connect_rdwr_found_tta_target(self, clf, terminate):
+    def test_connect_rdwr_remote_is_tta_tt1(self, clf, terminate):
         terminate.side_effect = [False, True]
         target = nfc.clf.RemoteTarget('106A')
-        target.rid_res = HEX('1148 B2565400')
         target.sens_res = HEX('000C')
+        target.rid_res = HEX('1148B2565400')
+        clf.device.sense_tta.return_value = target
+        rdwr_options = {'iterations': 1}
+        assert clf.connect(rdwr=rdwr_options, terminate=terminate) is True
+
+    def test_connect_rdwr_remote_is_tta_tt2(self, clf, terminate):
+        terminate.side_effect = [False, True]
+        target = nfc.clf.RemoteTarget('106A')
+        target.sens_res = HEX('4400')
+        target.sel_res = HEX('00')
+        target.sdd_res = HEX('0416C6C2D73881')
         clf.device.sense_tta.return_value = target
         rdwr_options = {'iterations': 1, 'targets': ['106A']}
         assert clf.connect(rdwr=rdwr_options, terminate=terminate) is True
+
+    def test_connect_rdwr_remote_is_tta_dep(self, clf, terminate):
+        terminate.side_effect = [False, True]
+        target = nfc.clf.RemoteTarget('106A')
+        target.sens_res = HEX('4400')
+        target.sel_res = HEX('40')
+        target.sdd_res = HEX('0416C6C2D73881')
+        clf.device.sense_tta.return_value = target
+        rdwr_options = {'iterations': 1, 'targets': ['106A']}
+        assert clf.connect(rdwr=rdwr_options, terminate=terminate) is None
+
+    def test_connect_rdwr_remote_is_ttb_tt4(self, clf, terminate):
+        terminate.side_effect = [False, True]
+        target = nfc.clf.RemoteTarget('106B')
+        target.sensb_res = HEX('50E8253EEC00000011008185')
+        clf.device.sense_ttb.return_value = target
+        clf.device.send_cmd_recv_rsp.return_value = HEX('00')
+        rdwr_options = {'iterations': 1, 'targets': ['106B']}
+        assert clf.connect(rdwr=rdwr_options, terminate=terminate) is True
+
+    def test_connect_rdwr_remote_is_ttf_tt3(self, clf, terminate):
+        terminate.side_effect = [False, True]
+        target = nfc.clf.RemoteTarget('212F')
+        target.sensf_res = HEX('01 01010701260cca02 0f0d23042f7783ff 12fc')
+        clf.device.sense_ttf.return_value = target
+        rdwr_options = {'iterations': 1, 'targets': ['212F']}
+        assert clf.connect(rdwr=rdwr_options, terminate=terminate) is True
+
+    def test_connect_rdwr_remote_is_ttf_dep(self, clf, terminate):
+        terminate.side_effect = [False, True]
+        target = nfc.clf.RemoteTarget('212F')
+        target.sensf_res = HEX('01 01FE0701260cca02 0f0d23042f7783ff 12fc')
+        clf.device.sense_ttf.return_value = target
+        rdwr_options = {'on-connect': lambda tag: False}
+        assert clf.connect(rdwr=rdwr_options, terminate=terminate) is None
+
+    def test_connect_rdwr_do_beep_on_connect(self, clf, terminate):
+        terminate.side_effect = [False, True]
+        target = nfc.clf.RemoteTarget('212F')
+        target.sensf_res = HEX('01 01010701260cca02 ffffffffffffffff 12fc')
+        clf.device.sense_ttf.return_value = target
+        rdwr_options = {'iterations': 1, 'beep-on-connect': True}
+        assert clf.connect(rdwr=rdwr_options, terminate=terminate) is True
+        print(clf.device.send_cmd_recv_rsp.mock_calls)
+        assert clf.device.turn_on_led_and_buzzer.call_count == 1
+
+    def test_connect_rdwr_no_beep_on_connect(self, clf, terminate):
+        terminate.side_effect = [False, True]
+        target = nfc.clf.RemoteTarget('212F')
+        target.sensf_res = HEX('01 01010701260cca02 ffffffffffffffff 12fc')
+        clf.device.sense_ttf.return_value = target
+        rdwr_options = {'iterations': 1, 'beep-on-connect': False}
+        assert clf.connect(rdwr=rdwr_options, terminate=terminate) is True
+        assert clf.device.turn_on_led_and_buzzer.call_count == 0
+
+    def test_connect_rdwr_one_presence_loop(self, clf, terminate):
+        terminate.side_effect = [False, False, True]
+        target = nfc.clf.RemoteTarget('212F')
+        target.sensf_res = HEX('01 01010701260cca02 ffffffffffffffff 12fc')
+        clf.device.sense_ttf.return_value = target
+        clf.device.send_cmd_recv_rsp.side_effect = [
+            HEX('12 01 01010701260cca02 ffffffffffffffff'),
+        ]
+        rdwr_options = {'iterations': 1}
+        assert clf.connect(rdwr=rdwr_options, terminate=terminate) is True
+
+    def test_connect_rdwr_on_connect_false(self, clf, terminate):
+        terminate.side_effect = [False, False, True]
+        target = nfc.clf.RemoteTarget('212F')
+        target.sensf_res = HEX('01 01010701260cca02 ffffffffffffffff 12fc')
+        clf.device.sense_ttf.return_value = target
+        rdwr_options = {'iterations': 1, 'on-connect': lambda tag: False}
+        tag = clf.connect(rdwr=rdwr_options, terminate=terminate)
+        assert isinstance(tag, nfc.tag.Tag)
+
+    def test_connect_rdwr_tag_activation_fails(self, clf, terminate):
+        terminate.side_effect = [False, True]
+        target = nfc.clf.RemoteTarget('106B')
+        target.sensb_res = HEX('50E8253EEC00000011008185')
+        clf.device.sense_ttb.return_value = target
+        clf.device.send_cmd_recv_rsp.side_effect = nfc.clf.TimeoutError
+        rdwr_options = {'iterations': 1}
+        assert clf.connect(rdwr=rdwr_options, terminate=terminate) is None
 
     #
     # SENSE
