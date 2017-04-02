@@ -13,6 +13,7 @@ logging.basicConfig(level=logging.DEBUG)
 logging_level = logging.getLogger().getEffectiveLevel()
 logging.getLogger("nfc.clf").setLevel(logging_level)
 logging.getLogger("nfc.tag").setLevel(logging_level)
+logging.getLogger("nfc.dep").setLevel(logging_level)
 
 
 def HEX(s):
@@ -32,7 +33,11 @@ class TestContactlessFrontend(object):
 
     @pytest.fixture()  # noqa: F811
     def device(self, mocker):
-        return mocker.Mock(spec=nfc.clf.device.Device)
+        device = mocker.Mock(spec=nfc.clf.device.Device)
+        device.path = "usb:001:001"
+        device.vendor_name = "Vendor"
+        device.product_name = "Product"
+        return device
 
     @pytest.fixture()  # noqa: F811
     def clf(self, device_connect, device):
@@ -49,6 +54,7 @@ class TestContactlessFrontend(object):
         clf.device.listen_ttb.return_value = None
         clf.device.listen_ttf.return_value = None
         clf.device.listen_dep.return_value = None
+        assert str(clf) == "Vendor Product on usb:001:001"
         return clf
 
     @pytest.fixture()  # noqa: F811
@@ -114,15 +120,6 @@ class TestContactlessFrontend(object):
         assert clf.connect(rdwr={}, terminate=terminate) is None
         assert clf.connect(card={}, terminate=terminate) is None
 
-    def test_connect_llcp_initiator(self, clf, terminate):
-        terminate.side_effect = [False, True]
-        assert clf.connect(llcp={}, terminate=terminate) is None
-
-    def test_connect_rdwr_defaults(self, clf, terminate):
-        terminate.side_effect = [False, True]
-        rdwr_options = {'iterations': 1}
-        assert clf.connect(rdwr=rdwr_options, terminate=terminate) is None
-
     @pytest.mark.parametrize("error", [
         IOError, nfc.clf.UnsupportedTargetError, KeyboardInterrupt,
     ])
@@ -131,8 +128,12 @@ class TestContactlessFrontend(object):
         clf.device.sense_ttb.side_effect = error
         clf.device.sense_ttf.side_effect = error
         clf.device.sense_dep.side_effect = error
-        llcp_options = {'role': 'initiator'}
-        assert clf.connect(llcp=llcp_options) is False
+        assert clf.connect(rwdr={}, llcp={}) is False
+
+    def test_connect_rdwr_defaults(self, clf, terminate):
+        terminate.side_effect = [False, True]
+        rdwr_options = {'iterations': 1}
+        assert clf.connect(rdwr=rdwr_options, terminate=terminate) is None
 
     def test_connect_rdwr_remote_is_tta_tt1(self, clf, terminate):
         terminate.side_effect = [False, True]
@@ -307,6 +308,57 @@ class TestContactlessFrontend(object):
                         'on-discover': lambda tag: False}
         assert clf.connect(card=card_options, terminate=terminate) is None
 
+    def test_connect_llcp_role_initiator(self, clf, terminate):
+        terminate.side_effect = [False, True]
+        target = nfc.clf.RemoteTarget('212F')
+        target.sensf_res = HEX('01 01fe000000000000 ffffffffffffffff')
+        clf.device.sense_ttf.return_value = target
+        clf.device.send_cmd_recv_rsp.side_effect = [
+            HEX('18 d501 01fe0000000000005354 0000000032 46666d010113'),
+            HEX('06 d507 000000'),
+            HEX('03 d509'),
+        ]
+        llcp_options = {'role': 'initiator', 'brs': 1}
+        assert clf.connect(llcp=llcp_options, terminate=terminate) is True
+
+    def test_connect_llcp_role_target(self, clf, terminate):
+        terminate.side_effect = [False, True]
+        atr_req = 'd400 01fe0000000000005354 00000032 46666d010113'
+        atr_res = 'd501 01fe1111111111115354 0000000032 46666d010113'
+        target = nfc.clf.LocalTarget('212F')
+        target.atr_req = HEX(atr_req)
+        target.atr_res = HEX(atr_res)
+        target.dep_req = HEX('d406 000000')
+        clf.device.listen_dep.return_value = target
+        clf.device.send_rsp_recv_cmd.side_effect = [
+            HEX('03 d408'),
+            nfc.clf.TimeoutError,
+        ]
+        llcp_options = {'role': 'target'}
+        assert clf.connect(llcp=llcp_options, terminate=terminate) is True
+
+    def test_connect_llcp_on_connect_false(self, clf, terminate):
+        terminate.side_effect = [False, True]
+        atr_req = 'd400 01fe0000000000005354 00000032 46666d010113'
+        atr_res = 'd501 01fe1111111111115354 0000000032 46666d010113'
+        target = nfc.clf.LocalTarget('212F')
+        target.atr_req = HEX(atr_req)
+        target.atr_res = HEX(atr_res)
+        target.dep_req = HEX('d406 000000')
+        clf.device.listen_dep.return_value = target
+        clf.device.send_rsp_recv_cmd.side_effect = [
+            HEX('03 d408'),
+            nfc.clf.TimeoutError,
+        ]
+        llcp_options = {'role': 'target', 'on-connect': lambda clf: False}
+        llc = clf.connect(llcp=llcp_options, terminate=terminate)
+        assert isinstance(llc, nfc.llcp.llc.LogicalLinkController)
+
+    def test_connect_llcp_role_invalid(self, clf, terminate):
+        terminate.side_effect = [False, True]
+        llcp_options = {'role': 'invalid'}
+        assert clf.connect(llcp=llcp_options, terminate=terminate) is None
+
     #
     # SENSE
     #
@@ -444,6 +496,45 @@ class TestContactlessFrontend(object):
         with pytest.raises(ValueError) as excinfo:
             clf.listen(target, 1.0)
         assert str(excinfo.value) == "unsupported bitrate technology type xxx"
+
+    #
+    # EXCHANGE
+    #
+
+    def test_exchange_without_device(self, clf):
+        clf.device = None
+        with pytest.raises(IOError) as excinfo:
+            clf.exchange(HEX(''), 1.0)
+        assert excinfo.value.errno == errno.ENODEV
+
+    def test_exchange_without_target(self, clf):
+        assert clf.exchange(HEX(''), 1.0) is None
+
+    #
+    # MISCELLEANEOUS
+    #
+
+    def test_max_send_data_size_without_device(self, clf):
+        clf.device = None
+        with pytest.raises(IOError) as excinfo:
+            clf.max_send_data_size()
+        assert excinfo.value.errno == errno.ENODEV
+
+    def test_max_recv_data_size_without_device(self, clf):
+        clf.device = None
+        with pytest.raises(IOError) as excinfo:
+            clf.max_recv_data_size()
+        assert excinfo.value.errno == errno.ENODEV
+
+    def test_format_string_without_device(self, clf):
+        clf.device = None
+        assert str(clf).startswith("<nfc.clf.ContactlessFrontend object")
+
+    def test_with_statement_enter_exit(self, clf):
+        device = clf.device
+        with clf as contactless_frontend:
+            assert contactless_frontend is clf
+        assert device.close.call_count == 1
 
 
 class TestRemoteTarget(object):

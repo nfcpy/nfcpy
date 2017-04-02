@@ -31,6 +31,10 @@ class TestDevice(object):
         with pytest.raises(NotImplementedError):
             nfc.clf.device.Device()
 
+    def test_close(self, device):
+        with pytest.raises(NotImplementedError):
+            device.close()
+
     def test_str(self, device):
         device._chipset_name = "IC"
         device._path = 'usb:001:001'
