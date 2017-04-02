@@ -992,10 +992,6 @@ class ContactlessFrontend(object):
 
         assert isinstance(target, LocalTarget), \
             "invalid target argument type: %r" % target
-        assert target.brty[-1:] in ('A', 'B', 'F'), \
-            "technology can be A/B/F but not %r" % target.brty[-1:]
-        assert target.brty[:-1] in ('106', '212', '424', '848'), \
-            "bitrate can be 106/212/424/848 but not %r" % target.brty[:-1]
 
         with self.lock:
             if self.device is None:
@@ -1008,15 +1004,19 @@ class ContactlessFrontend(object):
             if target.atr_res is not None:
                 log.debug(info, timeout, "DEP")
                 self.target = listen_dep(target, timeout)
-            elif target.brty.endswith('A'):
+            elif target.brty in ('106A', '212A', '424A'):
                 log.debug(info, timeout, target)
                 self.target = listen_tta(target, timeout)
-            elif target.brty.endswith('B'):
+            elif target.brty in ('106B', '212B', '424B', '848B'):
                 log.debug(info, timeout, target)
                 self.target = listen_ttb(target, timeout)
-            elif target.brty.endswith('F'):
+            elif target.brty in ('212F', '424F'):
                 log.debug(info, timeout, target)
                 self.target = listen_ttf(target, timeout)
+            else:
+                errmsg = "unsupported bitrate technology type {}"
+                raise ValueError(errmsg.format(target.brty))
+
             return self.target
 
     def exchange(self, send_data, timeout):

@@ -123,11 +123,6 @@ class TestContactlessFrontend(object):
         rdwr_options = {'iterations': 1}
         assert clf.connect(rdwr=rdwr_options, terminate=terminate) is None
 
-    def test_connect_card_defaults(self, clf, terminate):
-        terminate.side_effect = [False, True]
-        card_options = {'on-startup': lambda _: nfc.clf.LocalTarget('212F')}
-        assert clf.connect(card=card_options, terminate=terminate) is None
-
     @pytest.mark.parametrize("error", [
         IOError, nfc.clf.UnsupportedTargetError, KeyboardInterrupt,
     ])
@@ -241,6 +236,77 @@ class TestContactlessFrontend(object):
         rdwr_options = {'iterations': 1}
         assert clf.connect(rdwr=rdwr_options, terminate=terminate) is None
 
+    def _test_connect_card_defaults(self, clf, terminate):
+        terminate.side_effect = [False, True]
+        card_options = {'on-startup': lambda _: nfc.clf.LocalTarget('212F')}
+        assert clf.connect(card=card_options, terminate=terminate) is None
+
+    def test_connect_card_as_tt3_target(self, clf, terminate):
+        terminate.side_effect = [False, False, True]
+        target = nfc.clf.LocalTarget('212F')
+        target.sensf_req = HEX('0012FC0103')
+        target.sensf_res = HEX('0102FE010203040506FFFFFFFFFFFFFFFF12FC')
+        target.tt3_cmd = HEX('0602fe010203040506010b00018000')
+        clf.device.listen_ttf.return_value = target
+        clf.device.send_rsp_recv_cmd.return_value = HEX('0012FC0103')
+        card_options = {'target': target, 'on-startup': lambda t: target}
+        assert clf.connect(card=card_options, terminate=terminate) is True
+
+    def test_connect_card_and_broken_link_error(self, clf, terminate):
+        terminate.side_effect = [False, False, True]
+        target = nfc.clf.LocalTarget('212F')
+        target.sensf_req = HEX('0012FC0103')
+        target.sensf_res = HEX('0102FE010203040506FFFFFFFFFFFFFFFF12FC')
+        target.tt3_cmd = HEX('0602fe010203040506010b00018000')
+        clf.device.listen_ttf.return_value = target
+        clf.device.send_rsp_recv_cmd.side_effect = nfc.clf.BrokenLinkError
+        card_options = {'target': target, 'on-startup': lambda t: target}
+        assert clf.connect(card=card_options, terminate=terminate) is True
+
+    def test_connect_card_and_communication_error(self, clf, terminate):
+        terminate.side_effect = [False, False, True]
+        target = nfc.clf.LocalTarget('212F')
+        target.sensf_req = HEX('0012FC0103')
+        target.sensf_res = HEX('0102FE010203040506FFFFFFFFFFFFFFFF12FC')
+        target.tt3_cmd = HEX('0602fe010203040506010b00018000')
+        clf.device.listen_ttf.return_value = target
+        clf.device.send_rsp_recv_cmd.side_effect = nfc.clf.CommunicationError
+        card_options = {'target': target, 'on-startup': lambda t: target}
+        assert clf.connect(card=card_options, terminate=terminate) is True
+
+    def test_connect_card_and_leave_on_connect(self, clf, terminate):
+        terminate.side_effect = [False, False, True]
+        target = nfc.clf.LocalTarget('212F')
+        target.sensf_req = HEX('0012FC0103')
+        target.sensf_res = HEX('0102FE010203040506FFFFFFFFFFFFFFFF12FC')
+        target.tt3_cmd = HEX('0602fe010203040506010b00018000')
+        clf.device.listen_ttf.return_value = target
+        card_options = {'target': target, 'on-startup': lambda t: target,
+                        'on-connect': lambda tag: False}
+        tag = clf.connect(card=card_options, terminate=terminate)
+        assert isinstance(tag, nfc.tag.TagEmulation)
+
+    def test_connect_card_emulate_tag_returns_none(self, clf, terminate):
+        terminate.side_effect = [False, False, True]
+        target = nfc.clf.LocalTarget('212F')
+        target.sensf_req = HEX('0012FC0103')
+        target.sensf_res = HEX('0102FE010203040506FFFFFFFFFFFFFFFF12FC')
+        target.tt3_cmd = HEX('')
+        clf.device.listen_ttf.return_value = target
+        card_options = {'target': target, 'on-startup': lambda t: target}
+        assert clf.connect(card=card_options, terminate=terminate) is None
+
+    def test_connect_card_with_on_discover_false(self, clf, terminate):
+        terminate.side_effect = [False, False, True]
+        target = nfc.clf.LocalTarget('212F')
+        target.sensf_req = HEX('0012FC0103')
+        target.sensf_res = HEX('0102FE010203040506FFFFFFFFFFFFFFFF12FC')
+        target.tt3_cmd = HEX('0602fe010203040506010b00018000')
+        clf.device.listen_ttf.return_value = target
+        card_options = {'target': target, 'on-startup': lambda t: target,
+                        'on-discover': lambda tag: False}
+        assert clf.connect(card=card_options, terminate=terminate) is None
+
     #
     # SENSE
     #
@@ -336,6 +402,48 @@ class TestContactlessFrontend(object):
         res_target = clf.sense(req_target)
         assert isinstance(res_target, nfc.clf.RemoteTarget)
         clf.device.sense_ttb.assert_called_once_with(req_target)
+
+    #
+    # LISTEN
+    #
+
+    def test_listen_without_device(self, clf):
+        clf.device = None
+        with pytest.raises(IOError) as excinfo:
+            clf.listen(nfc.clf.LocalTarget('106A'), 1.0)
+        assert excinfo.value.errno == errno.ENODEV
+
+    def test_listen_for_tta_target(self, clf):
+        target = nfc.clf.LocalTarget('106A')
+        clf.device.listen_tta.return_value = target
+        assert clf.listen(target, 1.0) is target
+
+    def test_listen_for_ttb_target(self, clf):
+        target = nfc.clf.LocalTarget('106B')
+        clf.device.listen_ttb.return_value = target
+        assert clf.listen(target, 1.0) is target
+
+    def test_listen_for_ttf_target(self, clf):
+        target = nfc.clf.LocalTarget('212F')
+        clf.device.listen_ttf.return_value = target
+        assert clf.listen(target, 1.0) is target
+
+    def test_listen_for_dep_target(self, clf):
+        target = nfc.clf.LocalTarget('106A')
+        target.atr_req = HEX('D400 30313233343536373839 00000000')
+        target.atr_res = HEX('D501 66f6e98d1c13dfe56de4 0000000700')
+        clf.device.listen_dep.return_value = target
+        assert clf.listen(target, 1.0) is target
+        target.atr_req = HEX('D400 30313233343536373839 000000')
+        assert clf.listen(target, 1.0) is None
+        target.atr_req = None
+        assert clf.listen(target, 1.0) is None
+
+    def test_listen_for_xxx_target(self, clf):
+        target = nfc.clf.LocalTarget('xxx')
+        with pytest.raises(ValueError) as excinfo:
+            clf.listen(target, 1.0)
+        assert str(excinfo.value) == "unsupported bitrate technology type xxx"
 
 
 class TestRemoteTarget(object):
