@@ -335,7 +335,7 @@ class Chipset(object):
 
     def get_command_type(self):
         data = self.send_command(0x28, [])
-        return struct.unpack(">Q", str(data[0:8]))
+        return struct.unpack(">Q", str(data[0:8]))[0]
 
     def set_command_type(self, command_type):
         data = self.send_command(0x2A, [command_type])

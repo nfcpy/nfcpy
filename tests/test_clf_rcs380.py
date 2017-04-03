@@ -228,6 +228,173 @@ class TestChipset(object):
             chipset.in_set_rf(brty_send, brty_recv)
         assert excinfo.value.errno == 1
 
+    @pytest.mark.parametrize("data, kwargs, command", [
+        (None, {}, ''),
+        (None, {"initial_guard_time": 255}, '0200ff'),
+        (None, {"add_crc": 255}, '0201ff'),
+        (None, {"check_crc": 255}, '0202ff'),
+        (None, {"multi_card": 255}, '0203ff'),
+        (None, {"add_parity": 255}, '0204ff'),
+        (None, {"check_parity": 255}, '0205ff'),
+        (None, {"bitwise_anticoll": 255}, '0206ff'),
+        (None, {"last_byte_bit_count": 255}, '0207ff'),
+        (None, {"mifare_crypto": 255}, '0208ff'),
+        (None, {"add_sof": 255}, '0209ff'),
+        (None, {"check_sof": 255}, '020aff'),
+        (None, {"add_eof": 255}, '020bff'),
+        (None, {"check_eof": 255}, '020cff'),
+        (None, {"deaf_time": 255}, '020eff'),
+        (None, {"continuous_receive_mode": 255}, '020fff'),
+        (None, {"min_len_for_crm": 255}, '0210ff'),
+        (None, {"type_1_tag_rrdd": 255}, '0211ff'),
+        (None, {"rfca": 255}, '0212ff'),
+        (None, {"guard_time": 255}, '0213ff'),
+        (None, {"add_crc": 254, "check_crc": 255}, '0201fe02ff'),
+        (b'1', {"add_crc": 254, "check_crc": 255}, '023101fe02ff'),
+    ])
+    def test_in_set_protocol(self, chipset, data, kwargs, command):
+        chipset.transport.read.side_effect = [ACK(), RSP('0300')]
+        assert chipset.in_set_protocol(data, **kwargs) is None
+        if command:
+            chipset.transport.write.assert_called_with(CMD(command))
+            chipset.transport.read.side_effect = [ACK(), RSP('0301')]
+            with pytest.raises(nfc.clf.rcs380.StatusError) as excinfo:
+                chipset.in_set_protocol(data, **kwargs)
+            assert excinfo.value.errno == 1
+
+    @pytest.mark.parametrize("data, timeout, command", [
+        (b'12', 0, '0400003132'),
+        (b'12', 1, '0414003132'),
+        (b'12', 2, '041e003132'),
+        (b'12', 0x10000, '04ffff3132'),
+    ])
+    def test_in_comm_rf(self, chipset, data, timeout, command):
+        chipset.transport.read.side_effect = [ACK(), RSP('0500000000083334')]
+        assert chipset.in_comm_rf(data, timeout) == b'34'
+        chipset.transport.write.assert_called_with(CMD(command))
+        chipset.transport.read.side_effect = [ACK(), RSP('0501000000')]
+        with pytest.raises(nfc.clf.rcs380.CommunicationError) as excinfo:
+            chipset.in_comm_rf(data, timeout)
+        assert excinfo.value == "PROTOCOL_ERROR"
+
+    def test_switch_rf(self, chipset):
+        chipset.transport.read.side_effect = [ACK(), RSP('0700')]
+        assert chipset.switch_rf('off') is None
+        chipset.transport.write.assert_called_with(CMD('0600'))
+        chipset.transport.read.side_effect = [ACK(), RSP('0700')]
+        assert chipset.switch_rf('on') is None
+        chipset.transport.write.assert_called_with(CMD('0601'))
+        chipset.transport.read.side_effect = [ACK(), RSP('0701')]
+        with pytest.raises(nfc.clf.rcs380.StatusError) as excinfo:
+            chipset.switch_rf('off')
+        assert excinfo.value.errno == 1
+
+    @pytest.mark.parametrize("comm_type, command", [
+        ("106A", '40080b'),
+        ("212F", '40080c'),
+        ("424F", '40080d'),
+        ("212A", '40080e'),
+        ("424A", '40080f'),
+    ])
+    def test_tg_set_rf(self, chipset, comm_type, command):
+        chipset.transport.read.side_effect = [ACK(), RSP('4100')]
+        assert chipset.tg_set_rf(comm_type) is None
+        assert chipset.transport.write.mock_calls == [call(CMD(command))]
+        chipset.transport.read.side_effect = [ACK(), RSP('4101')]
+        with pytest.raises(nfc.clf.rcs380.StatusError) as excinfo:
+            chipset.tg_set_rf(comm_type)
+        assert excinfo.value.errno == 1
+
+    @pytest.mark.parametrize("data, kwargs, command", [
+        (None, {}, ''),
+        (None, {"send_timeout_time_unit": 255}, '4200ff'),
+        (None, {"rf_off_error": 255}, '4201ff'),
+        (None, {"continuous_receive_mode": 255}, '4202ff'),
+        (b'1', {"send_timeout_time_unit": 254, "rf_off_error": 255},
+         '423100fe01ff'),
+    ])
+    def test_tg_set_protocol(self, chipset, data, kwargs, command):
+        chipset.transport.read.side_effect = [ACK(), RSP('4300')]
+        assert chipset.tg_set_protocol(data, **kwargs) is None
+        if len(command) > 0:
+            chipset.transport.write.assert_called_with(CMD(command))
+            chipset.transport.read.side_effect = [ACK(), RSP('4301')]
+            with pytest.raises(nfc.clf.rcs380.StatusError) as excinfo:
+                chipset.tg_set_protocol(data, **kwargs)
+            assert excinfo.value.errno == 1
+
+    def test_tg_set_auto(self, chipset):
+        chipset.transport.read.side_effect = [ACK(), RSP('4500')]
+        assert chipset.tg_set_auto(HEX('0102')) is None
+        assert chipset.transport.write.mock_calls == [call(CMD('440102'))]
+        chipset.transport.read.side_effect = [ACK(), RSP('4501')]
+        with pytest.raises(nfc.clf.rcs380.StatusError) as excinfo:
+            chipset.tg_set_auto(HEX(''))
+        assert excinfo.value.errno == 1
+
+    @pytest.mark.parametrize("kwargs, command", [
+        ({}, '48 0000 ffff 00'
+         '000000000000 000000000000000000000000000000000000 00 00 0000'),
+        ({"guard_time": 1}, '48 0100 ffff 00'
+         '000000000000 000000000000000000000000000000000000 00 00 0000'),
+        ({"send_timeout": 1}, '48 0000 0100 00'
+         '000000000000 000000000000000000000000000000000000 00 00 0000'),
+        ({"mdaa": True}, '48 0000 ffff 01'
+         '000000000000 000000000000000000000000000000000000 00 00 0000'),
+        ({"nfca_params": b'123456'}, '48 0000 ffff 00'
+         '313233343536 000000000000000000000000000000000000 00 00 0000'),
+        ({"nfcf_params": b'123456789012345678'}, '48 0000 ffff 00'
+         '000000000000 313233343536373839303132333435363738 00 00 0000'),
+        ({"mf_halted": True}, '48 0000 ffff 00'
+         '000000000000 000000000000000000000000000000000000 01 00 0000'),
+        ({"arae": True}, '48 0000 ffff 00'
+         '000000000000 000000000000000000000000000000000000 00 01 0000'),
+        ({"recv_timeout": 1}, '48 0000 ffff 00'
+         '000000000000 000000000000000000000000000000000000 00 00 0100'),
+        ({"recv_timeout": 258, "arae": True}, '48 0000 ffff 00'
+         '000000000000 000000000000000000000000000000000000 00 01 0201'),
+        ({"recv_timeout": 256, "transmit_data": b'12'}, '48 0000 ffff 00'
+         '000000000000 000000000000000000000000000000000000 00 00 0001 3132'),
+    ])
+    def test_tg_comm_rf(self, chipset, kwargs, command):
+        chipset.transport.read.side_effect = [ACK(), RSP('4900000000000000')]
+        assert chipset.tg_comm_rf(**kwargs) == HEX('00000000000000')
+        chipset.transport.write.assert_called_with(CMD(command))
+        chipset.transport.read.side_effect = [ACK(), RSP('4900000001000000')]
+        with pytest.raises(nfc.clf.rcs380.CommunicationError) as excinfo:
+            chipset.tg_comm_rf(**kwargs)
+        assert excinfo.value == "PROTOCOL_ERROR"
+
+    def test_reset_device(self, mocker, chipset):  # noqa: F811
+        mocker.patch('nfc.clf.rcs380.time.sleep')
+        chipset.transport.read.side_effect = [ACK(), RSP('13')]
+        assert chipset.reset_device(startup_delay=10) is None
+        assert chipset.transport.write.mock_calls == [
+            call(CMD('120a00')), call(ACK()),
+        ]
+
+    @pytest.mark.parametrize("request", [None, 0x60, 0x61, 0x80])
+    def test_get_firmware_version(self, chipset, request):
+        chipset.transport.read.side_effect = [ACK(), RSP('210123')]
+        assert chipset.get_firmware_version(request) == HEX('0123')
+        assert chipset.transport.write.mock_calls == [
+            call(CMD('20' + (('%02x' % request) if request else '')))
+        ]
+
+    def test_get_command_type(self, chipset):
+        chipset.transport.read.side_effect = [ACK(), RSP('290000000000000003')]
+        assert chipset.get_command_type() == 3
+        assert chipset.transport.write.mock_calls == [call(CMD('28'))]
+
+    def test_set_command_type(self, chipset):
+        chipset.transport.read.side_effect = [ACK(), RSP('2b00')]
+        assert chipset.set_command_type(3) is None
+        assert chipset.transport.write.mock_calls == [call(CMD('2a03'))]
+        chipset.transport.read.side_effect = [ACK(), RSP('2b01')]
+        with pytest.raises(nfc.clf.rcs380.StatusError) as excinfo:
+            chipset.set_command_type(5)
+        assert excinfo.value.errno == 1
+
 
 class TestDevice(object):
     def test_close(self, device):
@@ -267,13 +434,314 @@ class TestDevice(object):
             CMD('04 360126'),
         ]]
 
-    @pytest.mark.skip()
     def test_sense_tta_with_tt1_target_found(self, device):
-        pass
+        sens_res = '000C'
+        rid_res = '1148b2565400'
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('01 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08' + sens_res),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08' + rid_res),
+        ]
+        target = device.sense_tta(nfc.clf.RemoteTarget('106A'))
+        assert isinstance(target, nfc.clf.RemoteTarget)
+        assert target.brty == "106A"
+        assert target.sens_res == HEX(sens_res)
+        assert target.rid_res == HEX(rid_res)
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('00 02030f03'),
+            CMD('02 00180101020103000400050006000708'
+                '   080009000a000b000c000e040f001000'
+                '   110012001306'),
+            CMD('02 01000200050100060707'),
+            CMD('04 360126'),
+            CMD('02 0102020207081102'),
+            CMD('04 360178000000000000'),
+        ]]
 
-    @pytest.mark.skip()
-    def test_sense_tta_with_tt2_target_found(self, device):
-        pass
+    def test_sense_tta_with_proprietary_target(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('01 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 0000'),
+            ACK(), RSP('03 00'),
+        ]
+        target = device.sense_tta(nfc.clf.RemoteTarget('106A'))
+        assert isinstance(target, nfc.clf.RemoteTarget)
+        assert target.brty == "106A"
+        assert target.sens_res == HEX('0000')
+        assert target.rid_res is None
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('00 02030f03'),
+            CMD('02 00180101020103000400050006000708'
+                '   080009000a000b000c000e040f001000'
+                '   110012001306'),
+            CMD('02 01000200050100060707'),
+            CMD('04 360126'),
+            CMD('02 0102020207081102'),
+        ]]
+
+    def test_sense_tta_find_tt1_but_receive_error(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('01 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 000C'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 40000000'),
+        ]
+        assert device.sense_tta(nfc.clf.RemoteTarget('106A')) is None
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('00 02030f03'),
+            CMD('02 00180101020103000400050006000708'
+                '   080009000a000b000c000e040f001000'
+                '   110012001306'),
+            CMD('02 01000200050100060707'),
+            CMD('04 360126'),
+            CMD('02 0102020207081102'),
+            CMD('04 360178000000000000'),
+        ]]
+
+    def test_sense_tta_find_tt2_target_uid_4(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('01 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 4400'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 01020304'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 00'),
+        ]
+        target = device.sense_tta(nfc.clf.RemoteTarget('106A'))
+        assert isinstance(target, nfc.clf.RemoteTarget)
+        assert target.brty == "106A"
+        assert target.sens_res == HEX('4400')
+        assert target.sdd_res == HEX('01020304')
+        assert target.sel_res == HEX('00')
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('00 02030f03'),
+            CMD('02 00180101020103000400050006000708'
+                '   080009000a000b000c000e040f001000'
+                '   110012001306'),
+            CMD('02 01000200050100060707'),
+            CMD('04 360126'),
+            CMD('02 04010708'),
+            CMD('02 01000200'),
+            CMD('04 36019320'),
+            CMD('02 01010201'),
+            CMD('04 3601937001020304'),
+        ]]
+
+    def test_sense_tta_find_tt2_target_uid_7(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('01 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 4400'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 88010203'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 04'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 04050607'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 00'),
+        ]
+        target = device.sense_tta(nfc.clf.RemoteTarget('106A'))
+        assert isinstance(target, nfc.clf.RemoteTarget)
+        assert target.brty == "106A"
+        assert target.sens_res == HEX('4400')
+        assert target.sdd_res == HEX('01020304050607')
+        assert target.sel_res == HEX('00')
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('00 02030f03'),
+            CMD('02 00180101020103000400050006000708'
+                '   080009000a000b000c000e040f001000'
+                '   110012001306'),
+            CMD('02 01000200050100060707'),
+            CMD('04 360126'),
+            CMD('02 04010708'),
+            CMD('02 01000200'),
+            CMD('04 36019320'),
+            CMD('02 01010201'),
+            CMD('04 3601937088010203'),
+            CMD('02 01000200'),
+            CMD('04 36019520'),
+            CMD('02 01010201'),
+            CMD('04 3601957004050607'),
+        ]]
+
+    def test_sense_tta_find_tt2_target_uid_10(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('01 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 4400'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 88010203'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 04'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 88040506'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 04'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 07080910'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 00'),
+        ]
+        target = device.sense_tta(nfc.clf.RemoteTarget('106A'))
+        assert isinstance(target, nfc.clf.RemoteTarget)
+        assert target.brty == "106A"
+        assert target.sens_res == HEX('4400')
+        assert target.sdd_res == HEX('01020304050607080910')
+        assert target.sel_res == HEX('00')
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('00 02030f03'),
+            CMD('02 00180101020103000400050006000708'
+                '   080009000a000b000c000e040f001000'
+                '   110012001306'),
+            CMD('02 01000200050100060707'),
+            CMD('04 360126'),
+            CMD('02 04010708'),
+            CMD('02 01000200'),
+            CMD('04 36019320'),
+            CMD('02 01010201'),
+            CMD('04 3601937088010203'),
+            CMD('02 01000200'),
+            CMD('04 36019520'),
+            CMD('02 01010201'),
+            CMD('04 3601957088040506'),
+            CMD('02 01000200'),
+            CMD('04 36019720'),
+            CMD('02 01010201'),
+            CMD('04 3601977007080910'),
+        ]]
+
+    def test_sense_tta_find_tt2_excessive_uid(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('01 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 4400'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 88010203'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 04'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 88040506'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 04'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 07080910'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 04'),
+        ]
+        assert device.sense_tta(nfc.clf.RemoteTarget('106A')) is None
+
+    def test_sense_tta_tt2_request_uid_4(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('01 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 4400'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 00'),
+        ]
+        uid = '01020304'
+        target = nfc.clf.RemoteTarget('106A', sel_req=HEX(uid))
+        target = device.sense_tta(target)
+        assert isinstance(target, nfc.clf.RemoteTarget)
+        assert target.brty == "106A"
+        assert target.sens_res == HEX('4400')
+        assert target.sdd_res == HEX(uid)
+        assert target.sel_res == HEX('00')
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('00 02030f03'),
+            CMD('02 00180101020103000400050006000708'
+                '   080009000a000b000c000e040f001000'
+                '   110012001306'),
+            CMD('02 01000200050100060707'),
+            CMD('04 360126'),
+            CMD('02 04010708'),
+            CMD('02 01010201'),
+            CMD('04 360193700102030404'),
+        ]]
+
+    def test_sense_tta_tt2_request_uid_7(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('01 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 4400'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 04'),
+            ACK(), RSP('05 00000000 08 00'),
+        ]
+        uid = '01020304050607'
+        target = nfc.clf.RemoteTarget('106A', sel_req=HEX(uid))
+        target = device.sense_tta(target)
+        assert isinstance(target, nfc.clf.RemoteTarget)
+        assert target.brty == "106A"
+        assert target.sens_res == HEX('4400')
+        assert target.sdd_res == HEX(uid)
+        assert target.sel_res == HEX('00')
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('00 02030f03'),
+            CMD('02 00180101020103000400050006000708'
+                '   080009000a000b000c000e040f001000'
+                '   110012001306'),
+            CMD('02 01000200050100060707'),
+            CMD('04 360126'),
+            CMD('02 04010708'),
+            CMD('02 01010201'),
+            CMD('04 360193708801020388'),
+            CMD('04 360195700405060700'),
+        ]]
+
+    def test_sense_tta_tt2_request_uid_10(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('01 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 4400'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 04'),
+            ACK(), RSP('05 00000000 08 04'),
+            ACK(), RSP('05 00000000 08 00'),
+        ]
+        uid = '01020304050607080910'
+        target = nfc.clf.RemoteTarget('106A', sel_req=HEX(uid))
+        target = device.sense_tta(target)
+        assert isinstance(target, nfc.clf.RemoteTarget)
+        assert target.brty == "106A"
+        assert target.sens_res == HEX('4400')
+        assert target.sdd_res == HEX(uid)
+        assert target.sel_res == HEX('00')
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('00 02030f03'),
+            CMD('02 00180101020103000400050006000708'
+                '   080009000a000b000c000e040f001000'
+                '   110012001306'),
+            CMD('02 01000200050100060707'),
+            CMD('04 360126'),
+            CMD('02 04010708'),
+            CMD('02 01010201'),
+            CMD('04 360193708801020388'),
+            CMD('04 36019570880405068f'),
+            CMD('04 360197700708091016'),
+        ]]
 
     def test_sense_tta_with_receive_errors(self, device):
         device.chipset.transport.read.side_effect = [
@@ -293,9 +761,39 @@ class TestDevice(object):
             CMD('04 360126'),
         ]]
 
-    @pytest.mark.skip()
-    def test_sense_tta_with_response_errors(self, device):
-        pass
+    def test_sense_tta_find_tt2_but_receive_error(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('01 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 4400'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 40000000'),
+        ]
+        assert device.sense_tta(nfc.clf.RemoteTarget('106A')) is None
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('00 02030f03'),
+            CMD('02 00180101020103000400050006000708'
+                '   080009000a000b000c000e040f001000'
+                '   110012001306'),
+            CMD('02 01000200050100060707'),
+            CMD('04 360126'),
+            CMD('02 04010708'),
+            CMD('02 01000200'),
+            CMD('04 36019320'),
+        ]]
+
+    @pytest.mark.parametrize("sens_res", ['00'])
+    def test_sense_tta_with_response_errors(self, device, sens_res):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('01 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08' + sens_res),
+        ]
+        assert device.sense_tta(nfc.clf.RemoteTarget('106A')) is None
+        assert device.chipset.transport.read.call_count == 8
 
     def test_sense_tta_with_invalid_target(self, device):
         with pytest.raises(nfc.clf.UnsupportedTargetError) as excinfo:
@@ -320,9 +818,25 @@ class TestDevice(object):
             CMD('04 3601050010'),
         ]]
 
-    @pytest.mark.skip()
     def test_sense_ttb_with_tt4_target_found(self, device):
-        pass
+        sensb_res = '50E8253EEC00000011008185'
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('01 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 ' + sensb_res),
+        ]
+        target = device.sense_ttb(nfc.clf.RemoteTarget('106B'))
+        assert isinstance(target, nfc.clf.RemoteTarget)
+        assert target.sensb_res == HEX(sensb_res)
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('00 03070f07'),
+            CMD('02 00180101020103000400050006000708'
+                '   080009000a000b000c000e040f001000'
+                '   110012001306'),
+            CMD('02 0b0109010c010a010014'),
+            CMD('04 3601050010'),
+        ]]
 
     def test_sense_ttb_with_receive_errors(self, device):
         device.chipset.transport.read.side_effect = [
@@ -342,9 +856,25 @@ class TestDevice(object):
             CMD('04 3601050010'),
         ]]
 
-    @pytest.mark.skip()
-    def test_sense_ttb_with_response_errors(self, device):
-        pass
+    @pytest.mark.parametrize('sensb_res', [
+        '51E8253EEC00000011008185', '50E8253EEC000000110081',
+    ])
+    def test_sense_ttb_with_response_errors(self, device, sensb_res):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('01 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('03 00'),
+            ACK(), RSP('05 00000000 08 ' + sensb_res),
+        ]
+        assert device.sense_ttb(nfc.clf.RemoteTarget('106B')) is None
+        assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
+            CMD('00 03070f07'),
+            CMD('02 00180101020103000400050006000708'
+                '   080009000a000b000c000e040f001000'
+                '   110012001306'),
+            CMD('02 0b0109010c010a010014'),
+            CMD('04 3601050010'),
+        ]]
 
     def test_sense_ttb_with_invalid_target(self, device):
         with pytest.raises(nfc.clf.UnsupportedTargetError) as excinfo:
