@@ -416,6 +416,10 @@ class TestDevice(object):
             CMD('0600')
         ]]
 
+    #
+    # SENSE
+    #
+
     def test_sense_tta_with_no_target_found(self, device):
         device.chipset.transport.read.side_effect = [
             ACK(), RSP('01 00'),
@@ -1029,3 +1033,197 @@ class TestDevice(object):
         assert str(excinfo.value) == (
             "NFC Port-100 v1.11 at usb:001:001 does not "
             "support sense for active DEP Target")
+
+    #
+    # LISTEN
+    #
+
+    @pytest.mark.parametrize("target, errmsg", [
+        (nfc.clf.LocalTarget('106B'),
+         "unsupported target bitrate: '106B'"),
+        (nfc.clf.LocalTarget('106A', rid_res=HEX('00')),
+         "listening for type 1 tag activation is not supported"),
+    ])
+    def test_listen_tta_target_not_supported(self, device, target, errmsg):
+        with pytest.raises(nfc.clf.UnsupportedTargetError) as excinfo:
+            device.listen_tta(target, 1.0)
+        assert str(excinfo.value) == errmsg
+
+    @pytest.mark.parametrize("target, errmsg", [
+        (nfc.clf.LocalTarget('106A'),
+         "sens_res is required"),
+        (nfc.clf.LocalTarget('106A', sens_res=b'1'),
+         "sdd_res is required"),
+        (nfc.clf.LocalTarget('106A', sens_res=b'1', sdd_res=b'1'),
+         "sel_res is required"),
+        (nfc.clf.LocalTarget('106A', sens_res=b'1', sdd_res=b'1',
+                             sel_res=b'12'),
+         "sens_res must be 2 byte"),
+        (nfc.clf.LocalTarget('106A', sens_res=b'12', sdd_res=b'1',
+                             sel_res=b'12'),
+         "sdd_res must be 4 byte"),
+        (nfc.clf.LocalTarget('106A', sens_res=b'12', sdd_res=b'1234',
+                             sel_res=b'12'),
+         "sel_res must be 1 byte"),
+        (nfc.clf.LocalTarget('106A', sens_res=b'12', sdd_res=b'1234',
+                             sel_res=b'1'),
+         "sdd_res[0] must be 08h"),
+    ])
+    def test_listen_tta_target_value_error(self, device, target, errmsg):
+        with pytest.raises(ValueError) as excinfo:
+            device.listen_tta(target, 1.0)
+        assert str(excinfo.value) == errmsg
+
+    @pytest.mark.parametrize("tg_comm_rf_response", [
+        '4900000080000000', '490c000300000000',
+    ])
+    def test_listen_tta_tt2_not_activated(self, device, tg_comm_rf_response):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('4100'),
+            ACK(), RSP('4300'),
+            ACK(), RSP('4300'),
+            ACK(), RSP(tg_comm_rf_response),
+        ]
+        target = nfc.clf.LocalTarget('106A')
+        target.sens_res = HEX("4400")
+        target.sel_res = HEX("00")
+        target.sdd_res = HEX("08010203")
+        assert device.listen_tta(target, 0.001) is None
+        assert device.chipset.transport.read.call_count == 8
+
+    def test_listen_tta_tt2_activated(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('4100'),
+            ACK(), RSP('4300'),
+            ACK(), RSP('4300'),
+            ACK(), RSP('490b000300000000 3132'),
+            ACK(), RSP('4300'),
+        ]
+        target = nfc.clf.LocalTarget('106A')
+        target.sens_res = HEX("4400")
+        target.sel_res = HEX("00")
+        target.sdd_res = HEX("08010203")
+        target = device.listen_tta(target, 1.0)
+        assert isinstance(target, nfc.clf.LocalTarget)
+        assert target.brty == '106A'
+        assert target.sens_res == HEX("4400")
+        assert target.sel_res == HEX("00")
+        assert target.sdd_res == HEX("08010203")
+        assert target.tt2_cmd == HEX('3132')
+        assert device.chipset.transport.read.call_count == 10
+
+    @pytest.mark.parametrize("tg_comm_rf_response", [
+        '4900000080000000', '490c000300000000E0',
+        '490b000400000000E0', '490b000300000000E1',
+    ])
+    def test_listen_tta_tt4_not_activated(self, device, tg_comm_rf_response):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('4100'),
+            ACK(), RSP('4300'),
+            ACK(), RSP('4300'),
+            ACK(), RSP(tg_comm_rf_response),
+        ]
+        target = nfc.clf.LocalTarget('106A')
+        target.sens_res = HEX("4400")
+        target.sel_res = HEX("20")
+        target.sdd_res = HEX("08010203")
+        assert device.listen_tta(target, 0.001) is None
+        assert device.chipset.transport.read.call_count == 8
+
+    @pytest.mark.parametrize("rats_res", [
+        None, HEX('05 78 80 70 02 aabbcc'), HEX('05 38 80 70 aabbcc'),
+        HEX('05 18 80 aabbcc'), HEX('05 08 aabbcc'),
+    ])
+    def test_listen_tta_tt4_activated(self, device, rats_res):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('4100'),
+            ACK(), RSP('4300'),
+            ACK(), RSP('4300'),
+            ACK(), RSP('490b000300000000E070'),
+            ACK(), RSP('490b0003000000003132'),
+            ACK(), RSP('4300'),
+        ]
+        target = nfc.clf.LocalTarget('106A')
+        target.sens_res = HEX("4400")
+        target.sel_res = HEX("20")
+        target.sdd_res = HEX("08010203")
+        target.rats_res = rats_res
+        target = device.listen_tta(target, 1.0)
+        assert isinstance(target, nfc.clf.LocalTarget)
+        assert target.brty == '106A'
+        assert target.sens_res == HEX("4400")
+        assert target.sel_res == HEX("20")
+        assert target.sdd_res == HEX("08010203")
+        assert target.tt4_cmd == HEX('3132')
+        assert device.chipset.transport.read.call_count == 12
+
+    def test_listen_tta_tt4_with_deselect(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('4100'),
+            ACK(), RSP('4300'),
+            ACK(), RSP('4300'),
+            ACK(), RSP('490b000300000000E070'),
+            ACK(), RSP('490b000300000000C200'),
+            ACK(), RSP('490b000300000000E070'),
+            ACK(), RSP('490b0003000000003132'),
+            ACK(), RSP('4300'),
+        ]
+        target = nfc.clf.LocalTarget('106A')
+        target.sens_res = HEX("4400")
+        target.sel_res = HEX("20")
+        target.sdd_res = HEX("08010203")
+        target.rats_res = HEX('05 78 80 70 02')
+        target = device.listen_tta(target, 1.0)
+        assert isinstance(target, nfc.clf.LocalTarget)
+        assert target.brty == '106A'
+        assert target.sens_res == HEX("4400")
+        assert target.sel_res == HEX("20")
+        assert target.sdd_res == HEX("08010203")
+        assert target.tt4_cmd == HEX('3132')
+        assert device.chipset.transport.read.call_count == 16
+
+    def test_listen_tta_tt4_skip_tt4_cmd(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('4100'),
+            ACK(), RSP('4300'),
+            ACK(), RSP('4300'),
+            ACK(), RSP('490b000300000000E070'),
+            ACK(), RSP('490b0003000000003932'),
+            ACK(), RSP('490b0003000000003132'),
+            ACK(), RSP('4300'),
+        ]
+        target = nfc.clf.LocalTarget('106A')
+        target.sens_res = HEX("4400")
+        target.sel_res = HEX("20")
+        target.sdd_res = HEX("08010203")
+        target.rats_res = HEX('05 78 80 70 02')
+        target = device.listen_tta(target, 1.0)
+        assert isinstance(target, nfc.clf.LocalTarget)
+        assert target.brty == '106A'
+        assert target.sens_res == HEX("4400")
+        assert target.sel_res == HEX("20")
+        assert target.sdd_res == HEX("08010203")
+        assert target.tt4_cmd == HEX('3132')
+        assert device.chipset.transport.read.call_count == 14
+
+    def test_listen_tta_not_tt2_or_tt4(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('4100'),
+            ACK(), RSP('4300'),
+            ACK(), RSP('4300'),
+        ]
+        target = nfc.clf.LocalTarget('106A')
+        target.sens_res = HEX("4400")
+        target.sel_res = HEX("40")
+        target.sdd_res = HEX("08010203")
+        with pytest.raises(nfc.clf.UnsupportedTargetError) as excinfo:
+            device.listen_tta(target, 1.0)
+        assert str(excinfo.value) == \
+            "sel_res does not indicate any tag target support"
+        assert device.chipset.transport.read.call_count == 6
+
+    def test_listen_ttb_is_not_supported(self, device):
+        with pytest.raises(nfc.clf.UnsupportedTargetError) as excinfo:
+            device.listen_ttb(nfc.clf.LocalTarget('106B'), 1.0)
+        assert str(excinfo.value) == "NFC Port-100 v1.11 at usb:001:001 " \
+            "does not support listen as Type A Target"

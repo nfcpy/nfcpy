@@ -597,7 +597,7 @@ class Device(device.Device):
                     tg_comm_rf_args['transmit_data'] = None
                 except CommunicationError as error:
                     tg_comm_rf_args['transmit_data'] = None
-                    rats_cmd, rats_res = None
+                    rats_cmd = rats_res = None
                     log.debug(error)
                 else:
                     brty = ('106A', '212F', '424F')[data[0]-11]
@@ -623,7 +623,7 @@ class Device(device.Device):
                         if tc is not None:
                             log.debug("TC(1) = {:08b}".format(tc))
                         if ta_tb_tc:
-                            log.debug("T({}) = {:08b}".format(
+                            log.debug("T({}) = {}".format(
                                 len(ta_tb_tc), hexlify(ta_tb_tc)))
                         did_supported = tc is None or bool(tc & 0x02)
                         cmd_with_did = bool(cmd[0] & 0x08)
