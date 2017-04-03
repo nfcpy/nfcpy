@@ -283,7 +283,7 @@ class Chipset(object):
         data = bytearray() if data is None else bytearray(data)
         KEYS = ("send_timeout_time_unit", "rf_off_error",
                 "continuous_receive_mode")
-        for key, value in kwargs.iteritems():
+        for key, value in sorted(kwargs.iteritems()):
             data.extend(bytearray([KEYS.index(key), int(value)]))
         data = self.send_command(0x42, bytearray(data))
         if data and data[0] != 0:

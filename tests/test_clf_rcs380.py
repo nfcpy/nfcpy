@@ -306,17 +306,17 @@ class TestChipset(object):
         assert excinfo.value.errno == 1
 
     @pytest.mark.parametrize("data, kwargs, command", [
-        (None, {}, ''),
+        (None, {}, None),
         (None, {"send_timeout_time_unit": 255}, '4200ff'),
         (None, {"rf_off_error": 255}, '4201ff'),
         (None, {"continuous_receive_mode": 255}, '4202ff'),
         (b'1', {"send_timeout_time_unit": 254, "rf_off_error": 255},
-         '423100fe01ff'),
+         '423101ff00fe'),
     ])
     def test_tg_set_protocol(self, chipset, data, kwargs, command):
         chipset.transport.read.side_effect = [ACK(), RSP('4300')]
         assert chipset.tg_set_protocol(data, **kwargs) is None
-        if len(command) > 0:
+        if command:
             chipset.transport.write.assert_called_with(CMD(command))
             chipset.transport.read.side_effect = [ACK(), RSP('4301')]
             with pytest.raises(nfc.clf.rcs380.StatusError) as excinfo:
