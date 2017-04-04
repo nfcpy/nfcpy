@@ -542,16 +542,20 @@ class Device(device.Device):
             info = "listening for type 1 tag activation is not supported"
             raise nfc.clf.UnsupportedTargetError(info)
 
-        try:
-            assert target.sens_res is not None, "sens_res is required"
-            assert target.sdd_res is not None, "sdd_res is required"
-            assert target.sel_res is not None, "sel_res is required"
-            assert len(target.sens_res) == 2, "sens_res must be 2 byte"
-            assert len(target.sdd_res) == 4, "sdd_res must be 4 byte"
-            assert len(target.sel_res) == 1, "sel_res must be 1 byte"
-            assert target.sdd_res[0] == 0x08, "sdd_res[0] must be 08h"
-        except AssertionError as error:
-            raise ValueError(str(error))
+        if target.sens_res is None:
+            raise ValueError("sens_res is required")
+        if target.sdd_res is None:
+            raise ValueError("sdd_res is required")
+        if target.sel_res is None:
+            raise ValueError("sel_res is required")
+        if len(target.sens_res) != 2:
+            raise ValueError("sens_res must be 2 byte")
+        if len(target.sdd_res) != 4:
+            raise ValueError("sdd_res must be 4 byte")
+        if len(target.sel_res) != 1:
+            raise ValueError("sel_res must be 1 byte")
+        if target.sdd_res[0] != 0x08:
+            raise ValueError("sdd_res[0] must be 08h")
 
         nfca_params = target.sens_res + target.sdd_res[1:4] + target.sel_res
         log.debug("nfca_params %s", hexlify(nfca_params))
@@ -665,12 +669,14 @@ class Device(device.Device):
 
     def listen_ttf(self, target, timeout):
         """Listen as Type F Target is supported for either 212 or 424 kbps."""
-        assert target.sensf_res is not None
-        assert len(target.sensf_res) == 19
-
         if target.brty not in ('212F', '424F'):
             info = "unsupported target bitrate: %r" % target.brty
             raise nfc.clf.UnsupportedTargetError(info)
+
+        if target.sensf_res is None:
+            raise ValueError("sensf_res is required")
+        if len(target.sensf_res) != 19:
+            raise ValueError("sensf_res must be 19 byte")
 
         self.chipset.tg_set_rf(target.brty)
         self.chipset.tg_set_protocol(self.chipset.tg_set_protocol_defaults)

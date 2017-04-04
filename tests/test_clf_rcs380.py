@@ -1227,3 +1227,59 @@ class TestDevice(object):
             device.listen_ttb(nfc.clf.LocalTarget('106B'), 1.0)
         assert str(excinfo.value) == "NFC Port-100 v1.11 at usb:001:001 " \
             "does not support listen as Type A Target"
+
+    @pytest.mark.parametrize("target, errmsg", [
+        (nfc.clf.LocalTarget('106F'), "unsupported target bitrate: '106F'"),
+    ])
+    def test_listen_ttf_target_not_supported(self, device, target, errmsg):
+        with pytest.raises(nfc.clf.UnsupportedTargetError) as excinfo:
+            device.listen_ttf(target, 1.0)
+        assert str(excinfo.value) == errmsg
+
+    @pytest.mark.parametrize("target, errmsg", [
+        (nfc.clf.LocalTarget('212F'),
+         "sensf_res is required"),
+        (nfc.clf.LocalTarget('212F', sensf_res=b''),
+         "sensf_res must be 19 byte"),
+    ])
+    def test_listen_ttf_target_value_error(self, device, target, errmsg):
+        with pytest.raises(ValueError) as excinfo:
+            device.listen_ttf(target, 1.0)
+        assert str(excinfo.value) == errmsg
+
+    def test_listen_ttf_timeout_waiting_for_activation(self, device):
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('4100'),
+            ACK(), RSP('4300'),
+            ACK(), RSP('4300'),
+            ACK(), RSP('490c000080000000'),
+        ]
+        target = nfc.clf.LocalTarget('212F')
+        target.sensf_res = HEX("01 0102030405060708 FFFFFFFFFFFFFFFF 12FC")
+        assert device.listen_ttf(target, 0.001) is None
+        assert device.chipset.transport.read.call_count == 8
+
+    @pytest.mark.parametrize("sensf_req", [
+        '00ffff0100', '00ffff0200', '0012fc0000',
+    ])
+    def test_listen_ttf_received_sensf_request(self, device, sensf_req):
+        sensf_res = '01 0102030405060708 FFFFFFFFFFFFFFFF 12FC'
+        device.chipset.transport.read.side_effect = [
+            ACK(), RSP('4100'),
+            ACK(), RSP('4300'),
+            ACK(), RSP('4300'),
+            ACK(), RSP('490c000000000000'),
+            ACK(), RSP('490c000000000000 060011220000'),
+            ACK(), RSP('490c000000000000 06' + sensf_req),
+            ACK(), RSP('490c000000000000 0a040102030405060708'),
+            ACK(), RSP('4300'),
+        ]
+        target = nfc.clf.LocalTarget('212F')
+        target.sensf_res = HEX(sensf_res)
+        target = device.listen_ttf(target, 1.0)
+        assert isinstance(target, nfc.clf.LocalTarget)
+        assert target.brty == '212F'
+        assert target.sensf_req == HEX(sensf_req)
+        assert target.sensf_res == HEX(sensf_res)
+        assert target.tt3_cmd == HEX('040102030405060708')
+        assert device.chipset.transport.read.call_count == 16
