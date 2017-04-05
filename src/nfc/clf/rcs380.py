@@ -726,18 +726,23 @@ class Device(device.Device):
 
     def listen_dep(self, target, timeout):
         log.debug("listen_dep for {0:.3f} sec".format(timeout))
-        assert target.sensf_res is not None
-        assert target.sens_res is not None
-        assert target.sdd_res is not None
-        assert target.sel_res is not None
-        assert target.atr_res is not None
+        print(target)
+
+        if not target.sens_res or len(target.sens_res) != 2:
+            raise ValueError("sens_res is required and must be 2 byte")
+        if not target.sel_res or len(target.sel_res) != 1:
+            raise ValueError("sel_res is required and must be 1 byte")
+        if not target.sdd_res or len(target.sdd_res) != 4:
+            raise ValueError("sdd_res is required and must be 4 byte")
+        if not target.sensf_res or len(target.sensf_res) < 19:
+            raise ValueError("sensf_res is required and must be 19 byte")
+        if not target.atr_res or len(target.atr_res) < 17:
+            raise ValueError("atr_res is required and must be >= 17 byte")
 
         nfca_params = target.sens_res + target.sdd_res[1:4] + target.sel_res
         nfcf_params = target.sensf_res[1:19]
         log.debug("nfca_params %s", hexlify(nfca_params))
         log.debug("nfcf_params %s", hexlify(nfcf_params))
-        assert len(nfca_params) == 6
-        assert len(nfcf_params) == 18
 
         self.chipset.tg_set_rf("106A")
         self.chipset.tg_set_protocol(self.chipset.tg_set_protocol_defaults)
@@ -776,21 +781,27 @@ class Device(device.Device):
         if brty == "106A" and len(data) > 1 and data[0] != 0xF0:
             # We received a Type A card activation, probably because
             # sel_res has indicated Type 2 or Type 4A Tag support.
-            target = nfc.clf.LocalTarget("106A", tag_cmd=data[:])
+            target = nfc.clf.LocalTarget("106A", tt2_cmd=data[:])
             target.sens_res = nfca_params[0:2]
             target.sdd_res = b'\x08' + nfca_params[2:5]
             target.sel_res = nfca_params[5:6]
             return target
 
-        try:
-            if brty == "106A":
-                assert data.pop(0) == 0xF0
-            assert len(data) == data.pop(0)
-            assert data.startswith(b"\xD4\x00")
-        except (IndexError, AssertionError):
-            return None
-
-        activation_params = nfca_params if brty == '106A' else nfcf_params
+        def verify_frame(brty, data, cmd_set):
+            offset = 1 if brty == "106A" else 0
+            try:
+                if brty == "106A" and data[0] != 0xF0:
+                    log.warn("rcvd frame has invalid start byte")
+                elif data[offset] != len(data) - offset:
+                    log.warn("rcvd frame has incorrect length byte")
+                elif data[offset+1] != 0xD4:
+                    log.warn("rcvd frame command byte 1 is not D4h")
+                elif data[offset+2] not in cmd_set:
+                    log.warn("rcvd frame command byte 2 not in %r" % cmd_set)
+                else:
+                    return data[offset+1:]
+            except (IndexError):
+                log.warn("rcvd frame with less than header size")
 
         def send_res_recv_req(brty, data, timeout):
             if data:
@@ -798,91 +809,85 @@ class Device(device.Device):
             args = {'transmit_data': data, 'recv_timeout': timeout}
             data = self.chipset.tg_comm_rf(**args)[7:]
             if timeout > 0:
-                try:
-                    if brty == "106A":
-                        assert data[0] == 0xF0, "invalid start byte"
-                        offset = 1
-                    else:
-                        offset = 0
-                    assert data[offset+0] == len(data),\
-                        "incorrect length byte"
-                    assert data[offset+1] == 0xD4,\
-                        "invalid command byte 1"
-                    assert data[offset+2] in (0, 4, 6, 8, 10),\
-                        "invalid command byte 2"
-                    return data[offset+1:]
-                except IndexError:
-                    raise AssertionError("insufficient receive data")
+                return verify_frame(brty, data, cmd_set=[0, 4, 6, 8, 10])
+
+        activation_params = nfca_params if brty == '106A' else nfcf_params
+        data = verify_frame(brty, data, cmd_set=[0])
 
         while data and data[1] == 0:
             try:
                 (atr_req, atr_res) = (data[:], target.atr_res)
                 log.debug("%s rcvd ATR_REQ %s", brty, hexlify(atr_req))
-                assert len(atr_req) >= 16, "ATR_REQ has less than 16 byte"
-                assert len(atr_req) <= 64, "ATR_REQ has more than 64 byte"
-                log.debug("%s send ATR_RES %s", brty, hexlify(atr_res))
-                data = send_res_recv_req(brty, atr_res, 1000)
-            except (CommunicationError, AssertionError) as error:
-                log.warning(str(error))
-                return None
+                if 16 <= len(atr_req) <= 64:
+                    log.debug("%s send ATR_RES %s", brty, hexlify(atr_res))
+                    data = send_res_recv_req(brty, atr_res, 1000)
+                else:
+                    log.warn("ATR_REQ must be 16 to 64 byte")
+                    data = None
+            except (CommunicationError) as error:
+                log.warn(str(error))
+                data = None
 
-        psl_req = dep_req = None
+        def send_dsl_res(brty, data):
+            dsl_res = b"\xD5\x09" + data[2:3]
+            log.debug("%s send DSL_RES %s", brty, hexlify(dsl_res))
+            send_res_recv_req(brty, dsl_res, 0)
+
+        def send_rls_res(brty, data):
+            rls_res = b"\xD5\x0B" + data[2:3]
+            log.debug("%s send RLS_RES %s", brty, hexlify(rls_res))
+            send_res_recv_req(brty, rls_res, 0)
+
+        def send_psl_res(brty, data):
+            (dsi, dri) = (data[3] >> 3 & 7, data[3] & 7)
+            if dsi != dri:
+                log.error("PSL_REQ DSI != DRI is not supported")
+                raise CommunicationError(b'\0\0\0\0')
+            (psl_req, psl_res) = (data[:], b"\xD5\x05" + data[2:3])
+            log.debug("%s send PSL_RES %s", brty, hexlify(psl_res))
+            send_res_recv_req(brty, psl_res, 0)
+            brty = ('106A', '212F', '424F')[dsi]
+            self.chipset.tg_set_rf(brty)
+            return brty, psl_req, psl_res
+
+        psl_req = None
         while data and data[1] in (4, 6, 8, 10):
             did = atr_req[12] if atr_req[12] > 0 else None
-            cmd = ("PSL", "DEP", "DSL", "RLS")[(data[1] - 4) // 2] + "_REQ"
-            log.debug("%s rcvd %s %s", brty, cmd, hexlify(data))
+            cmd = {4: "PSL", 6: "DEP", 8: "DSL", 10: "RLS"}.get(data[1], '???')
+            log.debug("%s rcvd %s_REQ %s", brty, cmd, hexlify(data))
             try:
-                if ((cmd == "DEP_REQ" and
-                     did == (data[3] if data[2] >> 2 & 1 else None))):
-                    dep_req = data[:]
-                    break
+                if cmd == "DEP":
+                    if did == (data[3] if data[2] >> 2 & 1 else None):
+                        target = nfc.clf.LocalTarget(brty, dep_req=data)
+                        target.atr_req = atr_req
+                        if psl_req:
+                            target.psl_req = psl_req
+                        if activation_params == nfca_params:
+                            target.sens_res = nfca_params[0:2]
+                            target.sdd_res = b'\x08' + nfca_params[2:5]
+                            target.sel_res = nfca_params[5:6]
+                        else:
+                            target.sensf_res = b"\x01" + nfcf_params
+                        return target
 
-                if ((cmd == "DSL_REQ" and
-                     did == (data[2] if len(data) > 2 else None))):
-                    data = b"\xD5\x09" + data[2:3]
-                    log.debug("%s send DSL_RES %s", brty, hexlify(data))
-                    send_res_recv_req(brty, data, 0)
-                    return None
+                elif cmd == "DSL":
+                    if did == (data[2] if len(data) > 2 else None):
+                        return send_dsl_res(brty, data)
 
-                if ((cmd == "RLS_REQ" and
-                     did == (data[2] if len(data) > 2 else None))):
-                    data = b"\xD5\x0B" + data[2:3]
-                    log.debug("%s send RLS_RES %s", brty, hexlify(data))
-                    send_res_recv_req(brty, data, 0)
-                    return None
+                elif cmd == "RLS":
+                    if did == (data[2] if len(data) > 2 else None):
+                        return send_rls_res(brty, data)
 
-                if ((cmd == "PSL_REQ" and
-                     did == (data[2] if data[2] > 0 else None))):
-                    dsi = data[3] >> 3 & 7
-                    dri = data[3] & 7
-                    if dsi != dri:
-                        log.warning("DSI != DRI is not supported")
-                        return None
-                    psl_req = data[:]
-                    psl_res = b"\xD5\x05" + data[2:3]
-                    log.debug("%s send PSL_RES %s", brty, hexlify(psl_res))
-                    send_res_recv_req(brty, psl_res, 0)
-                    brty = ('106A', '212F', '424F')[dsi]
-                    self.chipset.tg_set_rf(brty)
+                elif cmd == "PSL":  # pragma: no branch
+                    if did == (data[2] if data[2] > 0 else None):
+                        brty, psl_req, psl_res = send_psl_res(brty, data)
 
                 log.debug("%s wait recv 1000 ms", brty)
                 data = send_res_recv_req(brty, None, 1000)
-            except (CommunicationError, AssertionError) as error:
+
+            except (CommunicationError) as error:
                 log.warning(str(error))
                 return None
-        else:  # while data and data[1] in (4,6,8,10)
-            return None
-
-        target = nfc.clf.LocalTarget(brty, atr_req=atr_req, dep_req=dep_req)
-        if psl_req:
-            target.psl_req = psl_req
-        if activation_params == nfca_params:
-            target.sens_res = nfca_params[0:2]
-            target.sdd_res = b'\x08' + nfca_params[2:5]
-            target.sel_res = nfca_params[5:6]
-        else:
-            target.sensf_res = b"\x01" + nfcf_params
-        return target
 
     def get_max_send_data_size(self, target):
         return 290
