@@ -33,6 +33,30 @@ def RSP106A(hexstr):
     return FRAME('106A', hexstr)
 
 
+def CMD106B(hexstr):
+    return FRAME('106B', hexstr)
+
+
+def RSP106B(hexstr):
+    return FRAME('106B', hexstr)
+
+
+def CMD212F(hexstr):
+    return FRAME('212F', hexstr)
+
+
+def RSP212F(hexstr):
+    return FRAME('212F', hexstr)
+
+
+def CMD424F(hexstr):
+    return FRAME('424F', hexstr)
+
+
+def RSP424F(hexstr):
+    return FRAME('424F', hexstr)
+
+
 def CALLS(exchange):
     return [call(*cmd) for cmd, rsp in exchange]
 
@@ -45,6 +69,8 @@ def device(mocker):
     mocker.patch('nfc.clf.udp.socket.socket')
     device = nfc.clf.udp.Device('localhost', 54321)
     assert device.addr == ('127.0.0.1', 54321)
+    device._device_name = "IP-Stack"
+    device._chipset_name = "UDP"
     return device
 
 
@@ -238,3 +264,122 @@ class TestDevice(object):
         with pytest.raises(nfc.clf.UnsupportedTargetError) as excinfo:
             device.sense_tta(nfc.clf.RemoteTarget('106B'))
         assert str(excinfo.value) == "unsupported bitrate 106B"
+
+    def test_sense_ttb_with_no_target_found(self, device):
+        device.socket.sendto.side_effect = [len(CMD106B('050010')[0])]
+        device.socket.recvfrom.side_effect = [nfc.clf.TimeoutError]
+        assert device.sense_ttb(nfc.clf.RemoteTarget('106B')) is None
+        device.socket.sendto.assert_called_once_with(*CMD106B('050010'))
+
+    def test_sense_ttb_with_tt4_target_found(self, device):
+        sensb_res = '50E8253EEC00000011008185'
+        exchange = [(CMD106B('050010'), RSP106B(sensb_res))]
+        device.socket.sendto.side_effect = [len(cmd[0]) for cmd, _ in exchange]
+        device.socket.recvfrom.side_effect = [rsp for cmd, rsp in exchange]
+        target = device.sense_ttb(nfc.clf.RemoteTarget('106B'))
+        assert isinstance(target, nfc.clf.RemoteTarget)
+        assert target.sensb_res == HEX(sensb_res)
+        assert device.socket.sendto.mock_calls == CALLS(exchange)
+
+    def test_sense_ttb_with_receive_errors(self, device):
+        exchange = [(CMD106B('050010'), RSP106B(''))]
+        device.socket.sendto.side_effect = [len(cmd[0]) for cmd, _ in exchange]
+        device.socket.recvfrom.side_effect = [rsp for cmd, rsp in exchange]
+        assert device.sense_ttb(nfc.clf.RemoteTarget('106B')) is None
+        assert device.socket.sendto.mock_calls == CALLS(exchange)
+
+    @pytest.mark.parametrize('sensb_res', [
+        '51E8253EEC00000011008185', '50E8253EEC000000110081',
+    ])
+    def test_sense_ttb_with_response_errors(self, device, sensb_res):
+        exchange = [(CMD106B('050010'), RSP106B(sensb_res))]
+        device.socket.sendto.side_effect = [len(cmd[0]) for cmd, _ in exchange]
+        device.socket.recvfrom.side_effect = [rsp for cmd, rsp in exchange]
+        assert device.sense_ttb(nfc.clf.RemoteTarget('106B')) is None
+        assert device.socket.sendto.mock_calls == CALLS(exchange)
+
+    def test_sense_ttb_with_invalid_target(self, device):
+        with pytest.raises(nfc.clf.UnsupportedTargetError) as excinfo:
+            device.sense_ttb(nfc.clf.RemoteTarget('106A'))
+        assert str(excinfo.value) == "unsupported bitrate 106A"
+
+    def test_sense_ttf_with_no_target_found(self, device):
+        device.socket.sendto.side_effect = [len(CMD212F('0600ffff0100')[0])]
+        device.socket.recvfrom.side_effect = [nfc.clf.TimeoutError]
+        assert device.sense_ttf(nfc.clf.RemoteTarget('212F')) is None
+        device.socket.sendto.assert_called_once_with(*CMD212F('0600ffff0100'))
+
+    def test_sense_ttf_with_tt3_target_found(self, device):
+        sensf_res = '14 01 01010701260cca02 0f0d23042f7783ff 12fc'
+        exchange = [(CMD212F('0600ffff0100'), RSP212F(sensf_res))]
+        device.socket.sendto.side_effect = [len(cmd[0]) for cmd, _ in exchange]
+        device.socket.recvfrom.side_effect = [rsp for cmd, rsp in exchange]
+        target = device.sense_ttf(nfc.clf.RemoteTarget('212F'))
+        assert isinstance(target, nfc.clf.RemoteTarget)
+        assert target.brty == '212F'
+        assert target.sensf_res == HEX(sensf_res)[1:]
+        assert device.socket.sendto.mock_calls == CALLS(exchange)
+
+    @pytest.mark.parametrize("tg, sensf_req, sensf_res", [
+        (nfc.clf.RemoteTarget('212F', sensf_req=None),
+         '0600ffff0100', '140101010701260cca020f0d23042f7783ff12fc'),
+        (nfc.clf.RemoteTarget('212F', sensf_req=HEX('00ffff0100')),
+         '0600ffff0100', '140101010701260cca020f0d23042f7783ff12fc'),
+        (nfc.clf.RemoteTarget('212F', sensf_req=HEX('00ffff0000')),
+         '0600ffff0000', '120101010701260cca020f0d23042f7783ff'),
+    ])
+    def test_sense_ttf_with_sensf_req(self, device, tg, sensf_req, sensf_res):
+        exchange = [(CMD212F(sensf_req), RSP212F(sensf_res))]
+        device.socket.sendto.side_effect = [len(cmd[0]) for cmd, _ in exchange]
+        device.socket.recvfrom.side_effect = [rsp for cmd, rsp in exchange]
+        target = device.sense_ttf(tg)
+        assert isinstance(target, nfc.clf.RemoteTarget)
+        assert target.brty == tg.brty
+        assert target.sensf_res == HEX(sensf_res)[1:]
+        assert device.socket.sendto.mock_calls == CALLS(exchange)
+
+    @pytest.mark.parametrize("brty, rf_settings", [
+        ('212F', '01010f01'),
+        ('424F', '01020f02'),
+    ])
+    def test_sense_ttf_with_bitrate_type(self, device, brty, rf_settings):
+        sensf_res = '14 01 01010701260cca020f0d23042f7783ff12fc'
+        exchange = [(FRAME(brty, '0600ffff0100'), FRAME(brty, sensf_res))]
+        device.socket.sendto.side_effect = [len(cmd[0]) for cmd, _ in exchange]
+        device.socket.recvfrom.side_effect = [rsp for cmd, rsp in exchange]
+        target = device.sense_ttf(nfc.clf.RemoteTarget(brty))
+        assert isinstance(target, nfc.clf.RemoteTarget)
+        assert target.brty == brty
+        assert target.sensf_res == HEX(sensf_res)[1:]
+        assert device.socket.sendto.mock_calls == CALLS(exchange)
+
+    def test_sense_ttf_with_receive_errors(self, device):
+        exchange = [(CMD212F('0600ffff0100'), RSP212F(''))]
+        device.socket.sendto.side_effect = [len(cmd[0]) for cmd, _ in exchange]
+        device.socket.recvfrom.side_effect = [rsp for cmd, rsp in exchange]
+        assert device.sense_ttf(nfc.clf.RemoteTarget('212F')) is None
+        assert device.socket.sendto.mock_calls == CALLS(exchange)
+
+    @pytest.mark.parametrize("sensf_res", [
+        '110101010701260cca020f0d23042f7783',
+        '130101010701260cca020f0d23042f7783ff12fc',
+        '140201010701260cca020f0d23042f7783ff12fc',
+    ])
+    def test_sense_ttf_with_response_errors(self, device, sensf_res):
+        exchange = [(CMD212F('0600ffff0100'), RSP212F(sensf_res))]
+        device.socket.sendto.side_effect = [len(cmd[0]) for cmd, _ in exchange]
+        device.socket.recvfrom.side_effect = [rsp for cmd, rsp in exchange]
+        assert device.sense_ttf(nfc.clf.RemoteTarget('212F')) is None
+        assert device.socket.sendto.mock_calls == CALLS(exchange)
+
+    def test_sense_ttf_with_invalid_target(self, device):
+        with pytest.raises(nfc.clf.UnsupportedTargetError) as excinfo:
+            device.sense_ttf(nfc.clf.RemoteTarget('106A'))
+        assert str(excinfo.value) == "unsupported bitrate 106A"
+
+    def test_sense_dep_is_not_supported(self, device):
+        with pytest.raises(nfc.clf.UnsupportedTargetError) as excinfo:
+            device.sense_dep(nfc.clf.RemoteTarget('106A'))
+        assert str(excinfo.value) == (
+            "IP-Stack UDP at 127.0.0.1:54321 does not "
+            "support sense for active DEP Target")

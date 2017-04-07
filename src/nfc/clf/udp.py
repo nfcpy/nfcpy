@@ -59,6 +59,7 @@ class Device(nfc.clf.device.Device):
     def __init__(self, host, port):
         host, port = socket.getnameinfo((host, port), socket.NI_NUMERICHOST)
         self.addr = (host, int(port))
+        self._path = "%s:%s" % (host, port)
         self.socket = None
         self._create_socket()
 
@@ -168,7 +169,7 @@ class Device(nfc.clf.device.Device):
         try:
             self._send_data(target.brty, sensb_req, self.addr)
             brty, sensb_res, addr = self._recv_data(1.0, target.brty)
-        except nfc.clf.TimeoutError:
+        except nfc.clf.CommunicationError:
             return None
 
         if len(sensb_res) >= 12 and sensb_res[0] == 0x50:
@@ -194,7 +195,7 @@ class Device(nfc.clf.device.Device):
         try:
             self._send_data(target.brty, sensf_req, self.addr)
             brty, data, addr = self._recv_data(1.0, target.brty)
-        except nfc.clf.TimeoutError:
+        except nfc.clf.CommunicationError:
             return None
 
         if len(data) >= 18 and data[0] == len(data) and data[1] == 1:
