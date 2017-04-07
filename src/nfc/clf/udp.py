@@ -60,6 +60,7 @@ class Device(nfc.clf.device.Device):
         host, port = socket.getnameinfo((host, port), socket.NI_NUMERICHOST)
         self.addr = (host, int(port))
         self.socket = None
+        self._create_socket()
 
     def close(self):
         self.mute()
@@ -534,7 +535,10 @@ class Device(nfc.clf.device.Device):
                 log.log(logging.DEBUG-1, "<<< %s from %s:%d", data, *addr)
                 if data.startswith("RFOFF"):
                     raise nfc.clf.BrokenLinkError("RFOFF")
-                brty, data = data.split()
+                try:
+                    brty, data = data.split()
+                except ValueError:
+                    raise nfc.clf.TransmissionError("no data")
                 data = bytearray.fromhex(data)
                 self.rcvd_data += len(data)
                 if brty in brty_list:

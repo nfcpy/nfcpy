@@ -39,7 +39,9 @@ def CALLS(exchange):
 
 @pytest.fixture()  # noqa: F811
 def device(mocker):
+    nameinfo = ('127.0.0.1', '54321')
     mocker.patch('nfc.clf.udp.select.select').return_value = ([1], [], [])
+    mocker.patch('nfc.clf.udp.socket.getnameinfo').return_value = nameinfo
     mocker.patch('nfc.clf.udp.socket.socket')
     device = nfc.clf.udp.Device('localhost', 54321)
     assert device.addr == ('127.0.0.1', 54321)
@@ -236,19 +238,3 @@ class TestDevice(object):
         with pytest.raises(nfc.clf.UnsupportedTargetError) as excinfo:
             device.sense_tta(nfc.clf.RemoteTarget('106B'))
         assert str(excinfo.value) == "unsupported bitrate 106B"
-
-    #
-    # LISTEN
-    #
-
-    #
-    # SEND RESPONSE RECEIVE COMMAND
-    #
-
-    #
-    # SEND COMMAND RECEIVE RESPONSE
-    #
-
-@pytest.mark.skip
-def test_driver_init(transport):
-    pass
