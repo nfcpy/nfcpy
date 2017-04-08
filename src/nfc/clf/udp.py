@@ -240,6 +240,8 @@ class Device(nfc.clf.device.Device):
                     brty, data, addr = self._recv_data(wait, target.brty)
                 except nfc.clf.TimeoutError:
                     return None
+                except nfc.clf.CommunicationError:
+                    continue
             else:
                 (brty, data, addr), init = init, None
             if data == "\x26":
@@ -271,7 +273,7 @@ class Device(nfc.clf.device.Device):
                 self._send_data(brty, sel_res, addr)
             elif data == "\x95\x70" + sdd_res[10:15]:
                 log.debug("rcvd SEL_REQ CL3 %s", hexlify(data))
-                sel_res[0] = (sel_res[0] & 0xFB)
+                sel_res[0] = (sel_res[0] & 0xFB) | (len(sdd_res) > 15) << 2
                 log.debug("send SEL_RES %s", hexlify(sel_res))
                 self._send_data(brty, sel_res, addr)
             elif sel_res[0] & 0b00000100 == 0:
@@ -307,6 +309,8 @@ class Device(nfc.clf.device.Device):
                 brty, data, addr = self._recv_data(wait, target.brty)
             except nfc.clf.TimeoutError:
                 return None
+            except nfc.clf.CommunicationError:
+                continue
             if data and len(data) == 3 and data.startswith('\x05'):
                 req = "ALLB_REQ" if data[1] & 0x08 else "SENSB_REQ"
                 sensb_req = data
@@ -341,6 +345,8 @@ class Device(nfc.clf.device.Device):
                     brty, data, addr = self._recv_data(wait, target.brty)
                 except nfc.clf.TimeoutError:
                     return None
+                except nfc.clf.CommunicationError:
+                    continue
             else:
                 (brty, data, addr), init = init, None
             if data and len(data) == data[0]:
@@ -357,6 +363,8 @@ class Device(nfc.clf.device.Device):
                             data += "\x00" + chr(1 << (target.brty == "424F"))
                         data = chr(len(data)+1) + data
                         self._send_data(brty, data, addr)
+                    else:
+                        sensf_req = sensf_res = None
                 elif sensf_req and sensf_res:
                     if data[2:10] == target.sensf_res[1:9]:
                         target = nfc.clf.LocalTarget(brty, _addr=addr)
