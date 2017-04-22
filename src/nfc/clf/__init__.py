@@ -607,9 +607,10 @@ class ContactlessFrontend(object):
                 tag = nfc.tag.activate(self, target)
                 if tag is not None:
                     log.debug("connected to {0}".format(tag))
+                    on_connect_result = options['on-connect'](tag)
                     if options['beep-on-connect']:
                         self.device.turn_on_led_and_buzzer()
-                    if options['on-connect'](tag):
+                    if on_connect_result:
                         while not terminate() and tag.is_present:
                             time.sleep(0.1)
                         self.device.turn_off_led_and_buzzer()
