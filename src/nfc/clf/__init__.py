@@ -248,9 +248,9 @@ class ContactlessFrontend(object):
            beer.
 
         'beep-on-connect': boolean
-            If the device supports beeping or flashing an LED, 
-            automatically perform this functionality when a tag is 
-            successfully detected AND the 'on-connect' function 
+            If the device supports beeping or flashing an LED,
+            automatically perform this functionality when a tag is
+            successfully detected AND the 'on-connect' function
             returns a true value. Defaults to True.
 
         .. sourcecode:: python
