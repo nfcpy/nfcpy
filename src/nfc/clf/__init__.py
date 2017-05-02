@@ -248,9 +248,10 @@ class ContactlessFrontend(object):
            beer.
 
         'beep-on-connect': boolean
-            If the device supports beeping or flashing an LED, automatically
-            perform this functionality when a tag is successfully detected.
-            Defaults to True.
+            If the device supports beeping or flashing an LED, 
+            automatically perform this functionality when a tag is 
+            successfully detected AND the 'on-connect' function 
+            returns a true value. Defaults to True.
 
         .. sourcecode:: python
 
@@ -607,15 +608,14 @@ class ContactlessFrontend(object):
                 tag = nfc.tag.activate(self, target)
                 if tag is not None:
                     log.debug("connected to {0}".format(tag))
-                    if options['beep-on-connect']:
-                        self.device.turn_on_led_and_buzzer()
                     if options['on-connect'](tag):
+                        if options['beep-on-connect']:
+                            self.device.turn_on_led_and_buzzer()
                         while not terminate() and tag.is_present:
                             time.sleep(0.1)
                         self.device.turn_off_led_and_buzzer()
                         return options['on-release'](tag)
                     else:
-                        self.device.turn_off_led_and_buzzer()
                         return tag
 
     def _llcp_connect(self, options, terminate):
