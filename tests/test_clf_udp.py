@@ -604,7 +604,7 @@ class TestDevice(object):
     def test_listen_ttf_dep_activated(self, device):
         atr_req_frame = '13 D400 30313233343536373839 00000002 aabb'
         device.socket.sendto.side_effect = [
-            len('106B 120101010701260cca020f0d23042f7783ff')
+            len('212F 120101010701260cca020f0d23042f7783ff')
         ]
         device.socket.recvfrom.side_effect = [
             CMD212F('060000000000'), CMD212F('0600ffff0000'),
@@ -636,3 +636,386 @@ class TestDevice(object):
         device.socket.bind.side_effect \
             = nfc.clf.udp.socket.error(nfc.clf.udp.errno.EADDRINUSE, "test")
         assert device.listen_ttf(nfc.clf.LocalTarget('212F'), 1.0) is None
+
+    def test_listen_dep_activated_tta_passive(self, device):
+        atr_req_frame = '13 D400 01fe303132333435ffff 00000002 aabb'
+        dep_req_frame = '06 D40600 0000'
+        device.socket.sendto.side_effect = [
+            len('106A 0000'),
+            len('106A 0102030404'),
+            len('106A 60'),
+            len('106A f012d501d0d1d2d3d4d5d6d7d8d90000000800'),
+        ]
+        device.socket.recvfrom.side_effect = [
+            CMD106A('000000'),  # garbage
+            CMD106A('26'),
+            CMD106A('9320'),
+            CMD106A('93700102030404'),
+            CMD106A('f0' + atr_req_frame),
+            CMD106A('f0' + dep_req_frame),
+        ]
+        target = nfc.clf.LocalTarget()
+        target.sensf_res = HEX('01 01fe303132333435 0f0d23042f7783ff ffff')
+        target.sens_res = HEX('0000')
+        target.sdd_res = HEX('01020304')
+        target.sel_res = HEX('60')
+        target.atr_res = HEX('D501 d0d1d2d3d4d5d6d7d8d9 0000000800')
+        target = device.listen_dep(target, 1.0)
+        assert isinstance(target, nfc.clf.LocalTarget)
+        assert target.brty == '106A'
+        assert target.atr_req == HEX(atr_req_frame)[1:]
+        assert target.dep_req == HEX(dep_req_frame)[1:]
+        assert device.socket.sendto.mock_calls == [call(*_) for _ in [
+            RSP106A('0000'),
+            RSP106A('0102030404'),
+            RSP106A('60'),
+            RSP106A('f012d501d0d1d2d3d4d5d6d7d8d90000000800'),
+        ]]
+
+    def test_listen_dep_activated_tta_active(self, device):
+        atr_req_frame = '13 D400 01fe303132333435ffff 00000002 aabb'
+        dep_req_frame = '06 D40600 0000'
+        device.socket.sendto.side_effect = [
+            len('106A f012d501d0d1d2d3d4d5d6d7d8d90000000800'),
+        ]
+        device.socket.recvfrom.side_effect = [
+            CMD106A('f0' + atr_req_frame),
+            CMD106A('f0' + dep_req_frame),
+        ]
+        target = nfc.clf.LocalTarget()
+        target.sensf_res = HEX('01 01fe303132333435 0f0d23042f7783ff ffff')
+        target.sens_res = HEX('0000')
+        target.sdd_res = HEX('01020304')
+        target.sel_res = HEX('60')
+        target.atr_res = HEX('D501 d0d1d2d3d4d5d6d7d8d9 0000000800')
+        target = device.listen_dep(target, 1.0)
+        assert isinstance(target, nfc.clf.LocalTarget)
+        assert target.brty == '106A'
+        assert target.atr_req == HEX(atr_req_frame)[1:]
+        assert target.dep_req == HEX(dep_req_frame)[1:]
+        assert device.socket.sendto.mock_calls == [call(*_) for _ in [
+            RSP106A('f012d501d0d1d2d3d4d5d6d7d8d90000000800'),
+        ]]
+
+    def test_listen_dep_activated_ttf_passive(self, device):
+        atr_req_frame = '13 D400 01fe303132333435ffff 00000002 aabb'
+        dep_req_frame = '06 D40600 0000'
+        device.socket.sendto.side_effect = [
+            len('424F 120101010701260cca020f0d23042f7783ff'),
+            len('424F 12d501d0d1d2d3d4d5d6d7d8d90000000800'),
+        ]
+        device.socket.recvfrom.side_effect = [
+            CMD424F('000000'),  # garbage
+            CMD424F('030000'),  # garbage
+            CMD424F('0600ffff0000'),
+            CMD424F(atr_req_frame),
+            CMD424F(dep_req_frame),
+        ]
+        target = nfc.clf.LocalTarget()
+        target.sensf_res = HEX('01 01fe303132333435 0f0d23042f7783ff ffff')
+        target.sens_res = HEX('0000')
+        target.sdd_res = HEX('01020304')
+        target.sel_res = HEX('60')
+        target.atr_res = HEX('D501 d0d1d2d3d4d5d6d7d8d9 0000000800')
+        target = device.listen_dep(target, 1.0)
+        assert isinstance(target, nfc.clf.LocalTarget)
+        assert target.brty == '424F'
+        assert target.atr_req == HEX(atr_req_frame)[1:]
+        assert target.dep_req == HEX(dep_req_frame)[1:]
+        assert device.socket.sendto.mock_calls == [call(*_) for _ in [
+            RSP424F('12 01 01fe303132333435 0f0d23042f7783ff'),
+            RSP424F('12 d501 d0d1d2d3d4d5d6d7d8d9 0000000800'),
+        ]]
+
+    def test_listen_dep_activated_ttf_active(self, device):
+        atr_req_frame = '13 D400 01fe303132333435ffff 00000002 aabb'
+        dep_req_frame = '06 D40600 0000'
+        device.socket.sendto.side_effect = [
+            len('424F 12d501d0d1d2d3d4d5d6d7d8d90000000800'),
+        ]
+        device.socket.recvfrom.side_effect = [
+            CMD424F(atr_req_frame),
+            CMD424F(dep_req_frame),
+        ]
+        target = nfc.clf.LocalTarget()
+        target.sensf_res = HEX('01 01fe303132333435 0f0d23042f7783ff ffff')
+        target.sens_res = HEX('0000')
+        target.sdd_res = HEX('01020304')
+        target.sel_res = HEX('60')
+        target.atr_res = HEX('D501 d0d1d2d3d4d5d6d7d8d9 0000000800')
+        target = device.listen_dep(target, 1.0)
+        assert isinstance(target, nfc.clf.LocalTarget)
+        assert target.brty == '424F'
+        assert target.atr_req == HEX(atr_req_frame)[1:]
+        assert target.dep_req == HEX(dep_req_frame)[1:]
+        assert device.socket.sendto.mock_calls == [call(*_) for _ in [
+            RSP424F('12 d501 d0d1d2d3d4d5d6d7d8d9 0000000800'),
+        ]]
+
+    def test_listen_dep_activated_106_psl_106(self, device):
+        atr_req_frame = '13 D400 01fe303132333435ffff 00000002 aabb'
+        dep_req_frame = '06 D40600 0000'
+        device.socket.sendto.side_effect = [
+            len('106A f012d501d0d1d2d3d4d5d6d7d8d90000000800'),
+            len('106A f004d50500'),
+        ]
+        device.socket.recvfrom.side_effect = [
+            CMD106A('f0' + atr_req_frame),
+            CMD106A('f0' + '06D404000003'),
+            CMD106A('f0' + dep_req_frame),
+        ]
+        target = nfc.clf.LocalTarget()
+        target.sensf_res = HEX('01 01fe303132333435 0f0d23042f7783ff ffff')
+        target.sens_res = HEX('0000')
+        target.sdd_res = HEX('01020304')
+        target.sel_res = HEX('60')
+        target.atr_res = HEX('D501 d0d1d2d3d4d5d6d7d8d9 0000000800')
+        target = device.listen_dep(target, 1.0)
+        assert isinstance(target, nfc.clf.LocalTarget)
+        assert target.brty == '106A'
+        assert target.atr_req == HEX(atr_req_frame)[1:]
+        assert target.dep_req == HEX(dep_req_frame)[1:]
+        assert device.socket.sendto.mock_calls == [call(*_) for _ in [
+            RSP106A('f012d501d0d1d2d3d4d5d6d7d8d90000000800'),
+            RSP106A('f004d50500'),
+        ]]
+
+    def test_listen_dep_activated_106_psl_424(self, device):
+        atr_req_frame = '13 D400 01fe303132333435ffff 00000002 aabb'
+        dep_req_frame = '06 D40600 0000'
+        device.socket.sendto.side_effect = [
+            len('106A f012d501d0d1d2d3d4d5d6d7d8d90000000800'),
+            len('106A f004d50500'),
+        ]
+        device.socket.recvfrom.side_effect = [
+            CMD106A('f0' + atr_req_frame),
+            CMD106A('f0' + '06D404001203'),
+            CMD424F(dep_req_frame),
+        ]
+        target = nfc.clf.LocalTarget()
+        target.sensf_res = HEX('01 01fe303132333435 0f0d23042f7783ff ffff')
+        target.sens_res = HEX('0000')
+        target.sdd_res = HEX('01020304')
+        target.sel_res = HEX('60')
+        target.atr_res = HEX('D501 d0d1d2d3d4d5d6d7d8d9 0000000800')
+        target = device.listen_dep(target, 1.0)
+        assert isinstance(target, nfc.clf.LocalTarget)
+        assert target.brty == '424F'
+        assert target.atr_req == HEX(atr_req_frame)[1:]
+        assert target.dep_req == HEX(dep_req_frame)[1:]
+        assert device.socket.sendto.mock_calls == [call(*_) for _ in [
+            RSP106A('f012d501d0d1d2d3d4d5d6d7d8d90000000800'),
+            RSP106A('f004d50500'),
+        ]]
+
+    def test_listen_dep_activated_212_psl_424(self, device):
+        atr_req_frame = '13 D400 01fe303132333435ffff 00000002 aabb'
+        dep_req_frame = '06 D40600 0000'
+        device.socket.sendto.side_effect = [
+            len('212F 12d501d0d1d2d3d4d5d6d7d8d90000000800'),
+            len('212F 04d50500'),
+        ]
+        device.socket.recvfrom.side_effect = [
+            CMD212F(atr_req_frame),
+            CMD212F('06D404001203'),
+            CMD424F(dep_req_frame),
+        ]
+        target = nfc.clf.LocalTarget()
+        target.sensf_res = HEX('01 01fe303132333435 0f0d23042f7783ff ffff')
+        target.sens_res = HEX('0000')
+        target.sdd_res = HEX('01020304')
+        target.sel_res = HEX('60')
+        target.atr_res = HEX('D501 d0d1d2d3d4d5d6d7d8d9 0000000800')
+        target = device.listen_dep(target, 1.0)
+        assert isinstance(target, nfc.clf.LocalTarget)
+        assert target.brty == '424F'
+        assert target.atr_req == HEX(atr_req_frame)[1:]
+        assert target.dep_req == HEX(dep_req_frame)[1:]
+        assert device.socket.sendto.mock_calls == [call(*_) for _ in [
+            RSP212F('12d501d0d1d2d3d4d5d6d7d8d90000000800'),
+            RSP212F('04d50500'),
+        ]]
+
+    def test_listen_dep_activated_tta_deselect(self, device):
+        atr_req_frame = '13 D400 01fe303132333435ffff 00000002 aabb'
+        device.socket.sendto.side_effect = [
+            len('106A f012d501d0d1d2d3d4d5d6d7d8d90000000800'),
+            len('106A f003d509'),
+        ]
+        device.socket.recvfrom.side_effect = [
+            CMD106A('f0' + atr_req_frame),
+            CMD106A('f0' + '03d408'),
+        ]
+        target = nfc.clf.LocalTarget()
+        target.sensf_res = HEX('01 01fe303132333435 0f0d23042f7783ff ffff')
+        target.sens_res = HEX('0000')
+        target.sdd_res = HEX('01020304')
+        target.sel_res = HEX('60')
+        target.atr_res = HEX('D501 d0d1d2d3d4d5d6d7d8d9 0000000800')
+        assert device.listen_dep(target, 1.0) is None
+        assert device.socket.sendto.mock_calls == [call(*_) for _ in [
+            RSP106A('f0 12 d501d0d1d2d3d4d5d6d7d8d90000000800'),
+            RSP106A('f0 03 d509'),
+        ]]
+
+    def test_listen_dep_activated_tta_release(self, device):
+        atr_req_frame = '13 D400 01fe303132333435ffff 00000002 aabb'
+        device.socket.sendto.side_effect = [
+            len('106A f012d501d0d1d2d3d4d5d6d7d8d90000000800'),
+            len('106A f003d509'),
+        ]
+        device.socket.recvfrom.side_effect = [
+            CMD106A('f0' + atr_req_frame),
+            CMD106A('f0' + '03d40a'),
+        ]
+        target = nfc.clf.LocalTarget()
+        target.sensf_res = HEX('01 01fe303132333435 0f0d23042f7783ff ffff')
+        target.sens_res = HEX('0000')
+        target.sdd_res = HEX('01020304')
+        target.sel_res = HEX('60')
+        target.atr_res = HEX('D501 d0d1d2d3d4d5d6d7d8d9 0000000800')
+        assert device.listen_dep(target, 1.0) is None
+        assert device.socket.sendto.mock_calls == [call(*_) for _ in [
+            RSP106A('f0 12 d501d0d1d2d3d4d5d6d7d8d90000000800'),
+            RSP106A('f0 03 d50b'),
+        ]]
+
+    def test_listen_dep_activated_ttf_deselect(self, device):
+        atr_req_frame = '13 D400 01fe303132333435ffff 00000002 aabb'
+        device.socket.sendto.side_effect = [
+            len('424F 12d501d0d1d2d3d4d5d6d7d8d90000000800'),
+            len('424F 03d509'),
+        ]
+        device.socket.recvfrom.side_effect = [
+            CMD424F(atr_req_frame),
+            CMD424F('03d408'),
+        ]
+        target = nfc.clf.LocalTarget()
+        target.sensf_res = HEX('01 01fe303132333435 0f0d23042f7783ff ffff')
+        target.sens_res = HEX('0000')
+        target.sdd_res = HEX('01020304')
+        target.sel_res = HEX('60')
+        target.atr_res = HEX('D501 d0d1d2d3d4d5d6d7d8d9 0000000800')
+        assert device.listen_dep(target, 1.0) is None
+        assert device.socket.sendto.mock_calls == [call(*_) for _ in [
+            RSP424F('12 d501 d0d1d2d3d4d5d6d7d8d9 0000000800'),
+            RSP424F('03 d509'),
+        ]]
+
+    def test_listen_dep_activated_ttf_release(self, device):
+        atr_req_frame = '13 D400 01fe303132333435ffff 00000002 aabb'
+        device.socket.sendto.side_effect = [
+            len('424F 12d501d0d1d2d3d4d5d6d7d8d90000000800'),
+            len('424F 03d50b'),
+        ]
+        device.socket.recvfrom.side_effect = [
+            CMD424F(atr_req_frame),
+            CMD424F('03d40a'),
+        ]
+        target = nfc.clf.LocalTarget()
+        target.sensf_res = HEX('01 01fe303132333435 0f0d23042f7783ff ffff')
+        target.sens_res = HEX('0000')
+        target.sdd_res = HEX('01020304')
+        target.sel_res = HEX('60')
+        target.atr_res = HEX('D501 d0d1d2d3d4d5d6d7d8d9 0000000800')
+        assert device.listen_dep(target, 1.0) is None
+        assert device.socket.sendto.mock_calls == [call(*_) for _ in [
+            RSP424F('12 d501 d0d1d2d3d4d5d6d7d8d9 0000000800'),
+            RSP424F('03 d50b'),
+        ]]
+
+    @pytest.mark.parametrize('garbage', [
+        '030000', '000000'
+    ])
+    def test_listen_dep_activated_ttf_garbage(self, device, garbage):
+        atr_req_frame = '13 D400 01fe303132333435ffff 00000002 aabb'
+        device.socket.sendto.side_effect = [
+            len('424F 12d501d0d1d2d3d4d5d6d7d8d90000000800'),
+        ]
+        device.socket.recvfrom.side_effect = [
+            CMD424F(atr_req_frame),
+            CMD424F(garbage),
+        ]
+        target = nfc.clf.LocalTarget()
+        target.sensf_res = HEX('01 01fe303132333435 0f0d23042f7783ff ffff')
+        target.sens_res = HEX('0000')
+        target.sdd_res = HEX('01020304')
+        target.sel_res = HEX('60')
+        target.atr_res = HEX('D501 d0d1d2d3d4d5d6d7d8d9 0000000800')
+        assert device.listen_dep(target, 1.0) is None
+        assert device.socket.sendto.mock_calls == [call(*_) for _ in [
+            RSP424F('12 d501 d0d1d2d3d4d5d6d7d8d9 0000000800'),
+        ]]
+
+    @pytest.mark.parametrize('garbage', [
+        'f0030000', 'f0000000', 'ff000000'
+    ])
+    def test_listen_dep_activated_tta_garbage(self, device, garbage):
+        atr_req_frame = 'F0 13 D400 01fe303132333435ffff 00000002 aabb'
+        device.socket.sendto.side_effect = [
+            len('106A f012d501d0d1d2d3d4d5d6d7d8d90000000800'),
+        ]
+        device.socket.recvfrom.side_effect = [
+            CMD106A(atr_req_frame),
+            CMD106A(garbage),
+        ]
+        target = nfc.clf.LocalTarget()
+        target.sensf_res = HEX('01 01fe303132333435 0f0d23042f7783ff ffff')
+        target.sens_res = HEX('0000')
+        target.sdd_res = HEX('01020304')
+        target.sel_res = HEX('60')
+        target.atr_res = HEX('D501 d0d1d2d3d4d5d6d7d8d9 0000000800')
+        assert device.listen_dep(target, 1.0) is None
+        assert device.socket.sendto.mock_calls == [call(*_) for _ in [
+            RSP106A('f0 12 d501 d0d1d2d3d4d5d6d7d8d9 0000000800'),
+        ]]
+
+    @pytest.mark.parametrize('garbage', [
+        '010000', '000000'
+    ])
+    def test_listen_dep_activated_106_psl_garbage(self, device, garbage):
+        atr_req_frame = '13 D400 01fe303132333435ffff 00000002 aabb'
+        device.socket.sendto.side_effect = [
+            len('106A f012d501d0d1d2d3d4d5d6d7d8d90000000800'),
+            len('106A f004d50500'),
+        ]
+        device.socket.recvfrom.side_effect = [
+            CMD106A('f0' + atr_req_frame),
+            CMD106A('f0' + '06D404001203'),
+            CMD424F(garbage),
+        ]
+        target = nfc.clf.LocalTarget()
+        target.sensf_res = HEX('01 01fe303132333435 0f0d23042f7783ff ffff')
+        target.sens_res = HEX('0000')
+        target.sdd_res = HEX('01020304')
+        target.sel_res = HEX('60')
+        target.atr_res = HEX('D501 d0d1d2d3d4d5d6d7d8d9 0000000800')
+        assert device.listen_dep(target, 1.0) is None
+        assert device.socket.sendto.mock_calls == [call(*_) for _ in [
+            RSP106A('f012d501d0d1d2d3d4d5d6d7d8d90000000800'),
+            RSP106A('f004d50500'),
+        ]]
+
+    def test_listen_dep_communication_error(self, device):
+        device.socket.recvfrom.side_effect = [
+            FRAME('RFOFF', ''),
+        ]
+        target = nfc.clf.LocalTarget()
+        target.sensf_res = HEX('01 01fe303132333435 0f0d23042f7783ff ffff')
+        target.sens_res = HEX('0000')
+        target.sdd_res = HEX('01020304')
+        target.sel_res = HEX('60')
+        target.atr_res = HEX('D501 d0d1d2d3d4d5d6d7d8d9 0000000800')
+        assert device.listen_dep(target, 1.0) is None
+        assert device.socket.sendto.mock_calls == []
+
+    def test_listen_dep_timeout_error(self, device):
+        device.socket.recvfrom.return_value = CMD106A('00')
+        target = nfc.clf.LocalTarget()
+        target.sensf_res = HEX('01 01fe303132333435 0f0d23042f7783ff ffff')
+        target.sens_res = HEX('0000')
+        target.sdd_res = HEX('01020304')
+        target.sel_res = HEX('60')
+        target.atr_res = HEX('D501 d0d1d2d3d4d5d6d7d8d9 0000000800')
+        assert device.listen_dep(target, 0.001) is None
+        assert device.socket.sendto.mock_calls == []

@@ -404,7 +404,7 @@ class Device(nfc.clf.device.Device):
         atr_res = bytearray(target.atr_res)
 
         while time.time() < time_to_return:
-            wait = max(0.5, time_to_return - time.time())
+            wait = max(0, time_to_return - time.time())
             try:
                 result = self._recv_data(wait, '106A', '212F', '424F')
                 brty, data, addr = result
@@ -416,10 +416,10 @@ class Device(nfc.clf.device.Device):
                 if data == "\x26":
                     init = (brty, data, addr)
                     target = self._listen_tta(target, time_to_return, init)
-                elif len(data) >= 18 and data[1] == len(data)-1:
-                    if data[0] == 0xF0 and data[2:4] == '\xD4\x00':
-                        target = nfc.clf.LocalTarget(
-                            brty, atr_res=target.atr_res, atr_req=data[2:])
+                elif (len(data) >= 18 and data[1] == len(data)-1 and
+                      data[0] == 0xF0 and data[2:4] == '\xD4\x00'):
+                    target = nfc.clf.LocalTarget(
+                        brty, atr_res=target.atr_res, atr_req=data[2:])
             elif brty in ('212F', '424F') and data[0] == len(data):
                 if data.startswith('\x06\x00'):
                     init = (brty, data, addr)
@@ -481,6 +481,7 @@ class Device(nfc.clf.device.Device):
                 if data.startswith('\xD4\x06'):
                     target.dep_req = data[:]
                     return target
+                return None
 
     def send_cmd_recv_rsp(self, target, data, timeout):
         # send data, data should normally not be None for the Initiator
