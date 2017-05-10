@@ -419,6 +419,7 @@ class TestDevice(object):
         assert target.brty == '106A'
         assert target.tt2_cmd == HEX('3000')
         assert device.socket.sendto.mock_calls == RSP_CALLS(exchange[:-1])
+        return target
 
     def test_listen_tta_tt2_uid7_activated(self, device):
         exchange = [
@@ -1021,6 +1022,10 @@ class TestDevice(object):
         assert device.listen_dep(target, 0.001) is None
         assert device.socket.sendto.mock_calls == []
 
+    #
+    # SEND/RECV DATA
+    #
+
     def test_send_cmd_recv_rsp(self, device):
         target = self.test_sense_tta_with_tt1_target_found(device)
         cdata, rdata = ('01020304', '05060708')
@@ -1044,3 +1049,55 @@ class TestDevice(object):
         with pytest.raises(nfc.clf.TransmissionError):
             device.send_cmd_recv_rsp(target, HEX(cdata), 1)
         device.socket.sendto.assert_called_with(*CMD106A(cdata))
+
+        device.socket.sendto.side_effect = [len(CMD106A(cdata)[0])+1]
+        device.socket.recvfrom.side_effect = []
+        with pytest.raises(nfc.clf.TransmissionError):
+            device.send_cmd_recv_rsp(target, HEX(cdata), 1)
+        device.socket.sendto.assert_called_with(*CMD106A(cdata))
+
+        device.socket.sendto.side_effect = [len(CMD106A(cdata)[0])]
+        device.socket.recvfrom.side_effect = [RSP424F(rdata), RSP106A(rdata)]
+        assert device.send_cmd_recv_rsp(target, HEX(cdata), 1) == HEX(rdata)
+        device.socket.sendto.assert_called_with(*CMD106A(cdata))
+
+    def test_send_rsp_recv_cmd(self, device):
+        target = self.test_listen_tta_tt2_uid4_activated(device)
+        cdata, rdata = ('01020304', '05060708')
+
+        device.socket.sendto.side_effect = [len(RSP106A(rdata)[0])]
+        device.socket.recvfrom.side_effect = [CMD106A(cdata)]
+        assert device.send_rsp_recv_cmd(target, HEX(rdata), 1) == HEX(cdata)
+        device.socket.sendto.assert_called_with(*RSP106A(rdata))
+
+        device.socket.sendto.side_effect = [len(RSP106A(rdata)[0])]
+        device.socket.recvfrom.side_effect = [CMD106A(cdata)]
+        assert device.send_rsp_recv_cmd(target, HEX(rdata), None) == HEX(cdata)
+        device.socket.sendto.assert_called_with(*RSP106A(rdata))
+
+        device.socket.sendto.side_effect = []
+        device.socket.recvfrom.side_effect = [CMD106A(cdata)]
+        assert device.send_rsp_recv_cmd(target, None, 1) == HEX(cdata)
+
+        device.socket.sendto.side_effect = [len(RSP106A(rdata)[0])]
+        device.socket.recvfrom.side_effect = []
+        assert device.send_rsp_recv_cmd(target, HEX(rdata), 0) is None
+        device.socket.sendto.assert_called_with(*RSP106A(rdata))
+
+        device.socket.sendto.side_effect = [len(RSP106A(rdata)[0])]
+        device.socket.recvfrom.side_effect = [CMD106A('')]
+        with pytest.raises(nfc.clf.TransmissionError):
+            device.send_rsp_recv_cmd(target, HEX(rdata), 1)
+        device.socket.sendto.assert_called_with(*RSP106A(rdata))
+
+    def test_recv_data_timeout_error(self, mocker, device):  # noqa: F811
+        target = self.test_sense_tta_with_tt1_target_found(device)
+        mocker.patch('nfc.clf.udp.select.select').return_value = ([], [], [])
+        with pytest.raises(nfc.clf.TimeoutError):
+            device.send_cmd_recv_rsp(target, None, 0.001)
+
+    def test_get_max_send_data_size(self, device):
+        assert device.get_max_send_data_size(None) == 290
+
+    def test_get_max_recv_data_size(self, device):
+        assert device.get_max_recv_data_size(None) == 290
