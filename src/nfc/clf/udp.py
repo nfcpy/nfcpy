@@ -75,8 +75,7 @@ class Device(nfc.clf.device.Device):
             self.socket = None
 
     def sense_tta(self, target):
-        if not self.socket:
-            self._create_socket()
+        self._create_socket()
 
         log.debug("sense_tta for %s on %s:%d", target, *self.addr)
 
@@ -156,8 +155,7 @@ class Device(nfc.clf.device.Device):
             log.debug(error)
 
     def sense_ttb(self, target):
-        if not self.socket:
-            self._create_socket()
+        self._create_socket()
 
         if target.brty not in ("106B", "212B", "424B"):
             message = "unsupported bitrate {0}".format(target.brty)
@@ -178,8 +176,7 @@ class Device(nfc.clf.device.Device):
             return nfc.clf.RemoteTarget(brty, sensb_res=sensb_res, _addr=addr)
 
     def sense_ttf(self, target):
-        if not self.socket:
-            self._create_socket()
+        self._create_socket()
 
         log.debug("sense_ttf for %s on %s:%d", target, *self.addr)
 
@@ -208,8 +205,7 @@ class Device(nfc.clf.device.Device):
         raise nfc.clf.UnsupportedTargetError(info.format(device=self))
 
     def listen_tta(self, target, timeout):
-        if not self.socket:
-            self._create_socket()
+        self._create_socket()
 
         log.debug("listen_tta for %.3f seconds on %s:%d", timeout, *self.addr)
 
@@ -291,8 +287,7 @@ class Device(nfc.clf.device.Device):
                 return target
 
     def listen_ttb(self, target, timeout):
-        if not self.socket:
-            self._create_socket()
+        self._create_socket()
 
         log.debug("listen_ttb for %.3f seconds on %s:%d", timeout, *self.addr)
 
@@ -324,8 +319,7 @@ class Device(nfc.clf.device.Device):
                                            tt4_cmd=data, _addr=addr)
 
     def listen_ttf(self, target, timeout):
-        if not self.socket:
-            self._create_socket()
+        self._create_socket()
 
         log.debug("listen_ttf for %.3f seconds on %s:%d", timeout, *self.addr)
 
@@ -381,8 +375,7 @@ class Device(nfc.clf.device.Device):
                         return target
 
     def listen_dep(self, target, timeout):
-        if not self.socket:
-            self._create_socket()
+        self._create_socket()
 
         log.debug("listen_dep for %.3f seconds on %s:%d", timeout, *self.addr)
         assert target.sensf_res is not None
@@ -511,8 +504,9 @@ class Device(nfc.clf.device.Device):
         return 290
 
     def _create_socket(self):
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sent_data = self.rcvd_data = 0
+        if self.socket is None:
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self.sent_data = self.rcvd_data = 0
 
     def _bind_socket(self, time_to_return):
         addr = ('0.0.0.0', self.addr[1])

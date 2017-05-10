@@ -83,7 +83,17 @@ def device(mocker):
     assert device.addr == ('127.0.0.1', 54321)
     device._device_name = "IP-Stack"
     device._chipset_name = "UDP"
-    return device
+    yield device
+    device.close()
+
+
+def test_init(mocker):  # noqa: F811
+    nameinfo = ('127.0.0.1', '54321')
+    mocker.patch('nfc.clf.udp.select.select').return_value = ([1], [], [])
+    mocker.patch('nfc.clf.udp.socket.getnameinfo').return_value = nameinfo
+    mocker.patch('nfc.clf.udp.socket.socket')
+    device = nfc.clf.udp.init('localhost', 54321)
+    assert isinstance(device, nfc.clf.udp.Device)
 
 
 class TestDevice(object):
@@ -1022,6 +1032,18 @@ class TestDevice(object):
         assert device.listen_dep(target, 0.001) is None
         assert device.socket.sendto.mock_calls == []
 
+    def test_listen_dep_socket_bind_error(self, device):
+        device.socket.bind.side_effect \
+            = nfc.clf.udp.socket.error(nfc.clf.udp.errno.EADDRINUSE, "test")
+        target = nfc.clf.LocalTarget()
+        target.sensf_res = HEX('01 01fe303132333435 0f0d23042f7783ff ffff')
+        target.sens_res = HEX('0000')
+        target.sdd_res = HEX('01020304')
+        target.sel_res = HEX('60')
+        target.atr_res = HEX('D501 d0d1d2d3d4d5d6d7d8d9 0000000800')
+        assert device.listen_dep(target, 1.0) is None
+        assert device.socket.sendto.mock_calls == []
+
     #
     # SEND/RECV DATA
     #
@@ -1101,3 +1123,18 @@ class TestDevice(object):
 
     def test_get_max_recv_data_size(self, device):
         assert device.get_max_recv_data_size(None) == 290
+
+    #
+    # INTERNAL METHODS
+    #
+
+    def test_bind_socket(self, device):
+        assert device._bind_socket(nfc.clf.udp.time.time() - 1) is None
+        device.socket.bind.side_effect \
+            = nfc.clf.udp.socket.error(nfc.clf.udp.errno.EADDRINUSE, "test")
+        assert device._bind_socket(nfc.clf.udp.time.time() + 1) is False
+        device.socket.bind.side_effect \
+            = nfc.clf.udp.socket.error(nfc.clf.udp.errno.ENODEV, "test")
+        with pytest.raises(nfc.clf.udp.socket.error) as excinfo:
+            device._bind_socket(nfc.clf.udp.time.time() + 1)
+        assert excinfo.value.errno == nfc.clf.udp.errno.ENODEV
