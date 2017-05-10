@@ -98,7 +98,8 @@ class Device(nfc.clf.device.Device):
 
         if sens_res[0] & 0x1F == 0:
             log.debug("type 1 tag target found")
-            target = nfc.clf.RemoteTarget(target.brty, sens_res=sens_res)
+            target = nfc.clf.RemoteTarget(target.brty, _addr=addr)
+            target.sens_res = sens_res
             if sens_res[1] & 0x0F == 0b1100:
                 rid_cmd = bytearray.fromhex("78 0000 00000000")
                 log.debug("send RID_CMD " + hexlify(rid_cmd))
@@ -491,8 +492,6 @@ class Device(nfc.clf.device.Device):
         # receive response data unless the timeout is zero
         if timeout > 0:
             brty, data, addr = self._recv_data(timeout, target.brty)
-            if not data:
-                raise nfc.clf.BrokenLinkError("no data received")
             return data
 
     def send_rsp_recv_cmd(self, target, data, timeout):

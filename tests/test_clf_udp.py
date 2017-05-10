@@ -115,6 +115,7 @@ class TestDevice(object):
         assert target.brty == '106A'
         assert target.rid_res == HEX('110001020304')
         assert device.socket.sendto.mock_calls == CMD_CALLS(exchange)
+        return target
 
     def test_sense_tta_with_proprietary_target(self, device):
         exchange = [
@@ -1019,3 +1020,27 @@ class TestDevice(object):
         target.atr_res = HEX('D501 d0d1d2d3d4d5d6d7d8d9 0000000800')
         assert device.listen_dep(target, 0.001) is None
         assert device.socket.sendto.mock_calls == []
+
+    def test_send_cmd_recv_rsp(self, device):
+        target = self.test_sense_tta_with_tt1_target_found(device)
+        cdata, rdata = ('01020304', '05060708')
+
+        device.socket.sendto.side_effect = [len(CMD106A(cdata)[0])]
+        device.socket.recvfrom.side_effect = [RSP106A(rdata)]
+        assert device.send_cmd_recv_rsp(target, HEX(cdata), 1) == HEX(rdata)
+        device.socket.sendto.assert_called_with(*CMD106A(cdata))
+
+        device.socket.sendto.side_effect = []
+        device.socket.recvfrom.side_effect = [RSP106A(rdata)]
+        assert device.send_cmd_recv_rsp(target, None, 1) == HEX(rdata)
+
+        device.socket.sendto.side_effect = [len(CMD106A(cdata)[0])]
+        device.socket.recvfrom.side_effect = []
+        assert device.send_cmd_recv_rsp(target, HEX(cdata), 0) is None
+        device.socket.sendto.assert_called_with(*CMD106A(cdata))
+
+        device.socket.sendto.side_effect = [len(CMD106A(cdata)[0])]
+        device.socket.recvfrom.side_effect = [RSP106A('')]
+        with pytest.raises(nfc.clf.TransmissionError):
+            device.send_cmd_recv_rsp(target, HEX(cdata), 1)
+        device.socket.sendto.assert_called_with(*CMD106A(cdata))
