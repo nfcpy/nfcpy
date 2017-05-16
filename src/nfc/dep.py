@@ -83,7 +83,11 @@ class Initiator(DataExchangeProtocol):
         self.gbt = None  # general bytes from target
         self.pni = None  # dep packet number information
         self.rwt = None  # target response waiting time
-        self.acm = None  # active communication mode flag
+        self._acm = None  # active communication mode flag
+
+    @property
+    def acm(self):
+        return bool(self._acm)
 
     def __str__(self):
         msg = "NFC-DEP Initiator {brty} {mode} mode MIU={miu} RWT={rwt:.6f}"
@@ -99,8 +103,8 @@ class Initiator(DataExchangeProtocol):
         self.gbi = options.get('gbi', '')[0:48]
         self.brs = min(max(0, options.get('brs', 2)), 2)
         self.lri = min(max(0, options.get('lri', 3)), 3)
-        if self.acm is None or 'acm' in options:
-            self.acm = bool(options.get('acm', True))
+        if self._acm is None or 'acm' in options:
+            self._acm = bool(options.get('acm', True))
 
         assert self.did is None or 0 <= self.did <= 255
         assert self.nad is None or 0 <= self.nad <= 255
@@ -114,17 +118,18 @@ class Initiator(DataExchangeProtocol):
 
         if self.target is None and self.acm is True:
             log.debug("searching active communication mode target at 106A")
-            target = nfc.clf.RemoteTarget("106A", atr_req=atr_req.encode())
+            tg = nfc.clf.RemoteTarget("106A", atr_req=atr_req.encode())
             try:
-                target = self.clf.sense(target, iterations=2, interval=0.1)
-                if target:
-                    atr_res = ATR_RES.decode(target.atr_res)
+                self.target = self.clf.sense(tg, iterations=2, interval=0.1)
             except nfc.clf.UnsupportedTargetError:
-                self.acm = False
+                self._acm = False
             except nfc.clf.CommunicationError:
                 pass
             else:
-                self.target = target
+                if self.target:
+                    atr_res = ATR_RES.decode(self.target.atr_res)
+                else:
+                    self._acm = None
 
         if self.target is None:
             log.debug("searching passive communication mode target at 106A")
