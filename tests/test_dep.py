@@ -6,7 +6,7 @@ import nfc.dep
 
 import pytest
 from pytest_mock import mocker  # noqa: F401
-# from mock import call
+from mock import call
 
 import logging
 logging.basicConfig(level=logging.DEBUG-1)
@@ -133,3 +133,19 @@ class TestInitiator:
         assert dep.clf.sense.call_count == 3
         assert dep.activate() is None
         assert dep.clf.sense.call_count == 6
+
+    @pytest.mark.parametrize("release, command, response", [
+        (True, 'F004D40A00', 'F004D50B00'),
+        (True, 'F004D40A00', 'F004D50B01'),
+        (False, 'F004D40800', 'F004D50900'),
+        (False, 'F004D40800', 'F004D50901'),
+        (True, 'F004D40A00', 'F004D50900'),
+        (False, 'F004D40800', 'F004D50B00'),
+    ])
+    def test_deactivate_with_rls_or_dsl(self, dep, release, command, response):
+        target = nfc.clf.RemoteTarget("106A", atr_res=HEX(self.atr_res))
+        dep.clf.sense.return_value = target
+        dep.clf.exchange.side_effect = [HEX(response)]
+        assert dep.activate(None, did=0, brs=0) == HEX('46666D010113')
+        assert dep.deactivate(release) is None
+        assert dep.clf.exchange.mock_calls == [call(HEX(command), 0.1)]

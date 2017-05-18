@@ -178,16 +178,14 @@ class Initiator(DataExchangeProtocol):
 
     def deactivate(self, release=True):
         log.debug("deactivate {0}".format(self))
+        req = RLS_REQ(self.did) if release else DSL_REQ(self.did)
         try:
-            req = RLS_REQ(self.did) if release else DSL_REQ(self.did)
             res = self.send_req_recv_res(req, 0.1)
         except nfc.clf.CommunicationError:
             return
         else:
-            if type(res) != (RLS_RES if release else DSL_RES):
-                log.error("received unexpected response for " + req.NAME)
             if res.did != req.did:
-                log.error("target returned wrong DID in " + res.NAME)
+                log.error("target returned wrong DID in " + res.PDU_NAME)
         finally:
             log.debug("packets {0}".format(self.pcnt))
 
