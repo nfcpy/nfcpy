@@ -201,7 +201,7 @@ class Initiator(DataExchangeProtocol):
             return DEP_REQ(pfb, did, nad, data=None)
 
         def RTOX(rtox, did, nad):
-            if rtox < 1 or rtox > 59:
+            if not 0 < rtox < 60:
                 error = "NFC-DEP RTOX must be in range 1 to 59"
                 raise nfc.clf.ProtocolError(error)
             pdu_type = DEP_REQ.TimeoutExtension
