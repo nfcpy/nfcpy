@@ -361,7 +361,7 @@ class Initiator(DataExchangeProtocol):
 
         log.debug("<< {0}".format(res))
         pcnt_key = res.PDU_NAME[:3]
-        if isinstance(res, DEP_REQ):
+        if isinstance(res, DEP_RES):
             pcnt_key += " " + res.pfb.FMT_NAME
         self.pcnt.rcvd[pcnt_key] += 1
         return res

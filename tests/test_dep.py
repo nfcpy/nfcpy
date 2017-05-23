@@ -340,3 +340,258 @@ class TestInitiator:
             call(HEX('F0 06 D406 00 0102'), 0.07732861356932154),
             call(HEX('F0 04 D406 41'), 0.07732861356932154),
         ]
+
+    def test_exchange_attention_recoverable_error(self, dep):
+        target = nfc.clf.RemoteTarget("106A", atr_res=HEX(self.atr_res))
+        dep.clf.sense.return_value = target
+        dep.clf.exchange.side_effect = [
+            nfc.clf.TimeoutError,
+            nfc.clf.TimeoutError,
+            HEX('F0 04 D507 80'),
+            HEX('F0 06 D507 00 0304'),
+        ]
+        assert dep.activate(None, brs=0) == HEX('46666D010113')
+        assert dep.exchange(HEX('0102'), timeout=1) == HEX('0304')
+        assert dep.clf.exchange.mock_calls == [
+            call(HEX('F0 06 D406 00 0102'), 0.07732861356932154),
+            call(HEX('F0 04 D406 80'), 0.07732861356932154),
+            call(HEX('F0 04 D406 80'), 0.07732861356932154),
+            call(HEX('F0 06 D406 00 0102'), 0.07732861356932154),
+        ]
+
+    def test_exchange_attention_unrecoverable_error(self, dep):
+        target = nfc.clf.RemoteTarget("106A", atr_res=HEX(self.atr_res))
+        dep.clf.sense.return_value = target
+        dep.clf.exchange.side_effect = [
+            nfc.clf.TimeoutError,
+            nfc.clf.TimeoutError,
+            nfc.clf.TimeoutError,
+        ]
+        assert dep.activate(None, brs=0) == HEX('46666D010113')
+        with pytest.raises(nfc.clf.ProtocolError) as excinfo:
+            dep.exchange(HEX('0102'), timeout=1)
+        assert str(excinfo.value) == \
+            "unrecoverable NFC-DEP error in attention request"
+        assert dep.clf.exchange.mock_calls == [
+            call(HEX('F0 06 D406 00 0102'), 0.07732861356932154),
+            call(HEX('F0 04 D406 80'), 0.07732861356932154),
+            call(HEX('F0 04 D406 80'), 0.07732861356932154),
+        ]
+
+    def test_exchange_attention_rtox_after_attention(self, dep):
+        target = nfc.clf.RemoteTarget("106A", atr_res=HEX(self.atr_res))
+        dep.clf.sense.return_value = target
+        dep.clf.exchange.side_effect = [
+            nfc.clf.TimeoutError,
+            HEX('F0 04 D507 90'),
+        ]
+        assert dep.activate(None, brs=0) == HEX('46666D010113')
+        with pytest.raises(nfc.clf.ProtocolError) as excinfo:
+            dep.exchange(HEX('0102'), timeout=1)
+        assert str(excinfo.value) == \
+            "received NFC-DEP RTOX response to NACK or ATN"
+        assert dep.clf.exchange.mock_calls == [
+            call(HEX('F0 06 D406 00 0102'), 0.07732861356932154),
+            call(HEX('F0 04 D406 80'), 0.07732861356932154),
+        ]
+
+    def test_exchange_attention_invalid_response(self, dep):
+        target = nfc.clf.RemoteTarget("106A", atr_res=HEX(self.atr_res))
+        dep.clf.sense.return_value = target
+        dep.clf.exchange.side_effect = [
+            nfc.clf.TimeoutError,
+            HEX('F0 04 D507 40'),
+        ]
+        assert dep.activate(None, brs=0) == HEX('46666D010113')
+        with pytest.raises(nfc.clf.ProtocolError) as excinfo:
+            dep.exchange(HEX('0102'), timeout=1)
+        assert str(excinfo.value) == \
+            "expected NFC-DEP Attention response"
+        assert dep.clf.exchange.mock_calls == [
+            call(HEX('F0 06 D406 00 0102'), 0.07732861356932154),
+            call(HEX('F0 04 D406 80'), 0.07732861356932154),
+        ]
+
+    def test_exchange_attention_raises_timeout_error(self, dep):
+        target = nfc.clf.RemoteTarget("106A", atr_res=HEX(self.atr_res))
+        dep.clf.sense.return_value = target
+        dep.clf.exchange.side_effect = [
+            nfc.clf.TimeoutError,
+            HEX('F0 04 D507 80'),
+        ]
+        assert dep.activate(None, brs=0) == HEX('46666D010113')
+        with pytest.raises(nfc.clf.TimeoutError):
+            dep.exchange(HEX('0102'), timeout=0.0001)
+        assert dep.clf.exchange.call_count == 1
+
+    def test_exchange_retransmission_recoverable_error(self, dep):
+        target = nfc.clf.RemoteTarget("106A", atr_res=HEX(self.atr_res))
+        dep.clf.sense.return_value = target
+        dep.clf.exchange.side_effect = [
+            nfc.clf.TransmissionError,
+            nfc.clf.TransmissionError,
+            HEX('F0 06 D507 00 0304'),
+        ]
+        assert dep.activate(None, brs=0) == HEX('46666D010113')
+        assert dep.exchange(HEX('0102'), timeout=1) == HEX('0304')
+        assert dep.clf.exchange.mock_calls == [
+            call(HEX('F0 06 D406 00 0102'), 0.07732861356932154),
+            call(HEX('F0 04 D406 50'), 0.07732861356932154),
+            call(HEX('F0 04 D406 50'), 0.07732861356932154),
+        ]
+
+    def test_exchange_retransmission_unrecoverable_error(self, dep):
+        target = nfc.clf.RemoteTarget("106A", atr_res=HEX(self.atr_res))
+        dep.clf.sense.return_value = target
+        dep.clf.exchange.side_effect = [
+            nfc.clf.TransmissionError,
+            nfc.clf.TransmissionError,
+            nfc.clf.TransmissionError,
+        ]
+        assert dep.activate(None, brs=0) == HEX('46666D010113')
+        with pytest.raises(nfc.clf.ProtocolError) as excinfo:
+            dep.exchange(HEX('0102'), timeout=1)
+        assert str(excinfo.value) == \
+            "unrecoverable NFC-DEP error in retransmission request"
+        assert dep.clf.exchange.mock_calls == [
+            call(HEX('F0 06 D406 00 0102'), 0.07732861356932154),
+            call(HEX('F0 04 D406 50'), 0.07732861356932154),
+            call(HEX('F0 04 D406 50'), 0.07732861356932154),
+        ]
+
+    def test_exchange_retransmission_rtox_after_nack(self, dep):
+        target = nfc.clf.RemoteTarget("106A", atr_res=HEX(self.atr_res))
+        dep.clf.sense.return_value = target
+        dep.clf.exchange.side_effect = [
+            nfc.clf.TransmissionError,
+            HEX('F0 04 D507 90'),
+        ]
+        assert dep.activate(None, brs=0) == HEX('46666D010113')
+        with pytest.raises(nfc.clf.ProtocolError) as excinfo:
+            dep.exchange(HEX('0102'), timeout=1)
+        assert str(excinfo.value) == \
+            "received NFC-DEP RTOX response to NACK or ATN"
+        assert dep.clf.exchange.mock_calls == [
+            call(HEX('F0 06 D406 00 0102'), 0.07732861356932154),
+            call(HEX('F0 04 D406 50'), 0.07732861356932154),
+        ]
+
+    def test_exchange_retransmission_invalid_response(self, dep):
+        target = nfc.clf.RemoteTarget("106A", atr_res=HEX(self.atr_res))
+        dep.clf.sense.return_value = target
+        dep.clf.exchange.side_effect = [
+            nfc.clf.TransmissionError,
+            HEX('F0 04 D507 40'),
+        ]
+        assert dep.activate(None, brs=0) == HEX('46666D010113')
+        with pytest.raises(nfc.clf.ProtocolError) as excinfo:
+            dep.exchange(HEX('0102'), timeout=1)
+        assert str(excinfo.value) == \
+            "unrecoverable NFC-DEP transmission error"
+        assert dep.clf.exchange.mock_calls == [
+            call(HEX('F0 06 D406 00 0102'), 0.07732861356932154),
+            call(HEX('F0 04 D406 50'), 0.07732861356932154),
+        ]
+
+    def test_exchange_retransmission_raises_timeout_error(self, dep):
+        target = nfc.clf.RemoteTarget("106A", atr_res=HEX(self.atr_res))
+        dep.clf.sense.return_value = target
+        dep.clf.exchange.side_effect = [
+            nfc.clf.TransmissionError,
+            HEX('F0 04 D507 80'),
+        ]
+        assert dep.activate(None, brs=0) == HEX('46666D010113')
+        with pytest.raises(nfc.clf.TimeoutError):
+            dep.exchange(HEX('0102'), timeout=0.0001)
+        assert dep.clf.exchange.call_count == 1
+
+    def test_exchange_raises_timeout_error(self, dep):
+        target = nfc.clf.RemoteTarget("106A", atr_res=HEX(self.atr_res))
+        dep.clf.sense.return_value = target
+        dep.clf.exchange.side_effect = []
+        assert dep.activate(None, brs=0) == HEX('46666D010113')
+        with pytest.raises(nfc.clf.TimeoutError):
+            dep.exchange(HEX('0102'), timeout=0)
+        assert dep.clf.exchange.call_count == 0
+
+    def test_exchange_target_sends_nack_pdu(self, dep):
+        target = nfc.clf.RemoteTarget("106A", atr_res=HEX(self.atr_res))
+        dep.clf.sense.return_value = target
+        dep.clf.exchange.side_effect = [
+            HEX('F0 04 D507 50'),
+        ]
+        assert dep.activate(None, brs=0) == HEX('46666D010113')
+        with pytest.raises(nfc.clf.ProtocolError) as excinfo:
+            dep.exchange(HEX('0102'), timeout=1)
+        assert str(excinfo.value) == "received NFC-DEP NACK PDU from Target"
+        assert dep.clf.exchange.mock_calls == [
+            call(HEX('F0 06 D406 00 0102'), 0.07732861356932154),
+        ]
+
+    def test_exchange_decode_frame_error_start_byte(self, dep):
+        target = nfc.clf.RemoteTarget("106A", atr_res=HEX(self.atr_res))
+        dep.clf.sense.return_value = target
+        dep.clf.exchange.side_effect = [
+            HEX('FF 04 D507 50'),
+        ]
+        assert dep.activate(None, brs=0) == HEX('46666D010113')
+        with pytest.raises(nfc.clf.ProtocolError) as excinfo:
+            dep.exchange(HEX('0102'), timeout=1)
+        assert str(excinfo.value) == \
+            "first NFC-DEP frame byte must be F0h for 106A"
+        assert dep.clf.exchange.mock_calls == [
+            call(HEX('F0 06 D406 00 0102'), 0.07732861356932154),
+        ]
+
+    def test_exchange_decode_frame_error_frame_length(self, dep):
+        target = nfc.clf.RemoteTarget("106A", atr_res=HEX(self.atr_res))
+        dep.clf.sense.return_value = target
+        dep.clf.exchange.side_effect = [
+            HEX('F0 03 D507 50'),
+        ]
+        assert dep.activate(None, brs=0) == HEX('46666D010113')
+        with pytest.raises(nfc.clf.ProtocolError) as excinfo:
+            dep.exchange(HEX('0102'), timeout=1)
+        assert str(excinfo.value) == \
+            "NFC-DEP frame length byte must be data length + 1"
+        assert dep.clf.exchange.mock_calls == [
+            call(HEX('F0 06 D406 00 0102'), 0.07732861356932154),
+        ]
+
+    def test_exchange_decode_frame_error_min_length(self, dep):
+        target = nfc.clf.RemoteTarget("106A", atr_res=HEX(self.atr_res))
+        dep.clf.sense.return_value = target
+        dep.clf.exchange.side_effect = [
+            HEX('F0 02 D5'),
+            HEX('F0 02 D5'),
+            HEX('F0 02 D5'),
+        ]
+        assert dep.activate(None, brs=0) == HEX('46666D010113')
+        with pytest.raises(nfc.clf.ProtocolError) as excinfo:
+            dep.exchange(HEX('0102'), timeout=1)
+        assert str(excinfo.value) == \
+            "unrecoverable NFC-DEP error in retransmission request"
+        assert dep.clf.exchange.mock_calls == [
+            call(HEX('F0 06 D406 00 0102'), 0.07732861356932154),
+            call(HEX('F0 04 D406 50'), 0.07732861356932154),
+            call(HEX('F0 04 D406 50'), 0.07732861356932154),
+        ]
+
+    @pytest.mark.parametrize("rsp_frame", [
+        'F0 06 D407 00 0304', 'F0 06 D500 00 0304', 'F0 06 D502 00 0304',
+        'F0 06 D504 00 0304', 'F0 06 D506 00 0304', 'F0 06 D508 00 0304',
+        'F0 06 D50A 00 0304',
+    ])
+    def test_exchange_decode_frame_error_rsp_code(self, dep, rsp_frame):
+        target = nfc.clf.RemoteTarget("106A", atr_res=HEX(self.atr_res))
+        dep.clf.sense.return_value = target
+        dep.clf.exchange.side_effect = [
+            HEX(rsp_frame),
+        ]
+        assert dep.activate(None, brs=0) == HEX('46666D010113')
+        with pytest.raises(nfc.clf.ProtocolError) as excinfo:
+            dep.exchange(HEX('0102'), timeout=1)
+        assert str(excinfo.value) == "invalid NFC-DEP response code"
+        assert dep.clf.exchange.mock_calls == [
+            call(HEX('F0 06 D406 00 0102'), 0.07732861356932154),
+        ]
