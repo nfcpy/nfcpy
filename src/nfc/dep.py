@@ -64,6 +64,7 @@ class DataExchangeProtocol(object):
     def role(self):
         """Role in DEP communication, either 'Target' or 'Initiator'"""
 
+
 class Initiator(DataExchangeProtocol):
     ROLE = "Initiator"
 
