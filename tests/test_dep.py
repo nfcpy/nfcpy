@@ -18,21 +18,14 @@ def HEX(s):
     return bytearray.fromhex(s)
 
 
-@pytest.fixture()
-def target():
-    target = nfc.clf.RemoteTarget("106A")
-    target.sens_res = HEX("4400")
-    target.sel_res = HEX("00")
-    target.sdd_res = HEX("0102030405060708")
-    return target
-
-
 @pytest.fixture()  # noqa: F811
 def clf(mocker):
     clf = nfc.ContactlessFrontend()
-    mocker.patch.object(clf, 'exchange', autospec=True)
     mocker.patch.object(clf, 'sense', autospec=True)
+    mocker.patch.object(clf, 'listen', autospec=True)
+    mocker.patch.object(clf, 'exchange', autospec=True)
     clf.sense.return_value = None
+    clf.listen.return_value = None
     return clf
 
 
@@ -54,6 +47,8 @@ class TestInitiator:
         dep.clf.sense.return_value = target
         assert dep.activate(None, brs=0) == HEX('46666D010113')
         assert isinstance(dep.target, nfc.clf.RemoteTarget)
+        assert dep.general_bytes == HEX('46666D010113')
+        assert dep.role == "Initiator"
         assert dep.target.brty == brty
         assert dep.acm is True
 
@@ -595,3 +590,69 @@ class TestInitiator:
         assert dep.clf.exchange.mock_calls == [
             call(HEX('F0 06 D406 00 0102'), 0.07732861356932154),
         ]
+
+
+class TestTarget:
+    atr_req = 'D400 01FE0102030405060708 00000032 46666D010113'
+    atr_req_frame = '17' + atr_req
+
+    @pytest.fixture()
+    def dep(self, clf):
+        return nfc.dep.Target(clf)
+
+    def test_activate_active_not_initiated(self, dep):
+        assert dep.activate(timeout=1.0) is None
+        assert dep.clf.listen.call_count == 1
+
+    @pytest.mark.parametrize("brty", ["106A", "212F", "424F"])
+    def test_activate_active_initiator_without_psl(self, dep, brty):
+        target = nfc.clf.RemoteTarget(brty, atr_req=HEX(self.atr_req))
+        target.dep_req = HEX('D406 00 0102')
+        dep.clf.listen.return_value = target
+        assert dep.activate() == HEX('46666D010113')
+        assert isinstance(dep.target, nfc.clf.RemoteTarget)
+        assert dep.general_bytes == HEX('46666D010113')
+        assert dep.role == "Target"
+        assert dep.target.brty == brty
+        assert dep.acm is True
+
+    @pytest.mark.parametrize("request", [
+        HEX(''), nfc.clf.CommunicationError,
+    ])
+    def test_deactivate_with_immediate_return(self, dep, request):
+        target = nfc.clf.RemoteTarget('106A')
+        target.atr_req = HEX('D400 01FE0102030405060708 01000032 46666D010113')
+        target.dep_req = HEX('D406 04 01 0000')
+        dep.clf.listen.return_value = target
+        assert dep.activate() == HEX('46666D010113')
+        dep.clf.exchange.side_effect = [request]
+        assert dep.deactivate(HEX('0000')) is None
+        assert dep.clf.exchange.mock_calls[0][1] == (HEX('F007D50704010000'),)
+        assert dep.clf.exchange.call_count == 1
+
+    @pytest.mark.parametrize("req, res, last", [
+        ('08', '09', HEX('')),
+        ('0A', '0B', HEX('')),
+        ('08', '09', nfc.clf.CommunicationError),
+        ('0A', '0B', nfc.clf.CommunicationError),
+    ])
+    def test_deactivate_with_deselect_or_release(self, dep, req, res, last):
+        target = nfc.clf.RemoteTarget('106A')
+        target.atr_req = HEX('D400 01FE0102030405060708 01000032 46666D010113')
+        target.dep_req = HEX('D406 04 01 0000')
+        dep.clf.listen.return_value = target
+        assert dep.activate() == HEX('46666D010113')
+        dep.clf.exchange.side_effect = [
+            HEX('F0 05 D406 84 01'),   # DEP REQ ATN DID 1 -> reply
+            HEX('F0 06 D404 010000'),  # PSL REQ with DID 1 -> ignore
+            HEX('F0 04 D4'+req+'02'),  # DSL/RLS REQ with DID 2 -> ignore
+            HEX('F0 04 D4'+req+'01'),  # DSL/RLS REQ with DID 1 -> reply
+            last,
+        ]
+        assert dep.deactivate(HEX('0000')) is None
+        assert dep.clf.exchange.mock_calls[0][1] == (HEX('F007D50704010000'),)
+        assert dep.clf.exchange.mock_calls[1][1] == (HEX('F005D5078401'),)
+        assert dep.clf.exchange.mock_calls[2][1] == (None,)
+        assert dep.clf.exchange.mock_calls[3][1] == (None,)
+        dep.clf.exchange.assert_called_with(HEX('F004D5'+res+'01'), timeout=0)
+        assert dep.clf.exchange.call_count == 5

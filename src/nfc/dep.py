@@ -59,21 +59,14 @@ class DataExchangeProtocol(object):
     @property
     def general_bytes(self):
         """The general bytes received with the ATR exchange"""
-        if isinstance(self, Initiator):
-            return str(self.gbt)
-        if isinstance(self, Target):
-            return str(self.gbi)
 
     @property
     def role(self):
         """Role in DEP communication, either 'Target' or 'Initiator'"""
-        if isinstance(self, Initiator):
-            return "Initiator"
-        if isinstance(self, Target):
-            return "Target"
-
 
 class Initiator(DataExchangeProtocol):
+    ROLE = "Initiator"
+
     def __init__(self, clf):
         DataExchangeProtocol.__init__(self, clf)
         self.target = None
@@ -84,6 +77,14 @@ class Initiator(DataExchangeProtocol):
         self.pni = None  # dep packet number information
         self.rwt = None  # target response waiting time
         self._acm = None  # active communication mode flag
+
+    @property
+    def role(self):
+        return "Initiator"
+
+    @property
+    def general_bytes(self):
+        return bytes(self.gbt)
 
     @property
     def acm(self):
@@ -399,6 +400,14 @@ class Target(DataExchangeProtocol):
         self.pni = None  # dep packet number information
         self.rwt = None  # target response waiting time
 
+    @property
+    def role(self):
+        return "Target"
+
+    @property
+    def general_bytes(self):
+        return bytes(self.gbi)
+
     def __str__(self):
         msg = "NFC-DEP Target {brty} {mode} mode MIU={miu} RWT={rwt:.6f}"
         return msg.format(brty=self.target.brty, miu=self.miu, rwt=self.rwt,
@@ -469,7 +478,7 @@ class Target(DataExchangeProtocol):
 
         res = None
         deadline = time.time() + 1.0
-        while time.time() < deadline:
+        while time.time() < deadline:  # pragma: no branch
             try:
                 req = self.send_res_recv_req(res, deadline)
             except nfc.clf.CommunicationError:
@@ -489,6 +498,8 @@ class Target(DataExchangeProtocol):
                         res = ATN(self.did, self.nad)
                     else:
                         res = INF(req.pfb.pni, data, self.did, self.nad)
+                    continue
+            res = None
 
     def exchange(self, send_data, timeout):
         def INF(pni, data, more, did, nad):
