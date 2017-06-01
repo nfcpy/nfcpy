@@ -614,7 +614,6 @@ class TestTarget:
         assert dep.general_bytes == HEX('46666D010113')
         assert dep.role == "Target"
         assert dep.target.brty == brty
-        assert dep.acm is True
 
     @pytest.mark.parametrize("request", [
         HEX(''), nfc.clf.CommunicationError,
@@ -656,3 +655,149 @@ class TestTarget:
         assert dep.clf.exchange.mock_calls[3][1] == (None,)
         dep.clf.exchange.assert_called_with(HEX('F004D5'+res+'01'), timeout=0)
         assert dep.clf.exchange.call_count == 5
+
+    def test_exchange_maximum_information_unit(self, dep):
+        target = nfc.clf.RemoteTarget('106A', atr_req=HEX(self.atr_req))
+        target.dep_req = HEX('D406 00 0102')
+        dep.clf.listen.return_value = target
+        assert dep.activate() == HEX('46666D010113')
+        assert dep.miu == 251
+        dep.clf.exchange.side_effect = [
+            HEX('F0 FF D406 01' + dep.miu * '22'),
+            HEX('F0 FF D406 02' + dep.miu * '44'),
+            HEX('F0 FF D406 03' + dep.miu * '66'),
+            HEX('F0 FF D406 00' + dep.miu * '88'),
+            HEX('F0 FF D406 01' + dep.miu * 'aa'),
+        ]
+        assert dep.exchange(None, 1.0) == HEX('0102')
+        assert dep.exchange(dep.miu * HEX('11'), 1.0) == dep.miu * HEX('22')
+        assert dep.exchange(dep.miu * HEX('33'), 1.0) == dep.miu * HEX('44')
+        assert dep.exchange(dep.miu * HEX('55'), 1.0) == dep.miu * HEX('66')
+        assert dep.exchange(dep.miu * HEX('77'), 1.0) == dep.miu * HEX('88')
+        assert dep.exchange(dep.miu * HEX('99'), 1.0) == dep.miu * HEX('aa')
+        assert [c[1][0] for c in dep.clf.exchange.mock_calls] == [
+            HEX('F0 FF D507 00' + dep.miu * '11'),
+            HEX('F0 FF D507 01' + dep.miu * '33'),
+            HEX('F0 FF D507 02' + dep.miu * '55'),
+            HEX('F0 FF D507 03' + dep.miu * '77'),
+            HEX('F0 FF D507 00' + dep.miu * '99'),
+        ]
+
+    def test_exchange_larger_information_unit(self, dep):
+        target = nfc.clf.RemoteTarget('106A', atr_req=HEX(self.atr_req))
+        target.dep_req = HEX('D406 00 0102')
+        dep.clf.listen.return_value = target
+        assert dep.activate() == HEX('46666D010113')
+        assert dep.miu == 251
+        dep.clf.exchange.side_effect = [
+            HEX('F0 04 D406 41'),
+            HEX('F0 FF D406 12' + 251 * 'bb'),
+            HEX('F0 05 D406 03 bb'),
+        ]
+        assert dep.exchange(None, 1.0) == HEX('0102')
+        assert dep.exchange(252 * HEX('aa'), 1.0) == 252 * HEX('bb')
+        assert [c[1][0] for c in dep.clf.exchange.mock_calls] == [
+            HEX('F0 FF D507 10' + 251 * 'aa'),
+            HEX('F0 05 D507 01 aa'),
+            HEX('F0 04 D507 42'),
+        ]
+
+    def test_exchange_error_expected_ack_in_chaining(self, dep):
+        target = nfc.clf.RemoteTarget('106A', atr_req=HEX(self.atr_req))
+        target.dep_req = HEX('D406 00 0102')
+        dep.clf.listen.return_value = target
+        assert dep.activate() == HEX('46666D010113')
+        assert dep.miu == 251
+        dep.clf.exchange.side_effect = [
+            HEX('F0 05 D406 01 bb'),
+        ]
+        assert dep.exchange(None, 1.0) == HEX('0102')
+        with pytest.raises(nfc.clf.ProtocolError) as excinfo:
+            dep.exchange(252 * HEX('aa'), 1.0)
+        assert str(excinfo.value) == "expected ACK in NFC-DEP chaining"
+        assert [c[1][0] for c in dep.clf.exchange.mock_calls] == [
+            HEX('F0 FF D507 10' + 251 * 'aa'),
+        ]
+
+    def test_exchange_recv_more_with_wrong_packet_number(self, dep):
+        target = nfc.clf.RemoteTarget('106A', atr_req=HEX(self.atr_req))
+        target.dep_req = HEX('D406 00 0102')
+        dep.clf.listen.return_value = target
+        assert dep.activate() == HEX('46666D010113')
+        assert dep.miu == 251
+        dep.clf.exchange.side_effect = [
+            HEX('F0 FF D406 11' + 251 * 'bb'),
+            HEX('F0 05 D406 03 bb'),
+        ]
+        assert dep.exchange(None, 1.0) == HEX('0102')
+        with pytest.raises(nfc.clf.ProtocolError) as excinfo:
+            dep.exchange(HEX('aa'), 1.0)
+        assert str(excinfo.value) == "wrong NFC-DEP packet number"
+        assert [c[1][0] for c in dep.clf.exchange.mock_calls] == [
+            HEX('F0 05 D507 00 aa'),
+            HEX('F0 04 D507 41'),
+        ]
+
+    def test_exchange_with_invalid_packet_number(self, dep):
+        target = nfc.clf.RemoteTarget('106A', atr_req=HEX(self.atr_req))
+        target.dep_req = HEX('D406 00 0102')
+        dep.clf.listen.return_value = target
+        assert dep.activate() == HEX('46666D010113')
+        dep.clf.exchange.side_effect = [
+            HEX('F0 06 D406 01 0506'),
+            HEX('F0 06 D406 00 090A'),
+        ]
+        assert dep.exchange(None, 1.0) == HEX('0102')
+        assert dep.exchange(HEX('0304'), 1.0) == HEX('0506')
+        with pytest.raises(nfc.clf.ProtocolError) as excinfo:
+            dep.exchange(HEX('0708'), 1.0)
+        assert str(excinfo.value) == "wrong NFC-DEP packet number"
+        assert [c[1][0] for c in dep.clf.exchange.mock_calls] == [
+            HEX('F0 06 D507 00 0304'),
+            HEX('F0 06 D507 01 0708'),
+        ]
+
+    def test_exchange_error_send_data_empty(self, dep):
+        target = nfc.clf.RemoteTarget('106A', atr_req=HEX(self.atr_req))
+        target.dep_req = HEX('D406 00 0102')
+        dep.clf.listen.return_value = target
+        assert dep.activate() == HEX('46666D010113')
+        with pytest.raises(ValueError) as excinfo:
+            dep.exchange(b'', 1.0)
+        assert str(excinfo.value) == "send_data must not be empty"
+        assert dep.clf.exchange.call_count == 0
+
+    def test_exchange_send_data_with_transmission_error(self, dep):
+        target = nfc.clf.RemoteTarget('106A', atr_req=HEX(self.atr_req))
+        target.dep_req = HEX('D406 00 0102')
+        dep.clf.listen.return_value = target
+        assert dep.activate() == HEX('46666D010113')
+        dep.clf.exchange.side_effect = [
+            nfc.clf.TransmissionError,
+            None,
+        ]
+        assert dep.exchange(None, 1.0) == HEX('0102')
+        assert dep.exchange(HEX('aa'), 1.0) is None
+        assert [c[1][0] for c in dep.clf.exchange.mock_calls] == [
+            HEX('F0 05 D507 00 aa'),
+            None,
+        ]
+
+    def test_exchange_recv_more_with_transmission_error(self, dep):
+        target = nfc.clf.RemoteTarget('106A', atr_req=HEX(self.atr_req))
+        target.dep_req = HEX('D406 00 0102')
+        dep.clf.listen.return_value = target
+        assert dep.activate() == HEX('46666D010113')
+        assert dep.miu == 251
+        dep.clf.exchange.side_effect = [
+            HEX('F0 FF D406 11' + 251 * 'bb'),
+            nfc.clf.TransmissionError,
+            None,
+        ]
+        assert dep.exchange(None, 1.0) == HEX('0102')
+        assert dep.exchange(HEX('aa'), 1.0) is None
+        assert [c[1][0] for c in dep.clf.exchange.mock_calls] == [
+            HEX('F0 05 D507 00 aa'),
+            HEX('F0 04 D507 41'),
+            None,
+        ]
