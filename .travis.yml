@@ -38,6 +38,7 @@ script:
 
 before_install:
   - pip install codecov
+  - pip install six
 
 
 after_success:
