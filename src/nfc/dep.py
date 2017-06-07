@@ -580,6 +580,7 @@ class Target(DataExchangeProtocol):
             if req is None:
                 return None
             elif req.did != self.did:
+                log.debug("ignore non-matching device identifier")
                 res = None
             elif type(req) == DSL_REQ:
                 return self.send_res_recv_req(DSL_RES(self.did), 0)
@@ -596,6 +597,9 @@ class Target(DataExchangeProtocol):
                     res = dep_res
                 else:
                     dep_req = req
+            else:
+                log.debug("invalid command in data exchange context")
+                res = None
         return dep_req
 
     def send_res_recv_req(self, res, deadline):
@@ -732,7 +736,7 @@ class PSL_REQ_RES(object):
         if data.startswith(cls.PDU_CODE):
             try:
                 return cls(*data[2:])
-            except ValueError:
+            except TypeError:
                 errstr = "invalid format of the " + cls.PDU_NAME
                 raise nfc.clf.ProtocolError(errstr)
 
@@ -740,7 +744,8 @@ class PSL_REQ_RES(object):
 class PSL_REQ(PSL_REQ_RES):
     PDU_CODE = bytearray(b'\xD4\x04')
     PDU_NAME = 'PSL-REQ'
-    PDU_SHOW = "{name} DID={self.did} BRS={self.brs:02x}, FSL={self.fsl:02x}"
+    PDU_SHOW = "{name} DID={self.did:02x} BRS={self.brs:02x} " \
+               "FSL={self.fsl:02x}"
 
     def __init__(self, did, brs, fsl):
         self.did, self.brs, self.fsl = did if did else 0, brs, fsl
@@ -764,7 +769,7 @@ class PSL_REQ(PSL_REQ_RES):
 class PSL_RES(PSL_REQ_RES):
     PDU_CODE = bytearray(b'\xD5\x05')
     PDU_NAME = 'PSL-RES'
-    PDU_SHOW = "{name} DID={self.did}"
+    PDU_SHOW = "{name} DID={self.did:02x}"
 
     def __init__(self, did):
         self.did = did
