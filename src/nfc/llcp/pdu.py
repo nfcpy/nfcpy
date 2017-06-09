@@ -143,11 +143,11 @@ class ProtocolDataUnit(object):
         self.dsap = dsap
         self.ssap = ssap
 
-    @staticmethod
-    def decode_header(data, offset=0, size=None):
+    @classmethod
+    def decode_header(cls, data, offset=0, size=None):
         if size is None:
-            size = len(data)
-        if size < 2:
+            size = len(data) - offset
+        if size < cls.header_size:
             raise DecodeError("insufficient pdu header bytes")
         (dsap, ssap) = struct.unpack_from('!BB', data, offset)
         return (dsap >> 2, ssap & 63)
@@ -179,11 +179,11 @@ class NumberedProtocolDataUnit(ProtocolDataUnit):
         super(NumberedProtocolDataUnit, self).__init__(ptype, dsap, ssap)
         self.ns, self.nr = ns, nr
 
-    @staticmethod
-    def decode_header(data, offset=0, size=None):
+    @classmethod
+    def decode_header(cls, data, offset=0, size=None):
         if size is None:
-            size = len(data)
-        if size < 3:
+            size = len(data) - offset
+        if size < cls.header_size:
             raise DecodeError("numbered pdu header length error")
         (dsap, ssap, sequence) = struct.unpack_from('!BBB', data, offset)
         return (dsap >> 2, ssap & 63, sequence >> 4, sequence & 15)
@@ -191,7 +191,7 @@ class NumberedProtocolDataUnit(ProtocolDataUnit):
     def encode_header(self):
         data = super(NumberedProtocolDataUnit, self).encode_header()
         if self.ns is None or self.nr is None:
-            raise EncodeError("pdu ns and nr field can not be none")
+            raise EncodeError("pdu ns and nr field can not be None")
         if self.ns < 0 or self.nr < 0:
             raise EncodeError("pdu ns and nr field can not be < 0")
         if self.ns > 15 or self.nr > 15:

@@ -5,6 +5,10 @@ import pytest
 import nfc.llcp.pdu
 
 
+def HEX(s):
+    return bytearray.fromhex(s)
+
+
 # =============================================================================
 # PDU Parameter Tests
 # =============================================================================
@@ -17,6 +21,7 @@ class TestParameter:
         ("0302A55A", 3, 2, 0xA55A),        # WKS
         ("0401AB", 4, 1, 0xAB),            # LTO
         ("0501FA", 5, 1, 0x0A),            # RW
+        ("05010B", 5, 1, 0x0B),            # RW
         ("060141", 6, 1, b'A'),            # SN
         ("0600", 6, 0, b''),               # SN
         ("0701FD", 7, 1, 0x05),            # OPT
@@ -31,7 +36,7 @@ class TestParameter:
         ("FF01A5", 255, 1, b'\xA5'),
     ])
     def test_decode_pass(self, octets, T, L, V):
-        octets = bytes(bytearray.fromhex(octets + 'FF'))
+        octets = bytes(HEX(octets + 'FF'))
         assert nfc.llcp.pdu.Parameter.decode(octets, 0) == (T, L, V)
         assert nfc.llcp.pdu.Parameter.decode(b'\1' + octets, 1) == (T, L, V)
 
@@ -49,7 +54,7 @@ class TestParameter:
         (11, b'\xA5\x5A', "0B02A55A"),  # RN
     ])
     def test_encode_pass(self, T, V, octets):
-        octets = bytes(bytearray.fromhex(octets))
+        octets = bytes(HEX(octets))
         assert nfc.llcp.pdu.Parameter.encode(T, V) == octets
 
     @pytest.mark.parametrize("octets", [
@@ -64,7 +69,7 @@ class TestParameter:
         "0900", "0903A581", "0902A5",  # SDRES
     ])
     def test_decode_fail(self, octets):
-        octets = bytes(bytearray.fromhex(octets))
+        octets = bytes(HEX(octets))
         with pytest.raises(nfc.llcp.pdu.DecodeError):
             nfc.llcp.pdu.Parameter.decode(octets, 0)
 
@@ -90,17 +95,98 @@ class TestParameter:
     ("00", 0, 2),
 ])
 def test_decode_pdu_fail_short_data(octets, offset, size):
-    octets = bytearray.fromhex(octets)
     with pytest.raises(nfc.llcp.pdu.DecodeError):
-        nfc.llcp.pdu.decode(octets, offset, size)
+        nfc.llcp.pdu.decode(HEX(octets), offset, size)
 
 
-@pytest.mark.parametrize("arg", [
-    int(1), b'ABC',
-])
+@pytest.mark.parametrize("arg", [int(1), b'ABC'])
 def test_encode_pdu_fail_wrong_type(arg):
     with pytest.raises(AttributeError):
         nfc.llcp.pdu.encode(arg)
+
+
+class TestProtocolDataUnit:
+    PDU = nfc.llcp.pdu.ProtocolDataUnit
+
+    @pytest.mark.parametrize("args, dsap, ssap", [
+        ((HEX('1001'),), 4, 1),
+        ((HEX('00FFFF'), 1), 63, 63),
+        ((HEX('1001FF'), 0, 2), 4, 1)
+    ])
+    def test_decode_header_pass(self, args, dsap, ssap):
+        assert self.PDU.decode_header(*args) == (dsap, ssap)
+
+    @pytest.mark.parametrize("args, errstr", [
+        ((HEX('00'),), "insufficient pdu header bytes"),
+        ((HEX('0000'), 1), "insufficient pdu header bytes"),
+        ((HEX('000000'), 1, 1), "insufficient pdu header bytes"),
+    ])
+    def test_decode_header_fail(self, args, errstr):
+        with pytest.raises(nfc.llcp.pdu.DecodeError) as excinfo:
+            self.PDU.decode_header(*args)
+        assert str(excinfo.value) == errstr
+
+    @pytest.mark.parametrize("ptype, dsap, ssap, octets", [
+        (0, 0, 0, HEX('0000')),
+        (1, 2, 3, HEX('0843'))
+    ])
+    def test_encode_header_pass(self, ptype, dsap, ssap, octets):
+        assert self.PDU(ptype, dsap, ssap).encode_header() == octets
+
+    @pytest.mark.parametrize("ptype, dsap, ssap, errstr", [
+        (1, None, 3, "pdu dsap and ssap field can not be None"),
+        (1, 2, None, "pdu dsap and ssap field can not be None"),
+        (1, -2, 3, "pdu dsap and ssap field can not be < 0"),
+        (1, 2, -3, "pdu dsap and ssap field can not be < 0"),
+        (1, 64, 3, "pdu dsap and ssap field can not be > 63"),
+        (1, 2, 64, "pdu dsap and ssap field can not be > 63"),
+    ])
+    def test_encode_header_fail(self, ptype, dsap, ssap, errstr):
+        with pytest.raises(nfc.llcp.pdu.EncodeError) as excinfo:
+            self.PDU(ptype, dsap, ssap).encode_header()
+        assert str(excinfo.value) == errstr
+
+
+class TestNumberedProtocolDataUnit:
+    PDU = nfc.llcp.pdu.NumberedProtocolDataUnit
+
+    @pytest.mark.parametrize("args, dsap, ssap, ns, nr", [
+        ((HEX('100123'),), 4, 1, 2, 3),
+        ((HEX('00FFFF45'), 1), 63, 63, 4, 5),
+        ((HEX('100167FF'), 0, 3), 4, 1, 6, 7)
+    ])
+    def test_decode_header_pass(self, args, dsap, ssap, ns, nr):
+        assert self.PDU.decode_header(*args) == (dsap, ssap, ns, nr)
+
+    @pytest.mark.parametrize("args, errstr", [
+        ((HEX('0000'),), "numbered pdu header length error"),
+        ((HEX('000000'), 1), "numbered pdu header length error"),
+        ((HEX('00000000'), 1, 2), "numbered pdu header length error"),
+    ])
+    def test_decode_header_fail(self, args, errstr):
+        with pytest.raises(nfc.llcp.pdu.DecodeError) as excinfo:
+            self.PDU.decode_header(*args)
+        assert str(excinfo.value) == errstr
+
+    @pytest.mark.parametrize("ptype, dsap, ssap, ns, nr, octets", [
+        (0, 0, 0, 0, 0, HEX('000000')),
+        (1, 2, 3, 4, 5, HEX('084345'))
+    ])
+    def test_encode_header_pass(self, ptype, dsap, ssap, ns, nr, octets):
+        assert self.PDU(ptype, dsap, ssap, ns, nr).encode_header() == octets
+
+    @pytest.mark.parametrize("ns, nr, errstr", [
+        (None, 5, "pdu ns and nr field can not be None"),
+        (4, None, "pdu ns and nr field can not be None"),
+        (-4, 5, "pdu ns and nr field can not be < 0"),
+        (4, -5, "pdu ns and nr field can not be < 0"),
+        (16, 5, "pdu ns and nr field can not be > 15"),
+        (4, 16, "pdu ns and nr field can not be > 15"),
+    ])
+    def test_encode_header_fail(self, ns, nr, errstr):
+        with pytest.raises(nfc.llcp.pdu.EncodeError) as excinfo:
+            self.PDU(1, 2, 3, ns, nr).encode_header()
+        assert str(excinfo.value) == errstr
 
 
 # ----------------------------------------------------------------------------
@@ -114,7 +200,7 @@ class TestSymmetry:
         ("FF0000FF", 1, 2),
     ])
     def test_decode_pass(self, octets, offset, size):
-        pdu = nfc.llcp.pdu.decode(bytearray.fromhex(octets), offset, size)
+        pdu = nfc.llcp.pdu.decode(HEX(octets), offset, size)
         assert isinstance(pdu, self.pdu_class)
         assert len(pdu) == size
         assert pdu.name == "SYMM"
@@ -127,7 +213,7 @@ class TestSymmetry:
     ])
     def test_encode_pass(self, args, octets):
         pdu = self.pdu_class(*args)
-        assert nfc.llcp.pdu.encode(pdu) == bytearray.fromhex(octets)
+        assert nfc.llcp.pdu.encode(pdu) == HEX(octets)
 
     @pytest.mark.parametrize("octets", [
         "1000",
@@ -135,7 +221,7 @@ class TestSymmetry:
         "000000",
     ])
     def test_decode_fail(self, octets):
-        octets = bytearray.fromhex(octets)
+        octets = HEX(octets)
         with pytest.raises(nfc.llcp.pdu.DecodeError):
             self.pdu_class.decode(octets, 0, len(octets))
 
@@ -172,7 +258,7 @@ class TestParameterExchange:
     )
     def test_decode_pass(self, octets, offset, size,
                          plen, ver, miu, wks, lto, lsc, dpc):
-        pdu = nfc.llcp.pdu.decode(bytearray.fromhex(octets), offset, size)
+        pdu = nfc.llcp.pdu.decode(HEX(octets), offset, size)
         assert isinstance(pdu, self.pdu_class)
         assert len(pdu) == plen
         assert pdu.name == "PAX"
@@ -202,7 +288,7 @@ class TestParameterExchange:
     ])
     def test_encode_pass(self, args, octets):
         pdu = self.pdu_class(*args)
-        assert nfc.llcp.pdu.encode(pdu) == bytearray.fromhex(octets)
+        assert nfc.llcp.pdu.encode(pdu) == HEX(octets)
 
     @pytest.mark.parametrize("octets", [
         "1040",
@@ -210,7 +296,7 @@ class TestParameterExchange:
         "0040FFFF",
     ])
     def test_decode_fail(self, octets):
-        octets = bytearray.fromhex(octets)
+        octets = HEX(octets)
         with pytest.raises(nfc.llcp.pdu.DecodeError):
             self.pdu_class.decode(octets, 0, len(octets))
 
@@ -224,32 +310,32 @@ class TestParameterExchange:
     def test_setattr_version(self):
         pdu = self.pdu_class(0, 0)
         pdu.version = (5, 10)
-        assert nfc.llcp.pdu.encode(pdu) == bytearray.fromhex("004001015A")
+        assert nfc.llcp.pdu.encode(pdu) == HEX("004001015A")
 
     def test_setattr_miu(self):
         pdu = self.pdu_class(0, 0)
         pdu.miu = 128 + 0x07FF
-        assert nfc.llcp.pdu.encode(pdu) == bytearray.fromhex("0040020207FF")
+        assert nfc.llcp.pdu.encode(pdu) == HEX("0040020207FF")
 
     def test_setattr_wks(self):
         pdu = self.pdu_class(0, 0)
         pdu.wks = 0xA55A
-        assert nfc.llcp.pdu.encode(pdu) == bytearray.fromhex("00400302A55A")
+        assert nfc.llcp.pdu.encode(pdu) == HEX("00400302A55A")
 
     def test_setattr_lto(self):
         pdu = self.pdu_class(0, 0)
         pdu.lto = 320
-        assert nfc.llcp.pdu.encode(pdu) == bytearray.fromhex("0040040120")
+        assert nfc.llcp.pdu.encode(pdu) == HEX("0040040120")
 
     def test_setattr_lsc(self):
         pdu = self.pdu_class(0, 0)
         pdu.lsc = 2
-        assert nfc.llcp.pdu.encode(pdu) == bytearray.fromhex("0040070102")
+        assert nfc.llcp.pdu.encode(pdu) == HEX("0040070102")
 
     def test_setattr_dpc(self):
         pdu = self.pdu_class(0, 0)
         pdu.dpc = 1
-        assert nfc.llcp.pdu.encode(pdu) == bytearray.fromhex("0040070104")
+        assert nfc.llcp.pdu.encode(pdu) == HEX("0040070104")
 
 
 # ----------------------------------------------------------------------------
@@ -265,7 +351,7 @@ class TestAggregatedFrame:
         ("00800002000000020000", 0, 10, ("0000", "0000")),
     ])
     def test_decode_pass(self, octets, offset, size, pdu_list):
-        agf = nfc.llcp.pdu.decode(bytearray.fromhex(octets), offset, size)
+        agf = nfc.llcp.pdu.decode(HEX(octets), offset, size)
         assert isinstance(agf, self.pdu_class)
         assert len(agf) == size
         assert agf.name == "AGF"
@@ -275,7 +361,7 @@ class TestAggregatedFrame:
         assert "AGF " in str(agf)
         i = -1
         for i, pdu in enumerate(agf):
-            assert pdu == nfc.llcp.pdu.decode(bytearray.fromhex(pdu_list[i]))
+            assert pdu == nfc.llcp.pdu.decode(HEX(pdu_list[i]))
             assert pdu == agf.first if i == 0 else True
         assert i+1 == len(pdu_list)
 
@@ -287,7 +373,7 @@ class TestAggregatedFrame:
     ])
     def test_encode_pass(self, args, octets):
         pdu = self.pdu_class(*args)
-        assert nfc.llcp.pdu.encode(pdu) == bytearray.fromhex(octets)
+        assert nfc.llcp.pdu.encode(pdu) == HEX(octets)
 
     @pytest.mark.parametrize("octets", [
         "008000",
@@ -296,7 +382,7 @@ class TestAggregatedFrame:
         "0080000200",
     ])
     def test_decode_fail(self, octets):
-        octets = bytearray.fromhex(octets)
+        octets = HEX(octets)
         with pytest.raises(nfc.llcp.pdu.DecodeError):
             self.pdu_class.decode(octets, 0, len(octets))
 
@@ -322,7 +408,7 @@ class TestUnnumberedInformation:
         ("80C1414243", 0, 5, b'ABC'),
     ])
     def test_decode_pass(self, octets, offset, size, data):
-        pdu = nfc.llcp.pdu.decode(bytearray.fromhex(octets), offset, size)
+        pdu = nfc.llcp.pdu.decode(HEX(octets), offset, size)
         assert isinstance(pdu, self.pdu_class)
         assert len(pdu) == size
         assert pdu.name == "UI"
@@ -337,7 +423,7 @@ class TestUnnumberedInformation:
     ])
     def test_encode_pass(self, args, octets):
         pdu = self.pdu_class(*args)
-        assert nfc.llcp.pdu.encode(pdu) == bytearray.fromhex(octets)
+        assert nfc.llcp.pdu.encode(pdu) == HEX(octets)
 
 
 # ----------------------------------------------------------------------------
@@ -356,7 +442,7 @@ class TestConnect:
         ("8101000006024142", 0, 8, 6, 128, 1, b'AB'),
     ])
     def test_decode_pass(self, octets, offset, size, lpdu, miu, rw, sn):
-        pdu = nfc.llcp.pdu.decode(bytearray.fromhex(octets), offset, size)
+        pdu = nfc.llcp.pdu.decode(HEX(octets), offset, size)
         assert isinstance(pdu, self.pdu_class)
         assert len(pdu) == lpdu
         assert pdu.name == "CONNECT"
@@ -375,7 +461,7 @@ class TestConnect:
     ])
     def test_encode_pass(self, args, octets):
         pdu = self.pdu_class(*args)
-        assert nfc.llcp.pdu.encode(pdu) == bytearray.fromhex(octets)
+        assert nfc.llcp.pdu.encode(pdu) == HEX(octets)
 
 
 # ----------------------------------------------------------------------------
@@ -389,7 +475,7 @@ class TestDisconnect:
         ("FF8141FF", 1, 2),
     ])
     def test_decode_pass(self, octets, offset, size):
-        pdu = nfc.llcp.pdu.decode(bytearray.fromhex(octets), offset, size)
+        pdu = nfc.llcp.pdu.decode(HEX(octets), offset, size)
         assert isinstance(pdu, self.pdu_class)
         assert len(pdu) == size
         assert pdu.name == "DISC"
@@ -402,7 +488,7 @@ class TestDisconnect:
     ])
     def test_encode_pass(self, args, octets):
         pdu = self.pdu_class(*args)
-        assert nfc.llcp.pdu.encode(pdu) == bytearray.fromhex(octets)
+        assert nfc.llcp.pdu.encode(pdu) == HEX(octets)
 
 
 # ----------------------------------------------------------------------------
@@ -419,7 +505,7 @@ class TestConnectionComplete:
         ("818100000202F367", 0, 8, 6, 999, 1),
     ])
     def test_decode_pass(self, octets, offset, size, lpdu, miu, rw):
-        pdu = nfc.llcp.pdu.decode(bytearray.fromhex(octets), offset, size)
+        pdu = nfc.llcp.pdu.decode(HEX(octets), offset, size)
         assert isinstance(pdu, self.pdu_class)
         assert len(pdu) == lpdu
         assert pdu.name == "CC"
@@ -436,7 +522,7 @@ class TestConnectionComplete:
     ])
     def test_encode_pass(self, args, octets):
         pdu = self.pdu_class(*args)
-        assert nfc.llcp.pdu.encode(pdu) == bytearray.fromhex(octets)
+        assert nfc.llcp.pdu.encode(pdu) == HEX(octets)
 
 
 # ----------------------------------------------------------------------------
@@ -451,7 +537,7 @@ class TestDisconnectedMode:
         ("FF81C100FF", 1, 3, 0),
     ])
     def test_decode_pass(self, octets, offset, size, reason):
-        pdu = nfc.llcp.pdu.decode(bytearray.fromhex(octets), offset, size)
+        pdu = nfc.llcp.pdu.decode(HEX(octets), offset, size)
         assert isinstance(pdu, self.pdu_class)
         assert len(pdu) == size
         assert pdu.name == "DM"
@@ -467,14 +553,14 @@ class TestDisconnectedMode:
     ])
     def test_encode_pass(self, args, octets):
         pdu = self.pdu_class(*args)
-        assert nfc.llcp.pdu.encode(pdu) == bytearray.fromhex(octets)
+        assert nfc.llcp.pdu.encode(pdu) == HEX(octets)
 
     @pytest.mark.parametrize("octets", [
         "81C1",
         "81C10000",
     ])
     def test_decode_fail(self, octets):
-        octets = bytearray.fromhex(octets)
+        octets = HEX(octets)
         with pytest.raises(nfc.llcp.pdu.DecodeError):
             self.pdu_class.decode(octets, 0, len(octets))
 
@@ -491,7 +577,7 @@ class TestFrameReject:
         ("FF820100000000FF", 1, 6,  0,  0,  0,  0),
     ])
     def test_decode_pass(self, octets, offset, size, b0, b1, b2, b3):
-        pdu = nfc.llcp.pdu.decode(bytearray.fromhex(octets), offset, size)
+        pdu = nfc.llcp.pdu.decode(HEX(octets), offset, size)
         assert isinstance(pdu, self.pdu_class)
         assert len(pdu) == size
         assert pdu.name == "FRMR"
@@ -513,7 +599,7 @@ class TestFrameReject:
     ])
     def test_encode_pass(self, args, octets):
         pdu = self.pdu_class(*args)
-        assert nfc.llcp.pdu.encode(pdu) == bytearray.fromhex(octets)
+        assert nfc.llcp.pdu.encode(pdu) == HEX(octets)
 
     @pytest.mark.parametrize("octets", [
         "8201",
@@ -523,7 +609,7 @@ class TestFrameReject:
         "82010000000000",
     ])
     def test_decode_fail(self, octets):
-        octets = bytearray.fromhex(octets)
+        octets = HEX(octets)
         with pytest.raises(nfc.llcp.pdu.DecodeError):
             self.pdu_class.decode(octets, 0, len(octets))
 
@@ -533,7 +619,7 @@ class TestFrameReject:
             send_ack, recv_ack = 5, 6
             pass
         frmr = self.pdu_class.from_pdu(pdu, flags, DLC())
-        assert frmr.encode() == bytearray.fromhex(frame)
+        assert frmr.encode() == HEX(frame)
 
     @pytest.mark.parametrize("pdu, flags, octets", [
         (nfc.llcp.pdu.Information(0, 0, 1, 2),  "W",    "02008C123456"),
@@ -550,7 +636,7 @@ class TestFrameReject:
             send_ack, recv_ack = 5, 6
 
         frmr = self.pdu_class.from_pdu(pdu, flags, DLC())
-        assert frmr.encode() == bytearray.fromhex(octets)
+        assert frmr.encode() == HEX(octets)
 
 
 # ----------------------------------------------------------------------------
@@ -570,7 +656,7 @@ class TestServiceNameLookup:
         ("06410902021108020141", 0, 10, 10, [(0x01, b'A')], [(0x02, 0x11)]),
     ])
     def test_decode_pass(self, octets, offset, size, plen, sdreq, sdres):
-        pdu = nfc.llcp.pdu.decode(bytearray.fromhex(octets), offset, size)
+        pdu = nfc.llcp.pdu.decode(HEX(octets), offset, size)
         assert isinstance(pdu, self.pdu_class)
         assert len(pdu) == plen
         assert pdu.name == "SNL"
@@ -591,14 +677,14 @@ class TestServiceNameLookup:
     ])
     def test_encode_pass(self, args, octets):
         pdu = self.pdu_class(*args)
-        assert nfc.llcp.pdu.encode(pdu) == bytearray.fromhex(octets)
+        assert nfc.llcp.pdu.encode(pdu) == HEX(octets)
 
     @pytest.mark.parametrize("octets", [
         "0642",
         "1641",
     ])
     def test_decode_fail(self, octets):
-        octets = bytearray.fromhex(octets)
+        octets = HEX(octets)
         with pytest.raises(nfc.llcp.pdu.DecodeError):
             self.pdu_class.decode(octets, 0, len(octets))
 
@@ -621,7 +707,7 @@ class TestDataProtectionSetup:
         ("028000000A000B00", 0,  None, 2, b'',   b''),
     ])
     def test_decode_pass(self, octets, offset, size, plen, ecpk, rn):
-        pdu = nfc.llcp.pdu.decode(bytearray.fromhex(octets), offset, size)
+        pdu = nfc.llcp.pdu.decode(HEX(octets), offset, size)
         assert isinstance(pdu, self.pdu_class)
         assert len(pdu) == plen
         assert pdu.name == "DPS"
@@ -639,14 +725,14 @@ class TestDataProtectionSetup:
     ])
     def test_encode_pass(self, args, octets):
         pdu = self.pdu_class(*args)
-        assert nfc.llcp.pdu.encode(pdu) == bytearray.fromhex(octets)
+        assert nfc.llcp.pdu.encode(pdu) == HEX(octets)
 
     @pytest.mark.parametrize("octets", [
         "0281",
         "1280",
     ])
     def test_decode_fail(self, octets):
-        octets = bytearray.fromhex(octets)
+        octets = HEX(octets)
         with pytest.raises(nfc.llcp.pdu.DecodeError):
             self.pdu_class.decode(octets, 0, len(octets))
 
@@ -672,7 +758,7 @@ class TestInformation:
         ("830100414243", 0, 6, 0, 0, b'ABC'),
     ])
     def test_decode_pass(self, octets, offset, size, ns, nr, data):
-        pdu = nfc.llcp.pdu.decode(bytearray.fromhex(octets), offset, size)
+        pdu = nfc.llcp.pdu.decode(HEX(octets), offset, size)
         assert isinstance(pdu, self.pdu_class)
         assert len(pdu) == size
         assert pdu.name == "I"
@@ -690,13 +776,13 @@ class TestInformation:
     ])
     def test_encode_pass(self, args, octets):
         pdu = self.pdu_class(*args)
-        assert nfc.llcp.pdu.encode(pdu) == bytearray.fromhex(octets)
+        assert nfc.llcp.pdu.encode(pdu) == HEX(octets)
 
     @pytest.mark.parametrize("octets", [
         "8301",
     ])
     def test_decode_fail(self, octets):
-        octets = bytearray.fromhex(octets)
+        octets = HEX(octets)
         with pytest.raises(nfc.llcp.pdu.DecodeError):
             self.pdu_class.decode(octets, 0, len(octets))
 
@@ -725,7 +811,7 @@ class TestReceiveReady:
         ("FF834101FF", 1, 3, 1),
     ])
     def test_decode_pass(self, octets, offset, size, nr):
-        pdu = nfc.llcp.pdu.decode(bytearray.fromhex(octets), offset, size)
+        pdu = nfc.llcp.pdu.decode(HEX(octets), offset, size)
         assert isinstance(pdu, self.pdu_class)
         assert len(pdu) == size
         assert pdu.name == "RR"
@@ -741,13 +827,13 @@ class TestReceiveReady:
     ])
     def test_encode_pass(self, args, octets):
         pdu = self.pdu_class(*args)
-        assert nfc.llcp.pdu.encode(pdu) == bytearray.fromhex(octets)
+        assert nfc.llcp.pdu.encode(pdu) == HEX(octets)
 
     @pytest.mark.parametrize("octets", [
         "8341",
     ])
     def test_decode_fail(self, octets):
-        octets = bytearray.fromhex(octets)
+        octets = HEX(octets)
         with pytest.raises(nfc.llcp.pdu.DecodeError):
             self.pdu_class.decode(octets, 0, len(octets))
 
@@ -773,7 +859,7 @@ class TestReceiveNotReady:
         ("FF838101FF", 1, 3, 1),
     ])
     def test_decode_pass(self, octets, offset, size, nr):
-        pdu = nfc.llcp.pdu.decode(bytearray.fromhex(octets), offset, size)
+        pdu = nfc.llcp.pdu.decode(HEX(octets), offset, size)
         assert isinstance(pdu, self.pdu_class)
         assert len(pdu) == size
         assert pdu.name == "RNR"
@@ -789,13 +875,13 @@ class TestReceiveNotReady:
     ])
     def test_encode_pass(self, args, octets):
         pdu = self.pdu_class(*args)
-        assert nfc.llcp.pdu.encode(pdu) == bytearray.fromhex(octets)
+        assert nfc.llcp.pdu.encode(pdu) == HEX(octets)
 
     @pytest.mark.parametrize("octets", [
         "8381",
     ])
     def test_decode_fail(self, octets):
-        octets = bytearray.fromhex(octets)
+        octets = HEX(octets)
         with pytest.raises(nfc.llcp.pdu.DecodeError):
             self.pdu_class.decode(octets, 0, len(octets))
 
@@ -821,7 +907,7 @@ class TestUnknownProtocolDataUnit:
         ("83C1414243", 0, 5, '1111', b'ABC'),
     ])
     def test_decode_pass(self, octets, offset, size, name, payload):
-        pdu = nfc.llcp.pdu.decode(bytearray.fromhex(octets), offset, size)
+        pdu = nfc.llcp.pdu.decode(HEX(octets), offset, size)
         assert isinstance(pdu, self.pdu_class)
         assert len(pdu) == size
         assert pdu.name == name
@@ -837,7 +923,7 @@ class TestUnknownProtocolDataUnit:
     ])
     def test_encode_pass(self, args, octets):
         pdu = self.pdu_class(*args)
-        assert nfc.llcp.pdu.encode(pdu) == bytearray.fromhex(octets)
+        assert nfc.llcp.pdu.encode(pdu) == HEX(octets)
 
     @pytest.mark.parametrize("args", [
         (15, None, 0, b''),
