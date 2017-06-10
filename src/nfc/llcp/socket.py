@@ -140,7 +140,19 @@ class Socket(object):
         return self.llc.recvfrom(self._tco)
 
     def poll(self, event, timeout=None):
-        """Wait for a socket event."""
+        """Wait for a socket event. Posssible *event* values are the strings
+        "recv", "send" and "acks". Whent the timeout is present and
+        not :const:`None`, it should be a floating point number
+        specifying the timeout for the operation in seconds (or
+        fractions thereof). For "recv" or "send" the :meth:`poll`
+        method returns :const:`True` if a next :meth:`recv` or
+        :meth:`send` operation would be non-blocking. The "acks" event
+        may only be used with a data-link-connection type socket; the
+        call then returns :const:`True` if the counter of received
+        acknowledgements was greater than zero and decrements the
+        counter by one.
+
+        """
         return self.llc.poll(self._tco, event, timeout)
 
     def getsockname(self):
