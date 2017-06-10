@@ -83,10 +83,12 @@ class TransmissionControlObject(object):
         if option == opt.SO_SNDBUF:
             # with self.lock: self.send_buf = int(value)
             # adjustable send buffer only with non-blocking socket mode
-            raise NotImplemented
-        if option == opt.SO_RCVBUF:
+            raise NotImplementedError("SO_SNDBUF can not be set")
+        elif option == opt.SO_RCVBUF:
             with self.lock:
                 self.recv_buf = int(value)
+        else:
+            raise ValueError("invalid option value")
 
     def getsockopt(self, option):
         if option == opt.SO_SNDMIU:
@@ -102,6 +104,7 @@ class TransmissionControlObject(object):
         if self.addr and addr and self.addr != addr:
             log.warn("socket rebound from {0} to {1}".format(self.addr, addr))
         self.addr = addr
+        return self.addr
 
     def poll(self, event, timeout):
         if event == "recv":
