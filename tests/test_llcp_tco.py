@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, division
 
+import errno
 import pytest
 import threading
 import nfc.llcp.tco
@@ -110,3 +111,73 @@ class TestTransmissionControlObject:
         assert tco.poll("send", 0.001) is False
         assert tco.dequeue(10, 4, False) == pdu
         assert tco.poll("send", 1.0) is True
+
+
+# =============================================================================
+# Raw Access Point
+# =============================================================================
+class TestRawAccessPoint:
+    @pytest.fixture
+    def tco(self):
+        tco = nfc.llcp.tco.RawAccessPoint(128)
+        assert tco.state.ESTABLISHED is True
+        yield tco
+        tco.close()
+        assert tco.state.SHUTDOWN is True
+
+    def test_init(self):
+        tco = nfc.llcp.tco.RawAccessPoint(100)
+        assert tco.send_miu == 128
+        assert tco.recv_miu == 100
+
+    def test_str(self, tco):
+        assert str(tco) == "RAW None ->  ?"
+        tco.bind(1)
+        assert str(tco) == "RAW  1 ->  ?"
+
+    def test_sockopt(self, tco):
+        assert tco.getsockopt(nfc.llcp.SO_RCVBUF) == 1
+        tco.setsockopt(nfc.llcp.SO_RCVBUF, 2)
+        assert tco.getsockopt(nfc.llcp.SO_RCVBUF) == 2
+        tco.close()
+        with pytest.raises(nfc.llcp.Error) as excinfo:
+            tco.setsockopt(nfc.llcp.SO_RCVBUF, 2)
+        assert excinfo.value.errno == errno.ESHUTDOWN
+        with pytest.raises(nfc.llcp.Error) as excinfo:
+            tco.getsockopt(nfc.llcp.SO_RCVBUF)
+        assert excinfo.value.errno == errno.ESHUTDOWN
+
+    def test_poll(self, tco):
+        assert tco.poll("recv", 0.001) is False
+        assert tco.poll("send", 0.001) is True
+        with pytest.raises(nfc.llcp.Error) as excinfo:
+            tco.poll("invalid", 1)
+        assert excinfo.value.errno == errno.EINVAL
+        tco.close()
+        with pytest.raises(nfc.llcp.Error) as excinfo:
+            tco.poll("recv", 1)
+        assert excinfo.value.errno == errno.ESHUTDOWN
+
+    def test_send(self, tco):
+        pdu = nfc.llcp.pdu.UnnumberedInformation(1, 1, HEX('1122'))
+        assert tco.send(pdu, flags=nfc.llcp.MSG_DONTWAIT) is True
+        assert tco.dequeue(10, 4) == pdu
+        thread = start_thread(tco.send, (pdu, 0))
+        assert tco.dequeue(10, 4) == pdu
+        join_thread(thread)
+        tco.close()
+        with pytest.raises(nfc.llcp.Error) as excinfo:
+            tco.send(pdu, 0)
+        assert excinfo.value.errno == errno.ESHUTDOWN
+
+    def test_recv(self, tco):
+        pdu = nfc.llcp.pdu.UnnumberedInformation(1, 1, HEX('1122'))
+        assert tco.enqueue(pdu) is True
+        assert tco.recv() == pdu
+        threading.Timer(0.01, tco.close).start()
+        with pytest.raises(nfc.llcp.Error) as excinfo:
+            tco.recv()
+        assert excinfo.value.errno == errno.EPIPE
+        with pytest.raises(nfc.llcp.Error) as excinfo:
+            tco.recv()
+        assert excinfo.value.errno == errno.ESHUTDOWN
