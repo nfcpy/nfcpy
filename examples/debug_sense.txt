@@ -1,0 +1,88 @@
+2017-06-12 12:05:05,541 [main] enable debug output for 'nfc'
+2017-06-12 12:05:05,541 [nfc.clf] searching for reader on path usb
+2017-06-12 12:05:05,541 [nfc.clf.transport] using libusb-1.0.20
+2017-06-12 12:05:05,542 [nfc.clf.transport] path matches '^(usb|)$'
+2017-06-12 12:05:05,547 [nfc.clf.device] loading acr122 driver for usb:072f:2200
+2017-06-12 12:05:05,688 [nfc.clf.acr122] initialize ACR122U214
+2017-06-12 12:05:05,688 [nfc.clf.acr122] CCID ICC-POWER-ON
+2017-06-12 12:05:05,689 [nfc.clf.acr122] Set PICC Operating Parameters
+2017-06-12 12:05:05,691 [nfc.clf.acr122] Configure Buzzer and LED
+2017-06-12 12:05:05,766 [nfc.clf.acr122] chipset is a PN532v1.6
+2017-06-12 12:05:05,783 [nfc.clf.acr122] write analog settings for Type A 106 kbps
+2017-06-12 12:05:05,790 [nfc.clf.acr122] write analog settings for Type F 212/424 kbps
+2017-06-12 12:05:05,795 [nfc.clf.acr122] write analog settings for Type B 106 kbps
+2017-06-12 12:05:05,800 [nfc.clf.acr122] write analog settings for 14443-4 212/424/848 kbps
+2017-06-12 12:05:05,815 [nfc.clf] using ACS ACR122U PN532v1.6 at usb:002:003
+2017-06-12 12:05:05,815 [nfc.clf] connect('card', 'rdwr')
+2017-06-12 12:05:05,815 [nfc.clf] removing card_options after on-startup
+2017-06-12 12:05:05,815 [nfc.clf] connect options after startup: rdwr
+2017-06-12 12:05:05,824 [nfc.clf] sense 106A 
+2017-06-12 12:05:05,849 [nfc.clf] found 106A sdd_res=02840017CBD5C4 sel_res=20 sens_res=4200
+2017-06-12 12:05:05,850 [nfc.clf] found 106A sdd_res=02840017CBD5C4 sel_res=20 sens_res=4200
+2017-06-12 12:05:05,850 [nfc.clf] discovered target 106A sdd_res=02840017CBD5C4 sel_res=20 sens_res=4200
+2017-06-12 12:05:05,850 [nfc.tag] trying to activate 106A sdd_res=02840017CBD5C4 sel_res=20 sens_res=4200
+2017-06-12 12:05:05,850 [nfc.tag] trying type 4 tag activation for 106A
+2017-06-12 12:05:05,850 [nfc.tag.tt4] send RATS command to activate the Type 4A Tag
+2017-06-12 12:05:05,851 [nfc.tag.tt4] ACS ACR122U on usb:002:003 does not support fsd 256
+2017-06-12 12:05:05,851 [nfc.clf] >>> e070 timeout=0.03
+2017-06-12 12:05:05,872 [nfc.clf] <<< 0578005002 0.021s
+2017-06-12 12:05:05,872 [nfc.tag.tt4] rcvd RATS response: 0578005002
+2017-06-12 12:05:05,872 [nfc.tag.tt4] ACS ACR122U on usb:002:003 does not support fsc 256
+2017-06-12 12:05:05,872 [nfc.tag.tt4] max command frame size is 252 byte
+2017-06-12 12:05:05,872 [nfc.tag.tt4] max frame waiting time is 0.009666
+2017-06-12 12:05:05,872 [nfc.clf] connected to Type4ATag MIU=251 FWT=0.009666
+2017-06-12 12:05:05,872 [nfc.tag.tt4] read ndef data
+2017-06-12 12:05:05,872 [nfc.tag.tt4] select ndef application
+2017-06-12 12:05:05,872 [nfc.tag.tt4] >> 00a4040007d2760000850101
+2017-06-12 12:05:05,872 [nfc.clf] >>> 0200a4040007d2760000850101 timeout=0.0132908554572
+2017-06-12 12:05:05,895 [nfc.clf] <<< 029000 0.022s
+2017-06-12 12:05:05,895 [nfc.tag.tt4] << 9000
+2017-06-12 12:05:05,895 [nfc.tag.tt4] selected d2760000850101
+2017-06-12 12:05:05,895 [nfc.tag.tt4] select ndef capability file
+2017-06-12 12:05:05,895 [nfc.tag.tt4] >> 00a4000c02e103
+2017-06-12 12:05:05,895 [nfc.clf] >>> 0300a4000c02e103 timeout=0.0132908554572
+2017-06-12 12:05:05,916 [nfc.clf] <<< 039000 0.021s
+2017-06-12 12:05:05,916 [nfc.tag.tt4] << 9000
+2017-06-12 12:05:05,916 [nfc.tag.tt4] selected e103
+2017-06-12 12:05:05,917 [nfc.tag.tt4] read ndef capability file
+2017-06-12 12:05:05,917 [nfc.tag.tt4] read_binary from 0 to 2
+2017-06-12 12:05:05,917 [nfc.tag.tt4] >> 00b0000002
+2017-06-12 12:05:05,917 [nfc.clf] >>> 0200b0000002 timeout=0.0132908554572
+2017-06-12 12:05:05,938 [nfc.clf] <<< 02000f9000 0.022s
+2017-06-12 12:05:05,938 [nfc.tag.tt4] << 000f9000
+2017-06-12 12:05:05,938 [nfc.tag.tt4] read_binary from 2 to 15
+2017-06-12 12:05:05,939 [nfc.tag.tt4] >> 00b000020d
+2017-06-12 12:05:05,939 [nfc.clf] >>> 0300b000020d timeout=0.0132908554572
+2017-06-12 12:05:05,963 [nfc.clf] <<< 032000f600f604060001200000009000 0.024s
+2017-06-12 12:05:05,963 [nfc.tag.tt4] << 2000f600f604060001200000009000
+2017-06-12 12:05:05,963 [nfc.tag.tt4] ndef mapping version 2.0
+2017-06-12 12:05:05,963 [nfc.tag.tt4] max apdu response length 246
+2017-06-12 12:05:05,963 [nfc.tag.tt4] max apdu command length 246
+2017-06-12 12:05:05,963 [nfc.tag.tt4] ndef file control tlv tag 4
+2017-06-12 12:05:05,963 [nfc.tag.tt4] ndef file identifier 0001
+2017-06-12 12:05:05,963 [nfc.tag.tt4] ndef file size limit 8192
+2017-06-12 12:05:05,963 [nfc.tag.tt4] ndef file read flag is 0
+2017-06-12 12:05:05,964 [nfc.tag.tt4] ndef file write flag is 0
+2017-06-12 12:05:05,964 [nfc.tag.tt4] select ndef data file
+2017-06-12 12:05:05,964 [nfc.tag.tt4] >> 00a4000c020001
+2017-06-12 12:05:05,964 [nfc.clf] >>> 0200a4000c020001 timeout=0.0132908554572
+2017-06-12 12:05:05,985 [nfc.clf] <<< 029000 0.021s
+2017-06-12 12:05:05,985 [nfc.tag.tt4] << 9000
+2017-06-12 12:05:05,985 [nfc.tag.tt4] selected 0001
+2017-06-12 12:05:05,985 [nfc.tag.tt4] read ndef data file
+2017-06-12 12:05:05,985 [nfc.tag.tt4] read_binary from 0 to 2
+2017-06-12 12:05:05,985 [nfc.tag.tt4] >> 00b0000002
+2017-06-12 12:05:05,986 [nfc.clf] >>> 0300b0000002 timeout=0.0132908554572
+2017-06-12 12:05:06,007 [nfc.clf] <<< 0300479000 0.022s
+2017-06-12 12:05:06,007 [nfc.tag.tt4] << 00479000
+2017-06-12 12:05:06,007 [nfc.tag.tt4] ndef data length is 71
+2017-06-12 12:05:06,007 [nfc.tag.tt4] read_binary from 2 to 73
+2017-06-12 12:05:06,007 [nfc.tag.tt4] >> 00b0000247
+2017-06-12 12:05:06,008 [nfc.clf] >>> 0200b0000247 timeout=0.0132908554572
+2017-06-12 12:05:06,047 [nfc.clf] <<< 029101135500687474703a2f2f63726f73736261722e696f1101135500687474703a2f2f63726f73736261722e696f5101155402656e687474703a2f2f63726f73736261722e696f9000 0.039s
+2017-06-12 12:05:06,047 [nfc.tag.tt4] << 9101135500687474703a2f2f63726f73736261722e696f1101135500687474703a2f2f63726f73736261722e696f5101155402656e687474703a2f2f63726f73736261722e696f9000
+2017-06-12 12:05:06,047 [nfc.ndef.message] parse ndef message at offset 0
+2017-06-12 12:05:06,047 [nfc.ndef.record] parsed nfc.ndef.Record('urn:nfc:wkt:U', '', '\x00http://crossbar.io')
+2017-06-12 12:05:06,047 [nfc.ndef.record] parsed nfc.ndef.Record('urn:nfc:wkt:U', '', '\x00http://crossbar.io')
+2017-06-12 12:05:06,047 [nfc.ndef.record] parsed nfc.ndef.Record('urn:nfc:wkt:T', '', '\x02enhttp://crossbar.io')
+2017-06-12 12:05:06,048 [nfc.ndef.message] ndef message complete at offset 71
