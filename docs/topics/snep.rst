@@ -93,7 +93,7 @@ following example, where all error and exception handling has been sacrified for
           print ndef_message.pretty()
           return nfc.snep.Success
 
-  def startup(clf, llc):
+  def startup(llc):
       global my_snep_server
       my_snep_server = DefaultSnepServer(llc)
       return llc
