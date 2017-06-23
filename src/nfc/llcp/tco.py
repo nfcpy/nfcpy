@@ -407,7 +407,7 @@ class DataLinkConnection(TransmissionControlObject):
                 raise err.Error(errno.ESHUTDOWN)
             if not self.state.CLOSED:
                 self.err("listen() but socket state is {0}".format(self.state))
-                raise RuntimeError  # should raise err.Error(errno.E???)
+                raise err.Error(errno.ENOTSUP)
             self.state.LISTEN = True
             self.recv_buf = backlog
 
@@ -436,7 +436,8 @@ class DataLinkConnection(TransmissionControlObject):
                 dlc.state.ESTABLISHED = True
                 self.send_queue.append(send_pdu)
                 return dlc
-            raise RuntimeError("only CONNECT expected, not " + rcvd_pdu.name)
+            else:  # pragma: no cover
+                raise RuntimeError("CONNECT expected, not " + rcvd_pdu.name)
 
     def connect(self, dest):
         with self.lock:
@@ -447,14 +448,14 @@ class DataLinkConnection(TransmissionControlObject):
                 if self.state.CONNECT:
                     raise err.Error(errno.EALREADY)
                 raise err.Error(errno.EPIPE)
-            if isinstance(dest, bytes):
+            if isinstance(dest, (bytes, bytearray)):
                 send_pdu = pdu.Connect(1, self.addr, self.recv_miu,
-                                       self.recv_win, dest)
+                                       self.recv_win, bytes(dest))
             elif isinstance(dest, int):
                 send_pdu = pdu.Connect(dest, self.addr, self.recv_miu,
                                        self.recv_win)
             else:
-                raise TypeError("connect() arg *dest* must be int or string")
+                raise TypeError("connect destination must be int or bytes")
 
             self.state.CONNECT = True
             self.send_queue.append(send_pdu)
@@ -465,19 +466,19 @@ class DataLinkConnection(TransmissionControlObject):
                 raise err.Error(errno.EPIPE)
 
             if rcvd_pdu.name == "DM":
-                self.log("connect rejected with reason %d" % rcvd_pdu.reason)
+                logstr = "connect rejected with reason {}"
+                self.log(logstr.format(rcvd_pdu.reason))
                 self.state.CLOSED = True
                 raise err.ConnectRefused(rcvd_pdu.reason)
-
-            if rcvd_pdu.name == "CC":
+            elif rcvd_pdu.name == "CC":
                 self.peer = rcvd_pdu.ssap
                 self.recv_buf = self.recv_win
                 self.send_miu = rcvd_pdu.miu
                 self.send_win = rcvd_pdu.rw
                 self.state.ESTABLISHED = True
                 return
-
-            raise RuntimeError("only CC or DM expected, not " + rcvd_pdu.name)
+            else:  # pragma: no cover
+                raise RuntimeError("CC or DM expected, not " + rcvd_pdu.name)
 
     @property
     def send_window_slots(self):
@@ -500,7 +501,7 @@ class DataLinkConnection(TransmissionControlObject):
                 raise err.Error(errno.EMSGSIZE)
             while self.send_window_slots == 0 and self.state.ESTABLISHED:
                 if flags & opt.MSG_DONTWAIT:
-                    raise err.Error(errno.WOULDBLOCK)
+                    raise err.Error(errno.EWOULDBLOCK)
                 self.log("waiting on busy send window")
                 self.send_token.wait()
             self.log("send {0} byte on {1}".format(len(message), str(self)))
@@ -516,6 +517,7 @@ class DataLinkConnection(TransmissionControlObject):
             if not (self.state.ESTABLISHED or self.state.CLOSE_WAIT):
                 self.err("recv() in socket state {0}".format(self.state))
                 raise err.Error(errno.ENOTCONN)
+
             try:
                 rcvd_pdu = super(DataLinkConnection, self).recv()
             except IndexError:
@@ -538,29 +540,27 @@ class DataLinkConnection(TransmissionControlObject):
     def poll(self, event, timeout):
         if self.state.SHUTDOWN:
             raise err.Error(errno.ESHUTDOWN)
-        if event not in ("recv", "send", "acks"):
-            raise err.Error(errno.EINVAL)
 
         if event == "recv":
             if self.state.ESTABLISHED or self.state.CLOSE_WAIT:
                 rcvd_pdu = super(DataLinkConnection, self).poll(event, timeout)
                 if self.state.ESTABLISHED or self.state.CLOSE_WAIT:
                     return isinstance(rcvd_pdu, pdu.Information)
-
-        if event == "send":
+        elif event == "send":
             if self.state.ESTABLISHED:
                 if super(DataLinkConnection, self).poll(event, timeout):
                     return self.state.ESTABLISHED
-
-        if event == "acks":
+                return False
+        elif event == "acks":
             with self.acks_ready:
-                while not self.acks_recvd > 0:
+                if not self.acks_recvd > 0:
                     self.acks_ready.wait(timeout)
                 if self.acks_recvd > 0:
                     self.acks_recvd = self.acks_recvd - 1
                     return True
-
-        return False
+                return False
+        else:
+            raise err.Error(errno.EINVAL)
 
     def close(self):
         with self.lock:
