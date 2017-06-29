@@ -42,7 +42,7 @@ except ImportError:  # pragma: no cover
 import logging
 log = logging.getLogger(__name__)
 
-PATH = re.compile(r'^([a-z]+)(?::|)([a-zA-Z0-9]+|)(?::|)([a-zA-Z0-9]+|)$')
+PATH = re.compile(r'^([a-z]+)(?::|)([a-zA-Z0-9-]+|)(?::|)([a-zA-Z0-9]+|)$')
 
 
 class TTY(object):
@@ -56,44 +56,50 @@ class TTY(object):
         match = PATH.match(path)
 
         if match and match.group(1) == "tty":
-            if re.match(r'^\D+\d+$', match.group(2)):
-                TTYS = re.compile(r'^tty{0}$'.format(match.group(2)))
-            elif re.match(r'^\D+$', match.group(2)):
-                TTYS = re.compile(r'^tty{0}\d+$'.format(match.group(2)))
-            elif re.match(r'^$', match.group(2)):
-                TTYS = re.compile(r'^tty(S|ACM|AMA|USB)\d+$')
+            if re.match(r'^(S|ACM|AMA|USB)\d+$', match.group(2)):
+                TTYS = re.compile(r'^tty{}$'.format(match.group(2)))
+                glob = False
+            elif re.match(r'^(S|ACM|AMA|USB)$', match.group(2)):
+                TTYS = re.compile(r'^tty{}\d+$'.format(match.group(2)))
+                glob = True
+            elif re.match(r'^usbserial-\w+$', match.group(2)):
+                TTYS = re.compile(r'^cu\.{}$'.format(match.group(2)))
+                glob = False
+            elif re.match(r'^usbserial$', match.group(2)):
+                TTYS = re.compile(r'^cu\.usbserial-.*$')
+                glob = True
+            elif re.match(r'^.+$', match.group(2)):
+                TTYS = re.compile(r'^{}$'.format(match.group(2)))
+                glob = False
             else:
-                log.error("invalid port in 'tty' path: %r", match.group(2))
-                return
+                TTYS = re.compile(r'^(tty(S|ACM|AMA|USB)\d+|cu\.usbserial.*)$')
+                glob = True
 
+            log.debug(TTYS.pattern)
             ttys = [fn for fn in os.listdir('/dev') if TTYS.match(fn)]
-            if len(ttys) == 0:
-                return
 
-            # Sort ttys with custom function to correctly order numbers.
-            pattern = re.compile('(\D+)(\d+)')
-            ttys.sort(key=lambda s: "%s%3s" % pattern.match(s).groups())
-            log.debug('trying /dev/tty%s', ' '.join([tty[3:] for tty in ttys]))
+            if len(ttys) > 0:
+                # Sort ttys with custom function to correctly order numbers.
+                ttys.sort(key=lambda item: (len(item), item))
+                log.debug('check: ' + ' '.join('/dev/' + tty for tty in ttys))
 
-            # Eliminate tty nodes that are not physically present or
-            # inaccessible by the current user. Propagate IOError when
-            # path designated exactly one device, otherwise just log.
-            for i, tty in enumerate(ttys):
-                try:
+                # Eliminate tty nodes that are not physically present or
+                # inaccessible by the current user. Propagate IOError when
+                # path designated exactly one device, otherwise just log.
+                for i, tty in enumerate(ttys):
                     try:
                         termios.tcgetattr(open('/dev/%s' % tty))
                         ttys[i] = '/dev/%s' % tty
-                    except termios.error:
+                    except termios.error as error:
                         pass
-                except IOError as error:
-                    if not TTYS.pattern.endswith(r'\d+$'):
-                        raise
-                    else:
+                    except IOError as error:
                         log.debug(error)
+                        if not glob:
+                            raise error
 
-            ttys = [tty for tty in ttys if tty.startswith('/dev/')]
-            log.debug('avail: %s', ' '.join([tty for tty in ttys]))
-            return ttys, match.group(3), TTYS.pattern.endswith(r'\d+$')
+                ttys = [tty for tty in ttys if tty.startswith('/dev/')]
+                log.debug('avail: %s', ' '.join([tty for tty in ttys]))
+                return ttys, match.group(3), glob
 
         if match and match.group(1) == "com":
             if re.match(r'^COM\d+$', match.group(2)):

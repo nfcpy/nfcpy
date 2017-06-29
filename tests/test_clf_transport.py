@@ -11,11 +11,11 @@ from mock import call, MagicMock
 import termios
 import errno
 
-# import logging
-# logging.basicConfig(level=logging.DEBUG-1)
-# logging_level = logging.getLogger().getEffectiveLevel()
-# logging.getLogger("nfc.clf").setLevel(logging_level)
-# logging.getLogger("nfc.clf.transport").setLevel(logging_level)
+import logging
+logging.basicConfig(level=logging.DEBUG-1)
+logging_level = logging.getLogger().getEffectiveLevel()
+logging.getLogger("nfc.clf").setLevel(logging_level)
+logging.getLogger("nfc.clf.transport").setLevel(logging_level)
 
 
 def HEX(s):
@@ -23,60 +23,157 @@ def HEX(s):
 
 
 class TestTTY(object):
-    @pytest.mark.parametrize("path, nodes, tcgetattr, found", [  # noqa: F811
-        ('tty', ['stderr', 'urandom'], [],
-         None),
-        ('tty', ['stderr', 'ttyS0', 'ttyACM0', 'urandom'], [True, True],
-         (['/dev/ttyACM0', '/dev/ttyS0'], '', True)),
-        ('tty', ['stderr', 'ttyACM0', 'ttyAMA0', 'urandom'], [True, True],
-         (['/dev/ttyACM0', '/dev/ttyAMA0'], '', True)),
-        ('tty', ['stderr', 'ttyAMA0', 'ttyUSB0', 'urandom'], [True, True],
-         (['/dev/ttyAMA0', '/dev/ttyUSB0'], '', True)),
-        ('tty', ['stderr', 'ttyS0', 'ttyS1', 'urandom'], [True, termios.error],
-         (['/dev/ttyS0'], '', True)),
-        ('tty:S0', ['stderr', 'ttyS0', 'ttyS1', 'urandom'], [True, True],
-         (['/dev/ttyS0'], '', False)),
-        ('tty:S', ['stderr', 'ttyS0', 'ttyS1', 'urandom'], [True, True],
-         (['/dev/ttyS0', '/dev/ttyS1'], '', True)),
-        ('tty:0', ['stderr', 'ttyS0', 'ttyS1', 'urandom'], [True, True],
-         None),
-        ('tty:S0:drv', ['stderr', 'ttyS0', 'ttyS1', 'urandom'], [True, True],
-         (['/dev/ttyS0'], 'drv', False)),
-        ('tty:S:drv', ['stderr', 'ttyS0', 'ttyS1', 'urandom'], [True, True],
-         (['/dev/ttyS0', '/dev/ttyS1'], 'drv', True)),
-        ('tty:0:drv', ['stderr', 'ttyS0', 'ttyS1', 'urandom'], [True, True],
-         None),
-        ('tty::drv', ['stderr', 'ttyS0', 'ttyS1', 'urandom'], [True, True],
-         (['/dev/ttyS0', '/dev/ttyS1'], 'drv', True)),
-        ('tty', ['stderr', 'ttyS0', 'ttyACM0', 'urandom'], [IOError, True],
-         (['/dev/ttyS0'], '', True)),
-        ('tty:S0', ['stderr', 'ttyS0', 'ttyACM0', 'urandom'], [IOError],
-         IOError),
-        ('com', [('COM1',), ('COM2',), ('COM3',)], [],
-         (['COM1', 'COM2', 'COM3'], '', True)),
-        ('com:2', [('COM1',), ('COM2',), ('COM3',)], [],
-         (['COM2'], '', False)),
-        ('com:COM3', [('COM1',), ('COM2',), ('COM3',)], [],
-         (['COM3'], '', False)),
-        ('com:X', [('COM1',), ('COM2',), ('COM3',)], [],
-         None),
-        ('com_', [('COM1',), ('COM2',), ('COM3',)], [],
-         None),
-        ('', [('COM1',), ('COM2',), ('COM3',)], [],
-         None),
+    @pytest.mark.parametrize("path, avail, found", [  # noqa: F811
+        ('tty', [], ([], '', True)),
+        ('tty', ['cu.usbserial-1'], (['/dev/cu.usbserial-1'], '', True)),
+        ('tty', ['ttyUSB1'], (['/dev/ttyUSB1'], '', True)),
+        ('tty', ['ttyAMA1'], (['/dev/ttyAMA1'], '', True)),
+        ('tty', ['ttyACM1'], (['/dev/ttyACM1'], '', True)),
+        ('tty', ['ttyS1'], (['/dev/ttyS1'], '', True)),
+        ('tty', ['ttyS0', 'ttyS1'], (['/dev/ttyS0', '/dev/ttyS1'], '', True)),
+        ('tty::driver', ['ttyS1'], (['/dev/ttyS1'], 'driver', True)),
+        ('tty:abcd', [], None),
+        ('ttz', [], None),
     ])
-    def test_find(self, mocker, path, nodes, tcgetattr, found):
-        module = 'nfc.clf.transport'
-        mocker.patch(module+'.open')
-        mocker.patch(module+'.termios.tcgetattr').side_effect = tcgetattr
-        mocker.patch(module+'.os.listdir').return_value = nodes
-        mocker.patch(module+'.serial.tools.list_ports.comports') \
-              .return_value = nodes
-        if not found == IOError:
-            assert nfc.clf.transport.TTY.find(path) == found
-        else:
-            with pytest.raises(IOError):
-                nfc.clf.transport.TTY.find(path)
+    def test_find_tty_any(self, mocker, path, avail, found):
+        tty_nodes = list(sorted([
+            'cu.usbserial-0', 'cu.usbserial-1', 'cu.usbserial-FTSI7O',
+            'ttyACM0', 'ttyACM1', 'ttyACM10', 'ttyACM2',
+            'ttyAMA0', 'ttyAMA1', 'ttyAMA10', 'ttyAMA2',
+            'ttyUSB0', 'ttyUSB1', 'ttyUSB10', 'ttyUSB2',
+            'ttyS0', 'ttyS1', 'ttyS10', 'ttyS2'], key=lambda d: (len(d), d)))
+        dev_nodes = (['console', 'stderr', 'stdin', 'stdout', 'urandom'] +
+                     tty_nodes + ['tty', 'tty0', 'tty1', 'tty10', 'tty2'])
+        mocker.patch('nfc.clf.transport.open').return_value = True
+        mocker.patch('nfc.clf.transport.termios.tcgetattr').side_effect = [
+            (termios.error, [])[dev in avail] for dev in tty_nodes]
+        mocker.patch('nfc.clf.transport.os.listdir').return_value = dev_nodes
+        assert nfc.clf.transport.TTY.find(path) == found
+
+    def test_find_tty_err(self, mocker):  # noqa: F811
+        mod = 'nfc.clf.transport'
+        mocker.patch(mod + '.open').return_value = True
+        mocker.patch(mod + '.termios.tcgetattr').side_effect = IOError
+        mocker.patch(mod + '.os.listdir').return_value = ['ttyS0', 'ttyS1']
+        assert nfc.clf.transport.TTY.find('tty:S') == ([], '', True)
+        with pytest.raises(IOError):
+            assert nfc.clf.transport.TTY.find('tty:S0')
+        with pytest.raises(IOError):
+            assert nfc.clf.transport.TTY.find('tty:S1')
+
+    @pytest.mark.parametrize("path, avail, found", [  # noqa: F811
+        ('tty:S', [False, False, False, False], ([], '', True)),
+        ('tty:S', [False, True, False, False], (['/dev/ttyS1'], '', True)),
+        ('tty:S1', [True], (['/dev/ttyS1'], '', False)),
+        ('tty:S10', [True], (['/dev/ttyS10'], '', False)),
+        ('tty:S', [True, False, True, False],
+         (['/dev/ttyS0', '/dev/ttyS2'], '', True)),
+        ('tty:S:driver', [False, False, False, True],
+         (['/dev/ttyS10'], 'driver', True)),
+        ('tty:S:driver', [False, True, False, True],
+         (['/dev/ttyS1', '/dev/ttyS10'], 'driver', True)),
+        ('tty:ttyS1', [True], (['/dev/ttyS1'], '', False)),
+    ])
+    def test_find_tty_ser(self, mocker, path, avail, found):
+        tty_nodes = ['ttyS0', 'ttyS1', 'ttyS2', 'ttyS10']
+        mocker.patch('nfc.clf.transport.open').return_value = True
+        mocker.patch('nfc.clf.transport.termios.tcgetattr').side_effect = [
+            ([] if is_avail else termios.error) for is_avail in avail]
+        mocker.patch('nfc.clf.transport.os.listdir').return_value = tty_nodes
+        assert nfc.clf.transport.TTY.find(path) == found
+
+    @pytest.mark.parametrize("path, avail, found", [  # noqa: F811
+        ('tty:ACM', [False, False, False, False], ([], '', True)),
+        ('tty:ACM', [False, True, False, False], (['/dev/ttyACM1'], '', True)),
+        ('tty:ACM1', [True], (['/dev/ttyACM1'], '', False)),
+        ('tty:ACM10', [True], (['/dev/ttyACM10'], '', False)),
+        ('tty:ACM1:driver', [True], (['/dev/ttyACM1'], 'driver', False)),
+        ('tty:ACM', [True, False, True, False],
+         (['/dev/ttyACM0', '/dev/ttyACM2'], '', True)),
+        ('tty:ACM:driver', [False, True, False, False],
+         (['/dev/ttyACM1'], 'driver', True)),
+        ('tty:ttyACM1', [True], (['/dev/ttyACM1'], '', False)),
+    ])
+    def test_find_tty_acm(self, mocker, path, avail, found):
+        tty_nodes = ['ttyACM0', 'ttyACM1', 'ttyACM2', 'ttyACM10']
+        mocker.patch('nfc.clf.transport.open').return_value = True
+        mocker.patch('nfc.clf.transport.termios.tcgetattr').side_effect = [
+            ([] if is_avail else termios.error) for is_avail in avail]
+        mocker.patch('nfc.clf.transport.os.listdir').return_value = tty_nodes
+        assert nfc.clf.transport.TTY.find(path) == found
+
+    @pytest.mark.parametrize("path, avail, found", [  # noqa: F811
+        ('tty:AMA', [False, False, False, False], ([], '', True)),
+        ('tty:AMA', [False, True, False, False], (['/dev/ttyAMA1'], '', True)),
+        ('tty:AMA1', [True], (['/dev/ttyAMA1'], '', False)),
+        ('tty:AMA10', [True], (['/dev/ttyAMA10'], '', False)),
+        ('tty:AMA1:driver', [True], (['/dev/ttyAMA1'], 'driver', False)),
+        ('tty:AMA', [True, False, True, False],
+         (['/dev/ttyAMA0', '/dev/ttyAMA2'], '', True)),
+        ('tty:AMA:driver', [False, True, False, False],
+         (['/dev/ttyAMA1'], 'driver', True)),
+        ('tty:ttyAMA1', [True], (['/dev/ttyAMA1'], '', False)),
+    ])
+    def test_find_tty_ama(self, mocker, path, avail, found):
+        tty_nodes = ['ttyAMA0', 'ttyAMA1', 'ttyAMA2', 'ttyAMA10']
+        mocker.patch('nfc.clf.transport.open').return_value = True
+        mocker.patch('nfc.clf.transport.termios.tcgetattr').side_effect = [
+            ([] if is_avail else termios.error) for is_avail in avail]
+        mocker.patch('nfc.clf.transport.os.listdir').return_value = tty_nodes
+        assert nfc.clf.transport.TTY.find(path) == found
+
+    @pytest.mark.parametrize("path, avail, found", [  # noqa: F811
+        ('tty:USB', [False, False, False, False], ([], '', True)),
+        ('tty:USB', [False, True, False, False], (['/dev/ttyUSB1'], '', True)),
+        ('tty:USB1', [True], (['/dev/ttyUSB1'], '', False)),
+        ('tty:USB10', [True], (['/dev/ttyUSB10'], '', False)),
+        ('tty:USB1:driver', [True], (['/dev/ttyUSB1'], 'driver', False)),
+        ('tty:USB', [True, False, True, False],
+         (['/dev/ttyUSB0', '/dev/ttyUSB2'], '', True)),
+        ('tty:USB:driver', [False, True, False, False],
+         (['/dev/ttyUSB1'], 'driver', True)),
+        ('tty:ttyUSB1', [True], (['/dev/ttyUSB1'], '', False)),
+    ])
+    def test_find_tty_usb(self, mocker, path, avail, found):
+        tty_nodes = ['ttyUSB0', 'ttyUSB1', 'ttyUSB2', 'ttyUSB10']
+        mocker.patch('nfc.clf.transport.open').return_value = True
+        mocker.patch('nfc.clf.transport.termios.tcgetattr').side_effect = [
+            ([] if is_avail else termios.error) for is_avail in avail]
+        mocker.patch('nfc.clf.transport.os.listdir').return_value = tty_nodes
+        assert nfc.clf.transport.TTY.find(path) == found
+
+    @pytest.mark.parametrize("path, avail, found", [  # noqa: F811
+        ('tty:usbserial', [False, False, False], ([], '', True)),
+        ('tty:usbserial', [False, True, False],
+         (['/dev/cu.usbserial-1'], '', True)),
+        ('tty:usbserial', [True, True, False],
+         (['/dev/cu.usbserial-0', '/dev/cu.usbserial-1'], '', True)),
+        ('tty:usbserial-1', [True], (['/dev/cu.usbserial-1'], '', False)),
+        ('tty:usbserial-FTSI7X', [True],
+         (['/dev/cu.usbserial-FTSI7X'], '', False)),
+        ('tty:usbserial:driver', [False, True, False],
+         (['/dev/cu.usbserial-1'], 'driver', True)),
+    ])
+    def test_find_tty_mac(self, mocker, path, avail, found):
+        tty_nodes = 'cu.usbserial-0', 'cu.usbserial-1', 'cu.usbserial-FTSI7X',
+        mocker.patch('nfc.clf.transport.open').return_value = True
+        mocker.patch('nfc.clf.transport.termios.tcgetattr').side_effect = [
+            ([] if is_avail else termios.error) for is_avail in avail]
+        mocker.patch('nfc.clf.transport.os.listdir').return_value = tty_nodes
+        assert nfc.clf.transport.TTY.find(path) == found
+
+    @pytest.mark.parametrize("path, found", [  # noqa: F811
+        ('com', (['COM1', 'COM2', 'COM3'], '', True)),
+        ('com:2', (['COM2'], '', False)),
+        ('com:2:driver', (['COM2'], 'driver', False)),
+        ('com:COM3', (['COM3'], '', False)),
+        ('com:COM3:driver', (['COM3'], 'driver', False)),
+        ('com:X', None),
+    ])
+    def test_find_com_port(self, mocker, path, found):
+        mocker.patch('nfc.clf.transport.serial.tools.list_ports.comports') \
+              .return_value = [('COM1',), ('COM2',), ('COM3',)]
+        assert nfc.clf.transport.TTY.find(path) == found
 
     @pytest.fixture()  # noqa: F811
     def serial(self, mocker):
