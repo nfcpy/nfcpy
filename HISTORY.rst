@@ -1,6 +1,14 @@
 Changelog for nfcpy
 ===================
 
+0.13.1 (2017-07-01)
+-------------------
+
+* Restructured serial device discovery to find USB serial device nodes
+  on Mac OS X.
+
+* Increased regression test coverage.
+
 0.13.0 (2017-03-27)
 -------------------
 
