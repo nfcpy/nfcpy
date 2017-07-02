@@ -25,6 +25,7 @@ CLASSIFIERS = [
     "License :: OSI Approved :: European Union Public Licence 1.1 (EUPL 1.1)",
 ]
 INSTALL_REQUIRES = ["libusb1", "pyserial", "ndeflib", "pydes"]
+PYTHON_REQUIRES = ">=2.6, <3"
 
 ###############################################################################
 
@@ -74,4 +75,5 @@ if __name__ == "__main__":
         zip_safe=False,
         classifiers=CLASSIFIERS,
         install_requires=INSTALL_REQUIRES,
+        python_requires=PYTHON_REQUIRES,
     )

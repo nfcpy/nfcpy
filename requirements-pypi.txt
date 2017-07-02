@@ -3,10 +3,8 @@
 #
 # python setup.py sdist bdist_wheel
 #
-# python setup.py register -r test
 # twine upload -r test -s dist/nfcpy-x.y.z*
 #
-# python setup.py register -r pypi
 # twine upload -r pypi -s dist/nfcpy-x.y.z*
 #
 setuptools
