@@ -158,7 +158,7 @@ class Initiator(DataExchangeProtocol):
                 return None
 
         if self.target and atr_res:
-            if self.brs > (0 if self.target.brty == '106A' else 1):
+            if self.brs > ('106A', '212F', '424F').index(self.target.brty):
                 try:
                     psl_res = self.send_req_recv_res(psl_req, 0.1)
                 except nfc.clf.CommunicationError:
