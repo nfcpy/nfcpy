@@ -14,6 +14,7 @@ import logging
 logging.basicConfig(level=logging.DEBUG-1)
 logging_level = logging.getLogger().getEffectiveLevel()
 logging.getLogger("nfc.llcp").setLevel(logging_level)
+logging.getLogger("nfc.dep").setLevel(logging_level)
 
 
 def HEX(s):
@@ -33,7 +34,13 @@ def clf(mocker):
 
 @pytest.fixture
 def llc():
-    return nfc.llcp.llc.LogicalLinkController()
+    llc = nfc.llcp.llc.LogicalLinkController()
+    assert llc.cfg['recv-miu'] == 248
+    assert llc.cfg['send-lto'] == 500
+    assert llc.cfg['send-lsc'] == 3
+    assert llc.cfg['send-agf'] is True
+    assert llc.cfg['llcp-sec'] is True
+    return llc
 
 
 # =============================================================================
@@ -55,21 +62,75 @@ class TestServiceAccessPoint:
 # Logical Link Controller
 # =============================================================================
 class TestLogicalLinkController:
-    atr_res = 'D501 01FE0102030405060708 0000000832 46666D010113'
-    atr_res_frame = '18' + atr_res
+    @pytest.mark.parametrize("options, miu, lto, lsc, agf, sec", [
+        ({}, 248, 500, 3, True, True),
+        ({'miu': 128}, 128, 500, 3, True, True),
+        ({'lto': 100}, 248, 100, 3, True, True),
+        ({'lsc': 1}, 248, 500, 1, True, True),
+        ({'agf': False}, 248, 500, 3, False, True),
+        ({'sec': False}, 248, 500, 3, True, False),
+    ])
+    def test_init(self, options, miu, lto, lsc, agf, sec):
+        llc = nfc.llcp.llc.LogicalLinkController(**options)
+        assert llc.cfg['recv-miu'] == miu
+        assert llc.cfg['send-lto'] == lto
+        assert llc.cfg['send-lsc'] == lsc
+        assert llc.cfg['send-agf'] == agf
+        assert llc.cfg['llcp-sec'] == sec and nfc.llcp.llc.sec.OpenSSL
+        OpenSSL = nfc.llcp.llc.sec.OpenSSL
+        nfc.llcp.llc.sec.OpenSSL = None
+        llc = nfc.llcp.llc.LogicalLinkController(**options)
+        assert llc.cfg['llcp-sec'] is False
+        nfc.llcp.llc.sec.OpenSSL = OpenSSL
 
-    @pytest.fixture()  # noqa: F811
-    def mac(self, mocker, clf):
-        dep = nfc.dep.Initiator(clf)
-        target = nfc.clf.RemoteTarget("424F", atr_res=HEX(self.atr_res))
-        dep.clf.sense.return_value = target
-        dep.clf.exchange.side_effect = [HEX('04 D50500')]
-        assert dep.activate(None, brs=2) == HEX('46666D010113')
-        assert isinstance(dep.target, nfc.clf.RemoteTarget)
-        assert dep.target.brty == '424F'
-        assert dep.acm is True
-        return dep
+    @pytest.mark.parametrize("miu, lto, lsc, sec, gb", [
+        (128, 100, 0, False, HEX('')),
+        (128, 100, 0, False, HEX('46666D 010113 03020003')),
+        (128, 100, 0, True, HEX('46666D 010113 03020003 070104')),
+        (128, 100, 1, True, HEX('46666D 010113 03020003 070105')),
+        (248, 100, 3, True, HEX('46666D 010113 02020078 03020003 070107')),
+        (128, 500, 3, True, HEX('46666D 010113 03020003 040132 070107')),
+    ])
+    def test_activate_as_initiator(self, clf, miu, lto, lsc, sec, gb):
+        options = {'miu': miu, 'lto': lto, 'lsc': lsc, 'sec': sec}
+        llc = nfc.llcp.llc.LogicalLinkController(**options)
+        atr_res = HEX('D501 00010203040506070809 0000000832') + gb
+        clf.sense.return_value = nfc.clf.RemoteTarget("106A", atr_res=atr_res)
+        assert llc.activate(nfc.dep.Initiator(clf), brs=0) is bool(gb)
+        assert not gb or clf.sense.mock_calls[0][1][0].atr_req[16:] == gb
+        atr_res = HEX('D501 00010203040506070809 0000000B32') + gb
+        clf.sense.return_value = nfc.clf.RemoteTarget("106A", atr_res=atr_res)
+        assert llc.activate(nfc.dep.Initiator(clf), brs=0) is bool(gb)
+        assert not gb or clf.sense.mock_calls[0][1][0].atr_req[16:] == gb
 
-    def test_activate(self, llc, mac):
-        # llc.activate(mac)
-        pass
+    @pytest.mark.parametrize("miu, lto, lsc, sec, gb", [
+        (128, 100, 0, False, HEX('')),
+        (128, 100, 0, False, HEX('46666D 010113 03020003')),
+        (128, 100, 0, True, HEX('46666D 010113 03020003 070104')),
+        (128, 100, 1, True, HEX('46666D 010113 03020003 070105')),
+        (248, 100, 3, True, HEX('46666D 010113 02020078 03020003 070107')),
+        (128, 500, 3, True, HEX('46666D 010113 03020003 040132 070107')),
+    ])
+    def test_activate_as_target(self, clf, miu, lto, lsc, sec, gb):
+        options = {'miu': miu, 'lto': lto, 'lsc': lsc, 'sec': sec}
+        llc = nfc.llcp.llc.LogicalLinkController(**options)
+        atr_req = HEX('D400 00010203040506070809 00000032') + gb
+        dep_req = HEX('D406 000000')
+        target = nfc.clf.LocalTarget("106A", atr_req=atr_req, dep_req=dep_req)
+        clf.listen.return_value = target
+        assert llc.activate(nfc.dep.Target(clf), rwt=9) is bool(gb)
+        assert not gb or clf.listen.mock_calls[0][1][0].atr_res[17:] == gb
+        assert not gb or llc.mac.rwt == 4096/13.56E6 * pow(2, 9)
+
+    @pytest.mark.parametrize("options, gb, string", [
+        ({}, HEX('46666D 010113 02020078 040132'),
+         "LLC: Local(MIU=248, LTO=500ms) Remote(MIU=248, LTO=500ms)"),
+        ({'miu': 128, 'lto': 100}, HEX('46666D 010113'),
+         "LLC: Local(MIU=128, LTO=100ms) Remote(MIU=128, LTO=100ms)"),
+    ])
+    def test_format_str(self, clf, options, gb, string):
+        llc = nfc.llcp.llc.LogicalLinkController(**options)
+        atr_res = HEX('D501 00010203040506070809 0000000832') + gb
+        clf.sense.return_value = nfc.clf.RemoteTarget("106A", atr_res=atr_res)
+        assert llc.activate(nfc.dep.Initiator(clf), brs=0) is True
+        assert str(llc) == string

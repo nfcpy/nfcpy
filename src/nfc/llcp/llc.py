@@ -312,7 +312,7 @@ class LogicalLinkController(object):
         return self.cfg.get('llcp-dpc', 0) == 1
 
     def activate(self, mac, **options):
-        assert type(mac) in (nfc.dep.Initiator, nfc.dep.Target)
+        assert isinstance(mac, (nfc.dep.Initiator, nfc.dep.Target))
         self.mac = None
 
         wks = 1 + sum([1 << sap for sap in self.snl.values() if sap < 15])
@@ -334,15 +334,14 @@ class LogicalLinkController(object):
             self.link.CONNECT = True
             gb = mac.activate(gbi=gb, **options)
             self.run = self.run_as_initiator
-        elif isinstance(mac, nfc.dep.Target):
+        else:
             self.link.LISTEN = True
             gb = mac.activate(gbt=gb, **options)
             self.run = self.run_as_target
-        else:
-            gb = None
 
         if gb and gb.startswith('Ffm') and len(gb) >= 6:
-            if type(mac) == nfc.dep.Target and mac.rwt >= send_pax.lto*1E3:
+            if ((isinstance(mac, nfc.dep.Target)
+                 and mac.rwt >= send_pax.lto * 1E-3)):
                 msg = "local NFC-DEP RWT {0:.3f} contradicts LTO {1:.3f} sec"
                 log.warning(msg.format(mac.rwt, send_pax.lto*1E3))
 
