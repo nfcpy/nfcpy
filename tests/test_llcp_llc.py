@@ -264,7 +264,6 @@ class TestLogicalLinkController:
             threading.Timer(0.01, collect_and_dispatch, (llc,)).start()
             assert llc.resolve(name) == sap
 
-
     # -------------------------------------------------------------------------
     # Test As Target
     # -------------------------------------------------------------------------
