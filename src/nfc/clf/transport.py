@@ -25,7 +25,6 @@
 import os
 import re
 import errno
-import termios
 from binascii import hexlify
 
 try:
@@ -38,6 +37,11 @@ try:
     import serial.tools.list_ports
 except ImportError:  # pragma: no cover
     raise ImportError("missing serial module, try 'pip install pyserial'")
+
+try:
+    import termios
+except ImportError:  # pragma: no cover
+    assert os.name is not 'posix'
 
 import logging
 log = logging.getLogger(__name__)
@@ -108,7 +112,7 @@ class TTY(object):
                 return ["COM" + match.group(2)], match.group(3), False
             if re.match(r'^$', match.group(2)):
                 ports = [p[0] for p in serial.tools.list_ports.comports()]
-                log.debug('serial ports: %s', ' '.join([p for p in ports]))
+                log.debug('serial ports: %s', ' '.join(ports))
                 return ports, match.group(3), True
             log.error("invalid port in 'com' path: %r", match.group(2))
 
