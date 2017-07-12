@@ -1,6 +1,13 @@
 Changelog for nfcpy
 ===================
 
+0.13.2 (2017-07-12)
+-------------------
+
+* Fixes issue #73 "Importing termios prevents operation on Windows" by
+  catching the import error that occurs when running on a non-posix
+  system.
+
 0.13.1 (2017-07-01)
 -------------------
 
