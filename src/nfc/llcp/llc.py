@@ -27,6 +27,7 @@ from . import sec
 import nfc.clf
 import nfc.dep
 
+import re
 import time
 import errno
 import random
@@ -42,6 +43,8 @@ wks_map = {
     b"urn:nfc:sn:sdp": 1,
     b"urn:nfc:sn:snep": 4,
 }
+
+service_name_format = re.compile(r"^urn:nfc:[x]?sn:[a-zA-Z][a-zA-Z0-9-_:\.]*$")
 
 
 class ServiceAccessPoint(object):
@@ -760,9 +763,9 @@ class LogicalLinkController(object):
                 raise err.Error(errno.EACCES)
 
     def _bind_by_name(self, socket, name):
-        if not (name.startswith("urn:nfc:sn") or
-                name.startswith("urn:nfc:xsn")):
+        if not service_name_format.match(name):
             raise err.Error(errno.EFAULT)
+
         with self.lock:
             if self.snl.get(name) is not None:
                 raise err.Error(errno.EADDRINUSE)
