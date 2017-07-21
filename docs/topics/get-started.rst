@@ -165,7 +165,7 @@ Bluetooth connectivity). On a Raspberry Pi 2 it is always ttyAMA0.
    >>> import nfc
    >>> clf = nfc.ContactlessFrontend()
    >>> assert clf.open('tty:USB0:arygon') is True  # open /dev/ttyUSB0 with arygon driver
-   >>> assert clf.open('tty:AMA0:pn532') is True   # open /dev/ttyUSB0 with pn532 driver
+   >>> assert clf.open('tty:USB0:pn532') is True   # open /dev/ttyUSB0 with pn532 driver
    >>> assert clf.open('tty:AMA0') is True         # try different drivers on /dev/ttyAMA0
    >>> assert clf.open('tty') is True              # try all serial ports and drivers
    >>> clf.close()  # previous open calls implicitly closed the device
