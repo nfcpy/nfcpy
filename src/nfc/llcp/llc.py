@@ -279,7 +279,7 @@ class LogicalLinkController(object):
 
         def __str__(self):
             s = "sent/rcvd {0}/{1}".format(self.sent_count, self.rcvd_count)
-            for name in set(self.sent.keys() + self.rcvd.keys()):
+            for name in sorted(set(self.sent.keys() + self.rcvd.keys())):
                 s += " {name} {sent}/{rcvd}".format(
                     name=name, sent=self.sent[name], rcvd=self.rcvd[name])
             return s
@@ -573,18 +573,6 @@ class LogicalLinkController(object):
             c = self.sec.encrypt(a, send_pdu.data)
             return pdu_type(*pdu_type.decode_header(a), data=c)
 
-        def is_sap(sap):
-            return sap is not None
-
-        def is_raw(sap):
-            return sap and sap.mode == RAW_ACCESS_POINT
-
-        def is_ldl(sap):
-            return sap and sap.mode == LOGICAL_DATA_LINK
-
-        def is_dlc(sap):
-            return sap and sap.mode == DATA_LINK_CONNECTION
-
         miu_size = self.cfg["send-miu"]
         icv_size = self.sec.icv_size if self.sec else 0
         send_pdu = None
@@ -599,7 +587,8 @@ class LogicalLinkController(object):
             # sap.dequeue method is called with icv_size=0 because for
             # encrypted but not aggregated UI and I PDUs the receiver
             # must accept them with complete MIU plus ICV size.
-            for sap in sorted(filter(is_sap, self.sap), key=is_raw, reverse=1):
+            for sap in sorted(filter(None, self.sap), reverse=True,
+                              key=lambda sap: sap.mode == RAW_ACCESS_POINT):
                 send_pdu = sap.dequeue(miu_size, icv_size=0)
                 if send_pdu:
                     if self.sec and send_pdu.name in ("UI", "I"):
@@ -612,10 +601,11 @@ class LogicalLinkController(object):
             # the receive window is exhausted. If there is not yet a PDU to
             # send, this loop allows voluntary acknowledgement.
             if send_pdu is None:
-                for sap in filter(is_dlc, self.sap):
-                    send_pdu = sap.sendack()
-                    if send_pdu:
-                        break
+                for sap in filter(None, self.sap):
+                    if sap.mode == DATA_LINK_CONNECTION:
+                        send_pdu = sap.sendack()
+                        if send_pdu:
+                            break
 
             # Finish if either there is either no PDU to send or if PDU
             # aggregation is disabled.
@@ -630,7 +620,7 @@ class LogicalLinkController(object):
                 # The first loop will dequeue PDUs until the reamining miu_size
                 # is exhausted or all active SAP did not return a PDU.
                 deq_none = True
-                for sap in filter(is_sap, self.sap):
+                for sap in filter(None, self.sap):
                     send_pdu = sap.dequeue(miu_size, icv_size)
                     if send_pdu:
                         deq_none = False
@@ -645,13 +635,14 @@ class LogicalLinkController(object):
             # If the miu_size is not yet exhausted we query all data link
             # connection endpoints once for voluntary acknowledgements.
             if miu_size >= 0:
-                for sap in filter(is_dlc, self.sap):
-                    send_pdu = sap.sendack()
-                    if send_pdu:
-                        agf_pdu.append(send_pdu)
-                        miu_size = self.cfg["send-miu"] - len(agf_pdu) - 3
-                        if miu_size < 0:
-                            break
+                for sap in filter(None, self.sap):
+                    if sap.mode == DATA_LINK_CONNECTION:
+                        send_pdu = sap.sendack()
+                        if send_pdu:
+                            agf_pdu.append(send_pdu)
+                            miu_size = self.cfg["send-miu"] - len(agf_pdu) - 3
+                            if miu_size < 0:
+                                break
 
             return agf_pdu if agf_pdu.count > 1 else agf_pdu.first
 
@@ -797,9 +788,9 @@ class LogicalLinkController(object):
         if not isinstance(socket, tco.DataLinkConnection):
             raise err.Error(errno.EOPNOTSUPP)
         if not isinstance(backlog, int):
-            raise TypeError("backlog must be integer")
+            raise TypeError("backlog must be int type")
         if backlog < 0:
-            raise ValueError("backlog mmust not be negative")
+            raise ValueError("backlog can not be negative")
         backlog = min(backlog, 16)
         if not socket.is_bound:
             self.bind(socket)
@@ -812,19 +803,13 @@ class LogicalLinkController(object):
             raise err.Error(errno.EOPNOTSUPP)
         while True:
             client = socket.accept()
-            if not client.is_bound:
-                self.bind(client)
-            if self.sap[client.addr].insert_socket(client):
-                log.debug("new data link connection ({0} <=== {1})"
-                          .format(client.addr, client.peer))
-                if client.send_miu > self.cfg['send-miu']:
-                    log.warn("reducing outbound miu to comply with link miu")
-                    client.send_miu = self.cfg['send-miu']
-                return client
-            else:
-                dm = pdu.DisconnectedMode(
-                    client.peer, socket.addr, reason=0x20)
-                super(tco.DataLinkConnection, socket).send(dm)
+            self.sap[client.addr].insert_socket(client)
+            log.debug("new data link connection ({0} <=== {1})"
+                      .format(client.addr, client.peer))
+            if client.send_miu > self.cfg['send-miu']:
+                log.warn("reducing outbound miu to comply with link miu")
+                client.send_miu = self.cfg['send-miu']
+            return client
 
     def send(self, socket, message, flags):
         return self.sendto(socket, message, socket.peer, flags)
@@ -841,7 +826,7 @@ class LogicalLinkController(object):
             socket.send_miu = self.cfg['send-miu']
             return socket.send(message, flags)
         if not isinstance(message, bytes):
-            raise TypeError("sendto() argument *message* must be a string")
+            raise TypeError("the message argument must be a byte string")
         if isinstance(socket, tco.LogicalDataLink):
             if dest is None:
                 raise err.Error(errno.EDESTADDRREQ)
