@@ -21,7 +21,7 @@
 # -----------------------------------------------------------------------------
 from . import pdu
 from . import err
-from . import opt
+import nfc.llcp
 
 import errno
 import threading
@@ -80,24 +80,24 @@ class TransmissionControlObject(object):
         return self.addr is not None
 
     def setsockopt(self, option, value):
-        if option == opt.SO_SNDBUF:
+        if option == nfc.llcp.SO_SNDBUF:
             # with self.lock: self.send_buf = int(value)
             # adjustable send buffer only with non-blocking socket mode
             raise NotImplementedError("SO_SNDBUF can not be set")
-        elif option == opt.SO_RCVBUF:
+        elif option == nfc.llcp.SO_RCVBUF:
             with self.lock:
                 self.recv_buf = int(value)
         else:
             raise ValueError("invalid option value")
 
     def getsockopt(self, option):
-        if option == opt.SO_SNDMIU:
+        if option == nfc.llcp.SO_SNDMIU:
             return self.send_miu
-        if option == opt.SO_RCVMIU:
+        if option == nfc.llcp.SO_RCVMIU:
             return self.recv_miu
-        if option == opt.SO_SNDBUF:
+        if option == nfc.llcp.SO_SNDBUF:
             return self.send_buf
-        if option == opt.SO_RCVBUF:
+        if option == nfc.llcp.SO_RCVBUF:
             return self.recv_buf
 
     def bind(self, addr):
@@ -123,7 +123,7 @@ class TransmissionControlObject(object):
     def send(self, send_pdu, flags):
         with self.send_ready:
             self.send_queue.append(send_pdu)
-            if not (flags & opt.MSG_DONTWAIT):
+            if not (flags & nfc.llcp.MSG_DONTWAIT):
                 self.send_ready.wait()
 
     def recv(self):
@@ -380,24 +380,24 @@ class DataLinkConnection(TransmissionControlObject):
 
     def setsockopt(self, option, value):
         with self.lock:
-            if option == opt.SO_RCVMIU and self.state.CLOSED:
+            if option == nfc.llcp.SO_RCVMIU and self.state.CLOSED:
                 self.recv_miu = min(value, 2175)
                 return
-            if option == opt.SO_RCVBUF and self.state.CLOSED:
+            if option == nfc.llcp.SO_RCVBUF and self.state.CLOSED:
                 self.recv_win = min(value, 15)
                 self.recv_buf = self.recv_win
                 return
-            if option == opt.SO_RCVBSY:
+            if option == nfc.llcp.SO_RCVBSY:
                 self.mode.RECV_BUSY = bool(value)
                 return
             super(DataLinkConnection, self).setsockopt(option, value)
 
     def getsockopt(self, option):
-        if option == opt.SO_RCVBUF:
+        if option == nfc.llcp.SO_RCVBUF:
             return self.recv_win
-        if option == opt.SO_SNDBSY:
+        if option == nfc.llcp.SO_SNDBSY:
             return self.mode.SEND_BUSY
-        if option == opt.SO_RCVBSY:
+        if option == nfc.llcp.SO_RCVBSY:
             return self.mode.RECV_BUSY
         return super(DataLinkConnection, self).getsockopt(option)
 
@@ -500,7 +500,7 @@ class DataLinkConnection(TransmissionControlObject):
             if len(message) > self.send_miu:
                 raise err.Error(errno.EMSGSIZE)
             while self.send_window_slots == 0 and self.state.ESTABLISHED:
-                if flags & opt.MSG_DONTWAIT:
+                if flags & nfc.llcp.MSG_DONTWAIT:
                     raise err.Error(errno.EWOULDBLOCK)
                 self.log("waiting on busy send window")
                 self.send_token.wait()

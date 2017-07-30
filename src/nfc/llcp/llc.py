@@ -22,8 +22,8 @@
 from . import tco
 from . import pdu
 from . import err
-from . import opt
 from . import sec
+import nfc.llcp
 import nfc.clf
 import nfc.dep
 
@@ -698,7 +698,7 @@ class LogicalLinkController(object):
     def setsockopt(self, socket, option, value):
         if not isinstance(socket, tco.TransmissionControlObject):
             raise err.Error(errno.ENOTSOCK)
-        if option == opt.SO_RCVMIU:
+        if option == nfc.llcp.SO_RCVMIU:
             value = min(value, self.cfg['recv-miu'])
         socket.setsockopt(option, value)
         return socket.getsockopt(option)
