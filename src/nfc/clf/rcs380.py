@@ -726,7 +726,6 @@ class Device(device.Device):
 
     def listen_dep(self, target, timeout):
         log.debug("listen_dep for {0:.3f} sec".format(timeout))
-        print(target)
 
         if not target.sens_res or len(target.sens_res) != 2:
             raise ValueError("sens_res is required and must be 2 byte")
