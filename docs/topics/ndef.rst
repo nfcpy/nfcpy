@@ -141,7 +141,7 @@ attributes of the first record in the message.
 >>> message.type, message.name
 ('urn:nfc:wkt:T', '')
 
-If invalid or insufficient data is provided to to the NDEF message parser, an :class:`nfc.ndef.FormatError` or :class:`nfc.ndef.LengthError` is raised.
+If invalid or insufficient data is provided to the NDEF message parser, an :class:`nfc.ndef.FormatError` or :class:`nfc.ndef.LengthError` is raised.
 
 >>> try: nfc.ndef.Message('\xD0\x01\x00')
 ... except nfc.ndef.LengthError as e: print e
