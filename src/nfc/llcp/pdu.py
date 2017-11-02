@@ -331,8 +331,8 @@ class ParameterExchange(ProtocolDataUnit):
     @property
     def wks_text(self):
         t = {0: "LLC", 1: "SDP", 4: "SNEP"}
-        l = [t.get(i, str(i)) for i in range(15, -1, -1) if self.wks >> i & 1]
-        return ', '.join(l)
+        return ', '.join([
+            t.get(i, str(i)) for i in range(15, -1, -1) if self.wks >> i & 1])
 
     @property
     def lto(self):
