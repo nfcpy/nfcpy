@@ -32,7 +32,7 @@ logging.getLogger(__name__).setLevel(logging.INFO)
 
 # METADATA ####################################################################
 
-__version__ = "0.13.2"
+__version__ = "0.13.3"
 
 __title__ = "nfcpy"
 __description__ = "Python module for Near Field Communication."

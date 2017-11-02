@@ -188,16 +188,15 @@ class Tag(object):
                     import ndef
                     tag.ndef.records = [ndef.TextRecord('Hello World')]
 
-            Decoding and encoding are performed with a relaxed error
-            handling strategy that ignores minor errors in the NDEF
-            data. The `ndeflib <https://ndeflib.readthedocs.io>`_ does
-            also support 'strict' and 'ignore' error handling which
-            may be used like so::
+            Decoding is performed with a relaxed error handling
+            strategy that ignores minor errors in the NDEF data. The
+            `ndeflib <https://ndeflib.readthedocs.io>`_ does also
+            support 'strict' and 'ignore' error handling which may be
+            used like so::
 
                 from ndef import message_decoder, message_encoder
                 records = message_decoder(tag.ndef.octets, errors='strict')
-                octets = b''.join(message_encoder(records, errors='strict'))
-                tag.ndef.octets = octets
+                tag.ndef.octets = b''.join(message_encoder(records))
 
             """
             return list(message_decoder(self.octets, errors='relax'))
