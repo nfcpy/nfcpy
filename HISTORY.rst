@@ -1,6 +1,13 @@
 Changelog for nfcpy
 ===================
 
+0.13.3 (2017-11-02)
+-------------------
+
+* Corrects a documentation error about the errors parameter that is
+  not used for ndeflib.message_decoder() as wrongly stated in a docstr
+  embedded code example.
+
 0.13.2 (2017-07-12)
 -------------------
 
