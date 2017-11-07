@@ -640,7 +640,7 @@ class Type2TagMemoryReader(object):
     def __setitem__(self, key, value):
         self.__getitem__(key)
         if isinstance(key, slice):
-            if len(value) != len(xrange(*key.indices(0x100000))):
+            if len(value) != len(range(*key.indices(0x100000))):
                 msg = "{cls} requires item assignment of identical length"
                 raise ValueError(msg.format(cls=self.__class__.__name__))
         self._data_in_cache[key] = value
@@ -651,23 +651,27 @@ class Type2TagMemoryReader(object):
         raise TypeError(msg.format(cls=self.__class__.__name__))
 
     def _read_from_tag(self, stop):
-        start = len(self)
+        index = (len(self) >> 4) << 4
         try:
-            for i in xrange((start >> 4) << 4, stop, 16):
-                self._tag.sector_select(i >> 10)
-                self._data_from_tag[i:i+16] = self._tag.read(i >> 2)
-                self._data_in_cache[i:i+16] = self._data_from_tag[i:i+16]
+            while index < stop:
+                self._tag.sector_select(index >> 10)
+                data = self._tag.read(index >> 2)
+                self._data_from_tag[index:] = data
+                self._data_in_cache[index:] = data
+                index += 16
         except Type2TagCommandError:
             pass
 
     def _write_to_tag(self, stop):
+        index = 0
         try:
-            for i in xrange(0, stop, 4):
-                data = self._data_in_cache[i:i+4]
-                if data != self._data_from_tag[i:i+4]:
-                    self._tag.sector_select(i >> 10)
-                    self._tag.write(i >> 2, data)
-                    self._data_from_tag[i:i+4] = data
+            while index < stop:
+                data = self._data_in_cache[index:index+4]
+                if data != self._data_from_tag[index:index+4]:
+                    self._tag.sector_select(index >> 10)
+                    self._tag.write(index >> 2, data)
+                    self._data_from_tag[index:index+4] = data
+                index += 4
         except Type2TagCommandError:
             pass
 
