@@ -182,11 +182,14 @@ class Tag(object):
             from the NDEF message data or set the message data from a
             list of records. ::
 
+                from ndef import TextRecord
                 if tag.ndef is not None:
                     for record in tag.ndef.records:
                         print(record)
-                    import ndef
-                    tag.ndef.records = [ndef.TextRecord('Hello World')]
+                    try:
+                        tag.ndef.records = [TextRecord('Hello World')]
+                    except nfc.tag.TagCommandError as err:
+                        print("NDEF write failed: " + str(err))
 
             Decoding is performed with a relaxed error handling
             strategy that ignores minor errors in the NDEF data. The

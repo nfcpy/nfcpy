@@ -269,7 +269,7 @@ class TestDynamicMemoryTagNdef:
         assert tag.ndef.length == 461
         assert tag.ndef.octets == ndef_octets
 
-    def test_read_null_tlv_until_key_error(self, tag, mmap):
+    def test_read_null_tlv_until_read_error(self, tag, mmap):
         tag.clf.exchange.side_effect = [
             tag.target.rid_res[:2] + mmap[:12] + bytearray(108),  # RALL
             HEX("0F") + bytearray(8),  # READ8(15)
@@ -795,14 +795,15 @@ class TestMemoryReader:
         assert str(excinfo.value) == \
             "Type1TagMemoryReader requires item assignment of identical length"
 
-    @pytest.mark.parametrize("offset", [0, 120, 128])
+    @pytest.mark.parametrize("offset", [0, 1, 120, 121, 128])
     def test_read_mute_tag_at_offset(self, tag, offset):
         tag.clf.exchange.side_effect \
             = nfc.tag.tt1.Type1TagCommandError(nfc.tag.TIMEOUT_ERROR)
-        tag_memory = nfc.tag.tt1.Type1TagMemoryReader(tag)
-        tag_memory._data_from_tag = self.mmap[:offset]
-        with pytest.raises(IndexError):
+        with pytest.raises(nfc.tag.TagCommandError) as excinfo:
+            tag_memory = nfc.tag.tt1.Type1TagMemoryReader(tag)
+            tag_memory._data_from_tag = self.mmap[:offset]
             tag_memory[offset]
+        assert str(excinfo.value) == "unrecoverable timeout error"
 
     def test_write_raises_command_error(self, tag):
         tag.clf.exchange.side_effect = [
@@ -813,7 +814,9 @@ class TestMemoryReader:
         ]
         tag_memory = nfc.tag.tt1.Type1TagMemoryReader(tag)
         tag_memory[128] = 0x5A
-        tag_memory.synchronize()
+        with pytest.raises(nfc.tag.TagCommandError) as excinfo:
+            tag_memory.synchronize()
+        assert str(excinfo.value) == "invalid response data"
         tag.clf.exchange.assert_has_calls([
             mock.call(HEX('00 00 00 01020304'), 0.1),
             mock.call(HEX('02 0f 00000000 00000000 01020304'), 0.1),

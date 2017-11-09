@@ -819,8 +819,9 @@ class TestMemoryReader:
         ]
         tag.clf.exchange.side_effect = responses
         tag_memory = nfc.tag.tt2.Type2TagMemoryReader(tag)
-        with pytest.raises(IndexError):
+        with pytest.raises(nfc.tag.TagCommandError) as excinfo:
             tag_memory[16] = 0xfe
+        assert str(excinfo.value) == "unrecoverable timeout error"
         assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_write_error(self, tag):
@@ -841,5 +842,7 @@ class TestMemoryReader:
         tag.clf.exchange.side_effect = responses
         tag_memory = nfc.tag.tt2.Type2TagMemoryReader(tag)
         tag_memory[16] = 0xfe
-        tag_memory.synchronize()
+        with pytest.raises(nfc.tag.TagCommandError) as excinfo:
+            tag_memory.synchronize()
+        assert str(excinfo.value) == "unrecoverable timeout error"
         assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]

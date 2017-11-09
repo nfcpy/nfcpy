@@ -153,7 +153,7 @@ class Type2Tag(Tag):
                 self._readable = bool(tag_memory[15] >> 4 == 0)
                 self._writeable = bool(tag_memory[15] & 0xF == 0)
                 return True
-            except IndexError:
+            except Type2TagCommandError:
                 log.debug("first four memory pages were unreadable")
                 return False
 
@@ -178,7 +178,7 @@ class Type2Tag(Tag):
                 try:
                     tlv = read_tlv(tag_memory, offset, skip_bytes)
                     tlv_t, tlv_l, tlv_v = tlv
-                except IndexError:
+                except Type2TagCommandError:
                     return None
                 else:
                     logmsg = "tlv type {0} length {1} at offset {2}"
@@ -640,7 +640,7 @@ class Type2TagMemoryReader(object):
     def __setitem__(self, key, value):
         self.__getitem__(key)
         if isinstance(key, slice):
-            if len(value) != len(xrange(*key.indices(0x100000))):
+            if len(value) != len(range(*key.indices(0x100000))):
                 msg = "{cls} requires item assignment of identical length"
                 raise ValueError(msg.format(cls=self.__class__.__name__))
         self._data_in_cache[key] = value
@@ -651,25 +651,23 @@ class Type2TagMemoryReader(object):
         raise TypeError(msg.format(cls=self.__class__.__name__))
 
     def _read_from_tag(self, stop):
-        start = len(self)
-        try:
-            for i in xrange((start >> 4) << 4, stop, 16):
-                self._tag.sector_select(i >> 10)
-                self._data_from_tag[i:i+16] = self._tag.read(i >> 2)
-                self._data_in_cache[i:i+16] = self._data_from_tag[i:i+16]
-        except Type2TagCommandError:
-            pass
+        index = (len(self) >> 4) << 4
+        while index < stop:
+            self._tag.sector_select(index >> 10)
+            data = self._tag.read(index >> 2)
+            self._data_from_tag[index:] = data
+            self._data_in_cache[index:] = data
+            index += 16
 
     def _write_to_tag(self, stop):
-        try:
-            for i in xrange(0, stop, 4):
-                data = self._data_in_cache[i:i+4]
-                if data != self._data_from_tag[i:i+4]:
-                    self._tag.sector_select(i >> 10)
-                    self._tag.write(i >> 2, data)
-                    self._data_from_tag[i:i+4] = data
-        except Type2TagCommandError:
-            pass
+        index = 0
+        while index < stop:
+            data = self._data_in_cache[index:index+4]
+            if data != self._data_from_tag[index:index+4]:
+                self._tag.sector_select(index >> 10)
+                self._tag.write(index >> 2, data)
+                self._data_from_tag[index:index+4] = data
+            index += 4
 
     def synchronize(self):
         """Write pages that contain modified data back to tag memory."""

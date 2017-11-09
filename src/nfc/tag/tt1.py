@@ -60,7 +60,7 @@ def read_tlv(memory, offset, skip_bytes):
     # length (big endian).
     try:
         tlv_t, offset = (memory[offset], offset+1)
-    except IndexError:
+    except Type1TagCommandError:
         return (None, None, None)
 
     if tlv_t in (0x00, 0xFE):
@@ -144,9 +144,9 @@ class Type1Tag(Tag):
             # Otherwise, set state variables and return the ndef
             # message data as a bytearray (may be zero length).
             log.debug("read ndef data")
-            tag_memory = Type1TagMemoryReader(self.tag)
-
             try:
+                tag_memory = Type1TagMemoryReader(self.tag)
+
                 if tag_memory._header_rom[0] >> 4 != 1:
                     log.debug("proprietary type 1 tag memory structure")
                     return None
@@ -164,7 +164,7 @@ class Type1Tag(Tag):
 
                 tag_memory_size = (tag_memory[10] + 1) * 8
                 log.debug("tag memory size is %d byte" % tag_memory_size)
-            except IndexError:
+            except Type1TagCommandError:
                 log.debug("header rom and static memory were unreadable")
                 return None
 
@@ -511,48 +511,35 @@ class Type1TagMemoryReader(object):
 
     def _read_from_tag(self, stop):
         if len(self) < 120:
-            try:
-                read_all_data_response = self._tag.read_all()
-            except Type1TagCommandError:
-                return
-            else:
-                self._header_rom = read_all_data_response[0:2]
-                self._data_from_tag[0:] = read_all_data_response[2:]
-                self._data_in_cache[0:] = self._data_from_tag[0:]
+            read_all_data_response = self._tag.read_all()
+            self._header_rom = read_all_data_response[0:2]
+            self._data_from_tag[0:] = read_all_data_response[2:]
+            self._data_in_cache[0:] = self._data_from_tag[0:]
+
         if stop > 120 and len(self) < 128:
-            try:
-                read_block_response = self._tag.read_block(15)
-            except Type1TagCommandError:
-                return
-            else:
-                self._data_from_tag[120:128] = read_block_response
-                self._data_in_cache[120:128] = read_block_response
+            read_block_response = self._tag.read_block(15)
+            self._data_from_tag[120:128] = read_block_response
+            self._data_in_cache[120:128] = read_block_response
+
         while len(self) < stop:
-            try:
-                data = self._tag.read_segment(len(self) >> 7)
-            except Type1TagCommandError:
-                return
-            else:
-                self._data_from_tag.extend(data)
-                self._data_in_cache.extend(data)
+            data = self._tag.read_segment(len(self) >> 7)
+            self._data_from_tag.extend(data)
+            self._data_in_cache.extend(data)
 
     def _write_to_tag(self, stop):
-        try:
-            hr0 = self._header_rom[0]
-            if hr0 >> 4 == 1 and hr0 & 0x0F != 1:
-                for i in xrange(0, stop, 8):
-                    data = self._data_in_cache[i:i+8]
-                    if data != self._data_from_tag[i:i+8]:
-                        self._tag.write_block(i//8, data)
-                        self._data_from_tag[i:i+8] = data
-            else:
-                for i in xrange(0, stop):
-                    data = self._data_in_cache[i]
-                    if data != self._data_from_tag[i]:
-                        self._tag.write_byte(i, data)
-                        self._data_from_tag[i] = data
-        except Type1TagCommandError as error:
-            log.error(str(error))
+        hr0 = self._header_rom[0]
+        if hr0 >> 4 == 1 and hr0 & 0x0F != 1:
+            for i in xrange(0, stop, 8):
+                data = self._data_in_cache[i:i+8]
+                if data != self._data_from_tag[i:i+8]:
+                    self._tag.write_block(i//8, data)
+                    self._data_from_tag[i:i+8] = data
+        else:
+            for i in xrange(0, stop):
+                data = self._data_in_cache[i]
+                if data != self._data_from_tag[i]:
+                    self._tag.write_byte(i, data)
+                    self._data_from_tag[i] = data
 
     def synchronize(self):
         """Write pages that contain modified data back to tag memory."""

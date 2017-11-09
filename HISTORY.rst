@@ -1,6 +1,13 @@
 Changelog for nfcpy
 ===================
 
+0.13.4 (2017-11-10)
+-------------------
+
+* Raise nfc.tag.TagCommandError when NDEF data could not be written to
+  the tag. Previously this was captured within the tag memory cache
+  for Type1Tag and Type2Tag and raised as IndexError.
+
 0.13.3 (2017-11-02)
 -------------------
 
