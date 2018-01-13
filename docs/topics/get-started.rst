@@ -27,8 +27,8 @@ but a much simpler approach is to use the `Zadig`_ Windows application
 (download and run zadig, select your device and choose the WinUSB
 driver to install). The libusb library for Windows can be downloaded
 from `libusb`_ (Downloads -> Latest Windows Binaries) as a 7z
-archive. Just unpack and copy ``MS64\dll\libusb-1.0.dll`` to
-``C:\Windows\System32`` and ``MS32\dll\libusb-1.0.dll`` to the
+archive. Just unpack and copy ``MS32\dll\libusb-1.0.dll`` to
+``C:\Windows\System32`` and ``MS64\dll\libusb-1.0.dll`` to the
 ``C:\Windows\SysWOW64`` directory.
 
 **Install Python and nfcpy**
