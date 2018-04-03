@@ -388,16 +388,19 @@ def init(transport):
         initial_timeout = 100   # milliseconds
         change_baudrate = True  # try higher speeds
         if sys.platform.startswith('linux'):
-            for line in open("/proc/cpuinfo"):
-                if line.startswith("Hardware") and "BCM270" in line:
-                    log.debug("running on Raspberry Pi")
-                    if transport.port.startswith("/dev/ttyUSB"):
-                        log.debug("ttyUSB requires more time for first ack")
-                        initial_timeout = 1500  # milliseconds
-                    elif transport.port == "/dev/ttyS0":
-                        log.debug("ttyS0 can only do 115.2 kbps on RPi3")
-                        change_baudrate = False  # RPi3 'mini uart'
-                    break
+            board = ""  # Raspi board will identify through device tree
+            try:
+                board = open('/proc/device-tree/model').read().strip('\x00')
+            except IOError:
+                pass
+            if board.startswith("Raspberry Pi"):
+                log.debug("running on {}".format(board))
+                if transport.port.startswith("/dev/ttyUSB"):
+                    log.debug("ttyUSB requires more time for first ack")
+                    initial_timeout = 1500  # milliseconds
+                elif transport.port == "/dev/ttyS0":
+                    log.debug("ttyS0 can only do 115.2 kbps")
+                    change_baudrate = False  # RPi 'mini uart'
 
         get_version_cmd = bytearray.fromhex("0000ff02fed4022a00")
         get_version_rsp = bytearray.fromhex("0000ff06fad50332")

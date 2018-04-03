@@ -205,7 +205,7 @@ class TestDevice(base_clf_pn53x.TestDevice):
 
     def test_init_linux_stty_set_none(self, mocker, transport):  # noqa: F811
         mocker.patch('nfc.clf.pn532.Device.__init__').return_value = None
-        mocker.patch('nfc.clf.pn532.open').return_value = ["cpuinfo"]
+        mocker.patch('nfc.clf.pn532.open').side_effect = IOError
         mocker.patch('os.system').return_value = -1
         sys.platform = "linux"
 
@@ -223,7 +223,7 @@ class TestDevice(base_clf_pn53x.TestDevice):
 
     def test_init_linux_stty_set_460800(self, mocker, transport):  # noqa: F811
         mocker.patch('nfc.clf.pn532.Device.__init__').return_value = None
-        mocker.patch('nfc.clf.pn532.open').return_value = ["cpuinfo"]
+        mocker.patch('nfc.clf.pn532.open').side_effect = IOError
         stty = mocker.patch('os.system')
         stty.side_effect = [-1, 0, None]
         sys.platform = "linux"
@@ -249,7 +249,8 @@ class TestDevice(base_clf_pn53x.TestDevice):
 
     def test_init_raspi_tty_ser(self, mocker, transport):  # noqa: F811
         mocker.patch('nfc.clf.pn532.Device.__init__').return_value = None
-        mocker.patch('nfc.clf.pn532.open').return_value = ["Hardware BCM270"]
+        device_tree_model = mocker.mock_open(read_data=b"Raspberry Pi")
+        mocker.patch('nfc.clf.pn532.open', device_tree_model)
         type(transport.tty).port = PropertyMock(return_value='/dev/ttyS0')
         stty = mocker.patch('os.system')
         stty.return_value = -1
@@ -274,7 +275,8 @@ class TestDevice(base_clf_pn53x.TestDevice):
 
     def test_init_raspi_tty_usb(self, mocker, transport):  # noqa: F811
         mocker.patch('nfc.clf.pn532.Device.__init__').return_value = None
-        mocker.patch('nfc.clf.pn532.open').return_value = ["Hardware BCM270"]
+        device_tree_model = mocker.mock_open(read_data=b"Raspberry Pi")
+        mocker.patch('nfc.clf.pn532.open', device_tree_model)
         type(transport.tty).port = PropertyMock(return_value='/dev/ttyUSB0')
         stty = mocker.patch('os.system')
         stty.return_value = -1
@@ -304,7 +306,8 @@ class TestDevice(base_clf_pn53x.TestDevice):
 
     def test_init_raspi_tty_ama(self, mocker, transport):  # noqa: F811
         mocker.patch('nfc.clf.pn532.Device.__init__').return_value = None
-        mocker.patch('nfc.clf.pn532.open').return_value = ["Hardware BCM270"]
+        device_tree_model = mocker.mock_open(read_data=b"Raspberry Pi")
+        mocker.patch('nfc.clf.pn532.open', device_tree_model)
         type(transport.tty).port = PropertyMock(return_value='/dev/ttyAMA0')
         stty = mocker.patch('os.system')
         stty.return_value = -1
@@ -332,11 +335,9 @@ class TestDevice(base_clf_pn53x.TestDevice):
             call(timeout=100), call(timeout=100),
         ]
 
-    def test_init_linux_version_ack_err(self, mocker, transport):  # noqa: F811
+    def test_init_version_ack_err(self, mocker, transport):  # noqa: F811
         mocker.patch('nfc.clf.pn532.Device.__init__').return_value = None
-        mocker.patch('nfc.clf.pn532.open').return_value = ["cpuinfo"]
-        mocker.patch('os.system').return_value = -1
-        sys.platform = "linux"
+        sys.platform = ""
 
         transport.write.return_value = None
         transport.read.side_effect = [
@@ -349,11 +350,9 @@ class TestDevice(base_clf_pn53x.TestDevice):
             HEX(10 * '00') + CMD('02'),                   # GetFirmwareVersion
         ]]
 
-    def test_init_linux_version_rsp_err(self, mocker, transport):  # noqa: F811
+    def test_init_version_rsp_err(self, mocker, transport):  # noqa: F811
         mocker.patch('nfc.clf.pn532.Device.__init__').return_value = None
-        mocker.patch('nfc.clf.pn532.open').return_value = ["cpuinfo"]
-        mocker.patch('os.system').return_value = -1
-        sys.platform = "linux"
+        sys.platform = ""
 
         transport.write.return_value = None
         transport.read.side_effect = [
@@ -366,11 +365,9 @@ class TestDevice(base_clf_pn53x.TestDevice):
             HEX(10 * '00') + CMD('02'),                   # GetFirmwareVersion
         ]]
 
-    def test_init_linux_sam_cfg_ack_err(self, mocker, transport):  # noqa: F811
+    def test_init_sam_cfg_ack_err(self, mocker, transport):  # noqa: F811
         mocker.patch('nfc.clf.pn532.Device.__init__').return_value = None
-        mocker.patch('nfc.clf.pn532.open').return_value = ["cpuinfo"]
-        mocker.patch('os.system').return_value = -1
-        sys.platform = "linux"
+        sys.platform = ""
 
         transport.write.return_value = None
         transport.read.side_effect = [
@@ -385,11 +382,9 @@ class TestDevice(base_clf_pn53x.TestDevice):
             HEX(10 * '00') + CMD('14 010000'),            # SAMConfiguration
         ]]
 
-    def test_init_linux_sam_cfg_rsp_err(self, mocker, transport):  # noqa: F811
+    def test_init_sam_cfg_rsp_err(self, mocker, transport):  # noqa: F811
         mocker.patch('nfc.clf.pn532.Device.__init__').return_value = None
-        mocker.patch('nfc.clf.pn532.open').return_value = ["cpuinfo"]
-        mocker.patch('os.system').return_value = -1
-        sys.platform = "linux"
+        sys.platform = ""
 
         transport.write.return_value = None
         transport.read.side_effect = [
@@ -406,7 +401,7 @@ class TestDevice(base_clf_pn53x.TestDevice):
 
     def test_init_linux_setbaud_ack_err(self, mocker, transport):  # noqa: F811
         mocker.patch('nfc.clf.pn532.Device.__init__').return_value = None
-        mocker.patch('nfc.clf.pn532.open').return_value = ["cpuinfo"]
+        mocker.patch('nfc.clf.pn532.open').side_effect = IOError
         stty = mocker.patch('os.system')
         stty.side_effect = [-1, 0, None]
         sys.platform = "linux"
@@ -433,7 +428,7 @@ class TestDevice(base_clf_pn53x.TestDevice):
 
     def test_init_linux_setbaud_rsp_err(self, mocker, transport):  # noqa: F811
         mocker.patch('nfc.clf.pn532.Device.__init__').return_value = None
-        mocker.patch('nfc.clf.pn532.open').return_value = ["cpuinfo"]
+        mocker.patch('nfc.clf.pn532.open').side_effect = IOError
         stty = mocker.patch('os.system')
         stty.side_effect = [-1, 0, None]
         sys.platform = "linux"
