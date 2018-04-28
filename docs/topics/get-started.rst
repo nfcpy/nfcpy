@@ -12,46 +12,69 @@ Installation
 .. _WinUSB: https://msdn.microsoft.com/en-us/library/ff540196.aspx
 .. _Zadig: http://zadig.akeo.ie/
 .. _ndeflib: http://ndeflib.readthedocs.io/en/stable/
+.. _7zip: https://www.7-zip.org/download.html
+.. _Python: https://www.python.org/downloads/
 
-**Install libusb**
+NFCPy requires the library `libusb`_ for generic access to USB devices. 
 
-The `libusb`_ library provides generic access to USB devices. Linux
-distributions usually have this installed, otherwise it should be
+**Install libusb (Linux)**
+
+Linux distributions usually have this installed, otherwise it should be
 available through the standard package manager (beware not to choose
-the old version 0.x).
+the old version ``0.x``).
 
-Windows users will have a little work to (i) install the Microsoft
-`WinUSB`_ driver and (ii) place a copy of the libusb library into the
-system folder. Microsoft provides Instructions to install `WinUSB`_
-but a much simpler approach is to use the `Zadig`_ Windows application
-(download and run zadig, select your device and choose the WinUSB
-driver to install). The libusb library for Windows can be downloaded
-from `libusb`_ (Downloads -> Latest Windows Binaries) as a 7z
-archive. Just unpack and copy ``MS32\dll\libusb-1.0.dll`` to
-``C:\Windows\System32`` and ``MS64\dll\libusb-1.0.dll`` to the
-``C:\Windows\SysWOW64`` directory.
+**Install libusb (Windows)**
+
+Windows users will have to manually install `WinUSB`_ and `libusb`_. 
+Microsoft provides instructions to install `WinUSB`_ but a much 
+simpler approach is to use `Zadig`_ (a driver installation helper
+application).
+
+* Download `Zadig`_
+* Run the standalone exe
+* Click Options -> List All Devices 
+* Select your NFC reading/writing device from the list
+* Select the WinUSB driver from the other drop down and install it
+
+Then, install libusb:
+
+* Download `libusb`_ (Downloads -> Latest Windows Binaries).
+* Unpack the 7z archive (you may use `7zip`_).
+* Copy ``MS32\dll\libusb-1.0.dll`` to ``C:\Windows\System32``.
+* Copy ``MS32\dll\libusb-1.0.dll`` to ``C:\Windows\SysWOW64``.
+
+Note: you copy the 32bit dll to both the ``System32`` and ``SysWOW64``
+directories. If you are experiencing errors related to "invalid
+64 bit applications" try copying the dll from ``MS64\dll\libusb-1.0.dll``
+to ``C:\Windows\SysWOW64`` instead.
 
 **Install Python and nfcpy**
 
-Python is usually installed on Linux, otherwise can be downloaded at
-https://www.python.org/downloads/. Windows users may grab an installer
-at https://www.python.org/downloads/windows/. Choose the latest 2.x
-version, *nfcpy* is not yet ready for Python 3.
+Download and install the latest version of `Python`_ 2.7.x (
+*nfcpy* does not support Python 3 (yet)[#py3issue]).
 
-With Python installed use `pip`_ to install the latest stable version
-of nfcpy. This will also install the required libusb1 and pyserial
-modules.
+Note: Python may already be installed on your system if you are
+a Linux user.
+
+Once Python is installed use `pip`_ to install the latest stable 
+version of *nfcpy*. This will also install the required ``libusb1`` 
+and ``pyserial`` Python modules.
 
 .. code-block:: shell
 
    $ pip install -U nfcpy
 
-Windows users may have to use ``C:\Python27\Scripts\pip.exe``.
+Windows users will want to ensure they have configured their 
+environment's PATH correctly, otherwise they will not be able to 
+access ``pip`` on the command line. It is usually located at 
+``C:\Python27\Scripts\pip.exe`` so they must ensure 
+``C:\Python27\Scripts\`` is on their PATH.)
+
 
 **Verify installation**
 
-Check if all is correctly installed and *nfcpy* finds your contactless
-reader (Windows users may have to use``C:\Python27\python.exe``).
+Check if everything isntalled correctly and that *nfcpy* is able
+to find your contactless reader.
 
 .. code-block:: shell
 
@@ -590,3 +613,6 @@ different service name.
 
 .. _NFC Forum Assigned Numbers Register:
    http://members.nfc-forum.org/specs/nfc_forum_assigned_numbers_register
+
+
+.. [#py3issue] https://github.com/nfcpy/nfcpy/issues/47
