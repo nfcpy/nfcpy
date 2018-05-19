@@ -73,7 +73,7 @@ access ``pip`` on the command line. It is usually located at
 
 **Verify installation**
 
-Check if everything isntalled correctly and that *nfcpy* is able
+Check if everything installed correctly and that *nfcpy* is able
 to find your contactless reader.
 
 .. code-block:: shell
