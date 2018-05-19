@@ -25,6 +25,7 @@ import nfc.clf.transport
 
 import os
 import errno
+import logging
 import platform
 import argparse
 import subprocess
@@ -45,6 +46,11 @@ def main(args):
     print("This is the %s version of nfcpy run in Python %s\non %s" %
           (nfc.__version__, platform.python_version(), platform.platform()))
     print("I'm now searching your system for contactless devices")
+
+    logging.basicConfig()
+    log_levels = (logging.WARN, logging.INFO, logging.DEBUG, logging.DEBUG-1)
+    log_level = log_levels[min(args.verbose, len(log_levels) - 1)]
+    logging.getLogger('nfc').setLevel(log_level)
 
     found = 0
     for vid, pid, bus, dev in nfc.clf.transport.USB.find("usb"):
@@ -200,5 +206,9 @@ parser = argparse.ArgumentParser(
 parser.add_argument(
     "--search-tty", action="store_true",
     help="do also search for serial devices on linux")
+
+parser.add_argument(
+    "--verbose", "-v", action="count", default=0,
+    help="be verbose. Multiple -v options increase the verbosity.")
 
 main(parser.parse_args())
