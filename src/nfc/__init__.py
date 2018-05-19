@@ -32,7 +32,7 @@ logging.getLogger(__name__).setLevel(logging.INFO)
 
 # METADATA ####################################################################
 
-__version__ = "0.13.4"
+__version__ = "0.13.5"
 
 __title__ = "nfcpy"
 __description__ = "Python module for Near Field Communication."
@@ -42,6 +42,6 @@ __author__ = "Stephen Tiedemann"
 __email__ = "stephen.tiedemann@gmail.com"
 
 __license__ = "EUPL"
-__copyright__ = "Copyright (c) 2009, 2017 Stephen Tiedemann"
+__copyright__ = "Copyright (c) 2009, 2018 Stephen Tiedemann"
 
 ###############################################################################

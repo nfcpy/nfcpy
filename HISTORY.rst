@@ -1,6 +1,23 @@
 Changelog for nfcpy
 ===================
 
+0.13.5 (2018-05-19)
+-------------------
+
+* Raise TagCommandError when NDEF data could not be written to the
+  tag. Previously this was captured within the tag memory cache for
+  Type1Tag and Type2Tag and only raised as IndexError.
+
+* Improved and corrected documentation for libusb Windows DLL
+  installation (thanks to @ghxbob for PR #95 and @henrycjc for PR
+  #112).
+
+* Identify Raspberry Pi via device tree model file (instead of
+  /proc/cpuinfo).
+
+* Allow debug logs with `python -m nfc -verbose` to ease bug reporting
+  when reader enumeration fails.
+
 0.13.4 (2017-11-10)
 -------------------
 
