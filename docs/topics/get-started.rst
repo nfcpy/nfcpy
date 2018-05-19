@@ -51,7 +51,7 @@ to ``C:\Windows\SysWOW64`` instead.
 **Install Python and nfcpy**
 
 Download and install the latest version of `Python`_ 2.7.x (
-*nfcpy* does not support Python 3 (yet)[#py3issue]).
+*nfcpy* does not support Python 3 (yet) [#py3issue]_).
 
 Note: Python may already be installed on your system if you are
 a Linux user.
