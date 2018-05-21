@@ -51,6 +51,7 @@ import time
 import struct
 import operator
 from binascii import hexlify
+import six
 
 import logging
 log = logging.getLogger(__name__)
@@ -108,7 +109,7 @@ class CommunicationError:
                0x00000800: "TRANSMIT_TIMEOUT_ERROR",
                0x80000000: "RECEIVE_LENGTH_ERROR"
                }
-    str2err = dict([(v, k) for k, v in err2str.iteritems()])
+    str2err = dict([(v, k) for k, v in six.iteritems(err2str)])
 
     def __init__(self, status_bytes):
         self.errno = struct.unpack('<L', str(status_bytes))[0]
@@ -248,7 +249,7 @@ class Chipset(object):
                 "check_sof", "add_eof", "check_eof", "rfu", "deaf_time",
                 "continuous_receive_mode", "min_len_for_crm",
                 "type_1_tag_rrdd", "rfca", "guard_time")
-        for key, value in sorted(kwargs.iteritems()):
+        for key, value in sorted(six.iteritems(kwargs)):
             data.extend(bytearray([KEYS.index(key), int(value)]))
         if len(data) > 0:
             data = self.send_command(0x02, data)
@@ -283,7 +284,7 @@ class Chipset(object):
         data = bytearray() if data is None else bytearray(data)
         KEYS = ("send_timeout_time_unit", "rf_off_error",
                 "continuous_receive_mode")
-        for key, value in sorted(kwargs.iteritems()):
+        for key, value in sorted(six.iteritems(kwargs)):
             data.extend(bytearray([KEYS.index(key), int(value)]))
         data = self.send_command(0x42, bytearray(data))
         if data and data[0] != 0:

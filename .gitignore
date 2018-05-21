@@ -4,9 +4,12 @@
 .tox
 .cache
 .coverage*
+.pytest_cache/
 __pycache__/
 docs/_build/
 htmlcov
 dist
 python-2
 python-3
+.idea/
+.env/

@@ -214,7 +214,8 @@ class Chipset(pn532.Chipset):
         if frame[0] != 0x80:
             log.error("expected a RDR_to_PC_DataBlock")
             raise IOError(errno.EIO, os.strerror(errno.EIO))
-        if len(frame) != 10 + struct.unpack("<I", buffer(frame, 1, 4))[0]:
+        # if len(frame) != 10 + struct.unpack("<I", buffer(frame, 1, 4))[0]:
+        if len(frame) != 10 + struct.unpack("<I", frame[1:5])[0]:
             log.error("RDR_to_PC_DataBlock length mismatch")
             raise IOError(errno.EIO, os.strerror(errno.EIO))
         return frame[10:]

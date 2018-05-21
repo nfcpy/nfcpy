@@ -25,6 +25,7 @@
 import os
 import re
 import errno
+import six
 from binascii import hexlify
 
 try:
@@ -247,7 +248,7 @@ class USB(object):
             raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
 
         try:
-            first_setting = dev.iterSettings().next()
+            first_setting = six.next(dev.iterSettings())
         except StopIteration:
             log.error("no usb configuration settings, please replug device")
             raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))

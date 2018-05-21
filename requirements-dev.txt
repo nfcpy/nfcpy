@@ -21,3 +21,4 @@ flake8            # syntax and style checks  "flake8 src/"
 tox               # run tests before push    "tox -c tox.ini"
 sphinx            # to create documentation  "(cd docs && make html doctest)"
 sphinx-rtd-theme  # with the final layout    "firefox docs/_build/html/index.html"
+six               # py3 compat
