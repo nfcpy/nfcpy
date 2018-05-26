@@ -25,7 +25,7 @@
 import logging
 log = logging.getLogger(__name__)
 
-from record import Record
+from .record import Record
 
 class UriRecord(Record):
     """Wraps an NDEF URI record and provides access to the :attr:`uri`
