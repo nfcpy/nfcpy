@@ -40,21 +40,25 @@ Then, install libusb:
 
 * Download `libusb`_ (Downloads -> Latest Windows Binaries).
 * Unpack the 7z archive (you may use `7zip`_).
-* Copy ``MS32\dll\libusb-1.0.dll`` to ``C:\Windows\System32``.
-* Copy ``MS32\dll\libusb-1.0.dll`` to ``C:\Windows\SysWOW64``.
+* For 32-bit Windows:
 
-Note: you copy the 32bit dll to both the ``System32`` and ``SysWOW64``
-directories. If you are experiencing errors related to "invalid
-64 bit applications" try copying the dll from ``MS64\dll\libusb-1.0.dll``
-to ``C:\Windows\SysWOW64`` instead.
+  * Copy ``MS32\dll\libusb-1.0.dll`` to ``C:\Windows\System32``.
+
+* For 64-bit Windows:
+
+  * Copy ``MS64\dll\libusb-1.0.dll`` to ``C:\Windows\System32``.
+  * Copy ``MS32\dll\libusb-1.0.dll`` to ``C:\Windows\SysWOW64``.
+
 
 **Install Python and nfcpy**
 
 Download and install the latest version of `Python`_ 2.7.x (
 *nfcpy* does not support Python 3 (yet) [#py3issue]_).
 
-Note: Python may already be installed on your system if you are
-a Linux user.
+.. note::
+
+   Python may already be installed on your system if you are
+   a Linux user.
 
 Once Python is installed use `pip`_ to install the latest stable 
 version of *nfcpy*. This will also install the required ``libusb1`` 
