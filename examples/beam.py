@@ -237,7 +237,7 @@ def run_recv_send_action(args, llc, rcvd_ndef_msg):
                 break
     for msg_recv, msg_send in args.translations:
         if msg_recv == rcvd_ndef_msg:
-            log.info('rcvd beam {0!r}'.format(msg_rcvd))
+            log.info('rcvd beam {0!r}'.format(msg_recv))
             log.info('send beam {0!r}'.format(msg_send))
             nfc.snep.SnepClient(llc).put(msg_send)
             break
