@@ -79,7 +79,7 @@ def read_tlv(memory, offset, skip_bytes):
     if tlv_l == 0xFF:
         tlv_l, offset = (unpack(">H", memory[offset:offset+2])[0], offset+2)
     tlv_v = bytearray(tlv_l)
-    for i in xrange(tlv_l):
+    for i in range(tlv_l):
         while (offset + i) in skip_bytes:
             offset += 1
         tlv_v[i] = memory[offset+i]
@@ -307,7 +307,7 @@ class Type2Tag(Tag):
             if same_data > 0:
                 lines.append(pagedump(page, this_data))
 
-        for i in xrange(4, stop if stop is not None else 0x40000):
+        for i in range(4, stop if stop is not None else 0x40000):
             try:
                 self.sector_select(i >> 8)
                 this_data = self.read(i)[0:4]
@@ -375,7 +375,7 @@ class Type2Tag(Tag):
             if wipe is not None:
                 memory_size = memory[14] * 8 + 16
                 skip_bytes = self.ndef._skip_bytes
-                for offset in xrange(offset + 3, memory_size):
+                for offset in range(offset + 3, memory_size):
                     if offset not in skip_bytes:
                         memory[offset] = wipe & 0xFF
             memory.synchronize()

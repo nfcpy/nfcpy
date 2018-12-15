@@ -40,7 +40,7 @@ def send_request(socket, snep_request, send_miu):
     if socket.recv() != b"\x10\x80\x00\x00\x00\x00":
         return False
 
-    for offset in xrange(send_miu, len(snep_request), send_miu):
+    for offset in range(send_miu, len(snep_request), send_miu):
         fragment = snep_request[offset:offset+send_miu]
         if not socket.send(fragment):
             return False
