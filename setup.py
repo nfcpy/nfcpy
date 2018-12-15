@@ -18,6 +18,7 @@ CLASSIFIERS = [
     "Programming Language :: Python :: 2",
     "Programming Language :: Python :: 2.6",
     "Programming Language :: Python :: 2.7",
+    "Programming Language :: Python :: 3.6",
     "Operating System :: POSIX :: Linux",
     "Operating System :: MacOS :: MacOS X",
     "Operating System :: Microsoft :: Windows",
@@ -25,7 +26,7 @@ CLASSIFIERS = [
     "License :: OSI Approved :: European Union Public Licence 1.1 (EUPL 1.1)",
 ]
 INSTALL_REQUIRES = ["libusb1", "pyserial", "ndeflib", "pydes"]
-PYTHON_REQUIRES = ">=2.6, <3"
+PYTHON_REQUIRES = ">=2.6, >=3.6"
 
 ###############################################################################
 
