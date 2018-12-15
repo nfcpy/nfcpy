@@ -27,11 +27,11 @@ log = logging.getLogger(__name__)
 
 import io
 import struct
-from record import Record, RecordList
-from message import Message
-from error import *
-from bt_record import BluetoothConfigRecord
-from wifi_record import WifiConfigRecord
+from .record import Record, RecordList
+from .message import Message
+from .error import *
+from .bt_record import BluetoothConfigRecord
+from .wifi_record import WifiConfigRecord
 
 def parse_carrier_structure(ac_record, records):
     carrier_record = records.get(ac_record.carrier_data_reference)

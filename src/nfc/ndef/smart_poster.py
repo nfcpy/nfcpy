@@ -25,10 +25,10 @@ log = logging.getLogger(__name__)
 
 import io
 import struct
-from record import Record
-from message import Message
-from uri_record import UriRecord
-from text_record import TextRecord
+from .record import Record
+from .message import Message
+from .uri_record import UriRecord
+from .text_record import TextRecord
 
 actions = ('default', "exec", "save", "edit")
 

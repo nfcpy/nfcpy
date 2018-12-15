@@ -28,8 +28,8 @@ log = logging.getLogger(__name__)
 import io
 import struct
 from uuid import UUID
-from record import Record
-from error import *
+from .record import Record
+from .error import *
 
 class BluetoothConfigRecord(Record):
     def __init__(self, record=None):
