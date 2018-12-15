@@ -50,6 +50,7 @@ from . import device
 import time
 import struct
 import operator
+from functools import reduce
 from binascii import hexlify
 
 import logging
