@@ -49,6 +49,7 @@ import errno
 import socket
 import select
 import operator
+from functools import reduce
 from binascii import hexlify
 
 import logging
