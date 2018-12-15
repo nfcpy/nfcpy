@@ -28,7 +28,6 @@ RC-S956.
 import nfc.clf
 from . import device
 
-import six
 import os
 import time
 import errno
@@ -103,7 +102,7 @@ class Chipset(object):
         0x632E: "CIU_RFT3",
         0x632F: "CIU_RFT4",
     }
-    REGBYNAME = {v: k for k, v in six.iteritems(REG)}
+    REGBYNAME = {v: k for k, v in REG.items()}
 
     class Error(Exception):
         def __init__(self, errno, strerr):

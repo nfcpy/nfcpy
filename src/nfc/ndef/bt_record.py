@@ -46,7 +46,7 @@ class BluetoothConfigRecord(Record):
     def data(self):
         f = io.BytesIO()
         f.write(str(bytearray(reversed(self._bdaddr))))
-        for key, value in self.eir.iteritems():
+        for key, value in self.eir.items():
             f.write(chr(1 + len(value)) + chr(key) + str(value))
         oob_length = 2 + f.tell()
         f.seek(0,0)
