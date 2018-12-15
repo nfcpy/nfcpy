@@ -65,10 +65,10 @@ crypt_type_names = {
     }
 
 auth_type_keys = \
-    dict([(v, k) for k, v in six.iteritems(auth_type_names)])
+    dict([(v,k) for k,v in six.iteritems(auth_type_names)])
 
 crypt_type_keys = \
-    dict([(v, k) for k, v in six.iteritems(crypt_type_names)])
+    dict([(v,k) for k,v in six.iteritems(crypt_type_names)])
     
 class WifiConfigRecord(Record):
     def __init__(self, record=None):
