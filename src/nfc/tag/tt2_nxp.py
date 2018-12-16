@@ -1,4 +1,4 @@
-# -*- coding: latin-1 -*-
+# -*- coding: future_fstrings -*-
 # -----------------------------------------------------------------------------
 # Copyright 2014, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
@@ -157,7 +157,7 @@ class MifareUltralightC(tt2.Type2Tag):
         self.write(47, key2[4:8])
 
         # protect from memory page
-        self.write(42, bytes([max(3, min(protect_from, 0x30))]) + b"\0\0\0")
+        self.write(42, bytearray([max(3, min(protect_from, 0x30))]) + b"\0\0\0")
 
         # set read protection flag
         self.write(43, b"\0\0\0\0" if read_protect else b"\x01\0\0\0")
@@ -220,7 +220,7 @@ class MifareUltralightC(tt2.Type2Tag):
 
         ra = os.urandom(8)
         iv = bytes(rsp[1:9])
-        m2 = triple_des(key, CBC, iv).encrypt(ra + rb[1:8] + bytes([rb[0]]))
+        m2 = triple_des(key, CBC, iv).encrypt(ra + rb[1:8] + rb[0])
 
         log.debug("sending response")
         log.debug("ra = {}".format(hexlify(ra)))
@@ -237,7 +237,7 @@ class MifareUltralightC(tt2.Type2Tag):
         log.debug("iv = {}".format(hexlify(iv)))
         log.debug("m3 = {}".format(hexlify(m3)))
 
-        return triple_des(key, CBC, iv).decrypt(m3) == ra[1:9] + bytes([ra[0]])
+        return triple_des(key, CBC, iv).decrypt(m3) == ra[1:9] + ra[0]
 
 
 class NTAG203(tt2.Type2Tag):

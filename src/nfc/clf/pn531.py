@@ -1,4 +1,4 @@
-# -*- coding: latin-1 -*-
+# -*- coding: future_fstrings -*-
 # -----------------------------------------------------------------------------
 # Copyright 2009, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
@@ -147,7 +147,7 @@ class Chipset(pn53x.Chipset):
 
         """
         mode = self.sam_configuration_modes.index(mode) + 1
-        self.command(0x14, bytes([mode, timeout]), timeout=0.1)
+        self.command(0x14, bytearray([mode, timeout]), timeout=0.1)
 
     power_down_wakeup_sources = ("INT0", "INT1", "USB", "RF", "HSU", "SPI")
     """Possible wake up sources for the :meth:`power_down` method."""

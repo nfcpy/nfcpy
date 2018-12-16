@@ -1,4 +1,4 @@
-# -*- coding: latin-1 -*-
+# -*- coding: future_fstrings -*-
 # -----------------------------------------------------------------------------
 # Copyright 2014, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
@@ -486,7 +486,7 @@ class FelicaLite(tt3.Type3Tag):
         # reversed order.
         assert len(data) % 8 == 0 and len(key) == 16 and len(iv) == 8
         key = bytes(key[8:] + key[:8]) if flip_key else bytes(key)
-        txt = [bytes(reversed(x)) for x in zip(*[iter(data)]*8)]
+        txt = [b''.join(reversed(x)) for x in zip(*[iter(bytes(data))]*8)]
         return triple_des(key, CBC, bytes(iv)).encrypt(b''.join(txt))[:-9:-1]
 
     def protect(self, password=None, read_protect=False, protect_from=0):
@@ -533,7 +533,7 @@ class FelicaLite(tt3.Type3Tag):
                 return False
 
             # if password is empty use factory key of 16 zero bytes
-            key = bytearray(password[0:16] if password else b"\0"*16)
+            key = password[0:16] if password else b"\0"*16
 
             log.debug("protect with key {}".format(hexlify(key)))
             self.write_without_mac(key[7::-1] + key[15:7:-1], 0x87)
@@ -580,9 +580,9 @@ class FelicaLite(tt3.Type3Tag):
         # Perform internal authentication, i.e. ensure that the tag
         # has the same card key as in password. If the password is
         # empty, we'll try with the factory key.
-        key = password[0:16] if password else b"\0" * 16
+        key = bytes(bytearray(password[0:16])) if password else b"\0" * 16
 
-        log.debug("authenticate with key {}".format(key.hex()))
+        log.debug("authenticate with key {}".format(hexlify(key)))
         self._authenticated = False
         self.read_from_ndef_service = self.read_without_mac
         self.write_to_ndef_service = self.write_without_mac
@@ -591,16 +591,16 @@ class FelicaLite(tt3.Type3Tag):
         # that we write to the rc block. Because the tag works little endian,
         # we reverse the order of rc1 and rc2 bytes when writing.
         rc = os.urandom(16)
-        log.debug("rc1 = {}".format(rc[:8].hex()))
-        log.debug("rc2 = {}".format(rc[8:].hex()))
+        log.debug("rc1 = {}".format(hexlify(rc[:8])))
+        log.debug("rc2 = {}".format(hexlify(rc[8:])))
         self.write_without_mac(rc[7::-1] + rc[15:7:-1], 0x80)
 
         # The session key becomes the triple_des encryption of the random
         # challenge under the card key and with an initialization vector of
         # all zero.
-        sk = triple_des(key, CBC, b'\0' * 8).encrypt(rc)
-        log.debug("sk1 = {}".format(sk[:8].hex()))
-        log.debug("sk2 = {}".format(sk[8:].hex()))
+        sk = triple_des(key, CBC, b'\00' * 8).encrypt(rc)
+        log.debug("sk1 = {}".format(hexlify(sk[:8])))
+        log.debug("sk2 = {}".format(hexlify(sk[8:])))
 
         # By reading the id and mac block together we get the mac that the
         # tag has generated over the id block data under it's session key
@@ -946,7 +946,7 @@ class FelicaLiteS(FelicaLite):
 
         # The write count is the first three byte of the wcnt block.
         wcnt = self.read_without_mac(0x90)[0:3]
-        log.debug("write count is 0x{0}".format(wcnt[::-1].hex()))
+        log.debug("write count is {}".format(hexlify(wcnt[::-1])))
 
         # We must generate the mac_a block to write the data. The data
         # to encrypt to the mac is composed of write count and block

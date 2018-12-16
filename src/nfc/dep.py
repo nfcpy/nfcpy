@@ -1,4 +1,4 @@
-# -*- coding: latin-1 -*-
+# -*- coding: future_fstrings -*-
 # -----------------------------------------------------------------------------
 # Copyright 2009, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
@@ -24,6 +24,7 @@ import nfc.clf
 import os
 import time
 import collections
+from binascii import hexlify
 
 import logging
 log = logging.getLogger(__name__)
@@ -372,7 +373,7 @@ class Initiator(DataExchangeProtocol):
 
     def encode_frame(self, packet):
         frame = packet.encode()
-        frame = bytes([len(frame) + 1]) + frame
+        frame = bytearray([len(frame) + 1]) + frame
         if self.target.brty == '106A':
             frame = b'\xF0' + frame
         return frame
@@ -664,7 +665,7 @@ class Target(DataExchangeProtocol):
 #
 class ATR_REQ_RES(object):
     def __str__(self):
-        nfcid3, gb = [ba.hex() for ba in [self.nfcid3, self.gb]]
+        nfcid3, gb = [hexlify(ba) for ba in [self.nfcid3, self.gb]]
         return self.PDU_SHOW.format(self=self, nfcid3=nfcid3, gb=gb)
 
     @property
@@ -804,7 +805,7 @@ class DEP_REQ_RES(object):
         self.data = bytearray() if data is None else data
 
     def __str__(self):
-        data = self.data.hex()
+        data = hexlify(self.data)
         return self.PDU_SHOW.format(self=self, data=data)
 
     @classmethod
@@ -824,7 +825,7 @@ class DEP_REQ_RES(object):
     def encode(self):
         pfb = self.pfb
         pfb = (pfb.fmt << 4) | (pfb.nad << 3) | (pfb.did << 2) | (pfb.pni)
-        data = self.PDU_CODE + bytes([pfb])
+        data = self.PDU_CODE + bytearray([pfb])
         if self.pfb.did:
             data.append(self.did)
         if self.pfb.nad:
@@ -858,7 +859,7 @@ class DSL_REQ_RES(object):
             return cls(data[2] if len(data) == 3 else None)
 
     def encode(self):
-        return self.PDU_CODE + (b'' if self.did is None else bytes([self.did]))
+        return self.PDU_CODE + (bytearray("") if self.did is None else bytearray([self.did]))
 
 
 class DSL_REQ(DSL_REQ_RES):

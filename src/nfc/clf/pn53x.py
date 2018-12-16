@@ -1,4 +1,5 @@
-# -*- coding: latin-1 -*-
+# -*- coding: future_fstrings -*-
+
 # -----------------------------------------------------------------------------
 # Copyright 2009, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
@@ -402,7 +403,7 @@ class Chipset(object):
             self.chipset_error(data)
 
     def in_data_exchange(self, data, timeout, more=False):
-        data = self.command(0x40, bytes([int(more) << 6 | 0x01]) + data, timeout)
+        data = self.command(0x40, bytearray([int(more) << 6 | 0x01]) + data, timeout)
         if data is None or data[0] & 0x3f != 0:
             self.chipset_error(data[0] & 0x3f if data else None)
         return data[1:], bool(data[0] & 0x40)
@@ -491,7 +492,7 @@ class Device(device.Device):
         self.chipset = None
 
     def mute(self):
-        self.chipset.rf_configuration(0x01, bytes([0b00000010]))
+        self.chipset.rf_configuration(0x01, bytearray([0b00000010]))
 
     def sense_tta(self, target):
         brty = {"106A": 0}.get(target.brty)
@@ -636,7 +637,7 @@ class Device(device.Device):
         self.chipset.write_register(*reg)
 
         # Calculate the timeout index for InCommunicateThru. The
-        # effective timeout is T(µs) = 100 * 2**(n-1) for 1 <= n <= 16
+        # effective timeout is T(us) = 100 * 2**(n-1) for 1 <= n <= 16
         # and "no timeout" for n = 0. For a given timeout we calculate
         # the index as the first effective timeout that is longer.
         timeout_microsec = int(timeout * 1E6)

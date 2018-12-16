@@ -1,4 +1,4 @@
-# -*- coding: latin-1 -*-
+# -*- coding: future_fstrings -*-
 from __future__ import absolute_import, division
 
 import nfc
@@ -533,6 +533,7 @@ class TestDevice(object):
         assert target.sens_res == HEX('4400')
         assert target.sdd_res == HEX('01020304')
         assert target.sel_res == HEX('00')
+
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
             CMD('00 02030f03'),
             CMD('02 00180101020103000400050006000708'

@@ -1,4 +1,4 @@
-# -*- coding: latin-1 -*-
+# -*- coding: future_fstrings -*-
 # -----------------------------------------------------------------------------
 # Copyright 2013, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
@@ -248,7 +248,7 @@ class Tag(object):
             s = self.type + ' ' + repr(self._product)
         except AttributeError:
             s = self.type
-        return f"{s} ID={self.identifier.hex().upper()}"
+        return f"{s} ID={hexlify(self.identifier).upper()}"
 
     @property
     def clf(self):

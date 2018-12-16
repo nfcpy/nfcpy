@@ -1,4 +1,4 @@
-# -*- coding: latin-1 -*-
+# -*- coding: future_fstrings -*-
 # -----------------------------------------------------------------------------
 # Copyright 2009, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
@@ -478,7 +478,7 @@ class Type2Tag(Tag):
         """
         log.debug("read pages {0} to {1}".format(page, page+3))
 
-        data = self.transceive(bytes([0x30, page % 256]), timeout=0.005)
+        data = self.transceive(bytearray([0x30, page % 256]), timeout=0.005)
 
         if len(data) == 1 and data[0] & 0xFA == 0x00:
             log.debug("received nak response")
@@ -507,7 +507,7 @@ class Type2Tag(Tag):
             raise ValueError("data must be a four byte string or array")
 
         log.debug("write {0} to page {1}".format(hexlify(data), page))
-        rsp = self.transceive(bytes([0xA2, page % 256]) + data)
+        rsp = self.transceive(bytearray([0xA2, page % 256]) + data)
 
         if len(rsp) != 1:
             log.debug(f"invalid response {hexlify(data)}")
