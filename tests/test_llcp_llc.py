@@ -624,7 +624,7 @@ class TestLogicalLinkController:
             a = pdu.encode_header()
             c = cipher.encrypt(a, pdu.data)
             pdu = type(pdu)(*type(pdu).decode_header(a), data=c)
-            sec_llc.bind(ldl, b'urn:nfc:sn:service')
+            sec_llc.bind(ldl, 'urn:nfc:sn:service')
             sec_llc.dispatch(pdu)
 
         @pytest.mark.parametrize("dpu, ecpk, rand", [

@@ -202,7 +202,7 @@ class RawAccessPoint(TransmissionControlObject):
         self.state.ESTABLISHED = True
 
     def __str__(self):
-        return "RAW {0:2} ->  ?".format(self.addr)
+        return "RAW {addr:2} ->  ?".format(addr=self.addr if self.addr is not None else "None")
 
     def setsockopt(self, option, value):
         if self.state.SHUTDOWN:
@@ -263,7 +263,10 @@ class LogicalDataLink(TransmissionControlObject):
         self.state.ESTABLISHED = True
 
     def __str__(self):
-        return "LDL {0:2} -> {1:2}".format(self.addr, self.peer)
+        return "LDL {addr:2} -> {peer:2}".format(
+                addr=self.addr if self.addr is not None else "None",
+                peer=self.peer if self.peer is not None else "None"
+        )
 
     def setsockopt(self, option, value):
         if self.state.SHUTDOWN:
@@ -366,10 +369,14 @@ class DataLinkConnection(TransmissionControlObject):
         self.send_ack = 0         # V(SA)
 
     def __str__(self):
-        s = "DLC {dlc.addr:2} <-> {dlc.peer:2} {dlc.state} "
+        s = "DLC {addr:2} <-> {peer:2} {dlc.state} "
         s += "RW(R)={dlc.send_win} V(S)={dlc.send_cnt} V(SA)={dlc.send_ack} "
         s += "RW(L)={dlc.recv_win} V(R)={dlc.recv_cnt} V(RA)={dlc.recv_ack}"
-        return s.format(dlc=self)
+        return s.format(
+                dlc=self,
+                addr=self.addr if self.addr is not None else "None",
+                peer=self.peer if self.peer is not None else "None"
+        )
 
     def log(self, string):
         log.debug("DLC ({dlc.addr},{dlc.peer}) {dlc.state} {s}"

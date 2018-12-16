@@ -21,6 +21,7 @@
 # -----------------------------------------------------------------------------
 import logging
 import warnings
+from binascii import hexlify, unhexlify
 from ndef import message_decoder, message_encoder
 
 logging.captureWarnings(True)
@@ -247,7 +248,7 @@ class Tag(object):
             s = self.type + ' ' + repr(self._product)
         except AttributeError:
             s = self.type
-        return s + ' ID=' + self.identifier.encode("hex").upper()
+        return f"{s} ID={self.identifier.hex().upper()}"
 
     @property
     def clf(self):
@@ -268,7 +269,7 @@ class Tag(object):
     @property
     def identifier(self):
         """The unique tag identifier."""
-        return str(self._nfcid)
+        return bytes(self._nfcid)
 
     @property
     def ndef(self):

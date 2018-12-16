@@ -50,7 +50,7 @@ class Message(object):
         if len(args) == 1:
             if isinstance(args[0], io.BytesIO):
                 self._read(args[0])
-            elif isinstance(args[0], (str, bytearray)):
+            elif isinstance(args[0], (bytes, bytearray)):
                 self._read(io.BytesIO(args[0]))
             elif isinstance(args[0], nfc.ndef.Record):
                 self.append(args[0])
@@ -87,10 +87,16 @@ class Message(object):
         stream = io.BytesIO()
         self._write(stream)
         stream.seek(0, 0)
+        return stream.read().decode("utf-8")
+
+    def __bytes__(self):
+        stream = io.BytesIO()
+        self._write(stream)
+        stream.seek(0, 0)
         return stream.read()
 
     def __eq__(self, other):
-        return str(self) == str(other)
+        return bytes(self) == bytes(other)
     
     def __len__(self):
         return len(self._records)

@@ -283,7 +283,7 @@ class TestUltralightC:
             ]
 
         tag.clf.exchange.side_effect = responses
-        assert tag.protect('', protect_from=protect_from_page) is True
+        assert tag.protect(b'', protect_from=protect_from_page) is True
         assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
         tag.authenticate.assert_called_once_with(b'IEMKAERB!NACUOYF')
 
@@ -306,13 +306,13 @@ class TestUltralightC:
             HEX('E1100000 00000000 00000000 00000000'), HEX('0a'),
         ]
         tag.clf.exchange.side_effect = responses
-        assert tag.protect('', read_protect=True) is True
+        assert tag.protect(b'', read_protect=True) is True
         assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
         tag.authenticate.assert_called_once_with(b'IEMKAERB!NACUOYF')
 
     def test_protect_with_short_password(self, tag):
         with pytest.raises(ValueError) as excinfo:
-            tag.protect("abc")
+            tag.protect(b"abc")
         assert str(excinfo.value) == "password must be at least 16 byte"
 
     def test_read_ndef(self, tag):

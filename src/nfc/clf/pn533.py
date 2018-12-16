@@ -155,8 +155,8 @@ class Chipset(pn53x.Chipset):
         assert len(felica_params) == 18
         assert len(nfcid3t) == 10
 
-        data = (chr(mode) + mifare_params + felica_params + nfcid3t +
-                chr(len(gt)) + gt + chr(len(tk)) + tk)
+        data = (bytearray([mode]) + mifare_params + felica_params + nfcid3t +
+                bytearray([len(gt)]) + gt + bytearray([len(tk)]) + tk)
         return self.command(0x8c, data, timeout)
 
 
@@ -172,9 +172,9 @@ class Device(pn53x.Device):
         self.log.debug("chipset is a {0}".format(self._chipset_name))
 
         self.mute()
-        self.chipset.rf_configuration(0x02, "\x00\x0B\x0A")
-        self.chipset.rf_configuration(0x04, "\x00")
-        self.chipset.rf_configuration(0x05, "\x01\x00\x01")
+        self.chipset.rf_configuration(0x02, b"\x00\x0B\x0A")
+        self.chipset.rf_configuration(0x04, b"\x00")
+        self.chipset.rf_configuration(0x05, b"\x01\x00\x01")
         self.chipset.set_parameters(0b00000000)
 
         self.eeprom = bytearray()
@@ -271,7 +271,7 @@ class Device(pn53x.Device):
             # we're not fast enough to read it from the 64 byte FIFO.
             rsp = data[1:2]
             for block in range((data[1] >> 4) * 16, (data[1] >> 4) * 16 + 16):
-                cmd = "\x02" + chr(block) + data[2:]
+                cmd = bytearray([0x02, block]) + data[2:]
                 rsp += self._tt1_send_cmd_recv_rsp(cmd, timeout)[1:9]
             return rsp
 
@@ -366,8 +366,8 @@ class Device(pn53x.Device):
         return super(Device, self).send_rsp_recv_cmd(target, data, timeout)
 
     def _init_as_target(self, mode, tta_params, ttf_params, timeout):
-        nfcid3t = ttf_params[0:8] + "\x00\x00"
-        args = (mode, tta_params, ttf_params, nfcid3t, '', '', timeout)
+        nfcid3t = ttf_params[0:8] + b"\x00\x00"
+        args = (mode, tta_params, ttf_params, nfcid3t, b'', b'', timeout)
         return self.chipset.tg_init_as_target(*args)
 
 

@@ -22,7 +22,7 @@ def HEX(s):
 
 def FRAME(brty, hexstr):
     hexstr = hexstr.replace(' ', '')
-    return ('{:s} {:s}'.format(brty, hexstr), ('127.0.0.1', 54321))
+    return ('{:s} {:s}'.format(brty, hexstr).encode("utf-8"), ('127.0.0.1', 54321))
 
 
 def CMD106A(hexstr):

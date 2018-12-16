@@ -24,6 +24,7 @@ import nfc.dep
 import nfc.llcp
 from . import device
 
+import binascii
 import os
 import re
 import time
@@ -35,7 +36,7 @@ log = logging.getLogger(__name__)
 
 
 def print_data(data):
-    return 'None' if data is None else str(data).encode("hex")
+    return 'None' if data is None else binascii.hexlify(data).decode("utf-8")
 
 
 class ContactlessFrontend(object):
@@ -1115,7 +1116,7 @@ class Target(object):
                 continue
             value = self.__dict__[name]
             if isinstance(value, (bytearray, str)):
-                value = str(value).encode("hex").upper()
+                value = binascii.hexlify(value).upper()
             attrs.append("{0}={1}".format(name, value))
         return "{brty} {attrs}".format(brty=self.brty, attrs=' '.join(attrs))
 
@@ -1138,7 +1139,7 @@ class RemoteTarget(Target):
     @property
     def brty(self):
         """A string that combines bitrate and technology type, e.g. '106A'."""
-        return "{0}".format(self._brty_send)
+        return self._brty_send
 
     @brty.setter
     def brty(self, value):
@@ -1175,9 +1176,7 @@ class LocalTarget(Target):
     @property
     def brty(self):
         """A string that combines bitrate and technology type, e.g. '106A'."""
-        return ("{0}".format(self._brty_send)
-                if self._brty_send == self._brty_recv else
-                "{0}/{1}".format(self._brty_send, self._brty_recv))
+        return self._brty_send if self._brty_send == self._brty_recv else self._brty_send+"/"+self._brty_recv
 
     @brty.setter
     def brty(self, value):
