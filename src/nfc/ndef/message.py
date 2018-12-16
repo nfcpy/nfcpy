@@ -1,4 +1,4 @@
-# -*- coding: latin-1 -*-
+# -*- coding: future_fstrings -*-
 # -----------------------------------------------------------------------------
 # Copyright 2009, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
@@ -87,7 +87,7 @@ class Message(object):
         stream = io.BytesIO()
         self._write(stream)
         stream.seek(0, 0)
-        return stream.read().decode("utf-8")
+        return stream.read()
 
     def __bytes__(self):
         stream = io.BytesIO()

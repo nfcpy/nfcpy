@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# -*- coding: latin-1 -*-
+# -*- coding: future_fstrings -*-
 # -----------------------------------------------------------------------------
 # Copyright 2013 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #

@@ -1,4 +1,4 @@
-# -*- coding: latin-1 -*-
+# -*- coding: future_fstrings -*-
 # -----------------------------------------------------------------------------
 # Copyright 2009, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
@@ -117,14 +117,12 @@ class Parameter:
             if T in (Parameter.SN, Parameter.ECPK, Parameter.RN):
                 if len(V) > 255:
                     raise EncodeError("can't encode TLV T=%d, V=%r" % (T, V))
-                return struct.pack('BB', T, len(V)) \
-                       + bytes(V) if not isinstance(V, str) else V.encode("utf-8")
+                return struct.pack('BB', T, len(V)) + bytes(V)
             if T == Parameter.SDREQ:
                 tid, sn = V[0], V[1]
                 if len(sn) > 254:
                     raise EncodeError("can't encode TLV T=%d, V=%r" % (T, V))
-                return struct.pack('>BBB', T, 1+len(sn), tid) \
-                       + bytes(sn) if not isinstance(sn, str) else sn.encode("utf-8")
+                return struct.pack('>BBB', T, 1+len(sn), tid) + bytes(sn)
             if T == Parameter.SDRES:
                 tid, sap = V[0], V[1]
                 return struct.pack('>BBBB', T, 2, tid, sap)
@@ -460,6 +458,9 @@ class AggregatedFrameIterator(object):
             raise StopIteration
         self._current += 1
         return self._aggregate[self._current-1]
+
+    def next(self):
+        return self.__next__()
 
 
 # -----------------------------------------------------------------------------
@@ -805,8 +806,8 @@ class DataProtectionSetup(ProtocolDataUnit):
     def __str__(self):
         return super(DataProtectionSetup, self).__str__() + \
             " ECPK={0} RN={1}".format(
-                'None' if self.ecpk is None else self.ecpk.hex(),
-                'None' if self.rn is None else self.rn.hex())
+                'None' if self.ecpk is None else hexlify(self.ecpk),
+                'None' if self.rn is None else hexlify(self.rn))
 
 
 # -----------------------------------------------------------------------------
@@ -900,7 +901,7 @@ class UnknownProtocolDataUnit(ProtocolDataUnit):
 
     def __str__(self):
         return (super(UnknownProtocolDataUnit, self).__str__()
-                + " PAYLOAD={}".format(self.payload.hex()))
+                + " PAYLOAD={}".format(hexlify(self.payload)))
 
 
 # -----------------------------------------------------------------------------

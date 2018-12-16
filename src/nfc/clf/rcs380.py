@@ -1,4 +1,4 @@
-# -*- coding: latin-1 -*-
+# -*- coding: future_fstrings -*-
 # -----------------------------------------------------------------------------
 # Copyright 2012, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
@@ -310,7 +310,7 @@ class Chipset(object):
         # activation commands with *nfca_params* (sens_res, nfcid1-3,
         # sel_res) and *nfcf_params* (idm, pmm, system_code).
         data = struct.pack("<HH?6s18s??H", guard_time, send_timeout,
-                           mdaa, nfca_params, nfcf_params,
+                           mdaa, bytes(nfca_params), bytes(nfcf_params),
                            mf_halted, arae, recv_timeout)
         if transmit_data:
             data = data + bytes(transmit_data)
@@ -432,12 +432,12 @@ class Device(device.Device):
                 uid = bytearray()
                 for sel_cmd in b"\x93\x95\x97":
                     self.chipset.in_set_protocol(add_crc=0, check_crc=0)
-                    sdd_req = bytes([sel_cmd, 0x20])
+                    sdd_req = bytearray([sel_cmd, 0x20])
                     log.debug(f"send SDD_REQ {hexlify(sdd_req)}")
                     sdd_res = self.chipset.in_comm_rf(sdd_req, 30)
                     log.debug("rcvd SDD_RES {hexlify(sdd_res)}")
                     self.chipset.in_set_protocol(add_crc=1, check_crc=1)
-                    sel_req = bytes([sel_cmd, 0x70]) + sdd_res
+                    sel_req = bytearray([sel_cmd, 0x70]) + sdd_res
                     log.debug(f"send SEL_REQ {hexlify(sel_req)}")
                     sel_res = self.chipset.in_comm_rf(sel_req, 30)
                     log.debug(f"rcvd SEL_RES {hexlify(sel_res)}")

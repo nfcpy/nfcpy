@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
+# -*- coding: future_fstrings -*-tf-8 -*-
 import codecs
 import os
 import re

@@ -1,4 +1,4 @@
-# -*- coding: latin-1 -*-
+# -*- coding: future_fstrings -*-
 # -----------------------------------------------------------------------------
 # Copyright 2014, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
