@@ -195,7 +195,7 @@ class Type4Tag(nfc.tag.Tag):
             for self._aid in (ndef_aid_v2, ndef_aid_v1):
                 try:
                     self.tag.send_apdu(0, 0xA4, 0x04, 0x00, self._aid)
-                    log.debug("selected " + hexlify(self._aid))
+                    log.debug("selected {}".format(self._aid.hex()))
                     return True
                 except Type4TagCommandError as error:
                     if error.errno <= 0:
@@ -205,10 +205,10 @@ class Type4Tag(nfc.tag.Tag):
             p2 = 0x00 if self._aid == ndef_aid_v1 else 0x0C
             try:
                 self.tag.send_apdu(0, 0xA4, 0x00, p2, fid)
-                log.debug("selected " + hexlify(fid))
+                log.debug("selected {}".format(fid.hex()))
                 return True
             except Type4TagCommandError:
-                log.debug("failed to select " + hexlify(fid))
+                log.debug("failed to select {}".format(fid.hex()))
 
         def _read_binary(self, offset, size):
             (p1, p2) = pack(">H", offset)
@@ -327,7 +327,7 @@ class Type4Tag(nfc.tag.Tag):
 
             offset = 0
             while offset < len(data):
-                offset += self._update_binary(offset, buffer(data, offset))
+                offset += self._update_binary(offset, memoryview(data)[offset:])
 
             if nlen:
                 self._update_binary(0, nlen)
@@ -341,7 +341,7 @@ class Type4Tag(nfc.tag.Tag):
             offset = self._nlen_size
             data = bytearray(self._capacity * [wipe % 256])
             while offset < self.capacity:
-                offset += self._update_binary(offset, buffer(data, offset))
+                offset += self._update_binary(offset, memoryview(data)[offset:])
 
         def _dump_ndef_data(self):
             lines = []

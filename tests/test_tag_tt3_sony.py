@@ -774,7 +774,7 @@ class TestFelicaLite:
             HEX('0c 09 0102030405060708 0000'),  # write block 0
             nfc.clf.TimeoutError, nfc.clf.TimeoutError, nfc.clf.TimeoutError,
         ]
-        assert tag.authenticate("0123456789abcdef") is True
+        assert tag.authenticate(b"0123456789abcdef") is True
         assert tag.ndef is not None
         assert tag.ndef._original_nbr == 4
         assert tag.ndef.capacity == 48
@@ -867,7 +867,7 @@ class TestFelicaLite:
             HEX('0c 09 0102030405060708 0000'),
             HEX('0c 09 0102030405060708 0000'),
         ]
-        assert tag.protect("0123456789abcdef") is True
+        assert tag.protect(b"0123456789abcdef") is True
         assert tag.clf.exchange.mock_calls == [
             mock.call(HEX('10 06 0102030405060708 010b00 018088'), 0.3093504),
             mock.call(HEX('20 08 0102030405060708 010900 018087'
@@ -890,7 +890,7 @@ class TestFelicaLite:
             HEX('0c 09 0102030405060708 0000'),
             HEX('0c 09 0102030405060708 0000'),
         ]
-        assert tag.protect("0123456789abcdef", protect_from=1) is True
+        assert tag.protect(b"0123456789abcdef", protect_from=1) is True
         assert tag.clf.exchange.mock_calls == [
             mock.call(HEX('10 06 0102030405060708 010b00 018088'), 0.3093504),
             mock.call(HEX('20 08 0102030405060708 010900 018087'
@@ -917,7 +917,7 @@ class TestFelicaLite:
     def test_authenticate(self, tag):
         # test invalid password (too short)
         with pytest.raises(ValueError) as excinfo:
-            tag.authenticate("abc")
+            tag.authenticate(b"abc")
         assert str(excinfo.value) == "password must be at least 16 byte"
 
         # test successful authentication
@@ -927,7 +927,7 @@ class TestFelicaLite:
                 '00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00'
                 'cc 97 f1 b9  7b 8b bc 79  00 00 00 00  00 00 00 00'),
         ]
-        assert tag.authenticate("0123456789abcdef") is True
+        assert tag.authenticate(b"0123456789abcdef") is True
         assert tag.clf.exchange.mock_calls == [
             mock.call(HEX('20 08 0102030405060708 010900 018080'
                           '07060504 03020100 0f0e0d0c 0b0a0908'), 0.3093504),
@@ -943,7 +943,7 @@ class TestFelicaLite:
                 '00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00'
                 '00 00 00 00  00 00 00 00  00 00 00 00  00 00 00 00'),
         ]
-        assert tag.authenticate("0123456789abcdef") is False
+        assert tag.authenticate(b"0123456789abcdef") is False
         assert tag.clf.exchange.mock_calls == [
             mock.call(HEX('20 08 0102030405060708 010900 018080'
                           '07060504 03020100 0f0e0d0c 0b0a0908'), 0.3093504),
@@ -1369,7 +1369,7 @@ class TestFelicaLiteS:
                 'cc 97 f1 b9  7b 8b bc 79  00 00 00 00  00 00 00 00'),
         ]
         tag.clf.exchange.side_effect = responses
-        assert tag.authenticate("0123456789abcdef") is False
+        assert tag.authenticate(b"0123456789abcdef") is False
         assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_write_with_mac_wrong_data_size(self, tag):

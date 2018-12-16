@@ -282,7 +282,7 @@ class OpenSSLWrapper:
         @staticmethod
         def bin2bn(s):
             # BIGNUM *BN_bin2bn(const unsigned char *s, int len, BIGNUM *ret);
-            strbuf = ctypes.create_string_buffer(str(s), len(s))
+            strbuf = ctypes.create_string_buffer(bytes(s), len(s))
             res = OpenSSL.crypto.BN_bin2bn(strbuf, len(s), None)
             if res is None:
                 log.error("BN_bin2bn")
@@ -336,7 +336,7 @@ class OpenSSLWrapper:
             # int EC_KEY_set_public_key_affine_coordinates(EC_KEY *key,
             #     BIGNUM *x, BIGNUM *y);
             r = OpenSSL.crypto.EC_KEY_set_public_key_affine_coordinates(
-                self, *map(OpenSSL.BIGNUM.bin2bn, (pubkey_x, pubkey_y)))
+                self, *list(map(OpenSSL.BIGNUM.bin2bn, (pubkey_x, pubkey_y))))
             if r != 1:
                 errmsg = "EC_KEY_set_public_key_affine_coordinates"
                 raise AssertionError(errmsg)
@@ -419,7 +419,7 @@ class OpenSSLWrapper:
             # int CMAC_Init(CMAC_CTX *ctx, const void *key, size_t keylen,
             #     const EVP_CIPHER *cipher, ENGINE *impl);
             assert len(key) == 16
-            keybuf = ctypes.create_string_buffer(str(key), 16)
+            keybuf = ctypes.create_string_buffer(key, 16)
             keylen = ctypes.c_size_t(16)
             cipher = ctypes.c_void_p(self._cipher)
             r = OpenSSL.crypto.CMAC_Init(self, keybuf, keylen, cipher, None)
@@ -428,7 +428,7 @@ class OpenSSLWrapper:
 
         def update(self, msg):
             # int CMAC_Update(CMAC_CTX *ctx, const void *data, size_t dlen);
-            msgbuf = ctypes.create_string_buffer(str(msg), len(msg))
+            msgbuf = ctypes.create_string_buffer(msg, len(msg))
             msglen = ctypes.c_size_t(len(msg))
             r = OpenSSL.crypto.CMAC_Update(self, msgbuf, msglen)
             assert r == 1, "CMAC_Update"
@@ -540,9 +540,9 @@ class OpenSSLWrapper:
 
 libcrypto = ctypes.util.find_library('crypto')
 if libcrypto is not None:
-    if not sys.platform.startswith('linux'):
+    if not sys.platform.startswith('linux') and not sys.platform.startswith('darwin'):
         log.debug("OpenSSL crypto library binding is only tested on Linux")
-    elif not libcrypto.startswith('libcrypto.so.1.0'):
+    elif not libcrypto.startswith('libcrypto.so.1.0') and not libcrypto.endswith('libcrypto.dylib'):
         log.warning("OpenSSL {} is not supported".format(libcrypto))
     else:
         OpenSSL = OpenSSLWrapper(libcrypto)

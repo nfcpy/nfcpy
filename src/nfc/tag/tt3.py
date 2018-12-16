@@ -22,6 +22,7 @@
 import nfc.tag
 import nfc.clf
 
+import math
 import time
 import itertools
 from binascii import hexlify
@@ -129,8 +130,8 @@ class BlockCode:
     def pack(self):
         """Pack the block code for transmission. Returns a 2-3 byte string."""
         bn, am, sx = self.number, self.access, self.service
-        return chr(bool(bn < 256) << 7 | (am & 0x7) << 4 | (sx & 0xf)) + \
-            (chr(bn) if bn < 256 else pack("<H", bn))
+        return bytes([bool(bn < 256) << 7 | (am & 0x7) << 4 | (sx & 0xf)]) + \
+            (bytes([bn]) if bn < 256 else pack("<H", bn))
 
 
 class Type3Tag(nfc.tag.Tag):
@@ -252,7 +253,7 @@ class Type3Tag(nfc.tag.Tag):
     def __str__(self):
         s = " PMM={pmm} SYS={sys:04X}"
         return nfc.tag.Tag.__str__(self) + s.format(
-            pmm=hexlify(self.pmm).upper(), sys=self.sys)
+            pmm=self.pmm.hex().upper(), sys=self.sys)
 
     def _is_present(self):
         # Check if the card still responds to the acquired system code
@@ -442,7 +443,7 @@ class Type3Tag(nfc.tag.Tag):
         # If required, we will also overwrite the memory with the
         # 8-bit integer provided. This could take a while.
         if wipe is not None:
-            data = bytearray(chr(wipe) * 16)
+            data = bytearray([wipe]) * 16
             while nmaxb > 0:
                 self.write_to_ndef_service(data, nmaxb)
                 nmaxb = nmaxb - 1
@@ -548,14 +549,14 @@ class Type3Tag(nfc.tag.Tag):
         a, b, e = self.pmm[5] & 7, self.pmm[5] >> 3 & 7, self.pmm[5] >> 6
         timeout = 302.1E-6 * ((b + 1) * len(block_list) + a + 1) * 4**e
 
-        data = (chr(len(service_list))
-                + ''.join([sc.pack() for sc in service_list])
-                + chr(len(block_list))
-                + ''.join([bc.pack() for bc in block_list]))
+        data = bytearray([len(service_list)]) \
+               + b''.join([sc.pack() for sc in service_list]) \
+               + bytearray([len(block_list)]) \
+               + b''.join([bc.pack() for bc in block_list])
 
         log.debug("read w/o encryption service/block list: {0} / {1}".format(
-            ' '.join([hexlify(sc.pack()) for sc in service_list]),
-            ' '.join([hexlify(bc.pack()) for bc in block_list])))
+            ' '.join([sc.pack().hex() for sc in service_list]),
+            ' '.join([bc.pack().hex() for bc in block_list])))
 
         data = self.send_cmd_recv_rsp(0x06, data, timeout)
 
@@ -629,15 +630,15 @@ class Type3Tag(nfc.tag.Tag):
         a, b, e = self.pmm[6] & 7, self.pmm[6] >> 3 & 7, self.pmm[6] >> 6
         timeout = 302.1E-6 * ((b + 1) * len(block_list) + a + 1) * 4**e
 
-        data = (chr(len(service_list))
-                + ''.join([sc.pack() for sc in service_list])
-                + chr(len(block_list))
-                + ''.join([bc.pack() for bc in block_list])
-                + data)
+        data = bytearray([len(service_list)]) \
+               + b''.join([sc.pack() for sc in service_list]) \
+               + bytearray([len(block_list)]) \
+               + b''.join([bc.pack() for bc in block_list]) \
+               + data
 
         log.debug("write w/o encryption service/block list: {0} / {1}".format(
-            ' '.join([hexlify(sc.pack()) for sc in service_list]),
-            ' '.join([hexlify(bc.pack()) for bc in block_list])))
+            ' '.join([sc.pack().hex() for sc in service_list]),
+            ' '.join([bc.pack().hex() for bc in block_list])))
 
         self.send_cmd_recv_rsp(0x08, data, timeout)
 
@@ -683,16 +684,18 @@ class Type3Tag(nfc.tag.Tag):
 
         """
         idm = self.idm if send_idm else bytearray()
-        cmd = chr(2+len(idm)+len(cmd_data)) + chr(cmd_code) + idm + cmd_data
+        cmd = bytearray([2+len(idm)+len(cmd_data), cmd_code]) + idm + cmd_data
         log.debug(">> {0:02x} {1:02x} {2} {3} ({4}s)".format(
             cmd[0], cmd[1], hexlify(cmd[2:10]), hexlify(cmd[10:]), timeout))
 
         started = time.time()
+        error = None
         for retry in range(3):
             try:
                 rsp = self.clf.exchange(cmd, timeout)
                 break
-            except nfc.clf.CommunicationError as error:
+            except nfc.clf.CommunicationError as e:
+                error = e
                 reason = error.__class__.__name__
                 log.debug("%s after %d retries" % (reason, retry))
         else:
@@ -710,14 +713,14 @@ class Type3Tag(nfc.tag.Tag):
             log.debug("incorrect response code {0:02x}".format(rsp[1]))
             raise Type3TagCommandError(RSP_CODE_ERROR)
         if send_idm and rsp[2:10] != self.idm:
-            log.debug("wrong tag or transaction id " + hexlify(rsp[2:10]))
+            log.debug("wrong tag or transaction id {}".format(hexlify(rsp[2:10])))
             raise Type3TagCommandError(TAG_IDM_ERROR)
         if not send_idm:
             log.debug("<< {0:02x} {1:02x} {2}".format(
                 rsp[0], rsp[1], hexlify(rsp[2:])))
             return rsp[2:]
         if check_status and rsp[10] != 0:
-            log.debug("tag returned error status " + hexlify(rsp[10:12]))
+            log.debug("tag returned error status {}".format(hexlify(rsp[10:12])))
             raise Type3TagCommandError(unpack(">H", rsp[10:12])[0])
         if not check_status:
             log.debug("<< {0:02x} {1:02x} {2} {3}".format(
@@ -736,7 +739,7 @@ class Type3TagEmulation(nfc.tag.TagEmulation):
     def __init__(self, clf, target):
         self.services = dict()
         self.target = target
-        self.cmd = chr(len(target.tt3_cmd)+1) + target.tt3_cmd
+        self.cmd = bytearray([len(target.tt3_cmd)+1]) + target.tt3_cmd
         self.idm = target.sensf_res[1:9]
         self.pmm = target.sensf_res[9:17]
         self.sys = target.sensf_res[17:19]
@@ -744,8 +747,8 @@ class Type3TagEmulation(nfc.tag.TagEmulation):
 
     def __str__(self):
         """x.__str__() <==> str(x)"""
-        return "Type3TagEmulation IDm={0} PMm={1} SYS={2}".format(
-            hexlify(self.idm), hexlify(self.pmm), hexlify(self.sys))
+        return "Type3TagEmulation IDm={id} PMm={pmm} SYS={sys}".format(
+            id=self.idm.hex(), pmm=self.pmm.hex(), sys=self.sys.hex())
 
     def add_service(self, service_code, block_read_func, block_write_func):
         def default_block_read(block_number, rb, re):
@@ -763,7 +766,7 @@ class Type3TagEmulation(nfc.tag.TagEmulation):
         self.services[service_code] = (block_read_func, block_write_func)
 
     def process_command(self, cmd):
-        log.debug("cmd: " + (hexlify(cmd) if cmd else str(cmd)))
+        log.debug("cmd: {}".format(hexlify(cmd) if cmd else str(cmd)))
         if len(cmd) != cmd[0]:
             log.error("tt3 command length error")
             return None
@@ -790,7 +793,7 @@ class Type3TagEmulation(nfc.tag.TagEmulation):
                 return bytearray([10 + len(rsp), 0x0D]) + self.idm + rsp
 
     def send_response(self, rsp, timeout):
-        log.debug("rsp: " + (hexlify(rsp) if rsp is not None else 'None'))
+        log.debug("rsp: {}".format(hexlify(rsp) if rsp is not None else 'None'))
         return self.clf.exchange(rsp, timeout)
 
     def polling(self, cmd_data):
@@ -848,7 +851,7 @@ class Type3TagEmulation(nfc.tag.TagEmulation):
                 return bytearray([1 << (i % 8), 0xA2])
             block_data.extend(one_block_data)
 
-        return bytearray([0, 0, len(block_data)/16]) + block_data
+        return bytearray([0, 0, math.floor(len(block_data)/16)]) + block_data
 
     def write_without_encryption(self, cmd_data):
         service_list = cmd_data.pop(0) * [[None, None]]

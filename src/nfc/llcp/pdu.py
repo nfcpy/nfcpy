@@ -117,12 +117,14 @@ class Parameter:
             if T in (Parameter.SN, Parameter.ECPK, Parameter.RN):
                 if len(V) > 255:
                     raise EncodeError("can't encode TLV T=%d, V=%r" % (T, V))
-                return struct.pack('BB', T, len(V)) + bytes(V)
+                return struct.pack('BB', T, len(V)) \
+                       + bytes(V) if not isinstance(V, str) else V.encode("utf-8")
             if T == Parameter.SDREQ:
                 tid, sn = V[0], V[1]
                 if len(sn) > 254:
                     raise EncodeError("can't encode TLV T=%d, V=%r" % (T, V))
-                return struct.pack('>BBB', T, 1+len(sn), tid) + bytes(sn)
+                return struct.pack('>BBB', T, 1+len(sn), tid) \
+                       + bytes(sn) if not isinstance(sn, str) else sn.encode("utf-8")
             if T == Parameter.SDRES:
                 tid, sap = V[0], V[1]
                 return struct.pack('>BBBB', T, 2, tid, sap)
@@ -450,7 +452,10 @@ class AggregatedFrameIterator(object):
         self._aggregate = aggregate
         self._current = 0
 
-    def next(self):
+    def __iter__(self):
+        return self
+
+    def __next__(self):
         if self._current == len(self._aggregate):
             raise StopIteration
         self._current += 1
@@ -508,7 +513,7 @@ class Connect(ProtocolDataUnit):
             elif T == Parameter.RW:
                 connect_pdu.rw = V
             elif T == Parameter.SN:
-                connect_pdu.sn = str(V)
+                connect_pdu.sn = V
             else:
                 log.warn("invalid TLV %r in CONNECT PDU", (T, L, V))
             offset, size = offset + 2 + L, size - 2 - L
@@ -800,8 +805,8 @@ class DataProtectionSetup(ProtocolDataUnit):
     def __str__(self):
         return super(DataProtectionSetup, self).__str__() + \
             " ECPK={0} RN={1}".format(
-                'None' if self.ecpk is None else str(self.ecpk).encode('hex'),
-                'None' if self.rn is None else str(self.rn).encode('hex'))
+                'None' if self.ecpk is None else self.ecpk.hex(),
+                'None' if self.rn is None else self.rn.hex())
 
 
 # -----------------------------------------------------------------------------
@@ -895,7 +900,7 @@ class UnknownProtocolDataUnit(ProtocolDataUnit):
 
     def __str__(self):
         return (super(UnknownProtocolDataUnit, self).__str__()
-                + " PAYLOAD=" + hexlify(self.payload))
+                + " PAYLOAD={}".format(self.payload.hex()))
 
 
 # -----------------------------------------------------------------------------

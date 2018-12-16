@@ -73,7 +73,8 @@ class Record(object):
     
     def __init__(self, record_type=None, record_name=None, data=None):
         self._message_begin = self._message_end = False
-        self._type = self._name = self._data = ''
+        self._type = self._name = ''
+        self._data = b''
         if not (record_type is None and record_name is None):
             self.type = record_type if record_type is not None else 'unknown'
             if record_name is not None:
@@ -81,7 +82,7 @@ class Record(object):
             if data is not None:
                 self.data = data
         elif data is not None:
-            if isinstance(data, (bytearray, str)):
+            if isinstance(data, (bytearray, bytes)):
                 data = io.BytesIO(data)
             if isinstance(data, io.IOBase):
                 self._read(data)
@@ -137,11 +138,11 @@ class Record(object):
             raise FormatError( s.format(tnf) )
         if tnf == 0 and len(record_data) > 0:
             s = "ndef type name format {0} doesn't allow a payload"
-            raise FormatError( s.format(tnf) )
+            raise FormatError(s.format(tnf))
             
         self._message_begin, self._message_end = mbf, mef
-        self._type = bytearray(type_name_prefix[tnf] + record_type)
-        self._name = bytearray(record_name)
+        self._type = type_name_prefix[tnf] + record_type.decode("utf-8")
+        self._name = record_name.decode("utf-8")
         self._data = bytearray(record_data)
         log.debug("parsed {0}".format(repr(self)))
 
@@ -154,7 +155,7 @@ class Record(object):
         record_data = self.data
         
         if record_type == '':
-            header_flags = 0; record_name = ''; record_data = ''
+            header_flags = 0; record_name = ''; record_data = b''
         elif record_type.startswith("urn:nfc:wkt:"):
             header_flags = 1; record_type = record_type[12:]
         elif re.match(r'[a-zA-Z0-9-]+/[a-zA-Z0-9-+.]+', record_type):
@@ -188,8 +189,8 @@ class Record(object):
         if name_length > 0:
             f.write(struct.pack(">B", name_length))
 
-        f.write(record_type)
-        f.write(record_name)
+        f.write(record_type.encode("utf-8"))
+        f.write(record_name.encode("utf-8"))
         f.write(record_data)
 
     @property
@@ -198,17 +199,16 @@ class Record(object):
         or the string 'unknown', or the string 'unchanged', or starts
         with 'urn:nfc:wkt:', or starts with 'urn:nfc:ext:', or matches
         the mime-type format, or matches the absolute-URI format."""
-        return str(self._type)
+        return self._type
 
     @type.setter
     def type(self, value):
-        value = str(value)
         if (value in ('', 'unknown', 'unchanged') or
             value.startswith("urn:nfc:wkt:") or
             value.startswith("urn:nfc:ext:") or
             re.match(r'[a-zA-Z0-9-]+/[a-zA-Z0-9-+.]+', value) or
             re.match(r'[a-zA-Z][a-zA-Z0-9+-.]*://', value)):
-            self._type = bytearray(value)
+            self._type = value
         else:
             log.error("'{0}' is not an acceptable record type".format(value))
             raise ValueError("invalid record type")
@@ -218,22 +218,22 @@ class Record(object):
         """The record identifier as an octet string. Any type that can
         be coverted into a sequence of characters in range(0,256) can
         be assigned."""
-        return str(self._name)
+        return self._name
 
     @name.setter
     def name(self, value):
-        self._name = bytearray(str(value))
+        self._name = value
 
     @property
     def data(self):
         """The record payload as an octet string. Any type that can be
         coverted into a sequence of characters in range(0,256) can be
         assigned."""
-        return str(self._data)
+        return bytes(self._data)
 
     @data.setter
     def data(self, value):
-        self._data = bytearray(str(value))
+        self._data = bytearray(bytes(value))
 
     def __iter__(self):
         from itertools import islice
@@ -247,9 +247,9 @@ class Record(object):
 
     def __repr__(self):
         return "nfc.ndef.Record('{0}', '{1}', '{2}')".format(
-            self.type.encode('string_escape'),
-            self.name.encode('string_escape'),
-            self.data.encode('string_escape'))
+            self.type,
+            self.name,
+            self.data)
 
     def pretty(self, indent=0):
         """Returns a string with a formatted representation that might

@@ -40,8 +40,8 @@ log = logging.getLogger(__name__)
 RAW_ACCESS_POINT, LOGICAL_DATA_LINK, DATA_LINK_CONNECTION = range(3)
 
 wks_map = {
-    b"urn:nfc:sn:sdp": 1,
-    b"urn:nfc:sn:snep": 4,
+    "urn:nfc:sn:sdp": 1,
+    "urn:nfc:sn:snep": 4,
 }
 
 service_name_format = re.compile(r"^urn:nfc:[x]?sn:[a-zA-Z][a-zA-Z0-9-_:\.]*$")
@@ -157,7 +157,7 @@ class ServiceDiscovery(object):
     def __init__(self, llc):
         self.llc = llc
         self.snl = dict()
-        self.tids = range(256)
+        self.tids = list(range(256))
         self.resp = threading.Condition(self.llc.lock)
         self.sent = dict()
         self.sdreq = collections.deque()
@@ -279,7 +279,7 @@ class LogicalLinkController(object):
 
         def __str__(self):
             s = "sent/rcvd {0}/{1}".format(self.sent_count, self.rcvd_count)
-            for name in sorted(set(self.sent.keys() + self.rcvd.keys())):
+            for name in sorted(set(list(self.sent.keys()) + list(self.rcvd.keys()))):
                 s += " {name} {sent}/{rcvd}".format(
                     name=name, sent=self.sent[name], rcvd=self.rcvd[name])
             return s
@@ -342,7 +342,7 @@ class LogicalLinkController(object):
             gb = mac.activate(gbt=gb, **options)
             self.run = self.run_as_target
 
-        if gb and gb.startswith('Ffm') and len(gb) >= 6:
+        if gb and gb.startswith(b'Ffm') and len(gb) >= 6:
             if ((isinstance(mac, nfc.dep.Target)
                  and mac.rwt >= send_pax.lto * 1E-3)):
                 msg = "local NFC-DEP RWT {0:.3f} contradicts LTO {1:.3f} sec"
@@ -660,7 +660,7 @@ class LogicalLinkController(object):
 
         if rcvd_pdu.name == "CONNECT" and rcvd_pdu.dsap == 1:
             # connect-by-name
-            addr = self.snl.get(rcvd_pdu.sn)
+            addr = self.snl.get(rcvd_pdu.sn if isinstance(rcvd_pdu.sn, str) else rcvd_pdu.sn.decode("utf-8"))
             if not addr or self.sap[addr] is None:
                 dm_reason = 0x10 if rcvd_pdu.sn is None else 0x02
                 dm_pdu = pdu.DisconnectedMode(rcvd_pdu.ssap, 1, dm_reason)
@@ -723,7 +723,9 @@ class LogicalLinkController(object):
             self._bind_by_none(socket)
         elif isinstance(addr_or_name, int):
             self._bind_by_addr(socket, addr_or_name)
-        elif isinstance(addr_or_name, bytes):
+        elif isinstance(addr_or_name, (bytes, bytearray)):
+            self._bind_by_name(socket, addr_or_name.decode("utf-8"))
+        elif isinstance(addr_or_name, str):
             self._bind_by_name(socket, addr_or_name)
         else:
             raise err.Error(errno.EFAULT)

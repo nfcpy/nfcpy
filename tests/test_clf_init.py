@@ -151,6 +151,7 @@ class TestContactlessFrontend(object):
         target.sel_res = HEX('00')
         target.sdd_res = HEX('0416C6C2D73881')
         clf.device.sense_tta.return_value = target
+        clf.device.send_cmd_recv_rsp.return_value = HEX('00')
         rdwr_options = {'iterations': 1, 'targets': ['106A']}
         assert clf.connect(rdwr=rdwr_options, terminate=terminate) is True
 
@@ -169,6 +170,8 @@ class TestContactlessFrontend(object):
         target = nfc.clf.RemoteTarget('106B')
         target.sensb_res = HEX('50E8253EEC00000011008185')
         clf.device.sense_ttb.return_value = target
+        clf.device.get_max_send_data_size.return_value = 290
+        clf.device.get_max_recv_data_size.return_value = 290
         clf.device.send_cmd_recv_rsp.return_value = HEX('00')
         rdwr_options = {'iterations': 1, 'targets': ['106B']}
         assert clf.connect(rdwr=rdwr_options, terminate=terminate) is True
@@ -233,6 +236,8 @@ class TestContactlessFrontend(object):
         target = nfc.clf.RemoteTarget('106B')
         target.sensb_res = HEX('50E8253EEC00000011008185')
         clf.device.sense_ttb.return_value = target
+        clf.device.get_max_send_data_size.return_value = 290
+        clf.device.get_max_recv_data_size.return_value = 290
         clf.device.send_cmd_recv_rsp.side_effect = nfc.clf.TimeoutError
         rdwr_options = {'iterations': 1}
         assert clf.connect(rdwr=rdwr_options, terminate=terminate) is None

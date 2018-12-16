@@ -247,7 +247,7 @@ def listen_dep(timeout, clf, args):
             logging.warning("communication not verified")
             return target
         
-        logging.debug("send DEP_RES %s", hexlify(buffer(dep_res, 1)))
+        logging.debug("send DEP_RES %s", hexlify(memoryview(dep_res)[1:]))
         try:
             data = clf.exchange(dep_res, timeout=1)
             assert data and data[0]==len(data)
@@ -255,7 +255,7 @@ def listen_dep(timeout, clf, args):
             logging.error("communication failure after activation")
             return None
 
-        logging.debug("rcvd DEP_REQ %s", hexlify(buffer(data, 1)))
+        logging.debug("rcvd DEP_REQ %s", hexlify(memoryview(data)[1:]))
         mode = "passive" if target.sens_res or target.sensf_res else "active"
         logging.debug("activated in %s communication mode", mode)
         return target
