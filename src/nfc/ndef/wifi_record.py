@@ -28,7 +28,6 @@ log = logging.getLogger(__name__)
 
 import io
 import struct
-import six
 from .record import Record
 from .error import DecodeError, EncodeError
 
@@ -65,10 +64,10 @@ crypt_type_names = {
     }
 
 auth_type_keys = \
-    dict([(v, k) for k, v in six.iteritems(auth_type_names)])
+    dict([(v, k) for k, v in auth_type_names.items()])
 
 crypt_type_keys = \
-    dict([(v, k) for k, v in six.iteritems(crypt_type_names)])
+    dict([(v, k) for k, v in crypt_type_names.items()])
     
 class WifiConfigRecord(Record):
     def __init__(self, record=None):
