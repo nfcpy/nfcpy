@@ -40,7 +40,7 @@ import nfc.ndef
 
 def parse_version(string):
     try: major_version, minor_version = map(int, string.split('.'))
-    except ValueError, AttributeError:
+    except (ValueError, AttributeError):
         msg = "%r is not a version string, expecting <int>.<int>"
         raise argparse.ArgumentTypeError(msg % string)
     if major_version < 0 or major_version > 15:
