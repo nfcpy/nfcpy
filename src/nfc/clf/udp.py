@@ -55,7 +55,8 @@ import logging
 import sys
 if sys.version_info[0] == 2:
     memoryview = buffer  # noqa: F821
-
+else:
+    from functools import reduce
 log = logging.getLogger(__name__)
 
 
