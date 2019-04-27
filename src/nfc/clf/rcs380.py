@@ -45,6 +45,9 @@ listen_dep  yes      Only passive communication mode
 
 """
 from __future__ import division
+import sys
+if sys.version_info[0] == 2:
+    memoryview = buffer
 import nfc.clf
 from . import device
 
@@ -579,7 +582,7 @@ class Device(device.Device):
                     log.debug(error)
                 else:
                     brty = ('106A', '212F', '424F')[data[0]-11]
-                    log.debug("%s rcvd %s", brty, hexlify(buffer(data, 7)))
+                    log.debug("%s rcvd %s", brty, hexlify(memoryview(data, 7)))
                     if brty == "106A" and data[2] & 0x03 == 3:
                         self.chipset.tg_set_protocol(rf_off_error=True)
                         return nfc.clf.LocalTarget(
@@ -606,7 +609,7 @@ class Device(device.Device):
                     log.debug(error)
                 else:
                     brty = ('106A', '212F', '424F')[data[0]-11]
-                    log.debug("%s rcvd %s", brty, hexlify(buffer(data, 7)))
+                    log.debug("%s rcvd %s", brty, hexlify(memoryview(data, 7)))
                     if brty == "106A" and data[2] == 3 and data[7] == 0xE0:
                         (rats_cmd, rats_res) = (data[7:], target.rats_res)
                         log.debug("rcvd RATS_CMD %s", hexlify(rats_cmd))
@@ -702,7 +705,7 @@ class Device(device.Device):
                 transmit_data = None
 
             assert target.brty == ('106A', '212F', '424F')[data[0]-11]
-            log.debug("%s rcvd %s", target.brty, hexlify(buffer(data, 7)))
+            log.debug("%s rcvd %s", target.brty, hexlify(memoryview(data, 7)))
 
             if len(data) > 7 and len(data)-7 == data[7]:
                 if sensf_req and data[9:17] == target.sensf_res[1:9]:

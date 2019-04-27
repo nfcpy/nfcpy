@@ -26,6 +26,9 @@ RC-S956.
 
 """
 from __future__ import division
+import sys
+if sys.version_info[0] == 2:
+    memoryview = buffer
 import nfc.clf
 from . import device
 
@@ -205,7 +208,7 @@ class Chipset(object):
             if sum(frame[5:8]) & 0xFF != 0:
                 self.log.error("frame lenght checksum error")
                 raise IOError(errno.EIO, os.strerror(errno.EIO))
-            if unpack(">H", buffer(frame[5:7]))[0] != len(frame) - 10:
+            if unpack(">H", memoryview(frame[5:7]))[0] != len(frame) - 10:
                 self.log.error("frame lenght value mismatch")
                 raise IOError(errno.EIO, os.strerror(errno.EIO))
             del frame[0:8]
@@ -731,13 +734,13 @@ class Device(device.Device):
                     return None
 
             brty = ("106A", "212F", "424F")[(data[0] & 0x70) >> 4]
-            self.log.debug("%s rcvd %s", brty, hexlify(buffer(data, 1)))
+            self.log.debug("%s rcvd %s", brty, hexlify(memoryview(data, 1)))
             if brty != target.brty or len(data) < 2:
                 log.debug("received bitrate does not match %s", target.brty)
                 continue
 
             if target.sel_res[0] & 0x60 == 0x00:
-                self.log.debug("rcvd TT2_CMD %s", hexlify(buffer(data, 1)))
+                self.log.debug("rcvd TT2_CMD %s", hexlify(memoryview(data, 1)))
                 target = nfc.clf.LocalTarget(brty, tt2_cmd=data[1:])
                 target.sens_res = nfca_params[0:2]
                 target.sdd_res = b'\x08' + nfca_params[2:5]
@@ -772,7 +775,7 @@ class Device(device.Device):
             elif (target.sel_res[0] & 0x40 and data[1] == 0xF0
                   and len(data) >= 19 and data[2] == len(data)-2
                   and data[3:5] == b'\xD4\x00'):
-                self.log.debug("rcvd ATR_REQ %s", hexlify(buffer(data, 3)))
+                self.log.debug("rcvd ATR_REQ %s", hexlify(memoryview(data, 3)))
                 target = nfc.clf.LocalTarget(brty, atr_req=data[3:])
                 target.sens_res = nfca_params[0:2]
                 target.sdd_res = b'\x08' + nfca_params[2:5]
@@ -877,7 +880,7 @@ class Device(device.Device):
             else:
                 if not (data[1] == len(data)-1 and data[2:4] == b'\xD4\x00'):
                     info = "expected ATR_REQ but got %s"
-                    self.log.debug(info, hexlify(buffer(data, 1)))
+                    self.log.debug(info, hexlify(memoryview(data, 1)))
                 else:
                     break
         else:
@@ -908,7 +911,7 @@ class Device(device.Device):
         psl_req = psl_res = None
         if data and data.startswith(b'\x06\xD4\x04'):
             self.log.debug("%s rcvd PSL_REQ %s", brty,
-                           hexlify(buffer(data, 1)))
+                           hexlify(memoryview(data, 1)))
             try:
                 psl_req = data[1:]
                 assert len(psl_req) == 5, "psl_req length mismatch"
