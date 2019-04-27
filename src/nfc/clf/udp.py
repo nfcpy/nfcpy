@@ -45,6 +45,8 @@ listen_dep  yes
 import sys
 if sys.version_info[0] == 2:
     memoryview = buffer
+else:
+    from functools import reduce
 import nfc.clf
 
 import time
