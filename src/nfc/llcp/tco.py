@@ -42,7 +42,10 @@ class TransmissionControlObject(object):
             return self.names[self.value]
 
         def __getattr__(self, name):
-            return self.value == self.names.index(name)
+            try:
+                return self.value == self.names.index(name)
+            except ValueError:
+                raise AttributeError(name)
 
         def __setattr__(self, name, value):
             if name not in ("names", "value"):
@@ -58,7 +61,10 @@ class TransmissionControlObject(object):
             return str(self.value)
 
         def __getattr__(self, name):
-            return self.value[name]
+            try:
+                return self.value[name]
+            except KeyError:
+                raise AttributeError(name)
 
     def __init__(self, send_miu, recv_miu):
         self.lock = threading.RLock()
