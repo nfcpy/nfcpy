@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import codecs
+import io
 import os
 import re
 
@@ -37,7 +37,7 @@ def read(*parts):
     Build an absolute path from *parts* and and return the contents of the
     resulting file.  Assume UTF-8 encoding.
     """
-    with codecs.open(os.path.join(HERE, *parts), "rb", "utf-8") as f:
+    with io.open(os.path.join(HERE, *parts), "r", encoding="utf-8") as f:
         return f.read()
 
 
