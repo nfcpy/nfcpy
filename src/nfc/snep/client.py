@@ -26,6 +26,10 @@ import ndef
 import struct
 import nfc.llcp
 
+import sys
+if sys.version_info[0] == 2:
+    range = xrange
+
 import logging
 log = logging.getLogger(__name__)
 
@@ -40,7 +44,7 @@ def send_request(socket, snep_request, send_miu):
     if socket.recv() != b"\x10\x80\x00\x00\x00\x00":
         return False
 
-    for offset in xrange(send_miu, len(snep_request), send_miu):
+    for offset in range(send_miu, len(snep_request), send_miu):
         fragment = snep_request[offset:offset+send_miu]
         if not socket.send(fragment):
             return False
@@ -77,6 +81,7 @@ def recv_response(socket, acceptable_length, timeout):
 class SnepClient(object):
     """ Simple NDEF exchange protocol - client implementation
     """
+
     def __init__(self, llc, max_ndef_msg_recv_size=1024):
         self.acceptable_length = max_ndef_msg_recv_size
         self.socket = None

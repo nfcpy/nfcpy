@@ -296,7 +296,7 @@ class FelicaStandard(tt3.Type3Tag):
         For example, to print all services and areas of the active
         system: ::
 
-            for i in xrange(0x10000):
+            for i in range(0x10000):
                 area_or_service = tag.search_service_code(i)
                 if area_or_service is None:
                     break
