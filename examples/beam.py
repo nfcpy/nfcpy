@@ -196,7 +196,7 @@ def add_recv_print_parser(parser):
 
 def run_recv_print_action(args, llc, rcvd_ndef_msg):
     log.info('print ndef message {0!r}'.format(rcvd_ndef_msg.type))
-    print rcvd_ndef_msg.pretty()
+    print(rcvd_ndef_msg.pretty())
 
 def add_recv_save_parser(parser):
     parser.set_defaults(func=run_recv_save_action)

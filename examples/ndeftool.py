@@ -20,7 +20,7 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-
+from __future__ import print_function
 import logging
 log = logging.getLogger('main')
 
@@ -357,7 +357,7 @@ def add_pack_parser(parser):
     
 def pack(args):
     if args.type == 'unknown':
-        print >> sys.stderr, "guess mime type from file"
+        print("guess mime type from file", file=sys.stderr)
         mimetype = mimetypes.guess_type(args.input.name, strict=False)[0]
         if mimetype is not None: args.type = mimetype
     if args.name is None:
@@ -366,19 +366,19 @@ def pack(args):
     data = args.input.read()
 
     if args.type == "text/plain":
-        print >> sys.stderr, "text/plain ==> urn:nfc:wkt:T"
+        print("text/plain ==> urn:nfc:wkt:T", file=sys.stderr)
         try:
             from guess_language import guessLanguage
-            print >> sys.stderr, "guess language from text"
+            print("guess language from text", file=sys.stderr)
             language = guessLanguage(data)
             if language == "UNKNOWN": language = "en"
         except ImportError:
             language = "en"
-        print >> sys.stderr, "text language is '%s'" % language
+        print("text language is '%s'" % language, file=sys.stderr)
         record = nfc.ndef.TextRecord(data, language=language)
         record.name = args.name
     else:
-        print >> sys.stderr, "mime type is %s" % args.type
+        print("mime type is %s" % args.type, file=sys.stderr)
         record = nfc.ndef.Record(args.type, args.name, data)
 
     message = nfc.ndef.Message(record)
