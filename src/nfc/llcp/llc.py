@@ -257,7 +257,10 @@ class LogicalLinkController(object):
             return self.names[self.value]
 
         def __getattr__(self, name):
-            return self.value == self.names.index(name)
+            try:
+                return self.value == self.names.index(name)
+            except ValueError:
+                raise AttributeError(name)
 
         def __setattr__(self, name, value):
             if name not in ("names", "value"):
