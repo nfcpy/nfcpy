@@ -44,6 +44,7 @@ listen_dep  yes      Only passive communication mode
 ==========  =======  ============
 
 """
+from __future__ import division
 import nfc.clf
 from . import device
 

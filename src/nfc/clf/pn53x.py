@@ -25,6 +25,7 @@ interface chips, namely the NXP PN531, PN532, PN533 and the Sony
 RC-S956.
 
 """
+from __future__ import division
 import nfc.clf
 from . import device
 

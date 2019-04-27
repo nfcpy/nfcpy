@@ -22,6 +22,7 @@
 #
 # Transport layer for host to reader communication.
 #
+from __future__ import division
 import os
 import re
 import errno

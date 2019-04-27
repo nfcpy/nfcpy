@@ -20,6 +20,7 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
+from __future__ import division
 import os
 import os.path
 import inspect
