@@ -22,6 +22,9 @@
 #
 # text_record.py -- NDEF text record
 #
+import sys
+if sys.version_info[0] != 2:
+    unicode = str
 import logging
 log = logging.getLogger(__name__)
 
