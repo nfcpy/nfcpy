@@ -719,11 +719,11 @@ class Version(object):
         """Mainor version number. A read-only attribute."""
         return self._minor
     
-    def __cmp__(self, other):
+    def __eq__(self, other):
         if self.major == other.major:
-            return self.minor - other.minor
+            return self.minor == other.minor
         else:
-            return self.major - other.major
+            return False
   
     def __str__(self):
         return chr((self.major << 4) | (self.minor & 0x0f))
