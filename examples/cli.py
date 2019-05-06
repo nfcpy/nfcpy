@@ -19,6 +19,10 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
+try:
+    from future_builtins import filter, map
+except ImportError:
+    pass
 import logging
 log = logging.getLogger('main')
 
@@ -96,11 +100,11 @@ class CommandLineInterface(object):
             if self.options.test_all:
                 # get_test_method() yields a list of (line, name, docstr) tuples
                 test_methods = sorted(get_test_methods(self), key=itemgetter(0))
-                self.options.test = map(itemgetter(1), test_methods)
+                self.options.test = list(map(itemgetter(1), test_methods))
 
             if len(self.options.test) > 0 and self.options.select:
                 match = lambda name: re.match(self.options.select, name)
-                self.options.test = filter(match, self.options.test)
+                self.options.test = list(filter(match, self.options.test))
         
     def add_dbg_options(self, argument_parser):
         group = argument_parser.add_argument_group(
