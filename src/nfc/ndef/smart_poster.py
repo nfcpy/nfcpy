@@ -122,7 +122,7 @@ class SmartPosterRecord(Record):
     def uri(self, value):
         try:
             self._uri = value.encode("ascii")
-        except UnicodeDecodeError:
+        except UnicodeEncodeError:
             raise ValueError("uri value must be an ascii string")
         except AttributeError:
             raise TypeError("uri value must be a bytes type")
