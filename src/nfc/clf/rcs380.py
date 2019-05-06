@@ -102,7 +102,7 @@ class Frame(object):
         return self._data
 
 
-class CommunicationError:
+class Rcs380CommunicationError(Exception):
     err2str = {0x00000000: "NO_ERROR",
                0x00000001: "PROTOCOL_ERROR",
                0x00000002: "PARITY_ERROR",
@@ -123,18 +123,18 @@ class CommunicationError:
         self.errno = struct.unpack('<L', bytes(status_bytes))[0]
 
     def __eq__(self, strerr):
-        errno = CommunicationError.str2err[strerr]
+        errno = Rcs380CommunicationError.str2err[strerr]
         return bool(self.errno & errno) if self.errno or errno else True
 
     def __ne__(self, strerr):
         return not self.__eq__(strerr)
 
     def __str__(self):
-        return self.__class__.__name__ + ' ' + CommunicationError.err2str.get(
+        return self.__class__.__name__ + ' ' + Rcs380CommunicationError.err2str.get(
             self.errno, "0x{0:08X}".format(self.errno))
 
 
-class StatusError:
+class StatusError(Exception):
     err2str = ("SUCCESS", "PARAMETER_ERROR", "PB_ERROR", "RFCA_ERROR",
                "TEMPERATURE_ERROR", "PWD_ERROR", "RECEIVE_ERROR",
                "COMMANDTYPE_ERROR")
@@ -268,7 +268,7 @@ class Chipset(object):
         timeout = min((timeout + (1 if timeout > 0 else 0)) * 10, 0xFFFF)
         data = self.send_command(0x04, struct.pack("<H", timeout) + bytes(data))
         if data and tuple(data[0:4]) != (0, 0, 0, 0):
-            raise CommunicationError(data[0:4])
+            raise Rcs380CommunicationError(data[0:4])
         return data[5:] if data else None
 
     def switch_rf(self, switch):
@@ -323,7 +323,7 @@ class Chipset(object):
         data = self.send_command(0x48, data)
 
         if data and tuple(data[3:7]) != (0, 0, 0, 0):
-            raise CommunicationError(data[3:7])
+            raise Rcs380CommunicationError(data[3:7])
 
         return data
 
@@ -394,7 +394,7 @@ class Device(device.Device):
             sens_res = self.chipset.in_comm_rf(sens_req, 30)
             if len(sens_res) != 2:
                 return None
-        except CommunicationError as error:
+        except Rcs380CommunicationError as error:
             if error != "RECEIVE_TIMEOUT_ERROR":
                 log.debug(error)
             return None
@@ -411,7 +411,7 @@ class Device(device.Device):
                 log.debug("send RID_CMD %s", hexlify(rid_cmd))
                 try:
                     target.rid_res = self.chipset.in_comm_rf(rid_cmd, 30)
-                except CommunicationError as error:
+                except Rcs380CommunicationError as error:
                     log.debug(error)
                     return None
             return target
@@ -454,7 +454,7 @@ class Device(device.Device):
             if sel_res[0] & 0b00000100 == 0:
                 return nfc.clf.RemoteTarget(target.brty, sens_res=sens_res,
                                             sel_res=sel_res, sdd_res=uid)
-        except CommunicationError as error:
+        except Rcs380CommunicationError as error:
             log.debug(error)
 
     def sense_ttb(self, target):
@@ -480,7 +480,7 @@ class Device(device.Device):
         log.debug("send SENSB_REQ %s", hexlify(sensb_req))
         try:
             sensb_res = self.chipset.in_comm_rf(sensb_req, 30)
-        except CommunicationError as error:
+        except Rcs380CommunicationError as error:
             if error != "RECEIVE_TIMEOUT_ERROR":
                 log.debug(error)
             return None
@@ -510,7 +510,7 @@ class Device(device.Device):
         try:
             frame = struct.pack("B", len(sensf_req)+1) + sensf_req
             frame = self.chipset.in_comm_rf(frame, 10)
-        except CommunicationError as error:
+        except Rcs380CommunicationError as error:
             if error != "RECEIVE_TIMEOUT_ERROR":
                 log.debug(error)
             return None
@@ -583,7 +583,7 @@ class Device(device.Device):
                 log.debug("wait %d ms for Type 2 Tag activation", recv_timeout)
                 try:
                     data = self.chipset.tg_comm_rf(**tg_comm_rf_args)
-                except CommunicationError as error:
+                except Rcs380CommunicationError as error:
                     log.debug(error)
                 else:
                     brty = (b'106A', b'212F', b'424F')[data[0]-11]
@@ -608,7 +608,7 @@ class Device(device.Device):
                 try:
                     data = self.chipset.tg_comm_rf(**tg_comm_rf_args)
                     tg_comm_rf_args['transmit_data'] = None
-                except CommunicationError as error:
+                except Rcs380CommunicationError as error:
                     tg_comm_rf_args['transmit_data'] = None
                     rats_cmd = rats_res = None
                     log.debug(error)
@@ -702,7 +702,7 @@ class Device(device.Device):
             try:
                 data = self.chipset.tg_comm_rf(recv_timeout=recv_timeout,
                                                transmit_data=transmit_data)
-            except CommunicationError as error:
+            except Rcs380CommunicationError as error:
                 log.debug(error)
                 continue
             finally:
@@ -768,7 +768,7 @@ class Device(device.Device):
             log.debug("wait %d ms for activation", recv_timeout)
             try:
                 data = self.chipset.tg_comm_rf(**tg_comm_rf_args)
-            except CommunicationError as error:
+            except Rcs380CommunicationError as error:
                 if error != "RECEIVE_TIMEOUT_ERROR":
                     log.warning(error)
             else:
@@ -832,7 +832,7 @@ class Device(device.Device):
                 else:
                     log.warn("ATR_REQ must be 16 to 64 byte")
                     data = None
-            except (CommunicationError) as error:
+            except Rcs380CommunicationError as error:
                 log.warn(str(error))
                 data = None
 
@@ -850,7 +850,7 @@ class Device(device.Device):
             (dsi, dri) = (data[3] >> 3 & 7, data[3] & 7)
             if dsi != dri:
                 log.error("PSL_REQ DSI != DRI is not supported")
-                raise CommunicationError(b'\0\0\0\0')
+                raise Rcs380CommunicationError(b'\0\0\0\0')
             (psl_req, psl_res) = (data[:], b"\xD5\x05" + data[2:3])
             log.debug("%s send PSL_RES %s", brty, hexlify(psl_res))
             send_res_recv_req(brty, psl_res, 0)
@@ -893,7 +893,7 @@ class Device(device.Device):
                 log.debug("%s wait recv 1000 ms", brty)
                 data = send_res_recv_req(brty, None, 1000)
 
-            except (CommunicationError) as error:
+            except Rcs380CommunicationError as error:
                 log.warning(str(error))
                 return None
 
@@ -930,7 +930,7 @@ class Device(device.Device):
             else:
                 self.chipset.in_set_protocol(**in_set_protocol_settings)
                 return self.chipset.in_comm_rf(data, timeout_msec)
-        except CommunicationError as error:
+        except Rcs380CommunicationError as error:
             log.debug(error)
             if error == "RECEIVE_TIMEOUT_ERROR":
                 raise nfc.clf.TimeoutError
@@ -956,7 +956,7 @@ class Device(device.Device):
         try:
             data = self.chipset.tg_comm_rf(**kwargs)
             return data[7:] if data else None
-        except CommunicationError as error:
+        except Rcs380CommunicationError as error:
             log.debug(error)
             if error == "RF_OFF_ERROR":
                 raise nfc.clf.BrokenLinkError(str(error))

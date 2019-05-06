@@ -109,23 +109,23 @@ class TestFrame(object):
 
 class TestCommunicationError(object):
     @pytest.mark.parametrize("status, errno, errstr", [
-        ('00000000', 0x00000000, "CommunicationError NO_ERROR"),
-        ('01000000', 0x00000001, "CommunicationError PROTOCOL_ERROR"),
-        ('02000000', 0x00000002, "CommunicationError PARITY_ERROR"),
-        ('04000000', 0x00000004, "CommunicationError CRC_ERROR"),
-        ('08000000', 0x00000008, "CommunicationError COLLISION_ERROR"),
-        ('10000000', 0x00000010, "CommunicationError OVERFLOW_ERROR"),
-        ('40000000', 0x00000040, "CommunicationError TEMPERATURE_ERROR"),
-        ('80000000', 0x00000080, "CommunicationError RECEIVE_TIMEOUT_ERROR"),
-        ('00010000', 0x00000100, "CommunicationError CRYPTO1_ERROR"),
-        ('00020000', 0x00000200, "CommunicationError RFCA_ERROR"),
-        ('00040000', 0x00000400, "CommunicationError RF_OFF_ERROR"),
-        ('00080000', 0x00000800, "CommunicationError TRANSMIT_TIMEOUT_ERROR"),
-        ('00000080', 0x80000000, "CommunicationError RECEIVE_LENGTH_ERROR"),
-        ('ffffffff', 0xffffffff, "CommunicationError 0xFFFFFFFF"),
+        ('00000000', 0x00000000, "Rcs380CommunicationError NO_ERROR"),
+        ('01000000', 0x00000001, "Rcs380CommunicationError PROTOCOL_ERROR"),
+        ('02000000', 0x00000002, "Rcs380CommunicationError PARITY_ERROR"),
+        ('04000000', 0x00000004, "Rcs380CommunicationError CRC_ERROR"),
+        ('08000000', 0x00000008, "Rcs380CommunicationError COLLISION_ERROR"),
+        ('10000000', 0x00000010, "Rcs380CommunicationError OVERFLOW_ERROR"),
+        ('40000000', 0x00000040, "Rcs380CommunicationError TEMPERATURE_ERROR"),
+        ('80000000', 0x00000080, "Rcs380CommunicationError RECEIVE_TIMEOUT_ERROR"),
+        ('00010000', 0x00000100, "Rcs380CommunicationError CRYPTO1_ERROR"),
+        ('00020000', 0x00000200, "Rcs380CommunicationError RFCA_ERROR"),
+        ('00040000', 0x00000400, "Rcs380CommunicationError RF_OFF_ERROR"),
+        ('00080000', 0x00000800, "Rcs380CommunicationError TRANSMIT_TIMEOUT_ERROR"),
+        ('00000080', 0x80000000, "Rcs380CommunicationError RECEIVE_LENGTH_ERROR"),
+        ('ffffffff', 0xffffffff, "Rcs380CommunicationError 0xFFFFFFFF"),
     ])
     def test_init(self, status, errno, errstr):
-        error = nfc.clf.rcs380.CommunicationError(HEX(status))
+        error = nfc.clf.rcs380.Rcs380CommunicationError(HEX(status))
         assert error.errno == errno
         assert str(error) == errstr
 
@@ -157,7 +157,7 @@ class TestCommunicationError(object):
         ('ffffffff', "RECEIVE_LENGTH_ERROR"),
     ])
     def test_compare(self, status, errname):
-        error = nfc.clf.rcs380.CommunicationError(HEX(status))
+        error = nfc.clf.rcs380.Rcs380CommunicationError(HEX(status))
         assert error == errname
         if error.errno:
             assert error != "NO_ERROR"
@@ -273,7 +273,7 @@ class TestChipset(object):
         assert chipset.in_comm_rf(data, timeout) == b'34'
         chipset.transport.write.assert_called_with(CMD(command))
         chipset.transport.read.side_effect = [ACK(), RSP('0501000000')]
-        with pytest.raises(nfc.clf.rcs380.CommunicationError) as excinfo:
+        with pytest.raises(nfc.clf.rcs380.Rcs380CommunicationError) as excinfo:
             chipset.in_comm_rf(data, timeout)
         assert excinfo.value == "PROTOCOL_ERROR"
 
@@ -361,7 +361,7 @@ class TestChipset(object):
         assert chipset.tg_comm_rf(**kwargs) == HEX('00000000000000')
         chipset.transport.write.assert_called_with(CMD(command))
         chipset.transport.read.side_effect = [ACK(), RSP('4900000001000000')]
-        with pytest.raises(nfc.clf.rcs380.CommunicationError) as excinfo:
+        with pytest.raises(nfc.clf.rcs380.Rcs380CommunicationError) as excinfo:
             chipset.tg_comm_rf(**kwargs)
         assert excinfo.value == "PROTOCOL_ERROR"
 

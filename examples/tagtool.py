@@ -558,7 +558,7 @@ class TagTool(CommandLineInterface):
         tag.add_service(0x000B, ndef_read, lambda: False)
         return True
 
-class ArgparseError(SystemExit):
+class ArgparseError(Exception):
     def __init__(self, prog, message):
         super(ArgparseError, self).__init__(2, prog, message)
     
