@@ -55,7 +55,7 @@ class ConnectionLessEchoServer(Thread):
     """
     def __init__(self, llc):
         socket = nfc.llcp.Socket(llc, nfc.llcp.LOGICAL_DATA_LINK)
-        socket.bind('urn:nfc:sn:cl-echo')
+        socket.bind(b'urn:nfc:sn:cl-echo')
         log.info("bound connection-less echo server to port {0}"
                  .format(socket.getsockname()))
         super(ConnectionLessEchoServer, self).__init__(
@@ -102,7 +102,7 @@ class ConnectionModeEchoServer(Thread):
     """
     def __init__(self, llc):
         socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
-        socket.bind('urn:nfc:sn:co-echo')
+        socket.bind(b'urn:nfc:sn:co-echo')
         log.info("bound connection-mode echo server to port {0}"
                  .format(socket.getsockname()))
         super(ConnectionModeEchoServer, self).__init__(
@@ -177,7 +177,7 @@ class ConnectionModeEchoServer(Thread):
 class ConnectionModeDumpServer(Thread):
     def __init__(self, llc):
         socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
-        socket.bind('urn:nfc:sn:cm-dump')
+        socket.bind(b'urn:nfc:sn:cm-dump')
         log.info("bound connection-mode dump server to port {0}"
                  .format(socket.getsockname()))
         super(ConnectionModeDumpServer, self).__init__(

@@ -33,6 +33,12 @@ import inspect
 import argparse
 import Queue as queue
 from threading import Thread, Lock
+from binascii import hexlify
+if sys.version_info[0] == 2:
+    stob = str
+else:
+    def stob(s):
+        return s.encode('ascii')
 
 from cli import CommandLineInterface, TestFail
 
@@ -61,7 +67,7 @@ class PhdcAgent(Thread):
         return apdu
                 
     def send(self, apdu):
-        log.info("[ieee] >>> {0}".format(str(apdu).encode("hex")))
+        log.info("[ieee] >>> {0}".format(hexlify(apdu)))
         self.oqueue.put(apdu)
 
     def recv(self, timeout):
@@ -70,26 +76,26 @@ class PhdcAgent(Thread):
         except queue.Empty:
             pass
         else:
-            log.info("[ieee] <<< {0}".format(str(apdu).encode("hex")))
+            log.info("[ieee] <<< {0}".format(hexlify(apdu)))
             return apdu
 
 class PhdcTagAgent(PhdcAgent):
-    def __init__(self, tag, cmd, apdu=bytearray(), flags='\x00'):
+    def __init__(self, tag, cmd, apdu=bytearray(), flags=b'\x00'):
         super(PhdcTagAgent, self).__init__()
         self.terminate = False
         self.mc = 1
-        attr = nfc.tag.tt3.NdefAttributeData()
+        attr = nfc.tag.tt3.NdefAttributeData() # ???
         attr.version = "1.0"
         attr.nbr, attr.nbw = 12, 8
         attr.capacity = 1024
         attr.writeable = True
         attr.length = 7 + len(apdu)
     
-        phd_rec = nfc.ndef.Record("urn:nfc:wkt:PHD", data=flags + apdu)
+        phd_rec = nfc.ndef.Record(b"urn:nfc:wkt:PHD", data=flags + apdu)
         phd_msg = nfc.ndef.Message(phd_rec)
         
-        self.ndef_data_area = str(attr) + bytearray(attr.capacity)
-        self.ndef_data_area[16:16+7+len(apdu)] = bytearray(str(phd_msg))
+        self.ndef_data_area = attr.encode() + bytearray(attr.capacity)
+        self.ndef_data_area[16:16+7+len(apdu)] = bytearray(phd_msg.encode())
 
         tag.add_service(0x0009, self.ndef_read, self.ndef_write)
         tag.add_service(0x000B, self.ndef_read, lambda: False)
@@ -106,7 +112,7 @@ class PhdcTagAgent(PhdcAgent):
             if block < len(self.ndef_data_area) // 16:
                 data = self.ndef_data_area[block*16:(block+1)*16]
                 log.debug("[tt3] got read block #{0} {1}".format(
-                        block, str(data).encode("hex")))
+                        block, hexlify(data)))
                 return data
             else:
                 log.debug("[tt3] got read block #{0}".format(block))
@@ -119,7 +125,7 @@ class PhdcTagAgent(PhdcAgent):
             self.ndef_write_lock.acquire()
         try:
             log.debug("[tt3] got write block #{0} {1}".format(
-                    block, str(data).encode("hex")))
+                    block, hexlify(data)))
             if block < len(self.ndef_data_area) // 16:
                 self.ndef_data_area[block*16:(block+1)*16] = data
                 return True
@@ -132,7 +138,7 @@ class PhdcTagAgent(PhdcAgent):
                     Thread(target=self.send_phd_message).start()
             
     def recv_phd_message(self):
-        attr = nfc.tag.tt3.NdefAttributeData(self.ndef_data_area[0:16])
+        attr = nfc.tag.tt3.NdefAttributeData(self.ndef_data_area[0:16]) # ???
         if attr.valid and not attr.writing and attr.length > 0:
             #print str(self.ndef_data_area[16:16+attr.length]).encode("hex")
             try:
@@ -141,26 +147,26 @@ class PhdcTagAgent(PhdcAgent):
             except nfc.ndef.LengthError:
                 return None
 
-            if message.type == "urn:nfc:wkt:PHD":
+            if message.type == b"urn:nfc:wkt:PHD":
                 data = bytearray(message[0].data)
                 if data[0] & 0x8F == 0x80 | (self.mc % 16):
-                    log.info("[phdc] <<< " + str(data).encode("hex"))
+                    log.info("[phdc] <<< %s", hexlify(data))
                     self.mc += 1
                     attr.length = 0
-                    self.ndef_data_area[0:16] = bytearray(str(attr))
+                    self.ndef_data_area[0:16] = bytearray(attr.encode())
                     return data[1:]
                    
     def send_phd_message(self):
         apdu = self.dequeue(timeout=0.1)
         data = bytearray([0x80 | (self.mc % 16)]) + apdu
-        record = nfc.ndef.Record("urn:nfc:wkt:PHD", data=str(data))
+        record = nfc.ndef.Record(b"urn:nfc:wkt:PHD", data=bytes(data))
         with self.ndef_read_lock:
             if not self.terminate:
-                log.info("[phdc] >>> " + str(data).encode("hex"))
-                data = bytearray(str(nfc.ndef.Message(record)))
-                attr = nfc.tag.tt3.NdefAttributeData(self.ndef_data_area[0:16])
+                log.info("[phdc] >>> %s", hexlify(data))
+                data = bytearray(nfc.ndef.Message(record).encode())
+                attr = nfc.tag.tt3.NdefAttributeData(self.ndef_data_area[0:16]) # ???
                 attr.length = len(data)
-                self.ndef_data_area[0:16+attr.length] = str(attr) + data
+                self.ndef_data_area[0:16+attr.length] = attr.encode() + data
                 self.mc += 1
         
     def run(self):
@@ -220,8 +226,8 @@ class PhdcTagAgentTest(CommandLineInterface):
         pmm = bytearray.fromhex("01E0000000FFFF00")
         sys = bytearray.fromhex("12FC")
         
-        target.brty = str(self.options.bitrate) + "F"
-        target.sensf_res = "\x01" + idm + pmm + sys
+        target.brty = stob(self.options.bitrate) + b"F"
+        target.sensf_res = b"\x01" + idm + pmm + sys
         return target
     
     def test_00(self, tag, command):
@@ -265,7 +271,7 @@ class PhdcTagAgentTest(CommandLineInterface):
         if apdu is None:
             raise TestFail("no data received")
 
-        if apdu.startswith("\xE3\x00"):
+        if apdu.startswith(b"\xE3\x00"):
             info("rcvd association response")
 
         time.sleep(3.0)
@@ -278,7 +284,7 @@ class PhdcTagAgentTest(CommandLineInterface):
         if apdu is None:
             raise TestFail("no data received")
 
-        if apdu.startswith("\xE5\x00"):
+        if apdu.startswith(b"\xE5\x00"):
             info("rcvd association release response")
 
         info("leaving ieee agent")
@@ -300,7 +306,7 @@ class PhdcTagAgentTest(CommandLineInterface):
         apdu = agent.recv(timeout=5.0)
         if apdu is None:
             raise TestFail("no data received")
-        if apdu.startswith("\xE3\x00"):
+        if apdu.startswith(b"\xE3\x00"):
             info("rcvd association response")
 
         apdu = bytearray.fromhex(assoc_release_req)
@@ -310,7 +316,7 @@ class PhdcTagAgentTest(CommandLineInterface):
         apdu = agent.recv(timeout=5.0)
         if apdu is None:
             raise TestFail("no data received")
-        if apdu.startswith("\xE5\x00"):
+        if apdu.startswith(b"\xE5\x00"):
             info("rcvd association release response")
 
         info("leaving ieee agent")
@@ -326,7 +332,7 @@ class PhdcTagAgentTest(CommandLineInterface):
         apdu = agent.recv(timeout=5.0)
         if apdu is None:
             raise TestFail("no data received")
-        if apdu.startswith("\xE3\x00"):
+        if apdu.startswith(b"\xE3\x00"):
             info("rcvd association response")
 
         time.sleep(1.0)
@@ -340,7 +346,7 @@ class PhdcTagAgentTest(CommandLineInterface):
     def test_03(self, tag, command):
         """Activation with invalid settings"""
         
-        agent = PhdcTagAgent(tag, command, flags='\x02')
+        agent = PhdcTagAgent(tag, command, flags=b'\x02')
         info("sending with non-zero message counter")
         agent.start()
         if agent.is_alive():
@@ -349,7 +355,7 @@ class PhdcTagAgentTest(CommandLineInterface):
     def test_04(self, tag, command):
         """Activation with invalid RFU value"""
         
-        agent = PhdcTagAgent(tag, command, flags='\x40')
+        agent = PhdcTagAgent(tag, command, flags=b'\x40')
         info("sending with non-zero reserved field")
         agent.start()
             
@@ -377,7 +383,7 @@ class PhdcP2pAgentTest(CommandLineInterface):
 
         socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
         socket.setsockopt(nfc.llcp.SO_RCVBUF, 2)
-        socket.connect("urn:nfc:sn:phdc")
+        socket.connect(b"urn:nfc:sn:phdc")
         peer_sap = socket.getpeername()
         log.info("connected with phdc manager at sap {0}".format(peer_sap))
         log.info("entering ieee agent")
@@ -385,16 +391,16 @@ class PhdcP2pAgentTest(CommandLineInterface):
         try:
             with open("scenario.txt") as f:
                 for line in f:
-                    if line.startswith('#'):
+                    if line.startswith(b'#'):
                         continue
 
                     apdu = bytearray.fromhex(line)
                     apdu = struct.pack(">H", len(apdu)) + apdu
-                    log.info("send {0}".format(str(apdu).encode("hex")))
-                    socket.send(str(apdu))
+                    log.info("send {0}".format(hexlify(apdu)))
+                    socket.send(bytes(apdu))
 
                     apdu = socket.recv()
-                    log.info("rcvd {0}".format(str(apdu).encode("hex")))
+                    log.info("rcvd {0}".format(hexlify(apdu)))
         except IOError as e:
             log.error(e)
 
@@ -406,7 +412,7 @@ class PhdcP2pAgentTest(CommandLineInterface):
         
         socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
         socket.setsockopt(nfc.llcp.SO_RCVBUF, 2)
-        service_name = "urn:nfc:sn:phdc"
+        service_name = b"urn:nfc:sn:phdc"
         try:
             socket.connect(service_name)
         except nfc.llcp.ConnectRefused:
@@ -419,12 +425,12 @@ class PhdcP2pAgentTest(CommandLineInterface):
         apdu = bytearray.fromhex(thermometer_assoc_req)
         apdu = struct.pack(">H", len(apdu)) + apdu
         info("send thermometer association request")
-        info("send {0}".format(str(apdu).encode("hex")))
-        socket.send(str(apdu))
+        info("send {0}".format(hexlify(apdu)))
+        socket.send(bytes(apdu))
 
         apdu = socket.recv()
-        info("rcvd {0}".format(str(apdu).encode("hex")))
-        if apdu.startswith("\xE3\x00"):
+        info("rcvd {0}".format(hexlify(apdu)))
+        if apdu.startswith(b"\xE3\x00"):
             info("rcvd association response")
 
         time.sleep(3.0)
@@ -432,12 +438,12 @@ class PhdcP2pAgentTest(CommandLineInterface):
         apdu = bytearray.fromhex(assoc_release_req)
         apdu = struct.pack(">H", len(apdu)) + apdu
         info("send association release request")
-        info("send {0}".format(str(apdu).encode("hex")))
-        socket.send(str(apdu))
+        info("send {0}".format(hexlify(apdu)))
+        socket.send(bytes(apdu))
 
         apdu = socket.recv()
-        info("rcvd {0}".format(str(apdu).encode("hex")))
-        if apdu.startswith("\xE5\x00"):
+        info("rcvd {0}".format(hexlify(apdu)))
+        if apdu.startswith(b"\xE5\x00"):
             info("rcvd association release response")
 
         info("leaving ieee agent")
@@ -448,7 +454,7 @@ class PhdcP2pAgentTest(CommandLineInterface):
 
         socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
         socket.setsockopt(nfc.llcp.SO_RCVBUF, 2)
-        service_name = "urn:nfc:sn:phdc"
+        service_name = b"urn:nfc:sn:phdc"
         try:
             socket.connect(service_name)
         except nfc.llcp.ConnectRefused:
@@ -461,19 +467,19 @@ class PhdcP2pAgentTest(CommandLineInterface):
         apdu = bytearray.fromhex(thermometer_assoc_req)
         apdu = struct.pack(">H", len(apdu)) + apdu
         info("send thermometer association request")
-        info("send {0}".format(str(apdu).encode("hex")))
-        socket.send(str(apdu))
+        info("send {0}".format(hexlify(apdu)))
+        socket.send(bytes(apdu))
 
         apdu = socket.recv()
-        info("rcvd {0}".format(str(apdu).encode("hex")))
-        if apdu.startswith("\xE3\x00"):
+        info("rcvd {0}".format(hexlify(apdu)))
+        if apdu.startswith(b"\xE3\x00"):
             info("rcvd association response")
 
         socket.close()
 
         socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
         socket.setsockopt(nfc.llcp.SO_RCVBUF, 2)
-        socket.connect("urn:nfc:sn:phdc")
+        socket.connect(b"urn:nfc:sn:phdc")
         peer_sap = socket.getpeername()
         info("connected with phdc manager at sap {0}".format(peer_sap))
         info("entering ieee agent")
@@ -481,12 +487,12 @@ class PhdcP2pAgentTest(CommandLineInterface):
         apdu = bytearray.fromhex(thermometer_assoc_req)
         apdu = struct.pack(">H", len(apdu)) + apdu
         info("send thermometer association request")
-        info("send {0}".format(str(apdu).encode("hex")))
-        socket.send(str(apdu))
+        info("send {0}".format(hexlify(apdu)))
+        socket.send(bytes(apdu))
 
         apdu = socket.recv()
-        info("rcvd {0}".format(str(apdu).encode("hex")))
-        if apdu.startswith("\xE3\x00"):
+        info("rcvd {0}".format(hexlify(apdu)))
+        if apdu.startswith(b"\xE3\x00"):
             info("rcvd association response")
 
         time.sleep(3.0)
@@ -494,12 +500,12 @@ class PhdcP2pAgentTest(CommandLineInterface):
         apdu = bytearray.fromhex(assoc_release_req)
         apdu = struct.pack(">H", len(apdu)) + apdu
         info("send association release request")
-        info("send {0}".format(str(apdu).encode("hex")))
-        socket.send(str(apdu))
+        info("send {0}".format(hexlify(apdu)))
+        socket.send(bytes(apdu))
 
         apdu = socket.recv()
-        info("rcvd {0}".format(str(apdu).encode("hex")))
-        if apdu.startswith("\xE5\x00"):
+        info("rcvd {0}".format(hexlify(apdu)))
+        if apdu.startswith(b"\xE5\x00"):
             info("rcvd association release response")
 
         info("leaving ieee agent")
@@ -509,7 +515,7 @@ class PhdcP2pAgentTest(CommandLineInterface):
         
         socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
         socket.setsockopt(nfc.llcp.SO_RCVBUF, 2)
-        service_name = "urn:nfc:xsn:nfc-forum.org:phdc-validation"
+        service_name = b"urn:nfc:xsn:nfc-forum.org:phdc-validation"
         try:
             socket.connect(service_name)
         except nfc.llcp.ConnectRefused:
@@ -524,7 +530,7 @@ class PhdcP2pAgentTest(CommandLineInterface):
         log.info("send ieee apdu of size {0} byte".format(len(apdu)))
         apdu = struct.pack(">H", len(apdu)) + apdu
         for i in range(0, len(apdu), miu):
-            socket.send(str(apdu[i:i+miu]))
+            socket.send(bytes(apdu[i:i+miu]))
 
         sent_apdu = apdu[2:]
 

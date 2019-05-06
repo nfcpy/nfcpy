@@ -22,7 +22,7 @@ def HEX(s):
 
 @pytest.fixture()
 def target():
-    target = nfc.clf.RemoteTarget("106A")
+    target = nfc.clf.RemoteTarget(b"106A")
     target.sens_res = HEX("4400")
     target.sel_res = HEX("00")
     target.sdd_res = HEX("04517CA1E1ED2580")

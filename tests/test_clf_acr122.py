@@ -221,7 +221,7 @@ class TestDevice(object):
             RSP('4B 00'),                               # InListPassiveTarget
             RSP('07 26'),                               # ReadRegister
         ]
-        assert device.sense_tta(nfc.clf.RemoteTarget('106A')) is None
+        assert device.sense_tta(nfc.clf.RemoteTarget(b'106A')) is None
         assert device.chipset.transport.read.call_count == 2
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
             CMD('4A 0100'),                             # InListPassiveTarget
@@ -232,7 +232,7 @@ class TestDevice(object):
         device.chipset.transport.read.side_effect = [
             RSP('4B 00'),                               # InListPassiveTarget
         ]
-        assert device.sense_ttb(nfc.clf.RemoteTarget('106B')) is None
+        assert device.sense_ttb(nfc.clf.RemoteTarget(b'106B')) is None
         assert device.chipset.transport.read.call_count == 1
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
             CMD('4A 010300'),                           # InListPassiveTarget
@@ -243,7 +243,7 @@ class TestDevice(object):
             RSP('07 03'),                               # ReadRegister
             RSP('4B 00'),                               # InListPassiveTarget
         ]
-        assert device.sense_ttf(nfc.clf.RemoteTarget('212F')) is None
+        assert device.sense_ttf(nfc.clf.RemoteTarget(b'212F')) is None
         assert device.chipset.transport.read.call_count == 2
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
             CMD('06 6304'),                             # ReadRegister
@@ -256,7 +256,7 @@ class TestDevice(object):
             RSP('47 01'),                               # InJumpForPSL
             RSP('09 00'),                               # WriteRegister
         ]
-        target = nfc.clf.RemoteTarget('106A', atr_req=atr_req)
+        target = nfc.clf.RemoteTarget(b'106A', atr_req=atr_req)
         assert device.sense_dep(target) is None
         assert device.chipset.transport.read.call_count == 2
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [

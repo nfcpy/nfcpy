@@ -19,6 +19,13 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
+from binascii import hexlify
+import sys
+if sys.version_info[0] == 2:
+    hexstring = hexlify
+else :
+    def hexstring(b):
+        return hexlify(b).decode('ascii')
 import logging
 import warnings
 from ndef import message_decoder, message_encoder
@@ -247,7 +254,7 @@ class Tag(object):
             s = self.type + ' ' + repr(self._product)
         except AttributeError:
             s = self.type
-        return s + ' ID=' + self.identifier.encode("hex").upper()
+        return s + ' ID=' + hexstring(self.identifier).upper()
 
     @property
     def clf(self):
@@ -268,7 +275,7 @@ class Tag(object):
     @property
     def identifier(self):
         """The unique tag identifier."""
-        return str(self._nfcid)
+        return bytes(self._nfcid)
 
     @property
     def ndef(self):
@@ -460,16 +467,16 @@ def activate(clf, target):
     import nfc.clf
     try:
         log.debug("trying to activate {0}".format(target))
-        if target.brty.endswith('A'):
+        if target.brty.endswith(b'A'):
             if target.sens_res[1] & 0x0F == 0x0C:
                 return activate_tt1(clf, target)
             elif target.sel_res[0] >> 5 & 3 == 0:
                 return activate_tt2(clf, target)
             elif target.sel_res[0] >> 5 & 1 == 1:
                 return activate_tt4(clf, target)
-        elif target.brty.endswith('B'):
+        elif target.brty.endswith(b'B'):
             return activate_tt4(clf, target)
-        elif target.brty.endswith('F'):
+        elif target.brty.endswith(b'F'):
             return activate_tt3(clf, target)
     except nfc.clf.CommunicationError:
         return None

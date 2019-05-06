@@ -24,6 +24,7 @@ from . import tt2
 
 import os
 from binascii import hexlify
+from struct import pack
 from pyDes import triple_des, CBC
 
 import logging
@@ -147,7 +148,7 @@ class MifareUltralightC(tt2.Type2Tag):
         # unless the password is empty. If it's empty we use the
         # factory default password.
         key = password[0:16] if password != b"" else b"IEMKAERB!NACUOYF"
-        log.debug("protect with key " + hexlify(key))
+        log.debug("protect with key %s", hexlify(key))
 
         # split the key and reverse
         key1, key2 = key[7::-1], key[15:7:-1]
@@ -157,10 +158,10 @@ class MifareUltralightC(tt2.Type2Tag):
         self.write(47, key2[4:8])
 
         # protect from memory page
-        self.write(42, chr(max(3, min(protect_from, 0x30))) + b"\0\0\0")
+        self.write(42, pack("B", max(3, min(protect_from, 0x30))) + b"\0\0\0")
 
         # set read protection flag
-        self.write(43, "\0\0\0\0" if read_protect else "\x01\0\0\0")
+        self.write(43, b"\0\0\0\0" if read_protect else b"\x01\0\0\0")
 
         # Set NDEF read/write permissions if protection starts at page
         # 3 and the tag is formatted for NDEF. We set the read/write
@@ -206,7 +207,7 @@ class MifareUltralightC(tt2.Type2Tag):
         if len(key) != 16:
             raise ValueError("password must be at least 16 byte")
 
-        log.debug("authenticate with key " + str(key).encode("hex"))
+        log.debug("authenticate with key %s", hexlify(key))
 
         rsp = self.transceive(b"\x1A\x00")
         m1 = bytes(rsp[1:9])
@@ -214,18 +215,18 @@ class MifareUltralightC(tt2.Type2Tag):
         rb = triple_des(key, CBC, iv).decrypt(m1)
 
         log.debug("received challenge")
-        log.debug("iv = " + bytes(iv).encode("hex"))
-        log.debug("m1 = " + bytes(m1).encode("hex"))
-        log.debug("rb = " + bytes(rb).encode("hex"))
+        log.debug("iv = %s", hexlify(iv))
+        log.debug("m1 = %s", hexlify(m1))
+        log.debug("rb = %s", hexlify(rb))
 
         ra = os.urandom(8)
         iv = bytes(rsp[1:9])
         m2 = triple_des(key, CBC, iv).encrypt(ra + rb[1:8] + rb[0])
 
         log.debug("sending response")
-        log.debug("ra = " + bytes(ra).encode("hex"))
-        log.debug("iv = " + bytes(iv).encode("hex"))
-        log.debug("m2 = " + bytes(m2).encode("hex"))
+        log.debug("ra = %s", hexlify(ra))
+        log.debug("iv = %s", hexlify(iv))
+        log.debug("m2 = %s", hexlify(m2))
         try:
             rsp = self.transceive(b"\xAF" + m2)
         except tt2.Type2TagCommandError:
@@ -234,8 +235,8 @@ class MifareUltralightC(tt2.Type2Tag):
         m3 = bytes(rsp[1:9])
         iv = m2[8:16]
         log.debug("received confirmation")
-        log.debug("iv = " + bytes(iv).encode("hex"))
-        log.debug("m3 = " + bytes(m3).encode("hex"))
+        log.debug("iv = %s", hexlify(iv))
+        log.debug("m3 = %s", hexlify(m3))
 
         return triple_des(key, CBC, iv).decrypt(m3) == ra[1:9] + ra[0]
 
@@ -402,7 +403,7 @@ class NTAG21x(tt2.Type2Tag):
             raise ValueError("password must be at least 6 bytes")
 
         key = password[0:6] if password != b"" else b"\xFF\xFF\xFF\xFF\0\0"
-        log.debug("protect with key " + hexlify(key))
+        log.debug("protect with key %s", hexlify(key))
 
         # read CFG0, CFG1, PWD and PACK
         cfg = self.read(self._cfgpage)
@@ -466,7 +467,7 @@ class NTAG21x(tt2.Type2Tag):
             raise ValueError("password must be at least 6 bytes")
 
         key = password[0:6] if password != b"" else b"\xFF\xFF\xFF\xFF\0\0"
-        log.debug("authenticate with key " + hexlify(key))
+        log.debug("authenticate with key %s", hexlify(key))
 
         try:
             rsp = self.transceive(b"\x1B" + key[0:4])

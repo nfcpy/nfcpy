@@ -59,6 +59,7 @@ import os
 import sys
 import time
 import errno
+import struct
 
 import logging
 log = logging.getLogger(__name__)
@@ -147,7 +148,7 @@ class Chipset(pn53x.Chipset):
     def set_serial_baudrate(self, baudrate):
         br = (9600, 19200, 38400, 57600, 115200,
               230400, 460800, 921600, 1288000)
-        self.command(0x10, chr(br.index(baudrate)), timeout=0.1)
+        self.command(0x10, struct.pack("B", br.index(baudrate)), timeout=0.1)
         self.write_frame(self.ACK)
         time.sleep(0.001)
 
@@ -169,15 +170,15 @@ class Chipset(pn53x.Chipset):
             self.chipset_error(data)
 
     def tg_init_as_target(self, mode, mifare_params, felica_params, nfcid3t,
-                          general_bytes='', historical_bytes='', timeout=None):
+                          general_bytes=b'', historical_bytes=b'', timeout=None):
         assert type(mode) is int and mode & 0b11111000 == 0
         assert len(mifare_params) == 6
         assert len(felica_params) == 18
         assert len(nfcid3t) == 10
 
-        data = (chr(mode) + mifare_params + felica_params + nfcid3t +
-                chr(len(general_bytes)) + general_bytes +
-                chr(len(historical_bytes)) + historical_bytes)
+        data = (struct.pack("B", mode) + mifare_params + felica_params + nfcid3t +
+                struct.pack("B", len(general_bytes)) + general_bytes +
+                struct.pack("B", len(historical_bytes)) + historical_bytes)
         return self.command(0x8c, data, timeout)
 
 
@@ -193,9 +194,9 @@ class Device(pn53x.Device):
         self.log.debug("chipset is a {0}".format(self._chipset_name))
 
         self.chipset.set_parameters(0b00000000)
-        self.chipset.rf_configuration(0x02, "\x00\x0B\x0A")
-        self.chipset.rf_configuration(0x04, "\x00")
-        self.chipset.rf_configuration(0x05, "\x01\x00\x01")
+        self.chipset.rf_configuration(0x02, b"\x00\x0B\x0A")
+        self.chipset.rf_configuration(0x04, b"\x00")
+        self.chipset.rf_configuration(0x05, b"\x01\x00\x01")
 
         self.log.debug("write analog settings for Type A 106 kbps")
         data = bytearray.fromhex("59 F4 3F 11 4D 85 61 6F 26 62 87")
@@ -251,7 +252,7 @@ class Device(pn53x.Device):
         activation (which nfcpy does in the tag activation code).
 
         """
-        return super(Device, self).sense_ttb(target, did='\x01')
+        return super(Device, self).sense_ttb(target, did=b'\x01')
 
     def sense_ttf(self, target):
         """Search for a Type F Target.
@@ -281,7 +282,7 @@ class Device(pn53x.Device):
             # we're not fast enough to read it from the 64 byte FIFO.
             rsp = data[1:2]
             for block in range((data[1] >> 4) * 16, (data[1] >> 4) * 16 + 16):
-                cmd = "\x02" + chr(block) + data[2:]
+                cmd = b"\x02" + struct.pack("B", block) + data[2:]
                 rsp += self._tt1_send_cmd_recv_rsp(cmd, timeout)[1:9]
             return rsp
 
@@ -318,7 +319,7 @@ class Device(pn53x.Device):
         if fifo_level == 0:
             raise nfc.clf.TimeoutError
         data = self.chipset.read_register(*(fifo_level * ["CIU_FIFOData"]))
-        data = ''.join(["{:08b}".format(octet)[::-1] for octet in data])
+        data = b''.join([b"{:08b}".format(octet)[::-1] for octet in data])
         data = [int(data[i:i+8][::-1], 2) for i in range(0, len(data)-8, 9)]
         if self.check_crc_b(data) is False:
             raise nfc.clf.TransmissionError("crc_b check error")
@@ -363,8 +364,8 @@ class Device(pn53x.Device):
         return super(Device, self).listen_dep(target, timeout)
 
     def _init_as_target(self, mode, tta_params, ttf_params, timeout):
-        nfcid3t = ttf_params[0:8] + "\x00\x00"
-        args = (mode, tta_params, ttf_params, nfcid3t, '', '', timeout)
+        nfcid3t = ttf_params[0:8] + b"\x00\x00"
+        args = (mode, tta_params, ttf_params, nfcid3t, b'', b'', timeout)
         return self.chipset.tg_init_as_target(*args)
 
 
@@ -390,10 +391,10 @@ def init(transport):
         if sys.platform.startswith('linux'):
             board = ""  # Raspi board will identify through device tree
             try:
-                board = open('/proc/device-tree/model').read().strip('\x00')
+                board = open('/proc/device-tree/model').read().strip(b'\x00')
             except IOError:
                 pass
-            if board.startswith("Raspberry Pi"):
+            if board.startswith(b"Raspberry Pi"):
                 log.debug("running on {}".format(board))
                 if transport.port.startswith("/dev/ttyUSB"):
                     log.debug("ttyUSB requires more time for first ack")

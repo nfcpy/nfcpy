@@ -242,7 +242,7 @@ class TestDevice(base_clf_pn53x.TestDevice):
             ACK(), RSP('4B 01010c00b2565400'),            # InListPassiveTarget
             ACK(), RSP('41 001248b2565400'),              # InDataExchange
         ]
-        assert device.sense_tta(nfc.clf.RemoteTarget('106A')) is None
+        assert device.sense_tta(nfc.clf.RemoteTarget(b'106A')) is None
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
             CMD('4A 0100'),                               # InListPassiveTarget
             CMD('06 6339'),                               # ReadRegister
@@ -257,7 +257,7 @@ class TestDevice(base_clf_pn53x.TestDevice):
             ACK(), RSP('47 01'),                          # InJumpForPSL
             ACK(), RSP('09 00'),                          # WriteRegister
         ]
-        target = nfc.clf.RemoteTarget('106A', atr_req=atr_req)
+        target = nfc.clf.RemoteTarget(b'106A', atr_req=atr_req)
         assert device.sense_dep(target) is None
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
             CMD('32 020b0b0a'),                           # RFConfiguration
@@ -271,7 +271,7 @@ class TestDevice(base_clf_pn53x.TestDevice):
             ACK(), RSP('47 02'),                          # InJumpForPSL
             ACK(), RSP('09 00'),                          # WriteRegister
         ]
-        target = nfc.clf.RemoteTarget('106A', atr_req=atr_req)
+        target = nfc.clf.RemoteTarget(b'106A', atr_req=atr_req)
         assert device.sense_dep(target) is None
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
             CMD('32 020b0b0a'),                           # RFConfiguration
@@ -289,10 +289,10 @@ class TestDevice(base_clf_pn53x.TestDevice):
                        '020207ff 040164 070103'),         # InJumpForPSL
             ACK(), RSP('09 00'),                          # WriteRegister
         ]
-        target = nfc.clf.RemoteTarget('106A', atr_req=atr_req)
+        target = nfc.clf.RemoteTarget(b'106A', atr_req=atr_req)
         target = device.sense_dep(target)
         assert isinstance(target, nfc.clf.RemoteTarget)
-        assert target.brty == '106A'
+        assert target.brty == b'106A'
         assert target.atr_req == atr_req
         assert target.atr_res == HEX(
             'D501 66f6e98d1c13dfe56de4 0000000702'
@@ -496,7 +496,7 @@ class TestDevice(base_clf_pn53x.TestDevice):
         target.atr_res = HEX(atr_res)
         target = device.listen_dep(target, 1.0)
         assert isinstance(target, nfc.clf.LocalTarget)
-        assert target.brty == "106A"
+        assert target.brty == b"106A"
         assert target.sensf_res is None
         assert target.sens_res == HEX("0101")
         assert target.sel_res == HEX("40")
@@ -533,7 +533,7 @@ class TestDevice(base_clf_pn53x.TestDevice):
         target.atr_res = HEX(atr_res)
         target = device.listen_dep(target, 1.0)
         assert isinstance(target, nfc.clf.LocalTarget)
-        assert target.brty == "424F"
+        assert target.brty == b"424F"
         assert target.sensf_res == HEX(sensf_res)
         assert target.sens_res is None
         assert target.sel_res is None
@@ -577,7 +577,7 @@ class TestDevice(base_clf_pn53x.TestDevice):
         target.atr_res = HEX(atr_res)
         target = device.listen_dep(target, 1.0)
         assert isinstance(target, nfc.clf.LocalTarget)
-        assert target.brty == "424F"
+        assert target.brty == b"424F"
         assert target.atr_req == HEX(atr_req)
         assert target.atr_res == HEX(atr_res)
         assert target.psl_req == HEX(psl_req)
@@ -621,7 +621,7 @@ class TestDevice(base_clf_pn53x.TestDevice):
         target.atr_res = HEX(atr_res)
         target = device.listen_dep(target, 1.0)
         assert isinstance(target, nfc.clf.LocalTarget)
-        assert target.brty == "424F"
+        assert target.brty == b"424F"
         assert target.atr_req == HEX(atr_req)
         assert target.atr_res == HEX(atr_res)
         assert target.psl_req == HEX(psl_req)

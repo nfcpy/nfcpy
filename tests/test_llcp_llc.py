@@ -84,9 +84,9 @@ class TestLogicalLinkController:
     # -------------------------------------------------------------------------
     class BaseTestAs:
         @pytest.mark.parametrize("name, sap", [
-            ('urn:nfc:sn:sdp', 1),
-            ('urn:nfc:sn:snep', 4),
-            ('urn:nfc:sn:unknown', 0),
+            (b'urn:nfc:sn:sdp', 1),
+            (b'urn:nfc:sn:snep', 4),
+            (b'urn:nfc:sn:unknown', 0),
         ])
         def test_resolve(self, llc, name, sap):
             def collect_and_dispatch(llc):
@@ -173,21 +173,21 @@ class TestLogicalLinkController:
 
         def test_bind_by_name(self, llc, raw, ldl, dlc):
             with pytest.raises(nfc.llcp.Error) as excinfo:
-                llc.bind(dlc, 'urn:nfc:snep')
+                llc.bind(dlc, b'urn:nfc:snep')
             assert excinfo.value.errno == errno.EFAULT
-            llc.bind(dlc, 'urn:nfc:sn:snep')
+            llc.bind(dlc, b'urn:nfc:sn:snep')
             assert llc.getsockname(dlc) == 4
             with pytest.raises(nfc.llcp.Error) as excinfo:
-                llc.bind(ldl, 'urn:nfc:sn:snep')
+                llc.bind(ldl, b'urn:nfc:sn:snep')
             assert excinfo.value.errno == errno.EADDRINUSE
-            llc.bind(ldl, 'urn:nfc:xsn:nfcpy.org:service')
+            llc.bind(ldl, b'urn:nfc:xsn:nfcpy.org:service')
             assert llc.getsockname(ldl) == 16
             for sap in range(17, 32):
                 sock = llc.socket(nfc.llcp.llc.RAW_ACCESS_POINT)
-                llc.bind(sock, 'urn:nfc:sn:use_sap-{}'.format(sap))
+                llc.bind(sock, b'urn:nfc:sn:use_sap-{}'.format(sap))
                 assert llc.getsockname(sock) == sap
             with pytest.raises(nfc.llcp.Error) as excinfo:
-                llc.bind(raw, 'urn:nfc:sn:sap-32')
+                llc.bind(raw, b'urn:nfc:sn:sap-32')
             assert excinfo.value.errno == errno.EADDRNOTAVAIL
 
         def test_bind_notsock(self, llc):
@@ -524,12 +524,12 @@ class TestLogicalLinkController:
         @pytest.fixture
         def target(self):
             atr_res = 'D50100010203040506070809000000083246666D01011302020078'
-            return nfc.clf.RemoteTarget("106A", atr_res=HEX(atr_res))
+            return nfc.clf.RemoteTarget(b"106A", atr_res=HEX(atr_res))
 
         @pytest.fixture
         def sec_target(self):
             atr_res = 'D50100010203040506070809000000083246666D010113070107'
-            return nfc.clf.RemoteTarget("106A", atr_res=HEX(atr_res))
+            return nfc.clf.RemoteTarget(b"106A", atr_res=HEX(atr_res))
 
         @pytest.fixture
         def mac(self, mocker, clf, target):
@@ -571,12 +571,12 @@ class TestLogicalLinkController:
             options = {'miu': miu, 'lto': lto, 'lsc': lsc, 'sec': sec}
             llc = nfc.llcp.llc.LogicalLinkController(**options)
             atr_res = HEX('D501 00010203040506070809 0000000832') + gb
-            target = nfc.clf.RemoteTarget("106A", atr_res=atr_res)
+            target = nfc.clf.RemoteTarget(b"106A", atr_res=atr_res)
             clf.sense.return_value = target
             assert llc.activate(nfc.dep.Initiator(clf), brs=0) is bool(gb)
             assert not gb or clf.sense.mock_calls[0][1][0].atr_req[16:] == gb
             atr_res = HEX('D501 00010203040506070809 0000000B32') + gb
-            target = nfc.clf.RemoteTarget("106A", atr_res=atr_res)
+            target = nfc.clf.RemoteTarget(b"106A", atr_res=atr_res)
             clf.sense.return_value = target
             assert llc.activate(nfc.dep.Initiator(clf), brs=0) is bool(gb)
             assert not gb or clf.sense.mock_calls[0][1][0].atr_req[16:] == gb
@@ -705,13 +705,13 @@ class TestLogicalLinkController:
         @pytest.fixture
         def target(self):
             atr_req = 'D400 000102030405060708090000003246666D01011302020078'
-            return nfc.clf.RemoteTarget("106A", atr_req=HEX(atr_req),
+            return nfc.clf.RemoteTarget(b"106A", atr_req=HEX(atr_req),
                                         dep_req=HEX('D406 000000'))
 
         @pytest.fixture
         def sec_target(self):
             atr_req = 'D400 000102030405060708090000003246666D010113070107'
-            return nfc.clf.RemoteTarget("106A", atr_req=HEX(atr_req),
+            return nfc.clf.RemoteTarget(b"106A", atr_req=HEX(atr_req),
                                         dep_req=HEX('D406 000000'))
 
         @pytest.fixture
@@ -753,7 +753,7 @@ class TestLogicalLinkController:
         def test_activate(self, clf, miu, lto, lsc, sec, gb):
             options = {'miu': miu, 'lto': lto, 'lsc': lsc, 'sec': sec}
             llc = nfc.llcp.llc.LogicalLinkController(**options)
-            target = nfc.clf.LocalTarget("106A")
+            target = nfc.clf.LocalTarget(b"106A")
             target.atr_req = HEX('D400 00010203040506070809 00000032') + gb
             target.dep_req = HEX('D406 000000')
             clf.listen.return_value = target
@@ -948,22 +948,22 @@ class TestServiceDiscovery:
         assert len(sdp.snl) == 0
 
     def test_enqueue_csn_flag_in_sdres(self, sdp):
-        sdp.sent[101] = 'urn:nfc:sn:service'
+        sdp.sent[101] = b'urn:nfc:sn:service'
         sdp.enqueue(nfc.llcp.pdu.ServiceNameLookup(1, 1, sdres=[(101, 0x40)]))
-        assert sdp.resolve('urn:nfc:sn:service') == 1
+        assert sdp.resolve(b'urn:nfc:sn:service') == 1
 
     def test_enqueue_resolve_name(self, sdp):
-        sdreq = [(101, 'urn:nfc:sn:service')]
+        sdreq = [(101, b'urn:nfc:sn:service')]
         sdp.enqueue(nfc.llcp.pdu.ServiceNameLookup(1, 1, sdreq=sdreq))
         assert sdp.dequeue(128, 0) == \
             nfc.llcp.pdu.ServiceNameLookup(1, 1, sdres=[(101, 0)])
 
     def test_dequeue_miu_is_exhausted(self, sdp):
-        sdp.sdreq.append((2, 'urn:nfc:sn:svc'))
-        recv_sdreq = [(101, 'urn:nfc:sn:service')]
+        sdp.sdreq.append((2, b'urn:nfc:sn:svc'))
+        recv_sdreq = [(101, b'urn:nfc:sn:service')]
         sdp.enqueue(nfc.llcp.pdu.ServiceNameLookup(1, 1, sdreq=recv_sdreq))
         assert sdp.dequeue(0, 0) == nfc.llcp.pdu.ServiceNameLookup(1, 1)
         assert sdp.dequeue(8, 0) == \
             nfc.llcp.pdu.ServiceNameLookup(1, 1, sdres=[(101, 0)])
         assert sdp.dequeue(128, 0) == \
-            nfc.llcp.pdu.ServiceNameLookup(1, 1, sdreq=[(2, 'urn:nfc:sn:svc')])
+            nfc.llcp.pdu.ServiceNameLookup(1, 1, sdreq=[(2, b'urn:nfc:sn:svc')])

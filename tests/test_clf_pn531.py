@@ -166,7 +166,7 @@ class TestDevice(base_clf_pn53x.TestDevice):
             ACK(), self.reg_rsp('FF'),                    # ReadRegister
             ACK(), RSP('09 00'),                          # WriteRegister
         ]
-        target = device.sense_tta(nfc.clf.RemoteTarget('106A'))
+        target = device.sense_tta(nfc.clf.RemoteTarget(b'106A'))
         assert isinstance(target, nfc.clf.RemoteTarget)
         assert target.sel_res == HEX('00')
         assert target.sdd_res == HEX(sdd_res)
@@ -179,7 +179,7 @@ class TestDevice(base_clf_pn53x.TestDevice):
 
     def test_sense_ttb_is_not_supported(self, device):
         with pytest.raises(nfc.clf.UnsupportedTargetError) as excinfo:
-            device.sense_ttb(nfc.clf.RemoteTarget('106B'))
+            device.sense_ttb(nfc.clf.RemoteTarget(b'106B'))
         assert "does not support sense for Type B Target" in str(excinfo.value)
 
     def test_sense_ttb_no_target_found(self):
@@ -201,12 +201,12 @@ class TestDevice(base_clf_pn53x.TestDevice):
                        '020207ff 040164 070103'),         # InJumpForPSL
             ACK(), RSP('09 00'),                          # WriteRegister
         ]
-        target = nfc.clf.RemoteTarget('106A', atr_req=HEX(
+        target = nfc.clf.RemoteTarget(b'106A', atr_req=HEX(
             'D400 30313233343536373839 00000032'
             '46666d 010113 020207ff 040132 070107'))
         target = device.sense_dep(target)
         assert isinstance(target, nfc.clf.RemoteTarget)
-        assert target.brty == '106A'
+        assert target.brty == b'106A'
         assert target.atr_req == HEX(
             'D400 30313233343536373839 00000022'
             '46666d 010113 020207ff 040132 070107')

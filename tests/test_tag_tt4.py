@@ -48,7 +48,7 @@ def test_init_T4A(mocker, rats_response, max_send, max_recv, result):
     mocker.patch('nfc.ContactlessFrontend.max_recv_data_size',
                  new_callable=mock.PropertyMock).return_value = max_recv
 
-    target = nfc.clf.RemoteTarget("106A")
+    target = nfc.clf.RemoteTarget(b"106A")
     target.sens_res = HEX("4403")
     target.sel_res = HEX("20")
     target.sdd_res = HEX("04832F9A272D80")
@@ -89,7 +89,7 @@ def test_init_T4B(mocker, sensb_res, max_send, max_recv, result):
     mocker.patch('nfc.ContactlessFrontend.max_recv_data_size',
                  new_callable=mock.PropertyMock).return_value = max_recv
 
-    target = nfc.clf.RemoteTarget("106B")
+    target = nfc.clf.RemoteTarget(b"106B")
     target.sensb_res = HEX(sensb_res)
 
     attrib_cmd = '1D30702A1C' + ('00070100' if max_recv < 256 else '00080100')
@@ -102,7 +102,7 @@ def test_init_T4B(mocker, sensb_res, max_send, max_recv, result):
 
 def test_init_wrong_technology():
     clf = nfc.ContactlessFrontend()
-    target = nfc.clf.RemoteTarget('212F')
+    target = nfc.clf.RemoteTarget(b'212F')
     assert nfc.tag.tt4.activate(clf, target) is None
 
 
@@ -119,7 +119,7 @@ class TestType4Tag:
 
     @pytest.fixture()
     def target(self):
-        target = nfc.clf.RemoteTarget("106A")
+        target = nfc.clf.RemoteTarget(b"106A")
         target.sens_res = HEX("4403")
         target.sel_res = HEX("20")
         target.sdd_res = HEX("04832F9A272D80")

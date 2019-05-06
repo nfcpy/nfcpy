@@ -199,7 +199,7 @@ class Type4Tag(nfc.tag.Tag):
             for self._aid in (ndef_aid_v2, ndef_aid_v1):
                 try:
                     self.tag.send_apdu(0, 0xA4, 0x04, 0x00, self._aid)
-                    log.debug("selected " + hexlify(self._aid))
+                    log.debug("selected %s", hexlify(self._aid))
                     return True
                 except Type4TagCommandError as error:
                     if error.errno <= 0:
@@ -209,10 +209,10 @@ class Type4Tag(nfc.tag.Tag):
             p2 = 0x00 if self._aid == ndef_aid_v1 else 0x0C
             try:
                 self.tag.send_apdu(0, 0xA4, 0x00, p2, fid)
-                log.debug("selected " + hexlify(fid))
+                log.debug("selected %s", hexlify(fid))
                 return True
             except Type4TagCommandError:
-                log.debug("failed to select " + hexlify(fid))
+                log.debug("failed to select %s", hexlify(fid))
 
         def _read_binary(self, offset, size):
             (p1, p2) = pack(">H", offset)
@@ -577,7 +577,7 @@ class Type4BTag(Type4Tag):
 
 
 def activate(clf, target):
-    if target.brty.endswith('A'):
+    if target.brty.endswith(b'A'):
         return Type4ATag(clf, target)
-    if target.brty.endswith('B'):
+    if target.brty.endswith(b'B'):
         return Type4BTag(clf, target)

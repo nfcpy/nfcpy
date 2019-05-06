@@ -31,6 +31,13 @@ import string
 import struct
 import argparse
 import hmac, hashlib
+from binascii import hexlify, unhexlify
+import sys
+if sys.version_info[0] == 2:
+    stob = str
+else:
+    def stob(s):
+        s.encode('ascii')
 
 from cli import CommandLineInterface
 
@@ -288,7 +295,7 @@ class TagTool(CommandLineInterface):
                 key, msg = self.options.authenticate, tag.identifier
                 password = hmac.new(key, msg, hashlib.sha256).digest()
             else:
-                password = "" # use factory default password
+                password = b"" # use factory default password
             result = tag.authenticate(password)
             if result is False:
                 print("I'm sorry, but authentication failed.")
@@ -337,19 +344,19 @@ class TagTool(CommandLineInterface):
         if tag.ndef:
             data = tag.ndef.message
             if self.options.output.name == "<stdout>":
-                self.options.output.write(str(data).encode("hex"))
+                self.options.output.write(hexlify(data))
                 if self.options.loop:
-                    self.options.output.write('\n')
+                    self.options.output.write(b'\n')
                 else:
                     self.options.output.flush()
             else:
-                self.options.output.write(str(data))
+                self.options.output.write(data.encode())
 
     def load_tag(self, tag):
         try: self.options.data
         except AttributeError:
             self.options.data = self.options.input.read()
-            try: self.options.data = self.options.data.decode("hex")
+            try: self.options.data = unhexlify(self.options.data)
             except TypeError: pass
 
         if tag.ndef is None:
@@ -365,7 +372,7 @@ class TagTool(CommandLineInterface):
             print("The Tag already contains the message to write.")
             return
 
-        if len(str(new_ndef_message)) > tag.ndef.capacity:
+        if len(new_ndef_message.encode()) > tag.ndef.capacity:
             print("The new message exceeds the Tag's capacity.")
             return
         
@@ -455,7 +462,7 @@ class TagTool(CommandLineInterface):
                 password = hmac.new(key, msg, hashlib.sha256).digest()
             elif len(self.options.password) == 0:
                 print("using factory default key for password")
-                password = ""
+                password = b""
             else:
                 print("A password should be at least 8 characters.")
                 return
@@ -483,10 +490,10 @@ class TagTool(CommandLineInterface):
         except AttributeError:
             if self.options.input:
                 self.options.data = self.options.input.read()
-                try: self.options.data = self.options.data.decode("hex")
+                try: self.options.data = unhexlify(self.options.data)
                 except TypeError: pass
             else:
-                self.options.data = ""
+                self.options.data = b""
 
         if not (hasattr(self.options, "tt3_data") and self.options.keep):
             if self.options.input:
@@ -518,8 +525,8 @@ class TagTool(CommandLineInterface):
         pmm = bytearray.fromhex(self.options.pmm)
         sys = bytearray.fromhex(self.options.sys)
 
-        target.brty = str(self.options.bitrate) + "F"
-        target.sensf_res = "\x01" + idm + pmm + sys
+        target.brty = stob(self.options.bitrate) + b"F"
+        target.sensf_res = b"\x01" + idm + pmm + sys
         return target
 
     def emulate_tag_start(self, tag):

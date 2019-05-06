@@ -41,7 +41,7 @@ import nfc
 import nfc.llcp
 
 class PatternNumberReceiver(Thread):
-    service_name = 'urn:nfc:sn:dta-pattern-number'
+    service_name = b'urn:nfc:sn:dta-pattern-number'
     def __init__(self, llc, options):
         super(PatternNumberReceiver, self).__init__(name=self.service_name)
         socket = nfc.llcp.Socket(llc, nfc.llcp.LOGICAL_DATA_LINK)
@@ -66,7 +66,7 @@ class PatternNumberReceiver(Thread):
             self.socket.close()
 
 class ConnectionLessEchoServer(Thread):
-    service_name = 'urn:nfc:sn:dta-cl-echo-in'
+    service_name = b'urn:nfc:sn:dta-cl-echo-in'
     def __init__(self, llc, options):
         super(ConnectionLessEchoServer, self).__init__(name=self.service_name)
 
@@ -89,7 +89,7 @@ class ConnectionLessEchoServer(Thread):
                 log.info("waiting for start-of-test command")
                 data, addr = recv_socket.recvfrom()
                 if data == b'SOT': break
-            echo_out_addr = recv_socket.resolve('urn:nfc:sn:dta-cl-echo-out')
+            echo_out_addr = recv_socket.resolve(b'urn:nfc:sn:dta-cl-echo-out')
             while recv_socket.poll("recv"):
                 log.info("received data, start delay time")
                 time.sleep(self.options.cl_echo_delay)
@@ -106,7 +106,7 @@ class ConnectionLessEchoServer(Thread):
             recv_socket.close()
 
 class ConnectionModeEchoServer(Thread):
-    service_name = 'urn:nfc:sn:dta-co-echo-in'
+    service_name = b'urn:nfc:sn:dta-co-echo-in'
     def __init__(self, llc, options):
         super(ConnectionModeEchoServer, self).__init__(name=self.service_name)
         
@@ -160,9 +160,9 @@ class ConnectionModeEchoServer(Thread):
         if self.options.pattern_number == 0x1200:
             send_socket.connect(self.options.sap_lt_co_out_dest)
         elif self.options.pattern_number == 0x1240:
-            send_socket.connect("urn:nfc:sn:dta-co-echo-out")
+            send_socket.connect(b"urn:nfc:sn:dta-co-echo-out")
         elif self.options.pattern_number == 0x1280:
-            send_socket.connect(llc.resolve("urn:nfc:sn:dta-co-echo-out"))
+            send_socket.connect(llc.resolve(b"urn:nfc:sn:dta-co-echo-out"))
         send_thread = Thread(target=self.send, args=(send_socket, echo_buffer))
         send_thread.start()
         log.info("receiving from sap %d", recv_socket.getpeername())

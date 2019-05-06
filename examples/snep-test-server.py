@@ -35,7 +35,7 @@ import nfc.ndef
 
 class DefaultServer(nfc.snep.SnepServer):
     def __init__(self, llc):
-        service_name = 'urn:nfc:sn:snep'
+        service_name = b'urn:nfc:sn:snep'
         super(DefaultServer, self).__init__(llc, service_name)
 
     def put(self, ndef_message):
@@ -45,7 +45,7 @@ class DefaultServer(nfc.snep.SnepServer):
 
 class ValidationServer(nfc.snep.SnepServer):
     def __init__(self, llc):
-        service_name = "urn:nfc:xsn:nfc-forum.org:snep-validation"
+        service_name = b"urn:nfc:xsn:nfc-forum.org:snep-validation"
         super(ValidationServer, self).__init__(llc, service_name, 10000)
         self.ndef_message_store = dict()
 
@@ -64,7 +64,7 @@ class ValidationServer(nfc.snep.SnepServer):
             ndef_message = self.ndef_message_store[key]
             log.info("found matching ndef message")
             log.info(ndef_message.pretty())
-            if len(str(ndef_message)) <= acceptable_length:
+            if len(ndef_message.encode()) <= acceptable_length:
                 return ndef_message
             else: return nfc.snep.ExcessData
         return nfc.snep.NotFound

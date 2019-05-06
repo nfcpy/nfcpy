@@ -27,6 +27,7 @@ import nfc.ndef
 
 from threading import Thread
 from struct import pack, unpack
+from binascii import hexlify
 
 import logging
 log = logging.getLogger(__name__)
@@ -35,7 +36,7 @@ log = logging.getLogger(__name__)
 class SnepServer(Thread):
     """ NFC Forum Simple NDEF Exchange Protocol server
     """
-    def __init__(self, llc, service_name="urn:nfc:sn:snep",
+    def __init__(self, llc, service_name=b"urn:nfc:sn:snep",
                  max_acceptable_length=0x100000,
                  recv_miu=1984, recv_buf=15):
 
@@ -131,16 +132,16 @@ class SnepServer(Thread):
         acceptable_length = unpack(">L", snep_request[6:10])[0]
         response = self._get(acceptable_length, snep_request[10:])
         if type(response) == int:
-            response_code = chr(response)
+            response_code = pack("B", response)
             ndef_message = ""
         else:
-            response_code = chr(0x81)
+            response_code = pack("B", 0x81)
             ndef_message = response
         ndef_length = pack(">L", len(ndef_message))
         return b"\x10" + response_code + ndef_length + ndef_message
 
     def _get(self, acceptable_length, ndef_message_data):
-        log.debug("SNEP GET ({0})".format(ndef_message_data.encode("hex")))
+        log.debug("SNEP GET ({0})".format(hexlify(ndef_message_data)))
         try:
             ndef_message = nfc.ndef.Message(ndef_message_data)
         except (nfc.ndef.LengthError, nfc.ndef.FormatError) as err:
@@ -148,7 +149,7 @@ class SnepServer(Thread):
             return 0xC2
         else:
             rsp = self.get(acceptable_length, ndef_message)
-            return str(rsp) if isinstance(rsp, nfc.ndef.Message) else rsp
+            return rsp.encode() if isinstance(rsp, nfc.ndef.Message) else rsp
 
     def get(self, acceptable_length, ndef_message):
         """Handle Get requests. This method should be overwritten by a
@@ -160,10 +161,10 @@ class SnepServer(Thread):
     def __put(self, snep_request):
         response = self._put(snep_request[6:])
         ndef_length = b"\x00\x00\x00\x00"
-        return b"\x10" + chr(response) + ndef_length
+        return b"\x10" + pack("B", response) + ndef_length
 
     def _put(self, ndef_message_data):
-        log.debug("SNEP PUT ({0})".format(ndef_message_data.encode("hex")))
+        log.debug("SNEP PUT ({0})".format(hexlify(ndef_message_data)))
         try:
             ndef_message = nfc.ndef.Message(ndef_message_data)
         except (nfc.ndef.LengthError, nfc.ndef.FormatError) as err:

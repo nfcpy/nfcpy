@@ -43,6 +43,7 @@ import nfc.clf
 from . import pn53x
 
 import time
+import struct
 
 import logging
 log = logging.getLogger(__name__)
@@ -155,8 +156,8 @@ class Chipset(pn53x.Chipset):
         assert len(felica_params) == 18
         assert len(nfcid3t) == 10
 
-        data = (chr(mode) + mifare_params + felica_params + nfcid3t +
-                chr(len(gt)) + gt + chr(len(tk)) + tk)
+        data = (struct.pack("B", mode) + mifare_params + felica_params + nfcid3t +
+                struct.pack("B", len(gt)) + gt + struct.pack("B", len(tk)) + tk)
         return self.command(0x8c, data, timeout)
 
 
@@ -172,9 +173,9 @@ class Device(pn53x.Device):
         self.log.debug("chipset is a {0}".format(self._chipset_name))
 
         self.mute()
-        self.chipset.rf_configuration(0x02, "\x00\x0B\x0A")
-        self.chipset.rf_configuration(0x04, "\x00")
-        self.chipset.rf_configuration(0x05, "\x01\x00\x01")
+        self.chipset.rf_configuration(0x02, b"\x00\x0B\x0A")
+        self.chipset.rf_configuration(0x04, b"\x00")
+        self.chipset.rf_configuration(0x05, b"\x01\x00\x01")
         self.chipset.set_parameters(0b00000000)
 
         self.eeprom = bytearray()
@@ -190,7 +191,7 @@ class Device(pn53x.Device):
             head = "EEPROM  " + ' '.join(["%2X" % i for i in range(16)])
             self.log.debug(head)
             for i in range(0, len(self.eeprom), 16):
-                data = ' '.join(["%02X" % x for x in self.eeprom[i:i+16]])
+                data = b' '.join([b"%02X" % x for x in self.eeprom[i:i+16]])
                 self.log.debug(('0x%04X: %s' % (0xA000+i, data)))
         else:
             self.log.debug("no eeprom attached")
@@ -271,7 +272,7 @@ class Device(pn53x.Device):
             # we're not fast enough to read it from the 64 byte FIFO.
             rsp = data[1:2]
             for block in range((data[1] >> 4) * 16, (data[1] >> 4) * 16 + 16):
-                cmd = "\x02" + chr(block) + data[2:]
+                cmd = b"\x02" + struct.pack("B", block) + data[2:]
                 rsp += self._tt1_send_cmd_recv_rsp(cmd, timeout)[1:9]
             return rsp
 
@@ -313,7 +314,7 @@ class Device(pn53x.Device):
         if fifo_level == 0:
             raise nfc.clf.TimeoutError
         data = self.chipset.read_register(*(fifo_level * ["CIU_FIFOData"]))
-        data = ''.join(["{:08b}".format(octet)[::-1] for octet in data])
+        data = b''.join([b"{:08b}".format(octet)[::-1] for octet in data])
         data = [int(data[i:i+8][::-1], 2) for i in range(0, len(data)-8, 9)]
         if self.check_crc_b(data) is False:
             raise nfc.clf.TransmissionError("crc_b check error")
@@ -366,8 +367,8 @@ class Device(pn53x.Device):
         return super(Device, self).send_rsp_recv_cmd(target, data, timeout)
 
     def _init_as_target(self, mode, tta_params, ttf_params, timeout):
-        nfcid3t = ttf_params[0:8] + "\x00\x00"
-        args = (mode, tta_params, ttf_params, nfcid3t, '', '', timeout)
+        nfcid3t = ttf_params[0:8] + b"\x00\x00"
+        args = (mode, tta_params, ttf_params, nfcid3t, b'', b'', timeout)
         return self.chipset.tg_init_as_target(*args)
 
 

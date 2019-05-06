@@ -135,7 +135,7 @@ class SnepClient(object):
         """
         if not self.socket:
             try:
-                self.connect('urn:nfc:sn:snep')
+                self.connect(b'urn:nfc:sn:snep')
             except nfc.llcp.ConnectRefused:
                 return None
             else:
@@ -143,10 +143,11 @@ class SnepClient(object):
         else:
             self.release_connection = False
         try:
+            bmsg = ndef_message.encode()
             snep_request = b'\x10\x01'
-            snep_request += struct.pack('>L', 4 + len(str(ndef_message)))
+            snep_request += struct.pack('>L', 4 + len(bmsg))
             snep_request += struct.pack('>L', self.acceptable_length)
-            snep_request += str(ndef_message)
+            snep_request += bmsg
             if send_request(self.socket, snep_request, self.send_miu):
                 response = recv_response(
                     self.socket, self.acceptable_length, timeout)
@@ -197,7 +198,7 @@ class SnepClient(object):
 
         if not self.socket:
             try:
-                self.connect('urn:nfc:sn:snep')
+                self.connect(b'urn:nfc:sn:snep')
             except nfc.llcp.ConnectRefused:
                 return None
             else:
@@ -235,7 +236,7 @@ class SnepClient(object):
         """
         if not self.socket:
             try:
-                self.connect('urn:nfc:sn:snep')
+                self.connect(b'urn:nfc:sn:snep')
             except nfc.llcp.ConnectRefused:
                 return False
             else:
@@ -243,8 +244,9 @@ class SnepClient(object):
         else:
             self.release_connection = False
         try:
-            ndef_msgsize = struct.pack('>L', len(str(ndef_message)))
-            snep_request = b'\x10\x02' + ndef_msgsize + str(ndef_message)
+            bmsg = ndef_message.encode()
+            ndef_msgsize = struct.pack('>L', len(bmsg))
+            snep_request = b'\x10\x02' + ndef_msgsize + bmsg
             if send_request(self.socket, snep_request, self.send_miu):
                 response = recv_response(self.socket, 0, timeout)
                 if response is not None:
@@ -285,7 +287,7 @@ class SnepClient(object):
         """
         if not self.socket:
             try:
-                self.connect('urn:nfc:sn:snep')
+                self.connect(b'urn:nfc:sn:snep')
             except nfc.llcp.ConnectRefused:
                 return False
             else:

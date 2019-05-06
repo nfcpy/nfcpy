@@ -28,6 +28,12 @@ import sys
 import time
 import argparse
 import random
+from binascii import unhexlify
+
+if sys.version_info[0] == 2:
+    binary_type = (bytearray, str)
+else:
+    binary_type = (bytearray, bytes)
 
 from cli import CommandLineInterface, TestFail
 
@@ -138,7 +144,7 @@ quirks_handover_snep_response = None
 
 def handover_send(client, message, miu=128):
     if isinstance(client, nfc.handover.HandoverClient):
-        if isinstance(message, str):
+        if isinstance(message, binary_type):
             if not client._send(message, miu):
                 raise TestFail("error sending handover request")
         else:
@@ -171,7 +177,7 @@ def handover_recv(client, timeout, raw=False):
     
     if message is None:
         raise TestFail("no answer within {0} seconds".format(int(timeout)))
-    if not message.type == "urn:nfc:wkt:Hs":
+    if not message.type == b"urn:nfc:wkt:Hs":
         raise TestFail("unexpected message type '{0}'".format(message.type))
     
     if not raw:
@@ -235,10 +241,10 @@ class TestProgram(CommandLineInterface):
         
         for index, carrier in enumerate(self.options.carriers):
             data = carrier.read()
-            try: data = data.decode("hex")
+            try: data = unhexlify(data)
             except TypeError: pass
             message = nfc.ndef.Message(data)
-            if message.type in ("urn:nfc:wkt:Hs", "urn:nfc:wkt:Hr"):
+            if message.type in (b"urn:nfc:wkt:Hs", b"urn:nfc:wkt:Hr"):
                 message = (nfc.ndef.HandoverSelectMessage(message)
                            if message.type == "urn:nfc:wkt:Hs" else
                            nfc.ndef.HandoverRequestMessage(message))
@@ -341,9 +347,9 @@ class TestProgram(CommandLineInterface):
             message = nfc.ndef.HandoverRequestMessage(version="1.2")
             message.nonce = random.randint(0, 0xffff)
             message.add_carrier(record, "active")
-            data = bytearray(str(message))
+            data = bytearray(message.encode())
             data[5] = 0xf0 # set desired version number
-            handover_send(client, str(data), miu=128)
+            handover_send(client, bytes(data), miu=128)
             message = handover_recv(client, timeout=3.0)
             if message.version.major != 1 and message.version.minor != 2:
                 raise TestFail("handover select message version is not 1.2")
@@ -487,7 +493,7 @@ class TestProgram(CommandLineInterface):
         try:
             message = nfc.ndef.HandoverRequestMessage(version="1.2")
             message.nonce = random.randint(0, 0xffff)
-            unknown_carrier = "urn:nfc:ext:nfcpy.org:unknown-carrier-type"
+            unknown_carrier = b"urn:nfc:ext:nfcpy.org:unknown-carrier-type"
             record = nfc.ndef.Record(unknown_carrier)
             message.add_carrier(record, "active")
 
@@ -510,7 +516,7 @@ class TestProgram(CommandLineInterface):
         try:
             message = nfc.ndef.HandoverRequestMessage(version="1.2")
             message.nonce = random.randint(0, 0xffff)
-            unknown_carrier = "urn:nfc:ext:nfcpy.org:unknown-carrier-type"
+            unknown_carrier = b"urn:nfc:ext:nfcpy.org:unknown-carrier-type"
             record = nfc.ndef.Record(unknown_carrier)
             message.add_carrier(record, "active")
 
@@ -591,7 +597,7 @@ class TestProgram(CommandLineInterface):
                 raise TestFail(str(e))
             else:
                 record = message[0]
-                if record.type != "urn:nfc:wkt:ac":
+                if record.type != b"urn:nfc:wkt:ac":
                     raise TestFail("no alternative carrier record")
                 data = bytearray(record.data)
                 if data[0] & 0xfc != 0:
@@ -629,10 +635,10 @@ class TestProgram(CommandLineInterface):
 
             message.add_carrier(record, "active")
 
-            message = nfc.ndef.Message(str(message))
+            message = nfc.ndef.Message(message.encode())
             hr_records = nfc.ndef.Message(message[0].data[1:])
             hr_records.insert(i=0, record=nfc.ndef.TextRecord("text"))
-            message[0].data = '\x12' + str(hr_records)
+            message[0].data = b'\x12' + hr_records.encode()
 
             handover_send(client, message)
             message = handover_recv(client, timeout=3.0)

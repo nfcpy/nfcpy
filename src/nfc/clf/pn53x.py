@@ -167,7 +167,7 @@ class Chipset(object):
                          hexlify(cmd_data), timeout)
 
             if len(cmd_data) < 254:
-                head = self.SOF + chr(len(cmd_data)+2) + chr(254-len(cmd_data))
+                head = self.SOF + pack("B", len(cmd_data)+2) + pack("B", 254-len(cmd_data))
             else:
                 head = self.SOF + b'\xFF\xFF' + pack(">H", len(cmd_data)+2)
                 head.append((256 - sum(head[-2:])) & 0xFF)
@@ -282,14 +282,14 @@ class Chipset(object):
         bytes.
 
         """
-        return self.command(0x02, '', timeout=0.1)
+        return self.command(0x02, b'', timeout=0.1)
 
     def get_general_status(self):
         """Send a GetGeneralStatus command and return the response data
         bytes.
 
         """
-        data = self.command(0x04, '', timeout=0.1)
+        data = self.command(0x04, b'', timeout=0.1)
         if data is None or len(data) < 3:
             raise self.chipset_error(None)
         return data
@@ -308,7 +308,7 @@ class Chipset(object):
             return self.REGBYNAME[r] if type(r) is str else r
 
         args = [addr(reg) for reg in args]
-        data = ''.join([pack(">H", reg) for reg in args])
+        data = b''.join([pack(">H", reg) for reg in args])
         data = self._read_register(data)
         return list(data) if len(data) > 1 else data[0]
 
@@ -334,7 +334,7 @@ class Chipset(object):
         if len(args) == 2 and type(args[1]) == int:
             args = [args]
         args = [(addr(reg), val) for reg, val in args]
-        data = ''.join([pack(">HB", reg, val) for reg, val in args])
+        data = b''.join([pack(">HB", reg, val) for reg, val in args])
         self._write_register(data)
 
     def _write_register(self, data):
@@ -343,11 +343,11 @@ class Chipset(object):
 
     def set_parameters(self, flags):
         """Send a SetParameters command with the 8-bit *flags* integer."""
-        self.command(0x12, chr(flags), timeout=0.1)
+        self.command(0x12, pack("B", flags), timeout=0.1)
 
     def rf_configuration(self, cfg_item, cfg_data):
         """Send an RFConfiguration command."""
-        self.command(0x32, chr(cfg_item) + bytearray(cfg_data), timeout=0.1)
+        self.command(0x32, pack("B", cfg_item) + bytearray(cfg_data), timeout=0.1)
 
     def in_jump_for_dep(self, act_pass, br, passive_data, nfcid3, gi):
         """Send an InJumpForDEP command.
@@ -361,7 +361,7 @@ class Chipset(object):
         cm = int(bool(act_pass))
         br = (106, 212, 424).index(br)
         nf = (bool(passive_data) | bool(nfcid3) << 1 | bool(gi) << 2)
-        data = chr(cm) + chr(br) + chr(nf) + passive_data + nfcid3 + gi
+        data = pack("B", cm) + pack("B", br) + pack("B", nf) + passive_data + nfcid3 + gi
         data = self.command(0x56, bytearray(data), timeout=3.0)
         if data is None or data[0] != 0:
             self.chipset_error(data)
@@ -379,7 +379,7 @@ class Chipset(object):
         cm = int(bool(act_pass))
         br = (106, 212, 424).index(br)
         nf = (bool(passive_data) | bool(nfcid3) << 1 | bool(gi) << 2)
-        data = chr(cm) + chr(br) + chr(nf) + passive_data + nfcid3 + gi
+        data = pack("B", cm) + pack("B", br) + pack("B", nf) + passive_data + nfcid3 + gi
         data = self.command(0x46, bytearray(data), timeout=3.0)
         if data is None or data[0] != 0:
             self.chipset_error(data)
@@ -388,13 +388,13 @@ class Chipset(object):
     def in_list_passive_target(self, max_tg, brty, initiator_data):
         assert max_tg <= self.in_list_passive_target_max_target
         assert brty in self.in_list_passive_target_brty_range
-        data = chr(1) + chr(brty) + initiator_data
+        data = pack("B", 1) + pack("B", brty) + initiator_data
         data = self.command(0x4A, data, timeout=1.0)
         return data[2:] if data and data[0] > 0 else None
 
-    def in_atr(self, nfcid3i='', gi=''):
+    def in_atr(self, nfcid3i=b'', gi=b''):
         flag = int(bool(nfcid3i)) | (int(bool(gi)) << 1)
-        data = chr(1) + chr(flag) + nfcid3i + gi
+        data = pack("B", 1) + pack("B", flag) + nfcid3i + gi
         data = self.command(0x50, data, timeout=1.5)
         if data is None or data[0] != 0:
             self.chipset_error(data)
@@ -407,7 +407,7 @@ class Chipset(object):
             self.chipset_error(data)
 
     def in_data_exchange(self, data, timeout, more=False):
-        data = self.command(0x40, chr(int(more) << 6 | 0x01) + data, timeout)
+        data = self.command(0x40, pack("B", int(more) << 6 | 0x01) + data, timeout)
         if data is None or data[0] & 0x3f != 0:
             self.chipset_error(data[0] & 0x3f if data else None)
         return data[1:], bool(data[0] & 0x40)
@@ -426,7 +426,7 @@ class Chipset(object):
             self.chipset_error(data)
 
     def tg_get_data(self, timeout):
-        data = self.command(0x86, '', timeout)
+        data = self.command(0x86, b'', timeout)
         if data is None or data[0] & 0x3f != 0:
             self.chipset_error(data[0] & 0x3f if data else None)
         return data[1:], bool(data[0] & 0x40)
@@ -442,7 +442,7 @@ class Chipset(object):
             self.chipset_error(data)
 
     def tg_get_initiator_command(self, timeout):
-        data = self.command(0x88, '', timeout)
+        data = self.command(0x88, b'', timeout)
         if timeout > 0:
             if data and data[0] == 0:
                 return data[1:]
@@ -455,7 +455,7 @@ class Chipset(object):
             self.chipset_error(data)
 
     def tg_get_target_status(self):
-        data = self.command(0x8A, '', timeout=0.1)
+        data = self.command(0x8A, b'', timeout=0.1)
         if data[0] == 0x01:
             br_tx = (106, 212, 424)[data[1] >> 4 & 7]
             br_rx = (106, 212, 424)[data[1] & 7]
@@ -496,10 +496,10 @@ class Device(device.Device):
         self.chipset = None
 
     def mute(self):
-        self.chipset.rf_configuration(0x01, chr(0b00000010))
+        self.chipset.rf_configuration(0x01, pack("B", 0b00000010))
 
     def sense_tta(self, target):
-        brty = {"106A": 0}.get(target.brty)
+        brty = {b"106A": 0}.get(target.brty)
         if brty not in self.chipset.in_list_passive_target_brty_range:
             message = "unsupported bitrate {0}".format(target.brty)
             self.log.warning(message)
@@ -519,7 +519,7 @@ class Device(device.Device):
                 rxmode = self.chipset.read_register("CIU_RxMode")
                 self.chipset.write_register("CIU_RxMode", rxmode & 0x7F)
             return nfc.clf.RemoteTarget(
-                "106A", sens_res=sens_res, sel_res=sel_res, sdd_res=sdd_res)
+                b"106A", sens_res=sens_res, sel_res=sel_res, sdd_res=sdd_res)
 
         if self.chipset.read_register("CIU_FIFOData") == 0x26:
             # If we still see the SENS_REQ command in the CIU FIFO
@@ -538,12 +538,12 @@ class Device(device.Device):
             try:
                 rid_res = self.chipset.in_data_exchange(rid_cmd, 0.01)[0]
                 return nfc.clf.RemoteTarget(
-                    "106A", sens_res=rsp[1::-1], rid_res=rid_res)
+                    b"106A", sens_res=rsp[1::-1], rid_res=rid_res)
             except Chipset.Error:
                 pass
 
     def sense_ttb(self, target, did=None):
-        brty = {"106B": 3, "212B": 6, "424B": 7, "848B": 8}.get(target.brty)
+        brty = {b"106B": 3, b"212B": 6, b"424B": 7, b"848B": 8}.get(target.brty)
         if brty not in self.chipset.in_list_passive_target_brty_range:
             message = "unsupported bitrate {0}".format(target.brty)
             self.log.warning(message)
@@ -568,7 +568,7 @@ class Device(device.Device):
                 self.log.debug(error)
 
     def sense_ttf(self, target):
-        brty = {"212F": 1, "424F": 2}.get(target.brty)
+        brty = {b"212F": 1, b"424F": 2}.get(target.brty)
         if brty not in self.chipset.in_list_passive_target_brty_range:
             message = "unsupported bitrate {0}".format(target.brty)
             self.log.warning(message)
@@ -601,7 +601,7 @@ class Device(device.Device):
         nfcid3 = target.atr_req[2:12]
         gbytes = target.atr_req[16:]
         try:
-            data = self.chipset.in_jump_for_psl(1, br, '', nfcid3, gbytes)
+            data = self.chipset.in_jump_for_psl(1, br, b'', nfcid3, gbytes)
             atr_res = b'\xD5\x01' + data
         except Chipset.Error as error:
             if error.errno not in (0x01, 0x0A):
@@ -636,7 +636,7 @@ class Device(device.Device):
         rxm = (rxm & 0b10001111) | (bitrate(target.brty_recv) << 4)
         txm = (txm & 0b11111100) | (0b01 if acm else framing(target.brty_send))
         rxm = (rxm & 0b11111100) | (0b01 if acm else framing(target.brty_recv))
-        txa = (txa & 0b10111111) | (target.brty_send.endswith("A") << 6)
+        txa = (txa & 0b10111111) | (target.brty_send.endswith(b"A") << 6)
         reg = (("CIU_TxMode", txm), ("CIU_RxMode", rxm), ("CIU_TxAuto", txa))
         self.chipset.write_register(*reg)
 
@@ -693,7 +693,7 @@ class Device(device.Device):
         return data[:-2] if len(data) > 2 else data
 
     def listen_tta(self, target, timeout):
-        if target.brty != "106A":
+        if target.brty != b"106A":
             info = "unsupported bitrate/type: %r" % target.brty
             raise nfc.clf.UnsupportedTargetError(info)
         if target.rid_res:
@@ -733,7 +733,7 @@ class Device(device.Device):
                 else:
                     return None
 
-            brty = ("106A", "212F", "424F")[(data[0] & 0x70) >> 4]
+            brty = (b"106A", b"212F", b"424F")[(data[0] & 0x70) >> 4]
             self.log.debug("%s rcvd %s", brty, hexlify(memoryview(data, 1)))
             if brty != target.brty or len(data) < 2:
                 log.debug("received bitrate does not match %s", target.brty)
@@ -791,7 +791,7 @@ class Device(device.Device):
         # firmware is not in target state). With the 64-bit only CIU
         # FIFO it means that a tag can only allow two blocks for read
         # and write.
-        if target.brty not in ("212F", "424F"):
+        if target.brty not in (b"212F", b"424F"):
             info = "unsupported bitrate/type: %r" % target.brty
             raise nfc.clf.UnsupportedTargetError(info)
         try:
@@ -808,7 +808,7 @@ class Device(device.Device):
             ("CIU_Command",   0b00000000),  # Idle command
             ("CIU_FIFOLevel", 0b10000000),  # clear fifo
         ]
-        regs.extend(zip(25*["CIU_FIFOData"], nfca_params+nfcf_params+"\0"))
+        regs.extend(zip(25*["CIU_FIFOData"], nfca_params+nfcf_params+b"\0"))
         regs.append(("CIU_Command", 0b00000001))  # Configure command
         self.chipset.write_register(*regs)
         regs = [
@@ -886,14 +886,14 @@ class Device(device.Device):
         else:
             return
 
-        brty = ("106A", "212F", "424F")[(data[0] & 0b01110000) >> 4]
+        brty = (b"106A", b"212F", b"424F")[(data[0] & 0b01110000) >> 4]
         mode = ("passive", "active")[data[0] & 1]
         self.log.debug("activated in %s %s communication mode", brty, mode)
 
         atr_req = data[2:]
         atr_res = target.atr_res[:]
         atr_res[12] = atr_req[12]  # copy DID
-        activation_params = ((nfca_params if brty == "106A" else nfcf_params)
+        activation_params = ((nfca_params if brty == b"106A" else nfcf_params)
                              if mode == "passive" else None)
 
         try:
@@ -957,7 +957,7 @@ class Device(device.Device):
         raise NotImplementedError(cname + '._init_as_target()')
 
     def _send_atr_response(self, atr_res, timeout):
-        self.chipset.tg_response_to_initiator(chr(len(atr_res)+1) + atr_res)
+        self.chipset.tg_response_to_initiator(pack("B", len(atr_res)+1) + atr_res)
         return self.chipset.tg_get_initiator_command(timeout)
 
     def _send_psl_response(self, psl_req, psl_res, timeout):
@@ -969,8 +969,8 @@ class Device(device.Device):
             rx_mode = (rx_mode & 0b11111100) | ((0, 2)[dsi > 0])
         self.log.debug("set CIU_RxMode to {:08b}".format(rx_mode))
         self.chipset.write_register(("CIU_RxMode", rx_mode))
-        self.log.debug("send PSL_RES " + hexlify(psl_res))
-        data = chr(len(psl_res)+1) + psl_res
+        self.log.debug("send PSL_RES %s", hexlify(psl_res))
+        data = pack("B", len(psl_res)+1) + psl_res
         self.chipset.tg_response_to_initiator(data)
         tx_mode = self.chipset.read_register("CIU_TxMode")
         tx_mode = (tx_mode & 0b10001111) | (dri << 4)
@@ -978,7 +978,7 @@ class Device(device.Device):
             tx_mode = (tx_mode & 0b11111100) | ((0, 2)[dri > 0])
         self.log.debug("set CIU_TxMode to {:08b}".format(tx_mode))
         self.chipset.write_register(("CIU_TxMode", tx_mode))
-        return ("106A", "212F", "424F")[dri]
+        return (b"106A", b"212F", b"424F")[dri]
 
     def _tt3_send_rsp_recv_cmd(self, target, data, timeout):
         regs = [

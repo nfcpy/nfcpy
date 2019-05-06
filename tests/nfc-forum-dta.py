@@ -28,36 +28,37 @@ import nfc.clf
 import nfc.dep
 import logging
 from time import sleep
+from binascii import hexlify, unhexlify
 
 log = logging.getLogger()
 
 
 def dta_lis_p2p(clf, args):
     dep = nfc.dep.Target(clf)
-    gbt = ''  # 'Ffm' + "010111".decode("hex")
+    gbt = b''  # b'Ffm' + unhexlify(b"010111")
     if dep.activate(timeout=1.0, wt=8, gbt=gbt) is not None:
         log.info("enter nfc-dep target loop")
         rwt = 4096/13.56E6 * 2**8
         data = dep.exchange(None, timeout=1.0)
         while data is not None:
             # log.info("rcvd data {0}".format(data.encode("hex")))
-            if data == "FFFFFF0103".decode("hex"):
+            if data == unhexlify(b"FFFFFF0103"):
                 if dep.send_timeout_extension(2) == 2:
                     sleep(1.5 * rwt)
                 else:
                     break
-            if len(data) == 6 and data.startswith("\xFF\x00\x00\x00"):
-                log.info("pattern number: " + data[4:6].encode("hex"))
+            if len(data) == 6 and data.startswith(b"\xFF\x00\x00\x00"):
+                log.info("pattern number: %s", hexlify(data[4:6]))
                 # pattern_number = data[4:6]
-            # log.info("send back {0}".format(data.encode("hex")))
+            # log.info("send back {0}".format(hexlify(data)))
             data = dep.exchange(data, timeout=1.0)
         dep.deactivate()
         log.info("exit nfc-dep target loop")
 
 
 def dta_pol_p2p(clf, args):
-    sot = "004000011002010E".decode("hex")  # start of test command
-    gbi = ''  # 'Ffm' + "010111".decode("hex") # general bytes from initiator
+    sot = unhexlify(b"004000011002010E")  # start of test command
+    gbi = b''  # b'Ffm' + unhexlify(b"010111") # general bytes from initiator
     ato = 1.0  # activation timeout
     lto = 1.0  # link timeout
 
@@ -69,10 +70,10 @@ def dta_pol_p2p(clf, args):
             data = dep.exchange(send_data=sot, timeout=lto)
             while data is not None:
                 # log.info("rcvd data {0}".format(data.encode("hex")))
-                if data == "FFFFFF0101".decode("hex"):
+                if data == unhexlify(b"FFFFFF0101"):
                     dep.deactivate(release=False)
                     break
-                if data == "FFFFFF0102".decode("hex"):
+                if data == unhexlify(b"FFFFFF0102"):
                     dep.deactivate(release=True)
                     break
                 # log.info("send back {0}".format(data.encode("hex")))

@@ -51,6 +51,7 @@ listen_dep  yes      Only passive communication mode
 import nfc.clf
 from . import pn53x
 
+import struct
 import time
 
 import logging
@@ -159,7 +160,7 @@ class Chipset(pn53x.Chipset):
         assert len(felica_params) == 18
         assert len(nfcid3t) == 10
 
-        data = chr(mode) + mifare_params + felica_params + nfcid3t + gt
+        data = struct.pack("B", mode) + mifare_params + felica_params + nfcid3t + gt
         return self.command(0x8c, data, timeout)
 
 
@@ -321,7 +322,7 @@ class Device(pn53x.Device):
 
     def _init_as_target(self, mode, tta_params, ttf_params, timeout):
         nfcid3t = ttf_params[0:8] + b"\x00\x00"
-        args = (mode & 0xFE, tta_params, ttf_params, nfcid3t, '', timeout)
+        args = (mode & 0xFE, tta_params, ttf_params, nfcid3t, b'', timeout)
         return self.chipset.tg_init_target(*args)
 
     def _send_atr_response(self, atr_res, timeout):

@@ -29,6 +29,12 @@ import io
 import copy
 import nfc.ndef
 
+import sys
+if sys.version_info[0] == 2:
+    binary_type = (bytearray, str)
+else:
+    binary_type = (bytearray, bytes)
+
 class Message(object):
     """Wraps a sequence of NDEF records and provides methods for
     appending, inserting and indexing. Instantiation accepts a
@@ -50,7 +56,7 @@ class Message(object):
         if len(args) == 1:
             if isinstance(args[0], io.BytesIO):
                 self._read(args[0])
-            elif isinstance(args[0], (str, bytearray)):
+            elif isinstance(args[0], binary_type):
                 self._read(io.BytesIO(args[0]))
             elif isinstance(args[0], nfc.ndef.Record):
                 self.append(args[0])
@@ -83,14 +89,14 @@ class Message(object):
     def __repr__(self):
         return 'nfc.ndef.Message(' + repr(self._records) + ')'
     
-    def __str__(self):
+    def encode(self):
         stream = io.BytesIO()
         self._write(stream)
         stream.seek(0, 0)
         return stream.read()
 
     def __eq__(self, other):
-        return str(self) == str(other)
+        return self.encode() == other.encode()
     
     def __len__(self):
         return len(self._records)

@@ -137,7 +137,7 @@ class TestContactlessFrontend(object):
 
     def test_connect_rdwr_remote_is_tta_tt1(self, clf, terminate):
         terminate.side_effect = [False, True]
-        target = nfc.clf.RemoteTarget('106A')
+        target = nfc.clf.RemoteTarget(b'106A')
         target.sens_res = HEX('000C')
         target.rid_res = HEX('1148B2565400')
         clf.device.sense_tta.return_value = target
@@ -146,44 +146,44 @@ class TestContactlessFrontend(object):
 
     def test_connect_rdwr_remote_is_tta_tt2(self, clf, terminate):
         terminate.side_effect = [False, True]
-        target = nfc.clf.RemoteTarget('106A')
+        target = nfc.clf.RemoteTarget(b'106A')
         target.sens_res = HEX('4400')
         target.sel_res = HEX('00')
         target.sdd_res = HEX('0416C6C2D73881')
         clf.device.sense_tta.return_value = target
-        rdwr_options = {'iterations': 1, 'targets': ['106A']}
+        rdwr_options = {'iterations': 1, 'targets': [b'106A']}
         assert clf.connect(rdwr=rdwr_options, terminate=terminate) is True
 
     def test_connect_rdwr_remote_is_tta_dep(self, clf, terminate):
         terminate.side_effect = [False, True]
-        target = nfc.clf.RemoteTarget('106A')
+        target = nfc.clf.RemoteTarget(b'106A')
         target.sens_res = HEX('4400')
         target.sel_res = HEX('40')
         target.sdd_res = HEX('0416C6C2D73881')
         clf.device.sense_tta.return_value = target
-        rdwr_options = {'iterations': 1, 'targets': ['106A']}
+        rdwr_options = {'iterations': 1, 'targets': [b'106A']}
         assert clf.connect(rdwr=rdwr_options, terminate=terminate) is None
 
     def test_connect_rdwr_remote_is_ttb_tt4(self, clf, terminate):
         terminate.side_effect = [False, True]
-        target = nfc.clf.RemoteTarget('106B')
+        target = nfc.clf.RemoteTarget(b'106B')
         target.sensb_res = HEX('50E8253EEC00000011008185')
         clf.device.sense_ttb.return_value = target
         clf.device.send_cmd_recv_rsp.return_value = HEX('00')
-        rdwr_options = {'iterations': 1, 'targets': ['106B']}
+        rdwr_options = {'iterations': 1, 'targets': [b'106B']}
         assert clf.connect(rdwr=rdwr_options, terminate=terminate) is True
 
     def test_connect_rdwr_remote_is_ttf_tt3(self, clf, terminate):
         terminate.side_effect = [False, True]
-        target = nfc.clf.RemoteTarget('212F')
+        target = nfc.clf.RemoteTarget(b'212F')
         target.sensf_res = HEX('01 01010701260cca02 0f0d23042f7783ff 12fc')
         clf.device.sense_ttf.return_value = target
-        rdwr_options = {'iterations': 1, 'targets': ['212F']}
+        rdwr_options = {'iterations': 1, 'targets': [b'212F']}
         assert clf.connect(rdwr=rdwr_options, terminate=terminate) is True
 
     def test_connect_rdwr_remote_is_ttf_dep(self, clf, terminate):
         terminate.side_effect = [False, True]
-        target = nfc.clf.RemoteTarget('212F')
+        target = nfc.clf.RemoteTarget(b'212F')
         target.sensf_res = HEX('01 01FE0701260cca02 0f0d23042f7783ff 12fc')
         clf.device.sense_ttf.return_value = target
         rdwr_options = {'on-connect': lambda tag: False}
@@ -191,7 +191,7 @@ class TestContactlessFrontend(object):
 
     def test_connect_rdwr_do_beep_on_connect(self, clf, terminate):
         terminate.side_effect = [False, True]
-        target = nfc.clf.RemoteTarget('212F')
+        target = nfc.clf.RemoteTarget(b'212F')
         target.sensf_res = HEX('01 01010701260cca02 ffffffffffffffff 12fc')
         clf.device.sense_ttf.return_value = target
         rdwr_options = {'iterations': 1, 'beep-on-connect': True}
@@ -201,7 +201,7 @@ class TestContactlessFrontend(object):
 
     def test_connect_rdwr_no_beep_on_connect(self, clf, terminate):
         terminate.side_effect = [False, True]
-        target = nfc.clf.RemoteTarget('212F')
+        target = nfc.clf.RemoteTarget(b'212F')
         target.sensf_res = HEX('01 01010701260cca02 ffffffffffffffff 12fc')
         clf.device.sense_ttf.return_value = target
         rdwr_options = {'iterations': 1, 'beep-on-connect': False}
@@ -210,7 +210,7 @@ class TestContactlessFrontend(object):
 
     def test_connect_rdwr_one_presence_loop(self, clf, terminate):
         terminate.side_effect = [False, False, True]
-        target = nfc.clf.RemoteTarget('212F')
+        target = nfc.clf.RemoteTarget(b'212F')
         target.sensf_res = HEX('01 01010701260cca02 ffffffffffffffff 12fc')
         clf.device.sense_ttf.return_value = target
         clf.device.send_cmd_recv_rsp.side_effect = [
@@ -221,7 +221,7 @@ class TestContactlessFrontend(object):
 
     def test_connect_rdwr_on_connect_false(self, clf, terminate):
         terminate.side_effect = [False, False, True]
-        target = nfc.clf.RemoteTarget('212F')
+        target = nfc.clf.RemoteTarget(b'212F')
         target.sensf_res = HEX('01 01010701260cca02 ffffffffffffffff 12fc')
         clf.device.sense_ttf.return_value = target
         rdwr_options = {'iterations': 1, 'on-connect': lambda tag: False}
@@ -230,7 +230,7 @@ class TestContactlessFrontend(object):
 
     def test_connect_rdwr_tag_activation_fails(self, clf, terminate):
         terminate.side_effect = [False, True]
-        target = nfc.clf.RemoteTarget('106B')
+        target = nfc.clf.RemoteTarget(b'106B')
         target.sensb_res = HEX('50E8253EEC00000011008185')
         clf.device.sense_ttb.return_value = target
         clf.device.send_cmd_recv_rsp.side_effect = nfc.clf.TimeoutError
@@ -239,12 +239,12 @@ class TestContactlessFrontend(object):
 
     def _test_connect_card_defaults(self, clf, terminate):
         terminate.side_effect = [False, True]
-        card_options = {'on-startup': lambda _: nfc.clf.LocalTarget('212F')}
+        card_options = {'on-startup': lambda _: nfc.clf.LocalTarget(b'212F')}
         assert clf.connect(card=card_options, terminate=terminate) is None
 
     def test_connect_card_as_tt3_target(self, clf, terminate):
         terminate.side_effect = [False, False, True]
-        target = nfc.clf.LocalTarget('212F')
+        target = nfc.clf.LocalTarget(b'212F')
         target.sensf_req = HEX('0012FC0103')
         target.sensf_res = HEX('0102FE010203040506FFFFFFFFFFFFFFFF12FC')
         target.tt3_cmd = HEX('0602fe010203040506010b00018000')
@@ -255,7 +255,7 @@ class TestContactlessFrontend(object):
 
     def test_connect_card_and_broken_link_error(self, clf, terminate):
         terminate.side_effect = [False, False, True]
-        target = nfc.clf.LocalTarget('212F')
+        target = nfc.clf.LocalTarget(b'212F')
         target.sensf_req = HEX('0012FC0103')
         target.sensf_res = HEX('0102FE010203040506FFFFFFFFFFFFFFFF12FC')
         target.tt3_cmd = HEX('0602fe010203040506010b00018000')
@@ -266,7 +266,7 @@ class TestContactlessFrontend(object):
 
     def test_connect_card_and_communication_error(self, clf, terminate):
         terminate.side_effect = [False, False, True]
-        target = nfc.clf.LocalTarget('212F')
+        target = nfc.clf.LocalTarget(b'212F')
         target.sensf_req = HEX('0012FC0103')
         target.sensf_res = HEX('0102FE010203040506FFFFFFFFFFFFFFFF12FC')
         target.tt3_cmd = HEX('0602fe010203040506010b00018000')
@@ -277,7 +277,7 @@ class TestContactlessFrontend(object):
 
     def test_connect_card_and_leave_on_connect(self, clf, terminate):
         terminate.side_effect = [False, False, True]
-        target = nfc.clf.LocalTarget('212F')
+        target = nfc.clf.LocalTarget(b'212F')
         target.sensf_req = HEX('0012FC0103')
         target.sensf_res = HEX('0102FE010203040506FFFFFFFFFFFFFFFF12FC')
         target.tt3_cmd = HEX('0602fe010203040506010b00018000')
@@ -289,7 +289,7 @@ class TestContactlessFrontend(object):
 
     def test_connect_card_emulate_tag_returns_none(self, clf, terminate):
         terminate.side_effect = [False, False, True]
-        target = nfc.clf.LocalTarget('212F')
+        target = nfc.clf.LocalTarget(b'212F')
         target.sensf_req = HEX('0012FC0103')
         target.sensf_res = HEX('0102FE010203040506FFFFFFFFFFFFFFFF12FC')
         target.tt3_cmd = HEX('')
@@ -299,7 +299,7 @@ class TestContactlessFrontend(object):
 
     def test_connect_card_with_on_discover_false(self, clf, terminate):
         terminate.side_effect = [False, False, True]
-        target = nfc.clf.LocalTarget('212F')
+        target = nfc.clf.LocalTarget(b'212F')
         target.sensf_req = HEX('0012FC0103')
         target.sensf_res = HEX('0102FE010203040506FFFFFFFFFFFFFFFF12FC')
         target.tt3_cmd = HEX('0602fe010203040506010b00018000')
@@ -310,7 +310,7 @@ class TestContactlessFrontend(object):
 
     def test_connect_llcp_role_initiator(self, clf, terminate):
         terminate.side_effect = [False, True]
-        target = nfc.clf.RemoteTarget('212F')
+        target = nfc.clf.RemoteTarget(b'212F')
         target.sensf_res = HEX('01 01fe000000000000 ffffffffffffffff')
         clf.device.sense_ttf.return_value = target
         clf.device.send_cmd_recv_rsp.side_effect = [
@@ -325,7 +325,7 @@ class TestContactlessFrontend(object):
         terminate.side_effect = [False, True]
         atr_req = 'd400 01fe0000000000005354 00000032 46666d010113'
         atr_res = 'd501 01fe1111111111115354 0000000032 46666d010113'
-        target = nfc.clf.LocalTarget('212F')
+        target = nfc.clf.LocalTarget(b'212F')
         target.atr_req = HEX(atr_req)
         target.atr_res = HEX(atr_res)
         target.dep_req = HEX('d406 000000')
@@ -341,7 +341,7 @@ class TestContactlessFrontend(object):
         terminate.side_effect = [False, True]
         atr_req = 'd400 01fe0000000000005354 00000032 46666d010113'
         atr_res = 'd501 01fe1111111111115354 0000000032 46666d010113'
-        target = nfc.clf.LocalTarget('212F')
+        target = nfc.clf.LocalTarget(b'212F')
         target.atr_req = HEX(atr_req)
         target.atr_res = HEX(atr_res)
         target.dep_req = HEX('d406 000000')
@@ -369,17 +369,17 @@ class TestContactlessFrontend(object):
     def test_sense_without_device(self, clf):
         clf.device = None
         with pytest.raises(IOError) as excinfo:
-            clf.sense(nfc.clf.RemoteTarget('106A'))
+            clf.sense(nfc.clf.RemoteTarget(b'106A'))
         assert excinfo.value.errno == errno.ENODEV
 
     def test_sense_with_invalid_targets(self, clf):
         with pytest.raises(ValueError) as excinfo:
-            clf.sense(nfc.clf.RemoteTarget('106A'), nfc.clf.LocalTarget())
+            clf.sense(nfc.clf.RemoteTarget(b'106A'), nfc.clf.LocalTarget())
         assert str(excinfo.value).startswith("invalid target argument type")
 
     def test_sense_with_unknown_technology(self, clf):
-        valid_target = nfc.clf.RemoteTarget('106A')
-        wrong_target = nfc.clf.RemoteTarget('106X')
+        valid_target = nfc.clf.RemoteTarget(b'106A')
+        wrong_target = nfc.clf.RemoteTarget(b'106X')
         with pytest.raises(nfc.clf.UnsupportedTargetError) as excinfo:
             clf.sense(wrong_target)
         assert str(excinfo.value) == "unknown technology type in '106X'"
@@ -388,7 +388,7 @@ class TestContactlessFrontend(object):
 
     def test_sense_with_communication_error(self, clf):
         clf.device.sense_tta.side_effect = nfc.clf.CommunicationError
-        target = nfc.clf.RemoteTarget('106A')
+        target = nfc.clf.RemoteTarget(b'106A')
         assert clf.sense(target) is None
         clf.device.sense_tta.assert_called_once_with(target)
 
@@ -398,8 +398,8 @@ class TestContactlessFrontend(object):
         ('E00C', '00', '0416C6C2D73881', '1148B2565400'),
     ])
     def test_sense_tta_found_valid_target(self, clf, sens, sel, sdd, rid):
-        req_target = nfc.clf.RemoteTarget('106A')
-        res_target = nfc.clf.RemoteTarget('106A')
+        req_target = nfc.clf.RemoteTarget(b'106A')
+        res_target = nfc.clf.RemoteTarget(b'106A')
         res_target.sens_res = HEX(sens)
         res_target.sel_res = HEX(sel)
         res_target.sdd_res = HEX(sdd)
@@ -418,8 +418,8 @@ class TestContactlessFrontend(object):
         ('E0', '00', '0416C6C2D73881', None),
     ])
     def test_sense_tta_found_error_target(self, clf, sens, sel, sdd, rid):
-        req_target = nfc.clf.RemoteTarget('106A')
-        res_target = nfc.clf.RemoteTarget('106A')
+        req_target = nfc.clf.RemoteTarget(b'106A')
+        res_target = nfc.clf.RemoteTarget(b'106A')
         res_target.sens_res = HEX(sens)
         res_target.sel_res = HEX(sel)
         res_target.sdd_res = HEX(sdd)
@@ -429,14 +429,14 @@ class TestContactlessFrontend(object):
         clf.device.sense_tta.assert_called_once_with(req_target)
 
     def test_sense_tta_invalid_sel_req(self, clf):
-        target = nfc.clf.RemoteTarget('106A')
+        target = nfc.clf.RemoteTarget(b'106A')
         target.sel_req = HEX('0011')
         with pytest.raises(ValueError) as excinfo:
             clf.sense(target)
         assert str(excinfo.value) == "sel_req must be 4, 7, or 10 byte"
 
     def test_sense_dep_invalid_atr_req(self, clf):
-        target = nfc.clf.RemoteTarget('106A')
+        target = nfc.clf.RemoteTarget(b'106A')
         target.atr_req = bytearray(15)
         with pytest.raises(ValueError) as excinfo:
             clf.sense(target)
@@ -447,8 +447,8 @@ class TestContactlessFrontend(object):
         assert str(excinfo.value) == "maximum atr_req length is 64 byte"
 
     def test_sense_ttb_found_tt4_target(self, clf):
-        req_target = nfc.clf.RemoteTarget('106B')
-        res_target = nfc.clf.RemoteTarget('106B')
+        req_target = nfc.clf.RemoteTarget(b'106B')
+        res_target = nfc.clf.RemoteTarget(b'106B')
         res_target.sensb_res = HEX('50E8253EEC00000011008185')
         clf.device.sense_ttb.return_value = res_target
         res_target = clf.sense(req_target)
@@ -462,26 +462,26 @@ class TestContactlessFrontend(object):
     def test_listen_without_device(self, clf):
         clf.device = None
         with pytest.raises(IOError) as excinfo:
-            clf.listen(nfc.clf.LocalTarget('106A'), 1.0)
+            clf.listen(nfc.clf.LocalTarget(b'106A'), 1.0)
         assert excinfo.value.errno == errno.ENODEV
 
     def test_listen_for_tta_target(self, clf):
-        target = nfc.clf.LocalTarget('106A')
+        target = nfc.clf.LocalTarget(b'106A')
         clf.device.listen_tta.return_value = target
         assert clf.listen(target, 1.0) is target
 
     def test_listen_for_ttb_target(self, clf):
-        target = nfc.clf.LocalTarget('106B')
+        target = nfc.clf.LocalTarget(b'106B')
         clf.device.listen_ttb.return_value = target
         assert clf.listen(target, 1.0) is target
 
     def test_listen_for_ttf_target(self, clf):
-        target = nfc.clf.LocalTarget('212F')
+        target = nfc.clf.LocalTarget(b'212F')
         clf.device.listen_ttf.return_value = target
         assert clf.listen(target, 1.0) is target
 
     def test_listen_for_dep_target(self, clf):
-        target = nfc.clf.LocalTarget('106A')
+        target = nfc.clf.LocalTarget(b'106A')
         target.atr_req = HEX('D400 30313233343536373839 00000000')
         target.atr_res = HEX('D501 66f6e98d1c13dfe56de4 0000000700')
         clf.device.listen_dep.return_value = target
@@ -492,7 +492,7 @@ class TestContactlessFrontend(object):
         assert clf.listen(target, 1.0) is None
 
     def test_listen_for_xxx_target(self, clf):
-        target = nfc.clf.LocalTarget('xxx')
+        target = nfc.clf.LocalTarget(b'xxx')
         with pytest.raises(ValueError) as excinfo:
             clf.listen(target, 1.0)
         assert str(excinfo.value) == "unsupported bitrate technology type xxx"
@@ -539,9 +539,9 @@ class TestContactlessFrontend(object):
 
 class TestRemoteTarget(object):
     @pytest.mark.parametrize("brty, send, recv, kwargs", [
-        ('106A', '106A', '106A', {}),
-        ('106A/212F', '106A', '212F', {}),
-        ('106A', '106A', '106A', {'sens_req': HEX('0102'), 'integer': 5}),
+        (b'106A', b'106A', b'106A', {}),
+        (b'106A/212F', b'106A', b'212F', {}),
+        (b'106A', b'106A', b'106A', {'sens_req': HEX('0102'), 'integer': 5}),
     ])
     def test_init(self, brty, send, recv, kwargs):
         target = nfc.clf.RemoteTarget(brty, **kwargs)
@@ -554,7 +554,7 @@ class TestRemoteTarget(object):
             assert getattr(target, attr) == kwargs[attr]
 
     @pytest.mark.parametrize("brty", [
-        '106', 'A106', '106/106',
+        b'106', b'A106', b'106/106',
     ])
     def test_init_fail(self, brty):
         with pytest.raises(ValueError) as excinfo:
@@ -563,17 +563,17 @@ class TestRemoteTarget(object):
             "brty pattern does not match for '%s'" % brty
 
     @pytest.mark.parametrize("target1, target2", [
-        (nfc.clf.RemoteTarget('106A'), nfc.clf.RemoteTarget('106A')),
-        (nfc.clf.RemoteTarget('106A/106A'), nfc.clf.RemoteTarget('106A')),
-        (nfc.clf.RemoteTarget('106A', a=1), nfc.clf.RemoteTarget('106A', a=1)),
+        (nfc.clf.RemoteTarget(b'106A'), nfc.clf.RemoteTarget(b'106A')),
+        (nfc.clf.RemoteTarget(b'106A/106A'), nfc.clf.RemoteTarget(b'106A')),
+        (nfc.clf.RemoteTarget(b'106A', a=1), nfc.clf.RemoteTarget(b'106A', a=1)),
     ])
     def test_is_equal(self, target1, target2):
         assert target1 == target2
 
     @pytest.mark.parametrize("target1, target2", [
-        (nfc.clf.RemoteTarget('106A'), nfc.clf.RemoteTarget('212F')),
-        (nfc.clf.RemoteTarget('106A/212F'), nfc.clf.RemoteTarget('106A')),
-        (nfc.clf.RemoteTarget('106A', a=1), nfc.clf.RemoteTarget('106A', b=1)),
+        (nfc.clf.RemoteTarget(b'106A'), nfc.clf.RemoteTarget(b'212F')),
+        (nfc.clf.RemoteTarget(b'106A/212F'), nfc.clf.RemoteTarget(b'106A')),
+        (nfc.clf.RemoteTarget(b'106A', a=1), nfc.clf.RemoteTarget(b'106A', b=1)),
     ])
     def test_not_equal(self, target1, target2):
         assert target1 != target2
@@ -581,8 +581,8 @@ class TestRemoteTarget(object):
 
 class TestLocalTarget(object):
     @pytest.mark.parametrize("brty, kwargs", [
-        ('106A', {}),
-        ('212A', {'sens_req': HEX('0102'), 'integer': 5}),
+        (b'106A', {}),
+        (b'212A', {'sens_req': HEX('0102'), 'integer': 5}),
     ])
     def test_init(self, brty, kwargs):
         target = nfc.clf.LocalTarget(brty, **kwargs)
@@ -593,17 +593,17 @@ class TestLocalTarget(object):
             assert getattr(target, attr) == kwargs[attr]
 
     @pytest.mark.parametrize("target1, target2", [
-        (nfc.clf.LocalTarget(), nfc.clf.LocalTarget('106A')),
-        (nfc.clf.LocalTarget('212F'), nfc.clf.LocalTarget('212F')),
-        (nfc.clf.LocalTarget('106A', a=1), nfc.clf.LocalTarget('106A', a=1)),
+        (nfc.clf.LocalTarget(), nfc.clf.LocalTarget(b'106A')),
+        (nfc.clf.LocalTarget(b'212F'), nfc.clf.LocalTarget(b'212F')),
+        (nfc.clf.LocalTarget(b'106A', a=1), nfc.clf.LocalTarget(b'106A', a=1)),
     ])
     def test_is_equal(self, target1, target2):
         assert target1 == target2
 
     @pytest.mark.parametrize("target1, target2", [
-        (nfc.clf.LocalTarget(), nfc.clf.LocalTarget('212F')),
-        (nfc.clf.LocalTarget('212F'), nfc.clf.LocalTarget('106A')),
-        (nfc.clf.LocalTarget('106A', a=1), nfc.clf.LocalTarget('106A', b=1)),
+        (nfc.clf.LocalTarget(), nfc.clf.LocalTarget(b'212F')),
+        (nfc.clf.LocalTarget(b'212F'), nfc.clf.LocalTarget(b'106A')),
+        (nfc.clf.LocalTarget(b'106A', a=1), nfc.clf.LocalTarget(b'106A', b=1)),
     ])
     def test_not_equal(self, target1, target2):
         assert target1 != target2

@@ -30,6 +30,7 @@ import random
 import argparse
 import threading
 import mimetypes
+from binascii import unhexlify
 
 from cli import CommandLineInterface
 
@@ -79,7 +80,7 @@ def send_message(args, llc, message):
         log.error("failed to send message")
     elif args.timeit:
         transfer_time = time.time() - t0
-        message_size = len(str(message))
+        message_size = len(message.encode())
         print("message sent in {0:.3f} seconds ({1} byte @ {2:.0f} byte/sec)"
             .format(transfer_time, message_size, message_size/transfer_time))
 
@@ -129,7 +130,7 @@ def run_send_file_action(args, llc):
         args.name = args.file.name if args.file.name != "<stdin>" else ""
 
     data = args.file.read()
-    try: data = data.decode("hex")
+    try: data = unhexlify(data)
     except TypeError: pass
 
     record = nfc.ndef.Record(args.type, args.name, data)
@@ -206,7 +207,7 @@ def add_recv_save_parser(parser):
 
 def run_recv_save_action(args, llc, rcvd_ndef_msg):
     log.info('save ndef message {0!r}'.format(rcvd_ndef_msg.type))
-    args.file.write(str(rcvd_ndef_msg))
+    args.file.write(rcvd_ndef_msg.encode())
 
 def add_recv_echo_parser(parser):
     parser.set_defaults(func=run_recv_echo_action)

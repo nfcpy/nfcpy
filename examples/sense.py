@@ -25,13 +25,14 @@ import re
 import time
 import errno
 import argparse
+import struct
 import logging
 logging.basicConfig(format='%(relativeCreated)d ms [%(name)s] %(message)s')
 
 import nfc
 import nfc.clf
 
-brty_for_dep = ("106A", "212F", "424F")
+brty_for_dep = (b"106A", b"212F", b"424F")
 target_pattern = re.compile(r'([0-9]+[A-Z]{1})(?: +(.*)|.*)')
 
 def main(args):
@@ -69,7 +70,7 @@ def main(args):
                 
                 if (target and args.atr and target.brty in brty_for_dep and
                     ((target.sel_res and target.sel_res[0] & 0x40) or
-                     (target.sensf_res and target.sensf_res[1:3]=='\1\xFE'))):
+                     (target.sensf_res and target.sensf_res[1:3]==b'\1\xFE'))):
                     atr_req = args.atr[:]
                     if atr_req[0] == 0xFF: atr_req[0] = 0xD4
                     for i in (1, 12, 13, 14):
@@ -81,36 +82,36 @@ def main(args):
                     if atr_req[15] == 0xFF:
                         atr_req[15] = 0x30 | (len(atr_req)>16)<<1
                     try:
-                        data = chr(len(atr_req)+1) + atr_req
-                        if target.brty == "106A": data.insert(0, 0xF0)
+                        data = struct.pack("B", len(atr_req)+1) + atr_req
+                        if target.brty == b"106A": data.insert(0, 0xF0)
                         data = clf.exchange(data, 1.0)
-                        if target.brty == "106A": assert data.pop(0) == 0xF0
+                        if target.brty == b"106A": assert data.pop(0) == 0xF0
                         assert len(data) == data.pop(0)
                         target.atr_res = data
                         target.atr_req = atr_req
                     except nfc.clf.CommunicationError as error:
                         print(repr(error) + " for NFC-DEP ATR_REQ")
                     except AssertionError:
-                        print("invalid ATR_RES: %r" % str(data.encode("hex")))
+                        print("invalid ATR_RES: %r" % hexlify(data))
                 
                 if target and target.atr_res:
                     did = target.atr_req[12]
                     psl = "06D404%02x1203" % did # PSL_REQ
                     rls = ("04D40A%02x"%did) if did else "03D40A"
-                    if target.brty == "106A": psl = "F0" + psl
+                    if target.brty == b"106A": psl = "F0" + psl
                     psl, rls = map(bytearray.fromhex, (psl, rls))
                     try: clf.exchange(psl, 1.0)
                     except nfc.clf.CommunicationError as error:
                         print(repr(error) + " for NFC-DEP PSL_REQ")
                     else:
-                        target.brty = "424F"
+                        target.brty = b"424F"
                         try: clf.exchange(rls, 1.0)
                         except nfc.clf.CommunicationError as error:
                             print(repr(error) + " for NFC-DEP RLS_REQ")
 
                 if (target and target.sensf_res and
-                    target.sensf_res[1:3] != '\x01\xFE'):
-                    request_system_code = "\x0A\x0C"+target.sensf_res[1:9]
+                    target.sensf_res[1:3] != b'\x01\xFE'):
+                    request_system_code = b"\x0A\x0C"+target.sensf_res[1:9]
                     try: clf.exchange(request_system_code, timeout=1.0)
                     except nfc.clf.CommunicationError as error:
                         print(repr(error) + " for Request System Code Command")

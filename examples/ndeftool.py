@@ -29,6 +29,7 @@ import sys
 if sys.version_info[0] == 2:
     range = xrange
 import mimetypes
+from binascii import unhexlify, hexlify
 
 import nfc
 import nfc.ndef
@@ -42,39 +43,39 @@ def add_print_parser(parser):
 
 def print_command(args):
     data = args.message.read()
-    try: data = data.decode("hex")
+    try: data = unhexlify(data)
     except TypeError: pass
     
     message = nfc.ndef.Message(data)
     for index, record in enumerate(message):
         rcount = " [record {0}]".format(index+1) if len(message) > 1 else ""
         try:
-            if record.type == "urn:nfc:wkt:T":
+            if record.type == b"urn:nfc:wkt:T":
                 print("Text Record" + rcount)
                 record = nfc.ndef.TextRecord(record)
-            elif record.type == "urn:nfc:wkt:U":
+            elif record.type == b"urn:nfc:wkt:U":
                 print("URI Record" + rcount)
                 record = nfc.ndef.UriRecord(record)
-            elif record.type == "urn:nfc:wkt:Sp":
+            elif record.type == b"urn:nfc:wkt:Sp":
                 print("Smartposter Record" + rcount)
                 record = nfc.ndef.SmartPosterRecord(record)
-            elif record.type == "application/vnd.bluetooth.ep.oob":
+            elif record.type == b"application/vnd.bluetooth.ep.oob":
                 print("Bluetooth Configuration Record" + rcount)
                 record = nfc.ndef.BluetoothConfigRecord(record)
-            elif record.type == "application/vnd.wfa.wsc":
+            elif record.type == b"application/vnd.wfa.wsc":
                 try:
                     record = nfc.ndef.WifiPasswordRecord(record)
                     print("WiFi Password Record" + rcount)
                 except nfc.ndef.DecodeError:
                     record = nfc.ndef.WifiConfigRecord(record)
                     print("WiFi Configuration Record" + rcount)
-            elif record.type == "urn:nfc:wkt:Hr":
+            elif record.type == b"urn:nfc:wkt:Hr":
                 print("Handover Request Record" + rcount)
                 record = nfc.ndef.handover.HandoverRequestRecord(record)
-            elif record.type == "urn:nfc:wkt:Hs":
+            elif record.type == b"urn:nfc:wkt:Hs":
                 print("Handover Select Record" + rcount)
                 record = nfc.ndef.handover.HandoverSelectRecord(record)
-            elif record.type == "urn:nfc:wkt:Hc":
+            elif record.type == b"urn:nfc:wkt:Hc":
                 print("Handover Carrier Record" + rcount)
                 record = nfc.ndef.handover.HandoverCarrierRecord(record)
             else:
@@ -84,11 +85,11 @@ def print_command(args):
         print(record.pretty(indent=2))
 
     try:
-        if message.type == "urn:nfc:wkt:Hr":
+        if message.type == b"urn:nfc:wkt:Hr":
             message = nfc.ndef.HandoverRequestMessage(message)
             print("\nHandover Request Message")
             print(message.pretty(indent=2) + '\n')
-        elif message.type == "urn:nfc:wkt:Hs":
+        elif message.type == b"urn:nfc:wkt:Hs":
             message = nfc.ndef.HandoverSelectMessage(message)
             print("\nHandover Select Message")
             print(message.pretty(indent=2) + '\n')
@@ -155,9 +156,9 @@ def make_smartposter(args):
 
     message = nfc.ndef.Message(record)
     if args.outfile.name == "<stdout>":
-        args.outfile.write(str(message).encode("hex"))
+        args.outfile.write(hexlify(message.encode()))
     else:
-        args.outfile.write(str(message))
+        args.outfile.write(message.encode())
 
 def make_wifipassword_parser(parser):
     parser.set_defaults(func=make_wifipassword)
@@ -179,7 +180,7 @@ def make_wifipassword(args):
     import random, string, hashlib
     if args.password is None:
         printable = string.digits + string.letters + string.punctuation
-        args.password = ''.join([random.choice(printable) for i in range(32)])
+        args.password = b''.join([random.choice(printable) for i in range(32)])
     if args.password_id is None:
         args.password_id = random.randint(0x0010, 0xFFFF)
     pkhash = hashlib.sha256(args.pubkey.read()).digest()[0:20]
@@ -191,9 +192,9 @@ def make_wifipassword(args):
     
     message = nfc.ndef.Message(record)
     if args.outfile.name == "<stdout>":
-        args.outfile.write(str(message).encode("hex"))
+        args.outfile.write(hexlify(message.encode()))
     else:
-        args.outfile.write(str(message))
+        args.outfile.write(message.encode())
     
 def make_wificonfig_parser(parser):    
     parser.set_defaults(func=make_wificonfig)
@@ -261,9 +262,9 @@ def make_wificonfig(args):
         message = nfc.ndef.Message(record)
         
     if args.outfile.name == "<stdout>":
-        args.outfile.write(str(message).encode("hex"))
+        args.outfile.write(hexlify(message.encode()))
     else:
-        args.outfile.write(str(message))
+        args.outfile.write(message.encode())
 
 def make_bluetoothcfg_parser(parser):    
     parser.set_defaults(func=make_bluetoothcfg)
@@ -331,9 +332,9 @@ def make_bluetoothcfg(args):
         message = nfc.ndef.Message(record)
         
     if args.outfile.name == "<stdout>":
-        args.outfile.write(str(message).encode("hex"))
+        args.outfile.write(hexlify(message.encode()))
     else:
-        args.outfile.write(str(message))
+        args.outfile.write(message.encode())
 
 def add_pack_parser(parser):
     parser.description = """The pack command creates an NDEF record
@@ -385,9 +386,9 @@ def pack(args):
 
     message = nfc.ndef.Message(record)
     if args.outfile.name == "<stdout>":
-        args.outfile.write(str(message).encode("hex"))
+        args.outfile.write(hexlify(message.encode()))
     else:
-        args.outfile.write(str(message))
+        args.outfile.write(message.encode())
 
 def add_split_parser(parser):
     parser.description = """The split command separates an an NDEF
@@ -410,7 +411,7 @@ def split(args):
     log.info("reading message data from '{0}'".format(args.input.name))
     
     data = args.input.read()
-    try: data = data.decode("hex")
+    try: data = unhexlify(data)
     except TypeError: pass
         
     message = nfc.ndef.Message(data)
@@ -418,12 +419,12 @@ def split(args):
         if not args.keepmf:
             record._message_begin = record._message_end = False
         if args.input.name == "<stdin>":
-            print(str(record).encode("hex"))
+            print(hexlify(record))
         else:
             fn = os.path.splitext(os.path.split(args.input.name)[1])
             fn = fn[0] + "-{0:03d}".format(index+1) + fn[1]
             log.info("writing {fn}".format(fn=fn))
-            file(fn, "w").write(str(record))
+            file(fn, "w").write(record.encode())
 
 def add_cat_parser(parser):
     parser.description = "Concatenate records to a new message."
@@ -440,16 +441,16 @@ def cat(args):
     message = nfc.ndef.Message()
     for f in args.records:
         data = f.read()
-        try: data = data.decode("hex")
+        try: data = unhexlify(data)
         except TypeError: pass
         record = nfc.ndef.Record(data=data)
         log.info("add '{0}' record from file '{1}'"
                  .format(record.type, f.name))
         message.append(record)
     if args.output.name == "<stdout>":
-        args.output.write(str(message).encode("hex"))
+        args.output.write(hexlify(message.encode()))
     else:
-        args.output.write(str(message))
+        args.output.write(message.encode())
 
 if __name__ == '__main__':
     import argparse

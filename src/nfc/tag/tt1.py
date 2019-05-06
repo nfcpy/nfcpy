@@ -385,14 +385,14 @@ class Type1Tag(Tag):
         """Returns the 2 byte Header ROM and 4 byte UID.
         """
         log.debug("read identification")
-        cmd = "\x78\x00\x00\x00\x00\x00\x00"
+        cmd = b"\x78\x00\x00\x00\x00\x00\x00"
         return self.transceive(cmd)
 
     def read_all(self):
         """Returns the 2 byte Header ROM and all 120 byte static memory.
         """
         log.debug("read all static memory")
-        cmd = "\x00\x00\x00" + self.uid
+        cmd = b"\x00\x00\x00" + self.uid
         return self.transceive(cmd)
 
     def read_byte(self, addr):
@@ -401,7 +401,7 @@ class Type1Tag(Tag):
         if addr < 0 or addr > 127:
             raise ValueError("invalid byte address")
         log.debug("read byte at address {0} ({0:02X}h)".format(addr))
-        cmd = "\x01" + chr(addr) + "\x00" + self.uid
+        cmd = b"\x01" + pack("B", addr) + b"\x00" + self.uid
         return self.transceive(cmd)[-1]
 
     def read_block(self, block):
@@ -410,7 +410,7 @@ class Type1Tag(Tag):
         if block < 0 or block > 255:
             raise ValueError("invalid block number")
         log.debug("read block {0}".format(block))
-        cmd = "\x02" + chr(block) + 8 * chr(0) + self.uid
+        cmd = b"\x02" + pack("B", block) + 8 * pack("B", 0) + self.uid
         return self.transceive(cmd)[1:9]
 
     def read_segment(self, segment):
@@ -419,7 +419,7 @@ class Type1Tag(Tag):
         log.debug("read segment {0}".format(segment))
         if segment < 0 or segment > 15:
             raise ValueError("invalid segment number")
-        cmd = "\x10" + chr(segment << 4) + 8 * chr(0) + self.uid
+        cmd = b"\x10" + pack("B", segment << 4) + 8 * pack("B", 0) + self.uid
         rsp = self.transceive(cmd)
         if len(rsp) < 129:
             raise Type1TagCommandError(RESPONSE_ERROR)
@@ -433,8 +433,8 @@ class Type1Tag(Tag):
         if addr < 0 or addr >= 128:
             raise ValueError("invalid byte address")
         log.debug("write byte at address {0} ({0:02X}h)".format(addr))
-        cmd = "\x53" if erase is True else "\x1A"
-        cmd = cmd + chr(addr) + chr(data) + self.uid
+        cmd = b"\x53" if erase is True else b"\x1A"
+        cmd = cmd + pack("B", addr) + pack("B", data) + self.uid
         return self.transceive(cmd)
 
     def write_block(self, block, data, erase=True):
@@ -445,8 +445,8 @@ class Type1Tag(Tag):
         if block < 0 or block > 255:
             raise ValueError("invalid block number")
         log.debug("write block {0}".format(block))
-        cmd = "\x54" if erase is True else "\x1B"
-        cmd = cmd + chr(block) + data + self.uid
+        cmd = b"\x54" if erase is True else b"\x1B"
+        cmd = cmd + pack("B", block) + data + self.uid
         rsp = self.transceive(cmd)
         if len(rsp) < 9:
             raise Type1TagCommandError(RESPONSE_ERROR)

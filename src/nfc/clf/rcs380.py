@@ -77,7 +77,7 @@ class Frame(object):
             elif frame[3:5] == bytearray(b"\xff\xff"):
                 self._type = "data"
             if self.type == "data":
-                length = struct.unpack("<H", str(frame[5:7]))[0]
+                length = struct.unpack("<H", bytes(frame[5:7]))[0]
                 self._data = frame[8:8+length]
         else:
             frame = bytearray([0, 0, 255, 255, 255])
@@ -89,6 +89,9 @@ class Frame(object):
 
     def __str__(self):
         return str(self._frame)
+
+    def encode(self):
+        return bytes(self._frame)
 
     @property
     def type(self):
@@ -117,7 +120,7 @@ class CommunicationError:
     str2err = dict([(v, k) for k, v in err2str.items()])
 
     def __init__(self, status_bytes):
-        self.errno = struct.unpack('<L', str(status_bytes))[0]
+        self.errno = struct.unpack('<L', bytes(status_bytes))[0]
 
     def __eq__(self, strerr):
         errno = CommunicationError.str2err[strerr]
@@ -208,10 +211,10 @@ class Chipset(object):
 
     def send_command(self, cmd_code, cmd_data):
         cmd_data = bytearray(cmd_data)
-        log.log(logging.DEBUG-1, self.CMD[cmd_code]+" "+hexlify(cmd_data))
+        log.log(logging.DEBUG-1, "%s %s", self.CMD[cmd_code], hexlify(cmd_data))
         if self.transport is not None:
             cmd = bytearray([0xD6, cmd_code]) + cmd_data
-            self.transport.write(str(Frame(cmd)))
+            self.transport.write(Frame(cmd).encode())
             ack = Frame(self.transport.read())
             if ack.type == 'ack':
                 rsp = Frame(self.transport.read())
@@ -230,10 +233,10 @@ class Chipset(object):
 
     def in_set_rf(self, brty_send, brty_recv=None):
         settings = {
-            "212F": (1, 1, 15, 1), "424F": (1, 2, 15, 2),
-            "106A": (2, 3, 15, 3), "212A": (4, 4, 15, 4),
-            "424A": (5, 5, 15, 5), "106B": (3, 7, 15, 7),
-            "212B": (3, 8, 15, 8), "424B": (3, 9, 15, 9),
+            b"212F": (1, 1, 15, 1), b"424F": (1, 2, 15, 2),
+            b"106A": (2, 3, 15, 3), b"212A": (4, 4, 15, 4),
+            b"424A": (5, 5, 15, 5), b"106B": (3, 7, 15, 7),
+            b"212B": (3, 8, 15, 8), b"424B": (3, 9, 15, 9),
         }
         if brty_recv is None:
             brty_recv = brty_send
@@ -263,7 +266,7 @@ class Chipset(object):
 
     def in_comm_rf(self, data, timeout):
         timeout = min((timeout + (1 if timeout > 0 else 0)) * 10, 0xFFFF)
-        data = self.send_command(0x04, struct.pack("<H", timeout) + str(data))
+        data = self.send_command(0x04, struct.pack("<H", timeout) + bytes(data))
         if data and tuple(data[0:4]) != (0, 0, 0, 0):
             raise CommunicationError(data[0:4])
         return data[5:] if data else None
@@ -275,8 +278,8 @@ class Chipset(object):
             raise StatusError(data[0])
 
     def tg_set_rf(self, comm_type):
-        tg_comm_type = {"106A": (8, 11), "212F": (8, 12), "424F": (8, 13),
-                        "212A": (8, 14), "424A": (8, 15)}
+        tg_comm_type = {b"106A": (8, 11), b"212F": (8, 12), b"424F": (8, 13),
+                        b"212A": (8, 14), b"424A": (8, 15)}
 
         comm_type = tg_comm_type[comm_type]
         data = self.send_command(0x40, comm_type)
@@ -301,7 +304,7 @@ class Chipset(object):
             raise StatusError(data[0])
 
     def tg_comm_rf(self, guard_time=0, send_timeout=0xFFFF,
-                   mdaa=False, nfca_params='', nfcf_params='',
+                   mdaa=False, nfca_params=b'', nfcf_params=b'',
                    mf_halted=False, arae=False, recv_timeout=0,
                    transmit_data=None):
         # Send a response packet and receive the next request. If
@@ -312,10 +315,10 @@ class Chipset(object):
         # activation commands with *nfca_params* (sens_res, nfcid1-3,
         # sel_res) and *nfcf_params* (idm, pmm, system_code).
         data = struct.pack("<HH?6s18s??H", guard_time, send_timeout,
-                           mdaa, str(nfca_params), str(nfcf_params),
+                           mdaa, bytes(nfca_params), bytes(nfcf_params),
                            mf_halted, arae, recv_timeout)
         if transmit_data:
-            data = data + str(transmit_data)
+            data = data + bytes(transmit_data)
 
         data = self.send_command(0x48, data)
 
@@ -341,7 +344,7 @@ class Chipset(object):
 
     def get_command_type(self):
         data = self.send_command(0x28, [])
-        return struct.unpack(">Q", str(data[0:8]))[0]
+        return struct.unpack(">Q", bytes(data[0:8]))[0]
 
     def set_command_type(self, command_type):
         data = self.send_command(0x2A, [command_type])
@@ -374,7 +377,7 @@ class Device(device.Device):
         """
         log.debug("polling for NFC-A technology")
 
-        if target.brty not in ("106A", "212A", "424A"):
+        if target.brty not in (b"106A", b"212A", b"424A"):
             message = "unsupported bitrate {0}".format(target.brty)
             raise nfc.clf.UnsupportedTargetError(message)
 
@@ -396,7 +399,7 @@ class Device(device.Device):
                 log.debug(error)
             return None
 
-        log.debug("rcvd SENS_RES " + hexlify(sens_res))
+        log.debug("rcvd SENS_RES %s", hexlify(sens_res))
 
         if sens_res[0] & 0x1F == 0:
             log.debug("type 1 tag target found")
@@ -405,7 +408,7 @@ class Device(device.Device):
             target = nfc.clf.RemoteTarget(target.brty, sens_res=sens_res)
             if sens_res[1] & 0x0F == 0b1100:
                 rid_cmd = bytearray.fromhex("78 0000 00000000")
-                log.debug("send RID_CMD " + hexlify(rid_cmd))
+                log.debug("send RID_CMD %s", hexlify(rid_cmd))
                 try:
                     target.rid_res = self.chipset.in_comm_rf(rid_cmd, 30)
                 except CommunicationError as error:
@@ -423,26 +426,26 @@ class Device(device.Device):
                 if len(uid) > 8:
                     uid = uid[0:4] + b"\x88" + uid[4:]
                 self.chipset.in_set_protocol(add_crc=1, check_crc=1)
-                for i, sel_cmd in zip(range(0, len(uid), 4), b"\x93\x95\x97"):
-                    sel_req = sel_cmd + b"\x70" + uid[i:i+4]
+                for i, sel_cmd in zip(range(0, len(uid), 4), bytearray(b"\x93\x95\x97")):
+                    sel_req = bytearray(struct.pack("B", sel_cmd) + b"\x70" + uid[i:i+4])
                     sel_req.append(reduce(operator.xor, sel_req[2:6]))  # BCC
-                    log.debug("send SEL_REQ " + hexlify(sel_req))
+                    log.debug("send SEL_REQ %s", hexlify(sel_req))
                     sel_res = self.chipset.in_comm_rf(sel_req, 30)
-                    log.debug("rcvd SEL_RES " + hexlify(sel_res))
+                    log.debug("rcvd SEL_RES %s", hexlify(sel_res))
                 uid = target.sel_req
             else:
                 uid = bytearray()
-                for sel_cmd in b"\x93\x95\x97":
+                for sel_cmd in bytearray(b"\x93\x95\x97"):
                     self.chipset.in_set_protocol(add_crc=0, check_crc=0)
-                    sdd_req = sel_cmd + b"\x20"
-                    log.debug("send SDD_REQ " + hexlify(sdd_req))
+                    sdd_req = struct.pack("B", sel_cmd) + b"\x20"
+                    log.debug("send SDD_REQ %s", hexlify(sdd_req))
                     sdd_res = self.chipset.in_comm_rf(sdd_req, 30)
-                    log.debug("rcvd SDD_RES " + hexlify(sdd_res))
+                    log.debug("rcvd SDD_RES %s", hexlify(sdd_res))
                     self.chipset.in_set_protocol(add_crc=1, check_crc=1)
-                    sel_req = sel_cmd + b"\x70" + sdd_res
-                    log.debug("send SEL_REQ " + hexlify(sel_req))
+                    sel_req = struct.pack("B", sel_cmd) + b"\x70" + sdd_res
+                    log.debug("send SEL_REQ %s", hexlify(sel_req))
                     sel_res = self.chipset.in_comm_rf(sel_req, 30)
-                    log.debug("rcvd SEL_RES " + hexlify(sel_res))
+                    log.debug("rcvd SEL_RES %s", hexlify(sel_res))
                     if sel_res[0] & 0b00000100:
                         uid = uid + sdd_res[1:4]
                     else:
@@ -462,7 +465,7 @@ class Device(device.Device):
         """
         log.debug("polling for NFC-B technology")
 
-        if target.brty not in ("106B", "212B", "424B"):
+        if target.brty not in (b"106B", b"212B", b"424B"):
             message = "unsupported bitrate {0}".format(target.brty)
             raise nfc.clf.UnsupportedTargetError(message)
 
@@ -474,7 +477,7 @@ class Device(device.Device):
         sensb_req = (target.sensb_req if target.sensb_req else
                      bytearray.fromhex("050010"))
 
-        log.debug("send SENSB_REQ " + hexlify(sensb_req))
+        log.debug("send SENSB_REQ %s", hexlify(sensb_req))
         try:
             sensb_res = self.chipset.in_comm_rf(sensb_req, 30)
         except CommunicationError as error:
@@ -483,7 +486,7 @@ class Device(device.Device):
             return None
 
         if len(sensb_res) >= 12 and sensb_res[0] == 0x50:
-            log.debug("rcvd SENSB_RES " + hexlify(sensb_res))
+            log.debug("rcvd SENSB_RES %s", hexlify(sensb_res))
             return nfc.clf.RemoteTarget(target.brty, sensb_res=sensb_res)
 
     def sense_ttf(self, target):
@@ -492,7 +495,7 @@ class Device(device.Device):
         """
         log.debug("polling for NFC-F technology")
 
-        if target.brty not in ("212F", "424F"):
+        if target.brty not in (b"212F", b"424F"):
             message = "unsupported bitrate {0}".format(target.brty)
             raise nfc.clf.UnsupportedTargetError(message)
 
@@ -503,9 +506,9 @@ class Device(device.Device):
         sensf_req = (target.sensf_req if target.sensf_req else
                      bytearray.fromhex("00FFFF0100"))
 
-        log.debug("send SENSF_REQ " + hexlify(sensf_req))
+        log.debug("send SENSF_REQ %s", hexlify(sensf_req))
         try:
-            frame = chr(len(sensf_req)+1) + sensf_req
+            frame = struct.pack("B", len(sensf_req)+1) + sensf_req
             frame = self.chipset.in_comm_rf(frame, 10)
         except CommunicationError as error:
             if error != "RECEIVE_TIMEOUT_ERROR":
@@ -513,7 +516,7 @@ class Device(device.Device):
             return None
 
         if len(frame) >= 18 and frame[0] == len(frame) and frame[1] == 1:
-            log.debug("rcvd SENSF_RES " + hexlify(frame[1:]))
+            log.debug("rcvd SENSF_RES %s", hexlify(frame[1:]))
             return nfc.clf.RemoteTarget(target.brty, sensf_res=frame[1:])
 
     def sense_dep(self, target):
@@ -540,7 +543,7 @@ class Device(device.Device):
           activation will still be attempted.
 
         """
-        if not target.brty == '106A':
+        if not target.brty == b'106A':
             info = "unsupported target bitrate: %r" % target.brty
             raise nfc.clf.UnsupportedTargetError(info)
 
@@ -566,7 +569,7 @@ class Device(device.Device):
         nfca_params = target.sens_res + target.sdd_res[1:4] + target.sel_res
         log.debug("nfca_params %s", hexlify(nfca_params))
 
-        self.chipset.tg_set_rf("106A")
+        self.chipset.tg_set_rf(b"106A")
         self.chipset.tg_set_protocol(self.chipset.tg_set_protocol_defaults)
         self.chipset.tg_set_protocol(rf_off_error=False)
 
@@ -583,12 +586,12 @@ class Device(device.Device):
                 except CommunicationError as error:
                     log.debug(error)
                 else:
-                    brty = ('106A', '212F', '424F')[data[0]-11]
+                    brty = (b'106A', b'212F', b'424F')[data[0]-11]
                     log.debug("%s rcvd %s", brty, hexlify(memoryview(data, 7)))
-                    if brty == "106A" and data[2] & 0x03 == 3:
+                    if brty == b"106A" and data[2] & 0x03 == 3:
                         self.chipset.tg_set_protocol(rf_off_error=True)
                         return nfc.clf.LocalTarget(
-                            "106A", sens_res=nfca_params[0:2],
+                            b"106A", sens_res=nfca_params[0:2],
                             sdd_res=b'\x08'+nfca_params[2:5],
                             sel_res=nfca_params[5:6], tt2_cmd=data[7:])
                     else:
@@ -610,16 +613,16 @@ class Device(device.Device):
                     rats_cmd = rats_res = None
                     log.debug(error)
                 else:
-                    brty = ('106A', '212F', '424F')[data[0]-11]
+                    brty = (b'106A', b'212F', b'424F')[data[0]-11]
                     log.debug("%s rcvd %s", brty, hexlify(memoryview(data, 7)))
-                    if brty == "106A" and data[2] == 3 and data[7] == 0xE0:
+                    if brty == b"106A" and data[2] == 3 and data[7] == 0xE0:
                         (rats_cmd, rats_res) = (data[7:], target.rats_res)
                         log.debug("rcvd RATS_CMD %s", hexlify(rats_cmd))
                         if rats_res is None:
                             rats_res = bytearray.fromhex("05 78 80 70 02")
                         log.debug("send RATS_RES %s", hexlify(rats_res))
                         tg_comm_rf_args['transmit_data'] = rats_res
-                    elif brty == "106A" and data[7] != 0xF0 and rats_cmd:
+                    elif brty == b"106A" and data[7] != 0xF0 and rats_cmd:
                         did = rats_cmd[1] & 0x0F
                         cmd = data[7:]
                         ta_tb_tc = rats_res[2:]
@@ -648,7 +651,7 @@ class Device(device.Device):
                                 log.debug("rcvd TT4_CMD %s", hexlify(cmd))
                                 self.chipset.tg_set_protocol(rf_off_error=True)
                                 return nfc.clf.LocalTarget(
-                                    "106A", sens_res=nfca_params[0:2],
+                                    b"106A", sens_res=nfca_params[0:2],
                                     sdd_res=b'\x08'+nfca_params[2:5],
                                     sel_res=nfca_params[5:6], tt4_cmd=cmd,
                                     rats_cmd=rats_cmd, rats_res=rats_res)
@@ -675,7 +678,7 @@ class Device(device.Device):
 
     def listen_ttf(self, target, timeout):
         """Listen as Type F Target is supported for either 212 or 424 kbps."""
-        if target.brty not in ('212F', '424F'):
+        if target.brty not in (b'212F', b'424F'):
             info = "unsupported target bitrate: %r" % target.brty
             raise nfc.clf.UnsupportedTargetError(info)
 
@@ -706,7 +709,7 @@ class Device(device.Device):
                 recv_timeout = int((time_to_return - time.time()) * 1E3)
                 transmit_data = None
 
-            assert target.brty == ('106A', '212F', '424F')[data[0]-11]
+            assert target.brty == (b'106A', b'212F', b'424F')[data[0]-11]
             log.debug("%s rcvd %s", target.brty, hexlify(memoryview(data, 7)))
 
             if len(data) > 7 and len(data)-7 == data[7]:
@@ -727,8 +730,8 @@ class Device(device.Device):
                         transmit_data += sensf_res[17:19]
                     if sensf_req[3] == 2:
                         transmit_data += b"\x00"
-                        transmit_data += chr(1 << (target.brty == "424F"))
-                    transmit_data = chr(len(transmit_data)+1) + transmit_data
+                        transmit_data += struct.pack("B", 1 << (target.brty == "424F"))
+                    transmit_data = struct.pack("B", len(transmit_data)+1) + transmit_data
 
     def listen_dep(self, target, timeout):
         log.debug("listen_dep for {0:.3f} sec".format(timeout))
@@ -749,7 +752,7 @@ class Device(device.Device):
         log.debug("nfca_params %s", hexlify(nfca_params))
         log.debug("nfcf_params %s", hexlify(nfcf_params))
 
-        self.chipset.tg_set_rf("106A")
+        self.chipset.tg_set_rf(b"106A")
         self.chipset.tg_set_protocol(self.chipset.tg_set_protocol_defaults)
         self.chipset.tg_set_protocol(rf_off_error=False)
 
@@ -769,7 +772,7 @@ class Device(device.Device):
                 if error != "RECEIVE_TIMEOUT_ERROR":
                     log.warning(error)
             else:
-                brty = ('106A', '212F', '424F')[data[0]-11]
+                brty = (b'106A', b'212F', b'424F')[data[0]-11]
                 log.debug("%s %s", brty, hexlify(data))
                 if data[2] & 0x03 == 3:
                     data = data[7:]
@@ -783,19 +786,19 @@ class Device(device.Device):
         # further tg_comm_rf commands return RF_OFF_ERROR when field is gone
         self.chipset.tg_set_protocol(rf_off_error=True)
 
-        if brty == "106A" and len(data) > 1 and data[0] != 0xF0:
+        if brty == b"106A" and len(data) > 1 and data[0] != 0xF0:
             # We received a Type A card activation, probably because
             # sel_res has indicated Type 2 or Type 4A Tag support.
-            target = nfc.clf.LocalTarget("106A", tt2_cmd=data[:])
+            target = nfc.clf.LocalTarget(b"106A", tt2_cmd=data[:])
             target.sens_res = nfca_params[0:2]
             target.sdd_res = b'\x08' + nfca_params[2:5]
             target.sel_res = nfca_params[5:6]
             return target
 
         def verify_frame(brty, data, cmd_set):
-            offset = 1 if brty == "106A" else 0
+            offset = 1 if brty == b"106A" else 0
             try:
-                if brty == "106A" and data[0] != 0xF0:
+                if brty == b"106A" and data[0] != 0xF0:
                     log.warn("rcvd frame has invalid start byte")
                 elif data[offset] != len(data) - offset:
                     log.warn("rcvd frame has incorrect length byte")
@@ -810,13 +813,13 @@ class Device(device.Device):
 
         def send_res_recv_req(brty, data, timeout):
             if data:
-                data = (b"", b"\xF0")[brty == "106A"] + chr(len(data)+1) + data
+                data = (b"", b"\xF0")[brty == b"106A"] + struct.pack("B", len(data)+1) + data
             args = {'transmit_data': data, 'recv_timeout': timeout}
             data = self.chipset.tg_comm_rf(**args)[7:]
             if timeout > 0:
                 return verify_frame(brty, data, cmd_set=[0, 4, 6, 8, 10])
 
-        activation_params = nfca_params if brty == '106A' else nfcf_params
+        activation_params = nfca_params if brty == b'106A' else nfcf_params
         data = verify_frame(brty, data, cmd_set=[0])
 
         while data and data[1] == 0:
@@ -851,7 +854,7 @@ class Device(device.Device):
             (psl_req, psl_res) = (data[:], b"\xD5\x05" + data[2:3])
             log.debug("%s send PSL_RES %s", brty, hexlify(psl_res))
             send_res_recv_req(brty, psl_res, 0)
-            brty = ('106A', '212F', '424F')[dsi]
+            brty = (b'106A', b'212F', b'424F')[dsi]
             self.chipset.tg_set_rf(brty)
             return brty, psl_req, psl_res
 
@@ -908,17 +911,17 @@ class Device(device.Device):
         self.chipset.in_set_rf(target.brty_send, target.brty_recv)
         self.chipset.in_set_protocol(self.chipset.in_set_protocol_defaults)
         in_set_protocol_settings = {}
-        if target.brty_send.endswith('A'):
+        if target.brty_send.endswith(b'A'):
             in_set_protocol_settings['add_parity'] = 1
             in_set_protocol_settings['check_parity'] = 1
-        if target.brty_send.endswith('B'):
+        if target.brty_send.endswith(b'B'):
             in_set_protocol_settings['initial_guard_time'] = 20
             in_set_protocol_settings['add_sof'] = 1
             in_set_protocol_settings['check_sof'] = 1
             in_set_protocol_settings['add_eof'] = 1
             in_set_protocol_settings['check_eof'] = 1
         try:
-            if ((target.brty == '106A' and target.sel_res and
+            if ((target.brty == b'106A' and target.sel_res and
                  target.sel_res[0] & 0x60 == 0x00)):
                 # Driver must check TT2 CRC to get ACK/NAK
                 in_set_protocol_settings['check_crc'] = 0

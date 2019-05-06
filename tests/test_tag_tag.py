@@ -25,7 +25,7 @@ def clf():
 
 @pytest.fixture()
 def target():
-    return nfc.clf.RemoteTarget("106A")
+    return nfc.clf.RemoteTarget(b"106A")
 
 
 @pytest.fixture()
@@ -64,7 +64,7 @@ def test_read_ndef(mocker, tag):  # noqa: F811
     assert isinstance(tag.ndef, nfc.tag.Tag.NDEF)
     assert tag.ndef.octets == HEX('D50000')
     assert tag.ndef.records == [ndef.Record('unknown')]
-    assert tag.ndef.message == nfc.ndef.Message(nfc.ndef.Record('unknown'))
+    assert tag.ndef.message == nfc.ndef.Message(nfc.ndef.Record(b'unknown'))
 
     read_ndef_data.return_value = None
     assert tag.ndef.has_changed is True
@@ -123,17 +123,17 @@ def test_activate_unknown_106A(clf, target):
 
 
 def test_activate_unknown_106X(clf, target):
-    target._brty_send = '106X'
+    target._brty_send = b'106X'
     assert nfc.tag.activate(clf, target) is None
 
 
 def test_activate(mocker, clf, target):  # noqa: F811
     mocker.patch('nfc.tag.activate_tt3').side_effect = nfc.clf.TimeoutError
-    target._brty_send = '106F'
+    target._brty_send = b'106F'
     assert nfc.tag.activate(clf, target) is None
 
 
-@pytest.mark.parametrize("brty", ["106A", "106B"])
+@pytest.mark.parametrize("brty", [b"106A", b"106B"])
 def test_tag_emulate_unsupported(clf, brty):
     target = nfc.clf.LocalTarget(brty)
     assert nfc.tag.emulate(clf, target) is None
