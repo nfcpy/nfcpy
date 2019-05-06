@@ -29,6 +29,10 @@ import ctypes
 import ctypes.util
 from ctypes import c_void_p, c_int
 from binascii import hexlify
+if sys.version_info[0] == 2:
+    tobytes = str
+else:
+    tobytes = bytes
 
 import logging
 log = logging.getLogger(__name__)
@@ -286,7 +290,8 @@ class OpenSSLWrapper:
         @staticmethod
         def bin2bn(s):
             # BIGNUM *BN_bin2bn(const unsigned char *s, int len, BIGNUM *ret);
-            strbuf = ctypes.create_string_buffer(str(s), len(s))
+            b = tobytes(s)
+            strbuf = ctypes.create_string_buffer(b, len(b))
             res = OpenSSL.crypto.BN_bin2bn(strbuf, len(s), None)
             if res is None:
                 log.error("BN_bin2bn")
@@ -423,7 +428,7 @@ class OpenSSLWrapper:
             # int CMAC_Init(CMAC_CTX *ctx, const void *key, size_t keylen,
             #     const EVP_CIPHER *cipher, ENGINE *impl);
             assert len(key) == 16
-            keybuf = ctypes.create_string_buffer(str(key), 16)
+            keybuf = ctypes.create_string_buffer(tobytes(key), 16)
             keylen = ctypes.c_size_t(16)
             cipher = ctypes.c_void_p(self._cipher)
             r = OpenSSL.crypto.CMAC_Init(self, keybuf, keylen, cipher, None)
@@ -432,7 +437,7 @@ class OpenSSLWrapper:
 
         def update(self, msg):
             # int CMAC_Update(CMAC_CTX *ctx, const void *data, size_t dlen);
-            msgbuf = ctypes.create_string_buffer(str(msg), len(msg))
+            msgbuf = ctypes.create_string_buffer(tobytes(msg), len(msg))
             msglen = ctypes.c_size_t(len(msg))
             r = OpenSSL.crypto.CMAC_Update(self, msgbuf, msglen)
             assert r == 1, "CMAC_Update"
