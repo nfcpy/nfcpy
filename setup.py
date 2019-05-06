@@ -15,9 +15,10 @@ CLASSIFIERS = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Natural Language :: English",
-    "Programming Language :: Python :: 2",
-    "Programming Language :: Python :: 2.6",
+    "Programming Language :: Python",
     "Programming Language :: Python :: 2.7",
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
     "Operating System :: POSIX :: Linux",
     "Operating System :: MacOS :: MacOS X",
     "Operating System :: Microsoft :: Windows",
@@ -25,7 +26,6 @@ CLASSIFIERS = [
     "License :: OSI Approved :: European Union Public Licence 1.1 (EUPL 1.1)",
 ]
 INSTALL_REQUIRES = ["libusb1", "pyserial", "ndeflib", "pydes"]
-PYTHON_REQUIRES = ">=2.6, <3"
 
 ###############################################################################
 
@@ -75,5 +75,4 @@ if __name__ == "__main__":
         zip_safe=False,
         classifiers=CLASSIFIERS,
         install_requires=INSTALL_REQUIRES,
-        python_requires=PYTHON_REQUIRES,
     )
