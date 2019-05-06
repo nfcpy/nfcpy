@@ -228,7 +228,7 @@ class Record(object):
     @property
     def name(self):
         """The record identifier as an octet string. Any type that can
-        be coverted into a sequence of characters in range(0,256) can
+        be coverted into a sequence of characters in range(0,255) can
         be assigned."""
         return bytes(self._name)
 
@@ -239,7 +239,7 @@ class Record(object):
     @property
     def data(self):
         """The record payload as an octet string. Any type that can be
-        coverted into a sequence of characters in range(0,256) can be
+        coverted into a sequence of characters in range(0,255) can be
         assigned."""
         return bytes(self._data)
 
