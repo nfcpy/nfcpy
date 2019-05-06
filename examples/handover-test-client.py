@@ -20,6 +20,10 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
+try:
+    from future_builtins import map
+except ImportError:
+    pass
 import logging
 log = logging.getLogger('main')
 
@@ -80,7 +84,7 @@ class BluetoothAdapter(object):
 
     @property
     def service_uuids(self):
-        return map(str, self.adapter.GetProperties()["UUIDs"])
+        return list(map(str, self.adapter.GetProperties()["UUIDs"]))
 
     def get_ssp_data(self):
         ssp_hash, ssp_rand = self.oob_adapter.ReadLocalData()

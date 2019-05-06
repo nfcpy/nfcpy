@@ -19,6 +19,10 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
+try:
+    from future_builtins import map
+except ImportError:
+    pass
 import sys
 import struct
 import ctypes
@@ -336,7 +340,7 @@ class OpenSSLWrapper:
             # int EC_KEY_set_public_key_affine_coordinates(EC_KEY *key,
             #     BIGNUM *x, BIGNUM *y);
             r = OpenSSL.crypto.EC_KEY_set_public_key_affine_coordinates(
-                self, *map(OpenSSL.BIGNUM.bin2bn, (pubkey_x, pubkey_y)))
+                self, *list(map(OpenSSL.BIGNUM.bin2bn, (pubkey_x, pubkey_y))))
             if r != 1:
                 errmsg = "EC_KEY_set_public_key_affine_coordinates"
                 raise AssertionError(errmsg)
