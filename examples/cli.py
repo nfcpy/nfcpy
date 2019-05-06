@@ -311,9 +311,9 @@ class CommandLineInterface(object):
                 }
             if self.options.technology:
                 rdwr_options["targets"] = {
-                    "A": ["106A"],
-                    "B": ["106B"],
-                    "F": ["212F"],
+                    "A": [b"106A"],
+                    "B": [b"106B"],
+                    "F": [b"212F"],
                 }[self.options.technology.upper()]
         else:
             rdwr_options = None

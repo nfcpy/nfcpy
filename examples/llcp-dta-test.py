@@ -76,7 +76,7 @@ def raw_access_point_wait_no_recv(socket, timeout=3.0):
 def logical_data_link_send_sot(socket, dsap, ssap):
     pdu = nfc.llcp.pdu.UnnumberedInformation(dsap, ssap, data=b'SOT')
     info("send the start of test command")
-    assert socket.send(pdu), "error sending start of test command"
+    assert socket.send(pdu.encode()), "error sending start of test command"
 
 def logical_data_link_wait_recv(socket, timeout=3.0):
     text = "- wait %d seconds to receive a response on sap %d"
@@ -250,17 +250,17 @@ class TestProgram(CommandLineInterface):
         dsap, ssap = self.iut_cl_in_sap, self.lt_cl_in_sap
         pdu = nfc.llcp.pdu.UnnumberedInformation(dsap, ssap, data=b'SOT')
         info("send the start of test command")
-        assert socket.send(pdu), "error sending start of test command"
+        assert socket.send(pdu.encode()), "error sending start of test command"
 
         info("send UI PDU with %d-1 octet information", self.iut_miu)
         pdu.data = b'\xA5' * (self.iut_miu - 1)
-        assert socket.send(pdu), "error sending UI PDU"
+        assert socket.send(pdu.encode()), "error sending UI PDU"
         data, addr = logical_data_link_wait_recv(self.dta_cl_echo_out, 5.0)
         assert data == pdu.data, "received wrong data on echo return path"
 
         info("send UI PDU with %d octet information", self.iut_miu)
         pdu.data = b'\xA5' * self.iut_miu
-        assert socket.send(pdu), "error sending UI PDU"
+        assert socket.send(pdu.encode()), "error sending UI PDU"
         logical_data_link_wait_no_recv(self.dta_cl_echo_out, 5.0)
 
         info("test completed")
@@ -291,17 +291,17 @@ class TestProgram(CommandLineInterface):
         dsap, ssap = self.iut_cl_in_sap, self.lt_cl_in_sap
         pdu = nfc.llcp.pdu.UnnumberedInformation(dsap, ssap, data=b'SOT')
         info("send the start of test command")
-        assert socket.send(pdu), "error sending start of test command"
+        assert socket.send(pdu.encode()), "error sending start of test command"
 
         info("send UI PDU with an MIU(IUT) size information field")
         pdu.data = b'\xA5' * self.iut_miu
-        assert socket.send(pdu), "error sending UI PDU"
+        assert socket.send(pdu.encode()), "error sending UI PDU"
         data, addr = logical_data_link_wait_recv(self.dta_cl_echo_out, 5.0)
         assert data == pdu.data, "received wrong data on echo return path"
 
         info("send UI PDU with an MIU(IUT)+1 size information field")
         pdu.data = b'\xA5' * (self.iut_miu + 1)
-        assert socket.send(pdu), "error sending UI PDU"
+        assert socket.send(pdu.encode()), "error sending UI PDU"
         logical_data_link_wait_no_recv(self.dta_cl_echo_out, 5.0)
 
         info("test completed")
@@ -331,11 +331,11 @@ class TestProgram(CommandLineInterface):
         dsap, ssap = self.iut_cl_in_sap, self.lt_cl_in_sap
         pdu = nfc.llcp.pdu.UnnumberedInformation(dsap, ssap, data=b'SOT')
         info("send the start of test command")
-        assert socket.send(pdu), "error sending start of test command"
+        assert socket.send(pdu.encode()), "error sending start of test command"
 
         info("send UI PDU with %d octet information", self.iut_miu)
         pdu.data = b'\xA5' * self.iut_miu
-        assert socket.send(pdu), "error sending UI PDU"
+        assert socket.send(pdu.encode()), "error sending UI PDU"
 
         logical_data_link_wait_no_recv(socket, 5.0)
 
@@ -370,11 +370,11 @@ class TestProgram(CommandLineInterface):
         dsap, ssap = self.iut_cl_in_sap, self.lt_cl_in_sap
         pdu = nfc.llcp.pdu.UnnumberedInformation(dsap, ssap, data=b'SOT')
         info("send the start of test command")
-        assert socket.send(pdu), "error sending start of test command"
+        assert socket.send(pdu.encode()), "error sending start of test command"
 
         log.info("send UI PDU with %d+1 octet information field", self.iut_miu)
         pdu.data = b'\xA5' * (self.iut_miu + 1)
-        assert socket.send(pdu), "error sending UI PDU with excess SDU"
+        assert socket.send(pdu.encode()), "error sending UI PDU with excess SDU"
         logical_data_link_wait_no_recv(self.dta_cl_echo_out, 5.0)
 
         # TC Note: This part of the test case does not really make
@@ -383,7 +383,7 @@ class TestProgram(CommandLineInterface):
         # answer to be returned (there was nothing asked for).
         info("send SNL PDU with no content")
         snl_count = llc.pcnt.rcvd["SNL"]
-        socket.send(nfc.llcp.pdu.ServiceNameLookup(1, 1))
+        socket.send(nfc.llcp.pdu.ServiceNameLookup(1, 1).encode())
         log.info("- wait 5 seconds to not receive an SNL PDU")
         time.sleep(5)
         assert llc.pcnt.rcvd["SNL"] == snl_count, "received SNL PDU response"
@@ -481,7 +481,7 @@ class TestProgram(CommandLineInterface):
         info("send CONNECT PDU with payload '%s'", hexstr(data[x], ':'))
         pdu = {'ptype': 4, 'dsap': iut_co_in_sap, 'ssap': lt_co_in_sap}
         pdu = nfc.llcp.pdu.UnknownProtocolDataUnit(payload=data[x], **pdu)
-        send_socket.send(pdu)
+        send_socket.send(pdu.encode())
 
         pdu = raw_access_point_wait_recv(send_socket, timeout=5.0)
         assert pdu.name == "CC", "expected CC PDU but got %s" % pdu.name
@@ -490,7 +490,7 @@ class TestProgram(CommandLineInterface):
         data_link_connection_wait_no_recv(recv_socket, timeout=1.0)
 
         pdu = nfc.llcp.pdu.Disconnect(dsap=iut_co_in_sap, ssap=lt_co_in_sap)
-        send_socket.send(pdu)
+        send_socket.send(pdu.encode())
 
         pdu = raw_access_point_wait_recv(send_socket, timeout=5.0)
         assert pdu.name == "DM", "expected DM PDU but got %s" % pdu.name
@@ -518,7 +518,7 @@ class TestProgram(CommandLineInterface):
 
         info("connect-by-name to connection-mode echo server")
         pdu = nfc.llcp.pdu.Connect(1, lt_co_in_sap, sn=SN_CO_ECHO_IN)
-        send_socket.send(pdu)
+        send_socket.send(pdu.encode())
 
         info("waiting for data link connection confirmation")
         pdu = raw_access_point_wait_recv(send_socket, timeout=5.0)
@@ -538,7 +538,7 @@ class TestProgram(CommandLineInterface):
 
         info("disconnecting inbound connection")
         pdu = nfc.llcp.pdu.Disconnect(iut_co_in_sap, lt_co_in_sap)
-        send_socket.send(pdu)
+        send_socket.send(pdu.encode())
 
         pdu = raw_access_point_wait_recv(send_socket, timeout=5.0)
         assert pdu.name == "DM", "expected DM PDU but got %s" % pdu.name
@@ -573,7 +573,7 @@ class TestProgram(CommandLineInterface):
 
         info("connect-by-addr to connection-mode echo server")
         pdu = nfc.llcp.pdu.Connect(iut_co_in_sap, lt_co_in_sap)
-        send_socket.send(pdu)
+        send_socket.send(pdu.encode())
 
         info("waiting for data link connection confirmation")
         pdu = raw_access_point_wait_recv(send_socket, timeout=5.0)
@@ -588,7 +588,7 @@ class TestProgram(CommandLineInterface):
 
         info("disconnecting inbound connection")
         pdu = nfc.llcp.pdu.Disconnect(iut_co_in_sap, lt_co_in_sap)
-        send_socket.send(pdu)
+        send_socket.send(pdu.encode())
 
         pdu = raw_access_point_wait_recv(send_socket, timeout=5.0)
         assert pdu.name == "DM", "expected DM PDU but got %s" % pdu.name
@@ -611,7 +611,7 @@ class TestProgram(CommandLineInterface):
         send_socket.bind(self.lt_co_in_sap)
         
         pdu = nfc.llcp.pdu.Connect(31, self.lt_co_in_sap)
-        send_socket.send(pdu)
+        send_socket.send(pdu.encode())
 
         pdu = raw_access_point_wait_recv(send_socket)
         assert pdu.name == "DM", "expected DM PDU but got %s" % pdu.name
@@ -691,7 +691,7 @@ class TestProgram(CommandLineInterface):
         info("send CONNECT PDU with payload '%s'", hexstr(data[x], ':'))
         pdu = {'ptype': 0b0100, 'dsap': 1, 'ssap': socket.getsockname()}
         pdu = nfc.llcp.pdu.UnknownProtocolDataUnit(payload=data[x], **pdu)
-        socket.send(pdu)
+        socket.send(pdu.encode())
         
         pdu = raw_access_point_wait_recv(socket)
         assert pdu.name == "DM", "expected DM PDU but got %s" % pdu.name
@@ -788,7 +788,7 @@ class TestProgram(CommandLineInterface):
         info("send SNL PDU with payload '%s'", hexstr(data[x], ':'))
         pdu = {'ptype': 0b1001, 'dsap': 1, 'ssap': 1, 'payload': data[x]}
         pdu = nfc.llcp.pdu.UnknownProtocolDataUnit(**pdu)
-        socket.send(pdu)
+        socket.send(pdu.encode())
 
         if x == 4:
             raw_access_point_wait_no_recv(socket)
@@ -804,7 +804,7 @@ class TestProgram(CommandLineInterface):
         info("send SNL PDU to resolve urn:nfc:sn:dta-co-echo-in")
         pdu = {'ptype': 0b1001, 'dsap': 1, 'ssap': 1, 'payload': payload}
         pdu = nfc.llcp.pdu.UnknownProtocolDataUnit(**pdu)
-        socket.send(pdu)
+        socket.send(pdu.encode())
 
         pdu = raw_access_point_wait_recv(socket)
         assert pdu.name == "SNL", "expected SNL PDU not %s" % pdu.name
@@ -825,7 +825,7 @@ class TestProgram(CommandLineInterface):
 
         info("connect to echo server at sap %d", iut_co_in_sap)
         pdu = nfc.llcp.pdu.Connect(dsap=iut_co_in_sap, ssap=lt_co_in_sap)
-        send_socket.send(pdu)
+        send_socket.send(pdu.encode())
 
         pdu = raw_access_point_wait_recv(send_socket, timeout=5.0)
         assert pdu.name == "CC", "expected CC PDU but got %s" % pdu.name
@@ -834,7 +834,7 @@ class TestProgram(CommandLineInterface):
         data_link_connection_wait_no_recv(recv_socket, timeout=1.0)
 
         pdu = nfc.llcp.pdu.Disconnect(dsap=iut_co_in_sap, ssap=lt_co_in_sap)
-        send_socket.send(pdu)
+        send_socket.send(pdu.encode())
 
         pdu = raw_access_point_wait_recv(send_socket, timeout=5.0)
         assert pdu.name == "DM", "expected DM PDU but got %s" % pdu.name

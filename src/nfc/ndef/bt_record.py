@@ -31,10 +31,11 @@ from uuid import UUID
 from .record import Record
 from .error import *
 
+from binascii import hexlify, unhexlify
 
 class BluetoothConfigRecord(Record):
     def __init__(self, record=None):
-        Record.__init__(self, 'application/vnd.bluetooth.ep.oob')
+        Record.__init__(self, b'application/vnd.bluetooth.ep.oob')
         self.device_address = '00:00:00:00:00:00'
         self.eir = dict()
         if record is not None:
@@ -46,9 +47,9 @@ class BluetoothConfigRecord(Record):
     @property
     def data(self):
         f = io.BytesIO()
-        f.write(str(bytearray(reversed(self._bdaddr))))
+        f.write(bytes(bytearray(reversed(self._bdaddr))))
         for key, value in self.eir.items():
-            f.write(chr(1 + len(value)) + chr(key) + str(value))
+            f.write(struct.pack("B", 1 + len(value)) + struct.pack("B", key) + bytes(value))
         oob_length = 2 + f.tell()
         f.seek(0,0)
         return struct.pack('<H', oob_length) + f.read()
@@ -79,7 +80,7 @@ class BluetoothConfigRecord(Record):
 
     @device_address.setter
     def device_address(self, value):
-        self._bdaddr = bytearray(value.replace(':', '').decode("hex"))
+        self._bdaddr = bytearray(unhexlify(value.replace(':', '')))
         assert len(self._bdaddr) == 6
 
     @property
@@ -117,7 +118,7 @@ class BluetoothConfigRecord(Record):
         else:
             if len(value) != 16:
                 raise EncodeError("wrong length of simple pairing hash")
-            self.eir[0x0E] = str(bytearray(value))
+            self.eir[0x0E] = bytes(bytearray(value))
 
     @property
     def simple_pairing_rand(self):
@@ -140,7 +141,7 @@ class BluetoothConfigRecord(Record):
         else:
             if len(value) != 16:
                 raise EncodeError("wrong length of simple pairing randomizer")
-            self.eir[0x0F] = str(bytearray(value))
+            self.eir[0x0F] = bytes(bytearray(value))
 
     @property
     def service_class_uuid_list(self):
@@ -170,7 +171,7 @@ class BluetoothConfigRecord(Record):
         for item in value:
             uuid = UUID(item)
             if uuid.bytes[4:16] == bt_uuid.bytes[4:16]:
-                if uuid.bytes[0:2] == "\x00\x00":
+                if uuid.bytes[0:2] == b"\x00\x00":
                     self.eir[0x03] = self.eir.setdefault(0x03, '') + \
                         uuid.bytes[2:4][::-1]
                 else:
@@ -186,7 +187,7 @@ class BluetoothConfigRecord(Record):
         and transmitted as EIR type 0x0D in little endian byte
         order. Set to None if not received or not to be
         transmitted."""
-        try: return int(self.eir[0x0D][::-1].encode("hex"), 16)
+        try: return int(hexlify(self.eir[0x0D][::-1]), 16)
         except KeyError: return None
 
     @class_of_device.setter
@@ -212,10 +213,10 @@ class BluetoothConfigRecord(Record):
                 lines.append(("class of device", "{0:b}".format(cod)))
         if self.simple_pairing_hash:
             simple_pairing_hash = str(self.simple_pairing_hash)
-            lines.append(("pubkey hash", simple_pairing_hash.encode("hex")))
+            lines.append(("pubkey hash", hexlify(simple_pairing_hash)))
         if self.simple_pairing_rand:
             simple_pairing_rand = str(self.simple_pairing_rand)
-            lines.append(("randomizer", simple_pairing_rand.encode("hex")))
+            lines.append(("randomizer", hexlify(simple_pairing_rand)))
         for service_class_uuid in self.service_class_uuid_list:
             try: service_class = service_class_uuid_map[service_class_uuid]
             except KeyError: service_class = service_class_uuid

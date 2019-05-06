@@ -508,7 +508,7 @@ class Connect(ProtocolDataUnit):
             elif T == Parameter.RW:
                 connect_pdu.rw = V
             elif T == Parameter.SN:
-                connect_pdu.sn = str(V)
+                connect_pdu.sn = bytes(V)
             else:
                 log.warn("invalid TLV %r in CONNECT PDU", (T, L, V))
             offset, size = offset + 2 + L, size - 2 - L
@@ -800,8 +800,8 @@ class DataProtectionSetup(ProtocolDataUnit):
     def __str__(self):
         return super(DataProtectionSetup, self).__str__() + \
             " ECPK={0} RN={1}".format(
-                'None' if self.ecpk is None else str(self.ecpk).encode('hex'),
-                'None' if self.rn is None else str(self.rn).encode('hex'))
+                'None' if self.ecpk is None else hexlify(self.ecpk),
+                'None' if self.rn is None else hexlify(self.rn))
 
 
 # -----------------------------------------------------------------------------
@@ -895,7 +895,7 @@ class UnknownProtocolDataUnit(ProtocolDataUnit):
 
     def __str__(self):
         return (super(UnknownProtocolDataUnit, self).__str__()
-                + " PAYLOAD=" + hexlify(self.payload))
+                + " PAYLOAD={0}".format(hexlify(self.payload)))
 
 
 # -----------------------------------------------------------------------------

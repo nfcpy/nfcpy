@@ -29,7 +29,7 @@ def clf(mocker):
 
 @pytest.fixture()
 def target():
-    target = nfc.clf.RemoteTarget("212F")
+    target = nfc.clf.RemoteTarget(b"212F")
     target.sensf_res = HEX("01 0102030405060708 FFFFFFFFFFFFFFFF 12FC")
     return target
 
@@ -42,7 +42,7 @@ def tag(clf, target):
 
 
 def test_activate_with_wrong_idm_returns_none(clf):
-    target = nfc.clf.RemoteTarget("212F")
+    target = nfc.clf.RemoteTarget(b"212F")
     target.sensf_res = HEX("01 01FE000000000000 FFFFFFFFFFFFFFFF")
     assert nfc.tag.activate(clf, target) is None
 
@@ -780,7 +780,7 @@ def BLOCK_DATA(value):
 class TestTagEmulation:
     @pytest.fixture()
     def target(self):
-        target = nfc.clf.LocalTarget('212F')
+        target = nfc.clf.LocalTarget(b'212F')
         target.sensf_req = HEX('0012FC0103')
         target.sensf_res = HEX('0102FE010203040506FFFFFFFFFFFFFFFF12FC')
         target.tt3_cmd = HEX('0602fe010203040506010b00018000')

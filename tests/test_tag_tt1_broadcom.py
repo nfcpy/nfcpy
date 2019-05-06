@@ -30,7 +30,7 @@ def clf(mocker):
 
 @pytest.fixture()
 def target():
-    target = nfc.clf.RemoteTarget("106A")
+    target = nfc.clf.RemoteTarget(b"106A")
     target.sens_res = HEX("000C")
     target.rid_res = HEX("000001020304")
     return target

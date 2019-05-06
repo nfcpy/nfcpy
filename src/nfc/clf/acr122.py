@@ -151,15 +151,15 @@ class Chipset(pn532.Chipset):
 
         # read ACR122U firmware version string
         reader_version = self.ccid_xfr_block(bytearray.fromhex("FF00480000"))
-        if not reader_version.startswith("ACR122U"):
+        if not reader_version.startswith(b"ACR122U"):
             log.error("failed to retrieve ACR122U version string")
             raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
 
-        if int(chr(reader_version[7])) < 2:
+        if int(struct.pack("B", reader_version[7])) < 2:
             log.error("{0} not supported, need 2.x".format(reader_version[7:]))
             raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
 
-        log.debug("initialize " + str(reader_version))
+        log.debug("initialize %s", reader_version)
 
         # set icc power on
         log.debug("CCID ICC-POWER-ON")
@@ -224,7 +224,8 @@ class Chipset(pn532.Chipset):
         """Send a host command and return the chip response.
 
         """
-        log.log(logging.DEBUG-1, self.CMD[cmd_code]+" "+hexlify(cmd_data))
+        log.log(logging.DEBUG-1, "%s %s", self.CMD[cmd_code],
+                hexlify(cmd_data))
 
         frame = bytearray([0xD4, cmd_code]) + bytearray(cmd_data)
         frame = bytearray([0xFF, 0x00, 0x00, 0x00, len(frame)]) + frame

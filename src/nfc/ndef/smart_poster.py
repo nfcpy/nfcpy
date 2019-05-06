@@ -55,7 +55,7 @@ class SmartPosterRecord(Record):
     """
     def __init__(self, uri, title=None, icons=None, action='default',
                  resource_size=None, resource_type=None):
-        super(SmartPosterRecord, self).__init__('urn:nfc:wkt:Sp')
+        super(SmartPosterRecord, self).__init__(b'urn:nfc:wkt:Sp')
         self._title = dict()
         self.title = title if title else {}
         self.icons = icons if icons else {}
@@ -79,13 +79,13 @@ class SmartPosterRecord(Record):
         for lang, text in self.title.items():
             message.append(TextRecord(text=text, language=lang))
         for image_type, image_data in self.icons.items():
-            message.append(Record("image/"+image_type, data=image_data))
+            message.append(Record(b"image/"+image_type, data=image_data))
         if self._action >= 0:
-            message.append(Record("urn:nfc:wkt:act", data=chr(self._action)))
+            message.append(Record(b"urn:nfc:wkt:act", data=struct.pack("B", self._action)))
         if self._res_size:
             size = struct.pack('>L', self._res_size)
-            message.append(Record("urn:nfc:wkt:s", data=size))
-        return str(message)
+            message.append(Record(b"urn:nfc:wkt:s", data=size))
+        return message.encode()
 
     @data.setter
     def data(self, string):
@@ -94,19 +94,19 @@ class SmartPosterRecord(Record):
             f = io.BytesIO(string)
             while f.tell() < len(string):
                 record = Record(data=f)
-                if record.type == "urn:nfc:wkt:U":
+                if record.type == b"urn:nfc:wkt:U":
                     self.uri = UriRecord(record).uri
-                elif record.type == "urn:nfc:wkt:T":
+                elif record.type == b"urn:nfc:wkt:T":
                     record = TextRecord(record)
                     self.title[record.language] = record.text
-                elif record.type == "urn:nfc:wkt:act":
+                elif record.type == b"urn:nfc:wkt:act":
                     self._action = ord(record.data)
-                elif record.type == "urn:nfc:wkt:s":
+                elif record.type == b"urn:nfc:wkt:s":
                     self._res_size = struct.unpack('>L', record.data)
-                elif record.type == "urn:nfc:wkt:t":
+                elif record.type == b"urn:nfc:wkt:t":
                     self._res_type = record.data
-                elif record.type.startswith("image/"):
-                    image_type = record.type.replace("image/", "", 1)
+                elif record.type[:6] == b"image/":
+                    image_type = record.type[6:]
                     self.icons[image_type] = record.data
         else:
             log.error("nothing to parse")
@@ -125,7 +125,7 @@ class SmartPosterRecord(Record):
         except UnicodeDecodeError:
             raise ValueError("uri value must be an ascii string")
         except AttributeError:
-            raise TypeError("uri value must be a str type")
+            raise TypeError("uri value must be a bytes type")
 
     @property
     def title(self):

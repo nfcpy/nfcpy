@@ -478,7 +478,7 @@ class TestDevice(object):
             ACK(), RSP('4B 00'),                          # InListPassiveTarget
             ACK(), self.reg_rsp('26'),                    # ReadRegister
         ]
-        assert device.sense_tta(nfc.clf.RemoteTarget('106A')) is None
+        assert device.sense_tta(nfc.clf.RemoteTarget(b'106A')) is None
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
             CMD('4A 0100'),                               # InListPassiveTarget
             CMD('06 6339'),                               # ReadRegister
@@ -491,7 +491,7 @@ class TestDevice(object):
             ACK(), RSP('4B 01010c00b2565400'),            # InListPassiveTarget
             ACK(), RSP('41 001148b2565400'),              # InDataExchange
         ]
-        return device.sense_tta(nfc.clf.RemoteTarget('106A'))
+        return device.sense_tta(nfc.clf.RemoteTarget(b'106A'))
 
     def test_sense_tta_target_is_tt2(self, device):
         device.chipset.transport.read.side_effect = [
@@ -499,7 +499,7 @@ class TestDevice(object):
             ACK(), self.reg_rsp('FF'),                    # ReadRegister
             ACK(), RSP('09 00'),                          # WriteRegister
         ]
-        target = device.sense_tta(nfc.clf.RemoteTarget('106A'))
+        target = device.sense_tta(nfc.clf.RemoteTarget(b'106A'))
         assert isinstance(target, nfc.clf.RemoteTarget)
         assert target.sel_res == HEX('00')
         assert target.sdd_res == HEX('0416C6C2D73881')
@@ -509,7 +509,7 @@ class TestDevice(object):
         device.chipset.transport.read.side_effect = [
             ACK(), RSP('4B 0101004440070416c6c2d73881'),  # InListPassiveTarget
         ]
-        target = device.sense_tta(nfc.clf.RemoteTarget('106A'))
+        target = device.sense_tta(nfc.clf.RemoteTarget(b'106A'))
         assert isinstance(target, nfc.clf.RemoteTarget)
         assert target.sel_res == HEX('40')
         assert target.sdd_res == HEX('0416C6C2D73881')
@@ -517,7 +517,7 @@ class TestDevice(object):
 
     def test_sense_tta_unsupported_bitrate(self, device):
         with pytest.raises(ValueError) as excinfo:
-            device.sense_tta(nfc.clf.RemoteTarget('100A'))
+            device.sense_tta(nfc.clf.RemoteTarget(b'100A'))
         assert str(excinfo.value) == "unsupported bitrate 100A"
 
     @pytest.mark.parametrize("uid, initiator_data", [
@@ -530,7 +530,7 @@ class TestDevice(object):
             ACK(), RSP('4B 00'),                          # InListPassiveTarget
             ACK(), self.reg_rsp('26'),                    # ReadRegister
         ]
-        target = nfc.clf.RemoteTarget('106A', sel_req=HEX(uid))
+        target = nfc.clf.RemoteTarget(b'106A', sel_req=HEX(uid))
         assert device.sense_tta(target) is None
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
             CMD('4A 0100' + initiator_data),              # InListPassiveTarget
@@ -544,7 +544,7 @@ class TestDevice(object):
             ACK(), RSP('4B 01010c00b2565400'),            # InListPassiveTarget
             ACK(), RSP('41 01'),                          # InDataExchange
         ]
-        assert device.sense_tta(nfc.clf.RemoteTarget('106A')) is None
+        assert device.sense_tta(nfc.clf.RemoteTarget(b'106A')) is None
 
     def test_sense_tta_tt1_response_timeout(self, device):
         device.chipset.transport.read.side_effect = [
@@ -552,13 +552,13 @@ class TestDevice(object):
             ACK(), self.reg_rsp('93'),                    # ReadRegister
             ACK(), RSP('4B 00'),                          # InListPassiveTarget
         ]
-        assert device.sense_tta(nfc.clf.RemoteTarget('106A')) is None
+        assert device.sense_tta(nfc.clf.RemoteTarget(b'106A')) is None
 
     def test_sense_ttb_no_target_found(self, device):
         device.chipset.transport.read.side_effect = [
             ACK(), RSP('4B 00'),                          # InListPassiveTarget
         ]
-        assert device.sense_ttb(nfc.clf.RemoteTarget('106B')) is None
+        assert device.sense_ttb(nfc.clf.RemoteTarget(b'106B')) is None
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
             CMD('4A 010300'),                             # InListPassiveTarget
         ]]
@@ -570,7 +570,7 @@ class TestDevice(object):
             ACK(), RSP('43 00c2'),                        # InCommunicateThru
             ACK(), RSP('43 00' + sensb_res),              # InCommunicateThru
         ]
-        target = device.sense_ttb(nfc.clf.RemoteTarget('106B'))
+        target = device.sense_ttb(nfc.clf.RemoteTarget(b'106B'))
         assert isinstance(target, nfc.clf.RemoteTarget)
         assert target.sensb_res == HEX(sensb_res)
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
@@ -586,7 +586,7 @@ class TestDevice(object):
             ACK(), RSP('43 00c2'),                        # InCommunicateThru
             ACK(), RSP('43 01'),                          # InCommunicateThru
         ]
-        assert device.sense_ttb(nfc.clf.RemoteTarget('106B')) is None
+        assert device.sense_ttb(nfc.clf.RemoteTarget(b'106B')) is None
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
             CMD('4A 010300'),                             # InListPassiveTarget
             CMD(deselect_cmd),                            # InCommunicateThru
@@ -595,7 +595,7 @@ class TestDevice(object):
 
     def test_sense_ttb_unsupported_bitrate(self, device):
         with pytest.raises(ValueError) as excinfo:
-            device.sense_ttb(nfc.clf.RemoteTarget('100B'))
+            device.sense_ttb(nfc.clf.RemoteTarget(b'100B'))
         assert str(excinfo.value) == "unsupported bitrate 100B"
 
     def test_sense_ttf_no_target_found(self, device):
@@ -603,7 +603,7 @@ class TestDevice(object):
             ACK(), self.reg_rsp('03'),                    # ReadRegister
             ACK(), RSP('4B 00'),                          # InListPassiveTarget
         ]
-        assert device.sense_ttf(nfc.clf.RemoteTarget('212F')) is None
+        assert device.sense_ttf(nfc.clf.RemoteTarget(b'212F')) is None
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
             CMD('06 6304'),                               # ReadRegister
             CMD('4A 010100ffff0100'),                     # InListPassiveTarget
@@ -615,9 +615,9 @@ class TestDevice(object):
             ACK(), self.reg_rsp('03'),                    # ReadRegister
             ACK(), RSP('4B 0101 14' + sensf_res),         # InListPassiveTarget
         ]
-        target = device.sense_ttf(nfc.clf.RemoteTarget('212F'))
+        target = device.sense_ttf(nfc.clf.RemoteTarget(b'212F'))
         assert isinstance(target, nfc.clf.RemoteTarget)
-        assert target.brty == "212F"
+        assert target.brty == b"212F"
         assert target.sensf_res == HEX(sensf_res)
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
             CMD('06 6304'),                               # ReadRegister
@@ -630,7 +630,7 @@ class TestDevice(object):
             ACK(), RSP('33'),                             # RFConfiguration
             ACK(), RSP('4B 00'),                          # InListPassiveTarget
         ]
-        assert device.sense_ttf(nfc.clf.RemoteTarget('212F')) is None
+        assert device.sense_ttf(nfc.clf.RemoteTarget(b'212F')) is None
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
             CMD('06 6304'),                               # ReadRegister
             CMD('32 0101'),                               # RFConfiguration
@@ -639,7 +639,7 @@ class TestDevice(object):
 
     def test_sense_ttf_unsupported_bitrate(self, device):
         with pytest.raises(ValueError) as excinfo:
-            device.sense_ttf(nfc.clf.RemoteTarget('100F'))
+            device.sense_ttf(nfc.clf.RemoteTarget(b'100F'))
         assert str(excinfo.value) == "unsupported bitrate 100F"
 
     def test_sense_dep_no_target_found(self, device):
@@ -648,7 +648,7 @@ class TestDevice(object):
             ACK(), RSP('47 01'),                          # InJumpForPSL
             ACK(), RSP('09 00'),                          # WriteRegister
         ]
-        target = nfc.clf.RemoteTarget('106A', atr_req=atr_req)
+        target = nfc.clf.RemoteTarget(b'106A', atr_req=atr_req)
         assert device.sense_dep(target) is None
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
             CMD('46 01000230313233343536373839'),         # InJumpForPSL
@@ -660,7 +660,7 @@ class TestDevice(object):
             ACK(), RSP('47 02'),                          # InJumpForPSL
             ACK(), RSP('09 00'),                          # WriteRegister
         ]
-        target = nfc.clf.RemoteTarget('106A', atr_req=atr_req)
+        target = nfc.clf.RemoteTarget(b'106A', atr_req=atr_req)
         assert device.sense_dep(target) is None
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
             CMD('46 01000230313233343536373839'),         # InJumpForPSL
@@ -676,10 +676,10 @@ class TestDevice(object):
                        '020207ff 040164 070103'),         # InJumpForPSL
             ACK(), RSP('09 00'),                          # WriteRegister
         ]
-        target = nfc.clf.RemoteTarget('106A', atr_req=atr_req)
+        target = nfc.clf.RemoteTarget(b'106A', atr_req=atr_req)
         target = device.sense_dep(target)
         assert isinstance(target, nfc.clf.RemoteTarget)
-        assert target.brty == '106A'
+        assert target.brty == b'106A'
         assert target.atr_req == atr_req
         assert target.atr_res == HEX(
             'D501 66f6e98d1c13dfe56de4 0000000702'
@@ -783,7 +783,7 @@ class TestDevice(object):
             ACK(), RSP('33'),                             # RFConfiguration
             ACK(), RSP('43 %s' % err),                    # InCommunicateThru
         ]
-        target = nfc.clf.RemoteTarget('106A')
+        target = nfc.clf.RemoteTarget(b'106A')
         with pytest.raises(exc):
             device.send_cmd_recv_rsp(target, b'123', 1.0)
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
@@ -804,7 +804,7 @@ class TestDevice(object):
             ACK(), RSP('33'),                             # RFConfiguration
             ACK(), IOError(err, "test"),                  # InCommunicateThru
         ]
-        target = nfc.clf.RemoteTarget('106A')
+        target = nfc.clf.RemoteTarget(b'106A')
         with pytest.raises(exc):
             device.send_cmd_recv_rsp(target, b'123', 1.0)
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
@@ -844,7 +844,7 @@ class TestDevice(object):
             ACK(), RSP('09 00'),                          # WriteRegister
             ACK(), IOError(errno.ETIMEDOUT, ""),          # TgInitAsTarget
         ]
-        target = nfc.clf.LocalTarget('106A')
+        target = nfc.clf.LocalTarget(b'106A')
         target.sens_res = HEX("4400")
         target.sel_res = HEX("00")
         target.sdd_res = HEX("08010203")
@@ -855,13 +855,13 @@ class TestDevice(object):
             ACK(), RSP('09 00'),                          # WriteRegister
             ACK(), RSP('8D 00 30 00'),                    # TgInitAsTarget
         ]
-        target = nfc.clf.LocalTarget('106A')
+        target = nfc.clf.LocalTarget(b'106A')
         target.sens_res = HEX("4400")
         target.sel_res = HEX("00")
         target.sdd_res = HEX("08010203")
         target = device.listen_tta(target, 1.0)
         assert isinstance(target, nfc.clf.LocalTarget)
-        assert target.brty == '106A'
+        assert target.brty == b'106A'
         assert target.tt2_cmd == HEX('30 00')
         return target
 
@@ -872,13 +872,13 @@ class TestDevice(object):
             ACK(), RSP('91 00'),                        # TgResponseToInitiator
             ACK(), RSP('89 00 313233'),                 # TgGetInitiatorCommand
         ]
-        target = nfc.clf.LocalTarget('106A')
+        target = nfc.clf.LocalTarget(b'106A')
         target.sens_res = HEX("4400")
         target.sel_res = HEX("20")
         target.sdd_res = HEX("08010203")
         target = device.listen_tta(target, 1.0)
         assert isinstance(target, nfc.clf.LocalTarget)
-        assert target.brty == '106A'
+        assert target.brty == b'106A'
         assert target.tt4_cmd == b'123'
         device.chipset.transport.write.assert_any_call(CMD('90 0578807002'))
         return target
@@ -890,14 +890,14 @@ class TestDevice(object):
             ACK(), RSP('91 00'),                        # TgResponseToInitiator
             ACK(), RSP('89 00 313233'),                 # TgGetInitiatorCommand
         ]
-        target = nfc.clf.LocalTarget('106A')
+        target = nfc.clf.LocalTarget(b'106A')
         target.sens_res = HEX("4400")
         target.sel_res = HEX("20")
         target.sdd_res = HEX("08010203")
         target.rats_res = HEX("05 78 80 70 00")
         target = device.listen_tta(target, 1.0)
         assert isinstance(target, nfc.clf.LocalTarget)
-        assert target.brty == '106A'
+        assert target.brty == b'106A'
         assert target.tt4_cmd == b'123'
         device.chipset.transport.write.assert_any_call(CMD('90 0578807000'))
         return target
@@ -911,7 +911,7 @@ class TestDevice(object):
             ACK(), RSP('91 00'),                        # TgResponseToInitiator
             ACK(), IOError(errno.ETIMEDOUT, ""),        # TgInitAsTarget
         ]
-        target = nfc.clf.LocalTarget('106A')
+        target = nfc.clf.LocalTarget(b'106A')
         target.sens_res = HEX("4400")
         target.sel_res = HEX("20")
         target.sdd_res = HEX("08010203")
@@ -926,7 +926,7 @@ class TestDevice(object):
             ACK(), RSP('91 00'),                        # TgResponseToInitiator
             ACK(), RSP('89 01'),                        # TgGetInitiatorCommand
         ]
-        target = nfc.clf.LocalTarget('106A')
+        target = nfc.clf.LocalTarget(b'106A')
         target.sens_res = HEX("4400")
         target.sel_res = HEX("20")
         target.sdd_res = HEX("08010203")
@@ -942,7 +942,7 @@ class TestDevice(object):
             ACK(), RSP('89 00'),                        # TgGetInitiatorCommand
             ACK(), IOError(errno.ETIMEDOUT, ""),        # TgInitAsTarget
         ]
-        target = nfc.clf.LocalTarget('106A')
+        target = nfc.clf.LocalTarget(b'106A')
         target.sens_res = HEX("4400")
         target.sel_res = HEX("20")
         target.sdd_res = HEX("08010203")
@@ -957,13 +957,13 @@ class TestDevice(object):
             ACK(), RSP('91 00'),                        # TgResponseToInitiator
             ACK(), RSP('89 00 313233'),                 # TgGetInitiatorCommand
         ]
-        target = nfc.clf.LocalTarget('106A')
+        target = nfc.clf.LocalTarget(b'106A')
         target.sens_res = HEX("4400")
         target.sel_res = HEX("40")
         target.sdd_res = HEX("08010203")
         target = device.listen_tta(target, 1.0)
         assert isinstance(target, nfc.clf.LocalTarget)
-        assert target.brty == '106A'
+        assert target.brty == b'106A'
         assert target.atr_req == HEX('d4000000000000000000000000000000')
         return target
 
@@ -973,7 +973,7 @@ class TestDevice(object):
             ACK(), RSP('8D 00 E0 80'),                  # TgInitAsTarget
             ACK(), IOError(errno.ETIMEDOUT, ""),        # TgInitAsTarget
         ]
-        target = nfc.clf.LocalTarget('106A')
+        target = nfc.clf.LocalTarget(b'106A')
         target.sens_res = HEX("4400")
         target.sel_res = HEX("40")
         target.sdd_res = HEX("08010203")
@@ -984,7 +984,7 @@ class TestDevice(object):
         device.chipset.transport.read.side_effect = [
             ACK(), RSP('09 00'),                        # WriteRegister
         ]
-        target = nfc.clf.LocalTarget('106A')
+        target = nfc.clf.LocalTarget(b'106A')
         target.sens_res = HEX("4400")
         target.sel_res = HEX("40")
         target.sdd_res = HEX("08010203")
@@ -997,7 +997,7 @@ class TestDevice(object):
             ACK(), RSP('8D 11 00'),                     # TgInitAsTarget
             ACK(), IOError(errno.ETIMEDOUT, ""),        # TgInitAsTarget
         ]
-        target = nfc.clf.LocalTarget('106A')
+        target = nfc.clf.LocalTarget(b'106A')
         target.sens_res = HEX("4400")
         target.sel_res = HEX("40")
         target.sdd_res = HEX("08010203")
@@ -1009,7 +1009,7 @@ class TestDevice(object):
             ACK(), RSP('09 00'),                        # WriteRegister
             ACK(), IOError(errno.EIO, ""),              # TgInitAsTarget
         ]
-        target = nfc.clf.LocalTarget('106A')
+        target = nfc.clf.LocalTarget(b'106A')
         target.sens_res = HEX("4400")
         target.sel_res = HEX("40")
         target.sdd_res = HEX("08010203")
@@ -1018,13 +1018,13 @@ class TestDevice(object):
         assert device.chipset.transport.read.call_count == 4
 
     def test_listen_tta_unsupported_bitrate(self, device):
-        target = nfc.clf.LocalTarget('106B')
+        target = nfc.clf.LocalTarget(b'106B')
         with pytest.raises(nfc.clf.UnsupportedTargetError) as excinfo:
             device.listen_tta(target, 1.0)
         assert str(excinfo.value) == "unsupported bitrate/type: '106B'"
 
     def test_listen_tta_type_1_tag_not_supported(self, device):
-        target = nfc.clf.LocalTarget('106A')
+        target = nfc.clf.LocalTarget(b'106A')
         target.rid_res = HEX('00')
         with pytest.raises(nfc.clf.UnsupportedTargetError) as excinfo:
             device.listen_tta(target, 1.0)
@@ -1032,22 +1032,22 @@ class TestDevice(object):
             "listening for type 1 tag activation is not supported"
 
     @pytest.mark.parametrize("target, errstr", [
-        (nfc.clf.LocalTarget('106A'),
+        (nfc.clf.LocalTarget(b'106A'),
          "sens_res is required"),
-        (nfc.clf.LocalTarget('106A', sens_res=HEX('')),
+        (nfc.clf.LocalTarget(b'106A', sens_res=HEX('')),
          "sdd_res is required"),
-        (nfc.clf.LocalTarget('106A', sens_res=HEX(''), sdd_res=HEX('')),
+        (nfc.clf.LocalTarget(b'106A', sens_res=HEX(''), sdd_res=HEX('')),
          "sel_res is required"),
-        (nfc.clf.LocalTarget('106A', sens_res=HEX(''),
+        (nfc.clf.LocalTarget(b'106A', sens_res=HEX(''),
                              sdd_res=HEX(''), sel_res=HEX('')),
          "sens_res must be 2 byte"),
-        (nfc.clf.LocalTarget('106A', sens_res=HEX('0102'),
+        (nfc.clf.LocalTarget(b'106A', sens_res=HEX('0102'),
                              sdd_res=HEX(''), sel_res=HEX('')),
          "sdd_res must be 4 byte"),
-        (nfc.clf.LocalTarget('106A', sens_res=HEX('0102'),
+        (nfc.clf.LocalTarget(b'106A', sens_res=HEX('0102'),
                              sdd_res=HEX('01020304'), sel_res=HEX('')),
          "sel_res must be 1 byte"),
-        (nfc.clf.LocalTarget('106A', sens_res=HEX('0102'),
+        (nfc.clf.LocalTarget(b'106A', sens_res=HEX('0102'),
                              sdd_res=HEX('01020304'), sel_res=HEX('01')),
          "sdd_res[0] must be 08h"),
     ])
@@ -1058,7 +1058,7 @@ class TestDevice(object):
 
     def test_listen_ttb_not_supported(self, device):
         with pytest.raises(nfc.clf.UnsupportedTargetError) as excinfo:
-            device.listen_ttb(nfc.clf.LocalTarget('106B'), 1.0)
+            device.listen_ttb(nfc.clf.LocalTarget(b'106B'), 1.0)
         assert "does not support listen as Type B Target" in str(excinfo.value)
 
     def test_listen_ttf_not_activated(self, device):
@@ -1068,7 +1068,7 @@ class TestDevice(object):
             ACK(), self.reg_rsp('00 00 00 00'),           # ReadRegister
             ACK(), RSP('09 00'),                          # WriteRegister
         ]
-        target = nfc.clf.LocalTarget('212F')
+        target = nfc.clf.LocalTarget(b'212F')
         target.sensf_res = HEX("01 3132333435363738 FFFFFFFFFFFFFFFF 12FC")
         assert device.listen_ttf(target, 0.001) is None
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
@@ -1095,11 +1095,11 @@ class TestDevice(object):
             ACK(), self.reg_rsp('0a003132333435363738'),  # ReadRegister
         ]
         sensf_res = HEX("01 3132333435363738 FFFFFFFFFFFFFFFF 12FC")
-        target = nfc.clf.LocalTarget('212F')
+        target = nfc.clf.LocalTarget(b'212F')
         target.sensf_res = sensf_res
         target = device.listen_ttf(target, 1.0)
         assert isinstance(target, nfc.clf.LocalTarget)
-        assert target.brty == "212F"
+        assert target.brty == b"212F"
         assert target.sensf_res == sensf_res
         assert target.tt3_cmd == HEX('003132333435363738')
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
@@ -1135,7 +1135,7 @@ class TestDevice(object):
             ACK(), RSP('09 00'),                          # WriteRegister
         ]
         sensf_res = HEX("01 3132333435363738 FFFFFFFFFFFFFFFF 12FC")
-        target = nfc.clf.LocalTarget('212F')
+        target = nfc.clf.LocalTarget(b'212F')
         target.sensf_res = sensf_res
         assert device.listen_ttf(target, 0.001) is None
         assert device.chipset.transport.write.mock_calls == [call(_) for _ in [
@@ -1158,15 +1158,15 @@ class TestDevice(object):
         ]]
 
     def test_listen_ttf_unsupported_bitrate(self, device):
-        target = nfc.clf.LocalTarget('106A')
+        target = nfc.clf.LocalTarget(b'106A')
         with pytest.raises(nfc.clf.UnsupportedTargetError) as excinfo:
             device.listen_ttf(target, 1.0)
         assert str(excinfo.value) == "unsupported bitrate/type: '106A'"
 
     @pytest.mark.parametrize("target, errstr", [
-        (nfc.clf.LocalTarget('212F'),
+        (nfc.clf.LocalTarget(b'212F'),
          "sensf_res is required"),
-        (nfc.clf.LocalTarget('424F', sensf_res=b''),
+        (nfc.clf.LocalTarget(b'424F', sensf_res=b''),
          "sensf_res must be 19 byte"),
     ])
     def test_listen_ttf_target_value_error(self, device, target, errstr):
@@ -1208,7 +1208,7 @@ class TestDevice(object):
         target.atr_res = HEX(atr_res)
         target = device.listen_dep(target, 1.0)
         assert isinstance(target, nfc.clf.LocalTarget)
-        assert target.brty == "106A"
+        assert target.brty == b"106A"
         assert target.sensf_res is None
         assert target.sens_res == HEX("0101")
         assert target.sel_res == HEX("40")
@@ -1241,7 +1241,7 @@ class TestDevice(object):
         target.atr_res = HEX(atr_res)
         target = device.listen_dep(target, 1.0)
         assert isinstance(target, nfc.clf.LocalTarget)
-        assert target.brty == "424F"
+        assert target.brty == b"424F"
         assert target.sensf_res == HEX(sensf_res)
         assert target.sens_res is None
         assert target.sel_res is None
@@ -1281,7 +1281,7 @@ class TestDevice(object):
         target.atr_res = HEX(atr_res)
         target = device.listen_dep(target, 1.0)
         assert isinstance(target, nfc.clf.LocalTarget)
-        assert target.brty == "424F"
+        assert target.brty == b"424F"
         assert target.atr_req == HEX(atr_req)
         assert target.atr_res == HEX(atr_res)
         assert target.psl_req == HEX(psl_req)
@@ -1321,7 +1321,7 @@ class TestDevice(object):
         target.atr_res = HEX(atr_res)
         target = device.listen_dep(target, 1.0)
         assert isinstance(target, nfc.clf.LocalTarget)
-        assert target.brty == "424F"
+        assert target.brty == b"424F"
         assert target.atr_req == HEX(atr_req)
         assert target.atr_res == HEX(atr_res)
         assert target.psl_req == HEX(psl_req)

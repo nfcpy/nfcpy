@@ -45,7 +45,7 @@ class HandoverClient(object):
         socket = nfc.llcp.Socket(self.llc, nfc.llcp.DATA_LINK_CONNECTION)
         socket.setsockopt(nfc.llcp.SO_RCVBUF, recv_buf)
         socket.setsockopt(nfc.llcp.SO_RCVMIU, recv_miu)
-        socket.connect("urn:nfc:sn:handover")
+        socket.connect(b"urn:nfc:sn:handover")
         server = socket.getpeername()
         log.debug("handover client connected to remote sap {0}".format(server))
         self.socket = socket
@@ -61,7 +61,7 @@ class HandoverClient(object):
         log.debug("sending '{0}' message".format(message.type))
         send_miu = self.socket.getsockopt(nfc.llcp.SO_SNDMIU)
         try:
-            data = str(message)
+            data = message.encode()
         except nfc.llcp.EncodeError as e:
             log.error("message encoding failed: {0}".format(e))
         else:
@@ -78,7 +78,7 @@ class HandoverClient(object):
     def recv(self, timeout=None):
         """Receive a handover select message from the remote server."""
         message = self._recv(timeout)
-        if message and message.type == "urn:nfc:wkt:Hs":
+        if message and message.type == b"urn:nfc:wkt:Hs":
             log.debug("received '{0}' message".format(message.type))
             return nfc.ndef.HandoverSelectMessage(message)
         else:

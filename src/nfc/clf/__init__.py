@@ -29,17 +29,25 @@ import re
 import time
 import errno
 import threading
-
+from binascii import hexlify
 import sys
-if sys.version_info[0] == 2:
-    range = xrange  # noqa: F821
-
 import logging
 log = logging.getLogger(__name__)
 
+if sys.version_info[0] == 2:
+    range = xrange  # noqa: F821
+    binary_type = (bytearray, str)
+
+    hexstring = hexlify
+else:
+    binary_type = (bytearray, bytes)
+
+    def hexstring(b):
+        return hexlify(b).decode('ascii')
+
 
 def print_data(data):
-    return 'None' if data is None else str(data).encode("hex")
+    return 'None' if data is None else hexstring(data)
 
 
 class ContactlessFrontend(object):
@@ -537,7 +545,7 @@ class ContactlessFrontend(object):
                     return True
 
             rdwr_options = dict(rdwr_options)
-            rdwr_options.setdefault('targets', ['106A', '106B', '212F'])
+            rdwr_options.setdefault('targets', [b'106A', b'106B', b'212F'])
             rdwr_options.setdefault('on-startup', lambda targets: targets)
             rdwr_options.setdefault('on-discover', on_discover)
             rdwr_options.setdefault('on-connect', lambda tag: True)
@@ -848,11 +856,11 @@ class ContactlessFrontend(object):
                     try:
                         if target.atr_req is not None:
                             self.target = sense_dep(target)
-                        elif target.brty.endswith('A'):
+                        elif target.brty.endswith(b'A'):
                             self.target = sense_tta(target)
-                        elif target.brty.endswith('B'):
+                        elif target.brty.endswith(b'B'):
                             self.target = sense_ttb(target)
-                        elif target.brty.endswith('F'):
+                        elif target.brty.endswith(b'F'):
                             self.target = sense_ttf(target)
                         else:
                             info = "unknown technology type in %r"
@@ -1009,13 +1017,13 @@ class ContactlessFrontend(object):
             if target.atr_res is not None:
                 log.debug(info, timeout, "DEP")
                 self.target = listen_dep(target, timeout)
-            elif target.brty in ('106A', '212A', '424A'):
+            elif target.brty in (b'106A', b'212A', b'424A'):
                 log.debug(info, timeout, target)
                 self.target = listen_tta(target, timeout)
-            elif target.brty in ('106B', '212B', '424B', '848B'):
+            elif target.brty in (b'106B', b'212B', b'424B', b'848B'):
                 log.debug(info, timeout, target)
                 self.target = listen_ttb(target, timeout)
-            elif target.brty in ('212F', '424F'):
+            elif target.brty in (b'212F', b'424F'):
                 log.debug(info, timeout, target)
                 self.target = listen_ttf(target, timeout)
             else:
@@ -1118,8 +1126,8 @@ class Target(object):
             if name.startswith('_'):
                 continue
             value = self.__dict__[name]
-            if isinstance(value, (bytearray, str)):
-                value = str(value).encode("hex").upper()
+            if isinstance(value, binary_type):
+                value = hexstring(value).upper()
             attrs.append("{0}={1}".format(name, value))
         return "{brty} {attrs}".format(brty=self.brty, attrs=' '.join(attrs))
 
@@ -1133,7 +1141,7 @@ class RemoteTarget(Target):
     to None.
 
     """
-    brty_pattern = re.compile(r'(\d+[A-Z])(?:/(\d+[A-Z])|.*)')
+    brty_pattern = re.compile(b'(\\d+[A-Z])(?:/(\\d+[A-Z])|.*)')
 
     def __init__(self, brty, **kwargs):
         super(RemoteTarget, self).__init__(**kwargs)
@@ -1142,7 +1150,7 @@ class RemoteTarget(Target):
     @property
     def brty(self):
         """A string that combines bitrate and technology type, e.g. '106A'."""
-        return "{0}".format(self._brty_send)
+        return self._brty_send
 
     @brty.setter
     def brty(self, value):
@@ -1172,16 +1180,16 @@ class LocalTarget(Target):
     to None.
 
     """
-    def __init__(self, brty='106A', **kwargs):
+    def __init__(self, brty=b'106A', **kwargs):
         super(LocalTarget, self).__init__(**kwargs)
         self.brty = brty
 
     @property
     def brty(self):
         """A string that combines bitrate and technology type, e.g. '106A'."""
-        return ("{0}".format(self._brty_send)
+        return (self._brty_send
                 if self._brty_send == self._brty_recv else
-                "{0}/{1}".format(self._brty_send, self._brty_recv))
+                self._brty_send + b'/' + self._brty_recv)
 
     @brty.setter
     def brty(self, value):

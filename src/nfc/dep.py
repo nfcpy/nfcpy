@@ -25,6 +25,8 @@ import nfc.clf
 import os
 import time
 import collections
+from binascii import hexlify
+from struct import pack
 
 import logging
 log = logging.getLogger(__name__)
@@ -54,8 +56,8 @@ class DataExchangeProtocol(object):
     def __init__(self, clf):
         self.pcnt = DataExchangeProtocol.Counter()
         self.clf = clf
-        self.gbi = ""
-        self.gbt = ""
+        self.gbi = b""
+        self.gbt = b""
 
     @property
     def general_bytes(self):
@@ -121,7 +123,7 @@ class Initiator(DataExchangeProtocol):
 
         if self.target is None and self.acm is True:
             log.debug("searching active communication mode target at 106A")
-            tg = nfc.clf.RemoteTarget("106A", atr_req=atr_req.encode())
+            tg = nfc.clf.RemoteTarget(b"106A", atr_req=atr_req.encode())
             try:
                 self.target = self.clf.sense(tg, iterations=2, interval=0.1)
             except nfc.clf.UnsupportedTargetError:
@@ -136,14 +138,14 @@ class Initiator(DataExchangeProtocol):
 
         if self.target is None:
             log.debug("searching passive communication mode target at 106A")
-            target = nfc.clf.RemoteTarget("106A")
+            target = nfc.clf.RemoteTarget(b"106A")
             target = self.clf.sense(target, iterations=2, interval=0.1)
             if target and target.sel_res and bool(target.sel_res[0] & 0x40):
                 self.target = target
 
         if self.target is None and self.brs > 0:
             log.debug("searching passive communication mode target at 212F")
-            target = nfc.clf.RemoteTarget("212F", sensf_req=b'\0\xFF\xFF\0\0')
+            target = nfc.clf.RemoteTarget(b"212F", sensf_req=b'\0\xFF\xFF\0\0')
             target = self.clf.sense(target, iterations=2, interval=0.1)
             if target and target.sensf_res.startswith(b'\1\1\xFE'):
                 atr_req.nfcid3 = target.sensf_res[1:9] + b'ST'
@@ -159,7 +161,7 @@ class Initiator(DataExchangeProtocol):
                 return None
 
         if self.target and atr_res:
-            if self.brs > ('106A', '212F', '424F').index(self.target.brty):
+            if self.brs > (b'106A', b'212F', b'424F').index(self.target.brty):
                 try:
                     psl_res = self.send_req_recv_res(psl_req, 0.1)
                 except nfc.clf.CommunicationError:
@@ -167,7 +169,7 @@ class Initiator(DataExchangeProtocol):
                 if psl_res is None:
                     log.debug("NFC-DEP Parameter Selection failed")
                     return None
-                self.target.brty = ('212F', '424F')[self.brs-1]
+                self.target.brty = (b'212F', b'424F')[self.brs-1]
 
             self.rwt = (4096/13.56E6
                         * 2**(atr_res.wt if atr_res.wt < 15 else 14))
@@ -188,7 +190,7 @@ class Initiator(DataExchangeProtocol):
             return
         else:
             if res.did != req.did:
-                log.error("target returned wrong DID in " + res.PDU_NAME)
+                log.error("target returned wrong DID in %s", res.PDU_NAME)
         finally:
             log.debug("packets {0}".format(self.pcnt))
 
@@ -269,7 +271,7 @@ class Initiator(DataExchangeProtocol):
             self.pni = (self.pni + 1) & 0x3
 
         # log.debug("dep raw << " + str(recv_data).encode("hex"))
-        return str(recv_data)
+        return bytes(recv_data)
 
     def send_dep_req_recv_dep_res(self, req, rwt, timeout):
         def NAK(pni, did, nad):
@@ -371,13 +373,13 @@ class Initiator(DataExchangeProtocol):
 
     def encode_frame(self, packet):
         frame = packet.encode()
-        frame = chr(len(frame) + 1) + frame
-        if self.target.brty == '106A':
-            frame = '\xF0' + frame
+        frame = pack("B", len(frame) + 1) + frame
+        if self.target.brty == b'106A':
+            frame = b'\xF0' + frame
         return frame
 
     def decode_frame(self, frame):
-        if self.target.brty == '106A' and frame.pop(0) != 0xF0:
+        if self.target.brty == b'106A' and frame.pop(0) != 0xF0:
             error = "first NFC-DEP frame byte must be F0h for 106A"
             raise nfc.clf.ProtocolError(error)
         if len(frame) != frame.pop(0):
@@ -420,12 +422,12 @@ class Target(DataExchangeProtocol):
 
         if timeout is None:
             timeout = 1.0
-        gbt = options.get('gbt', '')[0:47]
+        gbt = options.get('gbt', b'')[0:47]
         lrt = min(max(0, options.get('lrt', 3)), 3)
         rwt = min(max(0, options.get('rwt', 8)), 14)
 
         pp = (lrt << 4) | (bool(gbt) << 1) | int(bool(self.nad))
-        nfcid3t = bytearray.fromhex("01FE") + os.urandom(6) + "ST"
+        nfcid3t = bytearray.fromhex("01FE") + os.urandom(6) + b"ST"
         atr_res = ATR_RES(nfcid3t, 0, 0, 0, rwt, pp, gbt)
         atr_res = atr_res.encode()
 
@@ -449,8 +451,8 @@ class Target(DataExchangeProtocol):
             self.rwt = 4096/13.56E6 * pow(2, rwt)
             self.did = atr_req.did if atr_req.did > 0 else None
             self.acm = not (target.sens_res or target.sensf_res)
-            self.cmd = chr(len(target.dep_req)+1) + target.dep_req
-            if target.brty == "106A":
+            self.cmd = pack("B", len(target.dep_req)+1) + target.dep_req
+            if target.brty == b"106A":
                 self.cmd = b"\xF0" + self.cmd
             self.target = target
 
@@ -555,7 +557,7 @@ class Target(DataExchangeProtocol):
                 raise nfc.clf.ProtocolError("wrong NFC-DEP packet number")
 
         recv_data += req.data
-        return str(recv_data)
+        return bytes(recv_data)
 
     def send_timeout_extension(self, rtox):
         def RTOX(rtox, did, nad):
@@ -637,13 +639,13 @@ class Target(DataExchangeProtocol):
 
     def encode_frame(self, packet):
         frame = packet.encode()
-        frame = chr(len(frame) + 1) + frame
-        if self.target.brty == '106A':
-            frame = '\xF0' + frame
+        frame = pack("B", len(frame) + 1) + frame
+        if self.target.brty == b'106A':
+            frame = b'\xF0' + frame
         return frame
 
     def decode_frame(self, frame):
-        if self.target.brty == '106A' and frame.pop(0) != 0xF0:
+        if self.target.brty == b'106A' and frame.pop(0) != 0xF0:
             error = "first NFC-DEP frame byte must be F0h for 106A"
             raise nfc.clf.ProtocolError(error)
         if len(frame) != frame.pop(0):
@@ -663,7 +665,7 @@ class Target(DataExchangeProtocol):
 #
 class ATR_REQ_RES(object):
     def __str__(self):
-        nfcid3, gb = [str(ba).encode("hex") for ba in [self.nfcid3, self.gb]]
+        nfcid3, gb = [hexlify(ba) for ba in [self.nfcid3, self.gb]]
         return self.PDU_SHOW.format(self=self, nfcid3=nfcid3, gb=gb)
 
     @property
@@ -803,7 +805,7 @@ class DEP_REQ_RES(object):
         self.data = bytearray() if data is None else data
 
     def __str__(self):
-        data = str(self.data).encode("hex")
+        data = hexlify(self.data)
         return self.PDU_SHOW.format(self=self, data=data)
 
     @classmethod
@@ -823,7 +825,7 @@ class DEP_REQ_RES(object):
     def encode(self):
         pfb = self.pfb
         pfb = (pfb.fmt << 4) | (pfb.nad << 3) | (pfb.did << 2) | (pfb.pni)
-        data = self.PDU_CODE + chr(pfb)
+        data = self.PDU_CODE + pack("B", pfb)
         if self.pfb.did:
             data.append(self.did)
         if self.pfb.nad:
@@ -857,7 +859,8 @@ class DSL_REQ_RES(object):
             return cls(data[2] if len(data) == 3 else None)
 
     def encode(self):
-        return self.PDU_CODE + ('' if self.did is None else chr(self.did))
+        return self.PDU_CODE \
+            + (b'' if self.did is None else pack("B", self.did))
 
 
 class DSL_REQ(DSL_REQ_RES):

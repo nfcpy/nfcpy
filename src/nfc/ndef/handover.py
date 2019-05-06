@@ -33,15 +33,22 @@ from .error import *
 from .bt_record import BluetoothConfigRecord
 from .wifi_record import WifiConfigRecord
 
+import sys
+if sys.version_info[0] == 2:
+    itob = str
+else:
+    def itob(i):
+        return str(i).encode('ascii')
+
 def parse_carrier_structure(ac_record, records):
     carrier_record = records.get(ac_record.carrier_data_reference)
     if carrier_record is None:
         s = "carrier data reference {0} links to nowhere"
         log.warning(s.format(ac_record.carrier_data_reference))
         raise DecodeError("orphaned carrier data reference")
-    if carrier_record.type == "urn:nfc:wkt:Hc":
+    if carrier_record.type == b"urn:nfc:wkt:Hc":
         carrier_record = HandoverCarrierRecord(carrier_record)
-    elif carrier_record.type == "application/vnd.bluetooth.ep.oob":
+    elif carrier_record.type == b"application/vnd.bluetooth.ep.oob":
         carrier_record = BluetoothConfigRecord(carrier_record)
     carrier = Carrier(carrier_record, ac_record.carrier_power_state)
     for aux_data_ref in ac_record.auxiliary_data_reference_list:
@@ -87,8 +94,8 @@ class HandoverRequestMessage(object):
         if message is not None and version is not None:
             raise ValueError("only one of message or version argument allowed")
         
-        self._name = ''
-        self._type = 'urn:nfc:wkt:Hr'
+        self._name = b''
+        self._type = b'urn:nfc:wkt:Hr'
         self._carriers = list()
         self._nonce = None
         
@@ -106,9 +113,9 @@ class HandoverRequestMessage(object):
             major, minor = [int(c) for c in version.split('.')]
             if major != 1 or minor not in range(16):
                 raise ValueError("version not in range 1.0 to 1.15")
-            self._version = Version(chr(major << 4 | minor))
+            self._version = Version(struct.pack("B", major << 4 | minor))
 
-    def __str__(self):
+    def encode(self):
         message = Message(HandoverRequestRecord())
         message[0].name = self.name
         message[0].version = self.version
@@ -116,15 +123,15 @@ class HandoverRequestMessage(object):
         for cref, carrier in enumerate(self.carriers):
             ac = AlternativeCarrier()
             ac.carrier_power_state = carrier.power_state
-            ac.carrier_data_reference = str(cref)
+            ac.carrier_data_reference = itob(cref)
             carrier.record.name = ac.carrier_data_reference
             message.append(carrier.record)
             for aref, aux in enumerate(carrier.auxiliary_data_records):
-                aux.name = "aux"+str(aref)
+                aux.name = b"aux"+itob(aref)
                 message.append(aux)
                 ac.auxiliary_data_reference_list.append(aux.name)
             message[0].carriers.append(ac)
-        return str(message)
+        return message.encode()
         
     @property
     def type(self):
@@ -200,15 +207,15 @@ class HandoverRequestMessage(object):
         for index, carrier in enumerate(self.carriers):
             lines.append(("carrier {0}:".format(index+1),))
             lines.append((indent + "power state", carrier.power_state))
-            if carrier.record.type == "urn:nfc:wkt:Hc":
+            if carrier.record.type == b"urn:nfc:wkt:Hc":
                 carrier_type = carrier.record.carrier_type
                 carrier_data = carrier.record.carrier_data
                 lines.append((indent + "carrier type", carrier_type))
                 lines.append((indent + "carrier data", repr(carrier_data)))
             else:
-                if carrier.type == "application/vnd.bluetooth.ep.oob":
+                if carrier.type == b"application/vnd.bluetooth.ep.oob":
                     carrier_record = BluetoothConfigRecord(carrier.record)
-                elif carrier.type == "application/vnd.wfa.wsc":
+                elif carrier.type == b"application/vnd.wfa.wsc":
                     carrier_record = WifiConfigRecord(carrier.record)
                 else:
                     carrier_record = carrier.record
@@ -229,7 +236,7 @@ class HandoverRequestMessage(object):
 # ------------------------------------------------------- HandoverRequestRecord
 class HandoverRequestRecord(Record):
     def __init__(self, record=None):
-        super(HandoverRequestRecord, self).__init__('urn:nfc:wkt:Hr')
+        super(HandoverRequestRecord, self).__init__(b'urn:nfc:wkt:Hr')
         self.version = Version() #: Version of the handover request record.
         self.nonce = None        #: Random number for collision resolution.
         self.carriers = []       #: Alternative carrier information list.
@@ -242,13 +249,13 @@ class HandoverRequestRecord(Record):
     @property
     def data(self):
         msg = Message()
-        if self.version >= Version('\x12'):
+        if self.version >= Version(b'\x12'):
             if self.nonce is None:
                 raise EncodeError("collision resolution required since V1.2")
             crn = struct.pack(">H", self.nonce)
-            msg.append(Record("urn:nfc:wkt:cr", data=crn))
+            msg.append(Record(b"urn:nfc:wkt:cr", data=crn))
         for carrier in self.carriers:
-            msg.append(Record('urn:nfc:wkt:ac', data=str(carrier)))
+            msg.append(Record(b'urn:nfc:wkt:ac', data=carrier.encode()))
         return str(self.version) + str(msg)
 
     @data.setter
@@ -259,16 +266,16 @@ class HandoverRequestRecord(Record):
             self.version = Version(f.read(1))
             if self.version.major != 1:
                 raise DecodeError("unsupported major version")
-            if self.version >= Version('\x12'):
+            if self.version >= Version(b'\x12'):
                 record = Record(data=f)
-                if record.type == "urn:nfc:wkt:cr":
+                if record.type == b"urn:nfc:wkt:cr":
                     self.nonce = struct.unpack(">H", record.data)[0]
                 else:
                     s = "cr record is required for version {v.major}.{v.minor}"
                     raise FormatError(s.format(v=self.version))
             while f.tell() < len(string):
                 record = Record(data=f)
-                if record.type == 'urn:nfc:wkt:ac':
+                if record.type == b'urn:nfc:wkt:ac':
                     carrier = AlternativeCarrier(record.data)
                     self.carriers.append(carrier)
                 else:
@@ -331,8 +338,8 @@ class HandoverSelectMessage(object):
         if message is not None and version is not None:
             raise ValueError("only one of message or version argument allowed")
         
-        self._name = ''
-        self._type = 'urn:nfc:wkt:Hs'
+        self._name = b''
+        self._type = b'urn:nfc:wkt:Hs'
         self._carriers = list()
         self._error = HandoverError()
         if message is not None:
@@ -348,11 +355,11 @@ class HandoverSelectMessage(object):
             major, minor = [int(c) for c in version.split('.')]
             if major != 1 or minor not in range(16):
                 raise ValueError("version not in range 1.0 to 1.15")
-            self._version = Version(chr(major << 4 | minor))
+            self._version = Version(pack("B", major << 4 | minor))
         else:
             raise TypeError("either message or version arg must be given")
 
-    def __str__(self):
+    def encode(self):
         message = Message(HandoverSelectRecord())
         message[0].name = self.name
         message[0].version = self.version
@@ -360,15 +367,15 @@ class HandoverSelectMessage(object):
         for cref, carrier in enumerate(self.carriers):
             ac = AlternativeCarrier()
             ac.carrier_power_state = carrier.power_state
-            ac.carrier_data_reference = str(cref)
+            ac.carrier_data_reference = itob(cref)
             carrier.record.name = ac.carrier_data_reference
             message.append(carrier.record)
             for aref, aux in enumerate(carrier.auxiliary_data_records):
-                aux.name = "aux"+str(aref)
+                aux.name = b"aux"+itob(aref)
                 message.append(aux)
                 ac.auxiliary_data_reference_list.append(aux.name)
             message[0].carriers.append(ac)
-        return str(message)
+        return message.encode()
         
     @property
     def type(self):
@@ -441,15 +448,15 @@ class HandoverSelectMessage(object):
         for index, carrier in enumerate(self.carriers):
             lines.append(("carrier {0}:".format(index+1),))
             lines.append((indent + "power state", carrier.power_state))
-            if carrier.record.type == "urn:nfc:wkt:Hc":
+            if carrier.record.type == b"urn:nfc:wkt:Hc":
                 carrier_type = carrier.record.carrier_type
                 carrier_data = carrier.record.carrier_data
                 lines.append((indent + "carrier type", carrier_type))
                 lines.append((indent + "carrier data", repr(carrier_data)))
             else:
-                if carrier.type == "application/vnd.bluetooth.ep.oob":
+                if carrier.type == b"application/vnd.bluetooth.ep.oob":
                     carrier_record = BluetoothConfigRecord(carrier.record)
-                elif carrier.type == "application/vnd.wfa.wsc":
+                elif carrier.type == b"application/vnd.wfa.wsc":
                     carrier_record = WifiConfigRecord(carrier.record)
                 else:
                     carrier_record = carrier.record
@@ -470,7 +477,7 @@ class HandoverSelectMessage(object):
 # -------------------------------------------------------- HandoverSelectRecord
 class HandoverSelectRecord(Record):
     def __init__(self, record=None):
-        super(HandoverSelectRecord, self).__init__('urn:nfc:wkt:Hs')
+        super(HandoverSelectRecord, self).__init__(b'urn:nfc:wkt:Hs')
         self.version = Version()     #: Version of the handover request record.
         self.carriers = []           #: Alternative carrier information list.
         self.error = HandoverError() #: Handover select error reason and data.
@@ -484,9 +491,9 @@ class HandoverSelectRecord(Record):
     def data(self):
         msg = Message()
         for carrier in self.carriers:
-            msg.append(Record('urn:nfc:wkt:ac', data=str(carrier)))
+            msg.append(Record(b'urn:nfc:wkt:ac', data=carrier.encode()))
         if self.error.reason is not None:
-            msg.append(Record("urn:nfc:wkt:err", data=str(self.error)))
+            msg.append(Record(b"urn:nfc:wkt:err", data=self.error.encode()))
         return str(self.version) + str(msg)
 
     @data.setter
@@ -499,10 +506,10 @@ class HandoverSelectRecord(Record):
                 raise DecodeError("unsupported major version")
             while f.tell() < len(string):
                 record = Record(data=f)
-                if record.type == 'urn:nfc:wkt:ac':
+                if record.type == b'urn:nfc:wkt:ac':
                     carrier = AlternativeCarrier(record.data)
                     self.carriers.append(carrier)
-                elif record.type == 'urn:nfc:wkt:err':
+                elif record.type == b'urn:nfc:wkt:err':
                     self.error = HandoverError(record.data)
                 else:
                     s = "skip unknown local record {0}"
@@ -545,7 +552,7 @@ class HandoverCarrierRecord(Record):
     >>> nfc.ndef.HandoverCarrierRecord('application/vnd.bluetooth.ep.oob')
     """
     def __init__(self, carrier_type, carrier_data=None):
-        super(HandoverCarrierRecord, self).__init__('urn:nfc:wkt:Hc')
+        super(HandoverCarrierRecord, self).__init__(b'urn:nfc:wkt:Hc')
         if isinstance(carrier_type, Record):
             record = carrier_type
             if record.type == self.type:
@@ -555,14 +562,14 @@ class HandoverCarrierRecord(Record):
                 raise ValueError("record type mismatch")
         else:
             self._carrier_type = carrier_type
-            self._carrier_data = '' if carrier_data is None else carrier_data
+            self._carrier_data = b'' if carrier_data is None else carrier_data
 
     @property
     def data(self):
-        binary = str(Record(self.carrier_type))
-        ctf = chr(ord(binary[0]) & 0x07)
+        binary = Record(self.carrier_type).encode()
+        ctf = struct.pack("B", ord(binary[0]) & 0x07)
         carrier_type = binary[3:]
-        carrier_type_length = chr(len(carrier_type))
+        carrier_type_length = struct.pack("B", len(carrier_type))
         return ctf + carrier_type_length + carrier_type + self.carrier_data
 
     @data.setter
@@ -607,14 +614,11 @@ class HandoverCarrierRecord(Record):
 #----------------------------------------------------------- AlternativeCarrier
 class AlternativeCarrier(object):
     def __init__(self, payload=None):
-        self.carrier_power_state = 'unknown'
+        self.carrier_power_state = b'unknown'
         self.carrier_data_reference = None
         self.auxiliary_data_reference_list = list()
         if payload is not None:
             self.decode(payload)
-
-    def __str__(self):
-        return self.encode()
 
     def decode(self, payload):
         f = io.BytesIO(payload)
@@ -629,17 +633,17 @@ class AlternativeCarrier(object):
                 
     def encode(self):
         f = io.BytesIO()
-        f.write(chr(carrier_power_states.index(self.carrier_power_state)))
-        f.write(chr(len(self.carrier_data_reference)))
+        f.write(struct.pack("B", carrier_power_states.index(self.carrier_power_state)))
+        f.write(struct.pack("B", len(self.carrier_data_reference)))
         f.write(self.carrier_data_reference)
-        f.write(chr(len(self.auxiliary_data_reference_list)))
+        f.write(struct.pack("B", len(self.auxiliary_data_reference_list)))
         for auxiliary_data_reference in self.auxiliary_data_reference_list:
-            f.write(chr(len(auxiliary_data_reference)))
+            f.write(struct.pack("B", len(auxiliary_data_reference)))
             f.write(auxiliary_data_reference)
         f.seek(0, 0)
         return f.read()
 
-carrier_power_states = ("inactive", "active", "activating", "unknown")
+carrier_power_states = (b"inactive", b"active", b"activating", b"unknown")
 
 #---------------------------------------------------------------- HandoverError
 class HandoverError(object):
@@ -669,9 +673,6 @@ class HandoverError(object):
     def data(self, value):
         self._data = value
         
-    def __str__(self):
-        return self.encode()
-    
     def decode(self, payload):
         try:
             self.reason = ord(payload[0])
@@ -688,15 +689,15 @@ class HandoverError(object):
             raise DecodeError("non matching error reason and data")
     
     def encode(self):
-        try: payload = chr(self.reason)
+        try: payload = struct.pack("B", self.reason)
         except ValueError: raise EncodeError("error reason out of limits")
         try:
             if self.reason == 1:
-                payload += chr(self.data)
+                payload += struct.pack("B", self.data)
             elif self.reason == 2:
                 payload += struct.pack(">L", self.data)
             elif self.reason == 3:
-                payload += chr(self.data)
+                payload += struct.pack("B", self.data)
             else:
                 raise EncodeError("reserved error reason %d" % self.reason)
         except (TypeError, struct.error):
@@ -705,7 +706,7 @@ class HandoverError(object):
     
 #---------------------------------------------------------------------- Version
 class Version(object):
-    def __init__(self, c='\x00'):
+    def __init__(self, c=b'\x00'):
         self._major = ord(c) >> 4
         self._minor = ord(c) & 15
 
@@ -725,8 +726,8 @@ class Version(object):
         else:
             return False
   
-    def __str__(self):
-        return chr((self.major << 4) | (self.minor & 0x0f))
+    def encode():
+        return struct.pack("B", (self.major << 4) | (self.minor & 0x0f))
 
 #---------------------------------------------------------------------- Carrier
 class Carrier(object):
@@ -741,7 +742,7 @@ class Carrier(object):
         :attr:`Carrier.record.type` or
         :attr:`Carrier.record.carrier_type` if the carrier is
         specified as a :class:`HandoverCarrierRecord`."""
-        return self.record.type if self.record.type != "urn:nfc:wkt:Hc" \
+        return self.record.type if self.record.type != b"urn:nfc:wkt:Hc" \
             else self.record.carrier_type
         
     @property

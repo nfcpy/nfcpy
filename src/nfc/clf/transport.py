@@ -153,7 +153,7 @@ class TTY(object):
             if frame is None or len(frame) == 0:
                 raise IOError(errno.ETIMEDOUT, os.strerror(errno.ETIMEDOUT))
             if frame.startswith(b"\x00\x00\xff\x00\xff\x00"):
-                log.log(logging.DEBUG-1, "<<< %s", str(frame).encode("hex"))
+                log.log(logging.DEBUG-1, "<<< %s", hexlify(frame))
                 return frame
             LEN = frame[3]
             if LEN == 0xFF:
@@ -168,7 +168,7 @@ class TTY(object):
             log.log(logging.DEBUG-1, ">>> %s", hexlify(frame))
             self.tty.flushInput()
             try:
-                self.tty.write(str(frame))
+                self.tty.write(bytes(frame))
             except serial.SerialTimeoutException:
                 raise IOError(errno.EIO, os.strerror(errno.EIO))
 

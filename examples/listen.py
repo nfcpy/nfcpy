@@ -78,12 +78,17 @@ import errno
 import argparse
 import logging
 from binascii import hexlify
+from struct import pack
 
 import nfc
 import nfc.clf
 
 if sys.version_info[0] == 2:
     memoryview = buffer  # noqa: F821
+    stob = str
+else:
+    def stob(s):
+        return bytes(s.encode('ascii'))
 
 def main(args):
     if args['--debug']:
@@ -149,10 +154,10 @@ def listen_tta(timeout, clf, args):
     except ValueError: assert 0, "the '--uid' argument must be hexadecimal"
     assert len(uid) in (4,7,10), "the '--uid' must be 4, 7, or 10 bytes"
     
-    target = nfc.clf.LocalTarget(str(bitrate) + 'A')
-    target.sens_res = bytearray("\x01\x01")
+    target = nfc.clf.LocalTarget(stob(bitrate) + b'A')
+    target.sens_res = bytearray(b"\x01\x01")
     target.sdd_res = uid
-    target.sel_res = bytearray("\x00" if args['tt2'] else "\x20")
+    target.sel_res = bytearray(b"\x00" if args['tt2'] else b"\x20")
     
     target = clf.listen(target, timeout)
     
@@ -160,7 +165,7 @@ def listen_tta(timeout, clf, args):
         logging.debug("rcvd TT2_CMD %s", hexlify(target.tt2_cmd))
         
         # Verify that we can send a response.
-        if target.tt2_cmd == "\x30\x00":
+        if target.tt2_cmd == b"\x30\x00":
             data = bytearray.fromhex("046FD536 11127A00 79C80000 E110060F")
         elif target.tt2_cmd[0] == 0x30:
             data = bytearray(16)
@@ -190,23 +195,23 @@ def listen_ttf(timeout, clf, args):
     
     try: pmm = bytearray.fromhex(args['--pmm'][0:16])
     except ValueError: assert 0, "the '--pmm' argument must be hexadecimal"
-    pmm += (8-len(pmm)) * "\xFF"
+    pmm += (8-len(pmm)) * b"\xFF"
     
     try: sys = bytearray.fromhex(args['--sys'][0:4])
     except ValueError: assert 0, "the '--sys' argument must be hexadecimal"
-    sys += (2-len(sys)) * "\xFF"
+    sys += (2-len(sys)) * b"\xFF"
     
-    target = nfc.clf.LocalTarget(str(bitrate) + 'F')
-    target.sensf_res = "\x01" + idm + pmm + sys
+    target = nfc.clf.LocalTarget(stob(bitrate) + b'F')
+    target.sensf_res = b"\x01" + idm + pmm + sys
     
     target = clf.listen(target, timeout)
     
     if target and target.tt3_cmd:
         if target.tt3_cmd[0] == 0x06:
-            response = chr(29) + "\7" + idm + "\0\0\1" + bytearray(16)
+            response = pack("B", 29) + b"\7" + idm + b"\0\0\1" + bytearray(16)
             clf.exchange(response, timeout=0)
         elif target.tt3_cmd[0] == 0x0C:
-            response = chr(13) + "\x0D" + idm + "\x01" + sys
+            response = pack("B", 13) + b"\x0D" + idm + b"\x01" + sys
         else:
             logging.warning("communication not verified")
             return target
@@ -229,8 +234,8 @@ def listen_dep(timeout, clf, args):
     target.sensf_res = bytearray.fromhex("01") + id3[0:8] + bytearray(10)
     target.sens_res = bytearray.fromhex("0101")
     target.sdd_res = bytearray.fromhex("08") + id3[-3:]
-    target.sel_res = bytearray.fromhex("60" if args['--hce'] else "40")
-    target.atr_res = "\xD5\x01"+id3+"\0\0\0\x08"+("\x32" if gbt else "\0")+gbt
+    target.sel_res = bytearray.fromhex("60" if args['--hce'] else b"40")
+    target.atr_res = b"\xD5\x01"+id3+b"\0\0\0\x08"+(b"\x32" if gbt else b"\0")+gbt
     
     target = clf.listen(target, timeout)
     if target and target.dep_req:
@@ -240,10 +245,10 @@ def listen_dep(timeout, clf, args):
         # not handle a DID, but nobody is sending them anyway. Further
         # note that target.dep_req is without the frame length byte
         # but exchange() works on frames and so it has to be added.
-        if target.dep_req.startswith("\xD4\x06\x80"):
+        if target.dep_req.startswith(b"\xD4\x06\x80"):
             # older phones start with attention
             dep_res = bytearray.fromhex("04 D5 07 80")
-        elif target.dep_req.startswith("\xD4\x06\x00"):
+        elif target.dep_req.startswith(b"\xD4\x06\x00"):
             # newer phones send information packet
             dep_res = bytearray.fromhex("06 D5 07 00 00 00")
         else:

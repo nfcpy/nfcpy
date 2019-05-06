@@ -38,11 +38,11 @@ class HandoverServer(Thread):
         socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
         recv_miu = socket.setsockopt(nfc.llcp.SO_RCVMIU, recv_miu)
         recv_buf = socket.setsockopt(nfc.llcp.SO_RCVBUF, recv_buf)
-        socket.bind('urn:nfc:sn:handover')
+        socket.bind(b'urn:nfc:sn:handover')
         log.info("handover server bound to port {0} (MIU={1}, RW={2})"
                  .format(socket.getsockname(), recv_miu, recv_buf))
         socket.listen(backlog=2)
-        Thread.__init__(self, name='urn:nfc:sn:handover',
+        Thread.__init__(self, name=b'urn:nfc:sn:handover',
                         target=self.listen, args=(llc, socket))
 
     def listen(self, llc, socket):
@@ -100,8 +100,8 @@ class HandoverServer(Thread):
     def _process_request(self, request):
         log.debug("rcvd handover request {0}\n{1}"
                   .format(request.type, request.pretty()))
-        response = nfc.ndef.Message("\xd1\x02\x01Hs\x12")
-        if not request.type == 'urn:nfc:wkt:Hr':
+        response = nfc.ndef.Message(b"\xd1\x02\x01Hs\x12")
+        if not request.type == b'urn:nfc:wkt:Hr':
             log.error("received message which is not a handover request")
         else:
             try:

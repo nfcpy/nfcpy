@@ -27,6 +27,8 @@ log = logging.getLogger(__name__)
 
 from .record import Record
 
+import struct
+
 class UriRecord(Record):
     """Wraps an NDEF URI record and provides access to the :attr:`uri`
     content. The URI RTD specification defines the payload of the URI
@@ -48,7 +50,7 @@ class UriRecord(Record):
     """
     
     def __init__(self, uri=None):
-        super(UriRecord, self).__init__('urn:nfc:wkt:U')
+        super(UriRecord, self).__init__(b'urn:nfc:wkt:U')
         if isinstance(uri, Record):
             record = uri
             if record.type == self.type:
@@ -67,16 +69,16 @@ class UriRecord(Record):
     def data(self):
         for i, p in enumerate(protocol_strings):
             if i > 0 and self.uri.startswith(p):
-                return chr(i) + self.uri[len(p):]
+                return struct.pack("B", i) + self.uri[len(p):].encode('utf-8')
         else:
-            return "\x00" + self.uri
+            return b"\x00" + self.uri.encode('utf-8')
 
     @data.setter
     def data(self, string):
         log.debug("decode uri record " + repr(string))
         if len(string) > 0:
             p = min(ord(string[0]), len(protocol_strings)-1)
-            self.uri = protocol_strings[p] + string[1:]
+            self.uri = protocol_strings[p] + string[1:].decode('utf-8')
         else: log.error("nothing to parse")
 
     @property

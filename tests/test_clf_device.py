@@ -53,19 +53,19 @@ class TestDevice(object):
 
     def test_sense_tta(self, device):
         with pytest.raises(NotImplementedError):
-            device.sense_tta(nfc.clf.RemoteTarget('106A'))
+            device.sense_tta(nfc.clf.RemoteTarget(b'106A'))
 
     def test_sense_ttb(self, device):
         with pytest.raises(NotImplementedError):
-            device.sense_ttb(nfc.clf.RemoteTarget('106B'))
+            device.sense_ttb(nfc.clf.RemoteTarget(b'106B'))
 
     def test_sense_ttf(self, device):
         with pytest.raises(NotImplementedError):
-            device.sense_ttf(nfc.clf.RemoteTarget('212F'))
+            device.sense_ttf(nfc.clf.RemoteTarget(b'212F'))
 
     def test_sense_dep(self, device):
         with pytest.raises(NotImplementedError):
-            device.sense_dep(nfc.clf.RemoteTarget('106A'))
+            device.sense_dep(nfc.clf.RemoteTarget(b'106A'))
 
     def test_listen_tta(self, device):
         with pytest.raises(NotImplementedError):
@@ -85,7 +85,7 @@ class TestDevice(object):
 
     def test_send_cmd_recv_rsp(self, device):
         with pytest.raises(NotImplementedError):
-            device.send_cmd_recv_rsp(nfc.clf.RemoteTarget('106A'), b'', 1.0)
+            device.send_cmd_recv_rsp(nfc.clf.RemoteTarget(b'106A'), b'', 1.0)
 
     def test_send_rsp_recv_cmd(self, device):
         with pytest.raises(NotImplementedError):

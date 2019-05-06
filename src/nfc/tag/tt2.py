@@ -339,7 +339,7 @@ class Type2Tag(Tag):
         # Verify that the tag is still present. This is implemented as
         # reading page 0-3 (from whatever sector is currently active).
         try:
-            data = self.transceive("\x30\x00")
+            data = self.transceive(b"\x30\x00")
         except Type2TagCommandError as error:
             if error.errno != TIMEOUT_ERROR:
                 log.warning("unexpected error in presence check: %s" % error)
@@ -375,7 +375,7 @@ class Type2Tag(Tag):
         if self.ndef and self.ndef.is_writeable:
             memory = self.ndef._tag_memory
             offset = self.ndef._ndef_tlv_offset
-            memory[offset+1:offset+3] = "\x00\xFE"
+            memory[offset+1:offset+3] = b"\x00\xFE"
             if wipe is not None:
                 memory_size = memory[14] * 8 + 16
                 skip_bytes = self.ndef._skip_bytes
@@ -482,7 +482,7 @@ class Type2Tag(Tag):
         """
         log.debug("read pages {0} to {1}".format(page, page+3))
 
-        data = self.transceive("\x30"+chr(page % 256), timeout=0.005)
+        data = self.transceive(b"\x30"+pack("B", page % 256), timeout=0.005)
 
         if len(data) == 1 and data[0] & 0xFA == 0x00:
             log.debug("received nak response")
@@ -511,10 +511,10 @@ class Type2Tag(Tag):
             raise ValueError("data must be a four byte string or array")
 
         log.debug("write {0} to page {1}".format(hexlify(data), page))
-        rsp = self.transceive("\xA2" + chr(page % 256) + data)
+        rsp = self.transceive(b"\xA2" + pack("B", page % 256) + data)
 
         if len(rsp) != 1:
-            log.debug("invalid response " + hexlify(data))
+            log.debug("invalid response %s", hexlify(data))
             raise Type2TagCommandError(INVALID_RESPONSE_ERROR)
 
         if rsp[0] != 0x0A:  # NAK

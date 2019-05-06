@@ -45,7 +45,8 @@ wks_map = {
     b"urn:nfc:sn:snep": 4,
 }
 
-service_name_format = re.compile(r"^urn:nfc:[x]?sn:[a-zA-Z][a-zA-Z0-9-_:\.]*$")
+service_name_format = (
+    re.compile(b"^urn:nfc:[x]?sn:[a-zA-Z][a-zA-Z0-9\-_:\\\.]*$"))  # noqa: W605
 
 
 class ServiceAccessPoint(object):
@@ -302,7 +303,7 @@ class LogicalLinkController(object):
             self.cfg['llcp-sec'] = False
         log.debug("llc cfg {0}".format(self.cfg))
         self.sec = None
-        self.snl = dict({"urn:nfc:sn:sdp": 1})
+        self.snl = dict({b"urn:nfc:sn:sdp": 1})
         self.sap = 64 * [None]
         self.sap[0] = ServiceAccessPoint(0, self)
         self.sap[1] = ServiceDiscovery(self)
@@ -346,7 +347,7 @@ class LogicalLinkController(object):
             gb = mac.activate(gbt=gb, **options)
             self.run = self.run_as_target
 
-        if gb and gb.startswith('Ffm') and len(gb) >= 6:
+        if gb and gb.startswith(b'Ffm') and len(gb) >= 6:
             if ((isinstance(mac, nfc.dep.Target)
                  and mac.rwt >= send_pax.lto * 1E-3)):
                 msg = "local NFC-DEP RWT {0:.3f} contradicts LTO {1:.3f} sec"

@@ -25,6 +25,7 @@
 import sys
 if sys.version_info[0] != 2:
     unicode = str
+import struct
 import logging
 log = logging.getLogger(__name__)
 
@@ -51,7 +52,7 @@ class TextRecord(Record):
     """
     
     def __init__(self, text=None, language='en', encoding='UTF-8'):
-        super(TextRecord, self).__init__('urn:nfc:wkt:T')
+        super(TextRecord, self).__init__(b'urn:nfc:wkt:T')
         if isinstance(text, Record):
             record = text
             if record.type == self.type:
@@ -70,8 +71,8 @@ class TextRecord(Record):
         
     @property
     def data(self):
-        sb = chr(len(self.language) | ((self.encoding == "UTF-16") << 7))
-        return sb + self.language + self._text.encode(self.encoding)
+        sb = struct.pack("B", len(self.language) | ((self.encoding == "UTF-16") << 7))
+        return sb + self.language.encode('ascii') + self._text.encode(self.encoding)
 
     @data.setter
     def data(self, string):

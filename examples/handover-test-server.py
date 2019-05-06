@@ -26,6 +26,7 @@ log = logging.getLogger('main')
 import sys
 import time
 import argparse
+from binascii import unhexlify
 
 from cli import CommandLineInterface
 
@@ -40,8 +41,8 @@ from copy import deepcopy
 import gobject
 import dbus.mainloop.glib
 
-mime_btoob = "application/vnd.bluetooth.ep.oob"
-mime_wfasc = "application/vnd.wfa.wsc"
+mime_btoob = b"application/vnd.bluetooth.ep.oob"
+mime_wfasc = b"application/vnd.wfa.wsc"
 
 class BluetoothAdapter(object):
     def __init__(self):
@@ -92,7 +93,7 @@ class HandoverServer(nfc.handover.HandoverServer):
     
 class DefaultSnepServer(nfc.snep.SnepServer):
     def __init__(self, llc, select_carrier_func):
-        super(DefaultSnepServer, self).__init__(llc, 'urn:nfc:sn:snep')
+        super(DefaultSnepServer, self).__init__(llc, b'urn:nfc:sn:snep')
         self.select_carrier = select_carrier_func
 
     def put(self, ndef_message):
@@ -102,12 +103,12 @@ class DefaultSnepServer(nfc.snep.SnepServer):
 
     def get(self, acceptable_length, message):
         log.info("default snep server got GET request")
-        if message.type == 'urn:nfc:wkt:Hr':
+        if message.type == b'urn:nfc:wkt:Hr':
             try: hr = nfc.ndef.HandoverRequestMessage(message)
             except nfc.ndef.FormatError as e:
                 log.error("error - {0}".format(e))
                 log.warning("quirks: set handover request version to 1.1")
-                message = nfc.ndef.Message(data[:5] + '\x11' + data[6:])
+                message = nfc.ndef.Message(data[:5] + b'\x11' + data[6:])
                 hr = nfc.ndef.HandoverRequestMessage(message)
             return self.select_carrier(hr)
         return nfc.snep.NotFound
@@ -164,10 +165,10 @@ class TestProgram(CommandLineInterface):
         
         for index, carrier in enumerate(self.options.carriers):
             data = carrier.read()
-            try: data = data.decode("hex")
+            try: data = unhexlify(data)
             except TypeError: pass
             message = nfc.ndef.Message(data)
-            if message.type == "urn:nfc:wkt:Hs":
+            if message.type == b"urn:nfc:wkt:Hs":
                 message = nfc.ndef.HandoverSelectMessage(message)
                 for carrier in message.carriers:
                     selectable.add_carrier(carrier.record, carrier.power_state,
@@ -226,8 +227,8 @@ class TestProgram(CommandLineInterface):
             remote_carrier_type = remote_carrier.type
             
             if self.options.quirks:
-                if remote_carrier.type in ("urn:nfc:wkt:" + mime_btoob,
-                                           "urn:nfc:wkt:" + mime_wfasc):
+                if remote_carrier.type in (b"urn:nfc:wkt:" + mime_btoob,
+                                           b"urn:nfc:wkt:" + mime_wfasc):
                     log.warning("quirks: correct xperia carrier request {0}"
                                 .format(remote_carrier.type))
                     remote_carrier_type = remote_carrier.type[12:]

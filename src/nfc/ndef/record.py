@@ -35,8 +35,20 @@ import re
 import nfc.ndef
 from .error import LengthError, FormatError
 
+import sys
+if sys.version_info[0] == 2:
+    binary_type = (bytearray, str)
+
+    def strescape(b):
+        return b.encode('string_escape')
+else:
+    binary_type = (bytearray, bytes)
+
+    def strescape(b):
+        return str(b)
+
 type_name_prefix = (
-    '', 'urn:nfc:wkt:', '', '', 'urn:nfc:ext:', 'unknown', 'unchanged')
+    b'', b'urn:nfc:wkt:', b'', b'', b'urn:nfc:ext:', b'unknown', b'unchanged')
     
 class Record(object):
     """Wraps an NDEF record and provides getting and setting of the
@@ -75,13 +87,13 @@ class Record(object):
         self._message_begin = self._message_end = False
         self._type = self._name = self._data = ''
         if not (record_type is None and record_name is None):
-            self.type = record_type if record_type is not None else 'unknown'
+            self.type = record_type if record_type is not None else b'unknown'
             if record_name is not None:
                 self.name = record_name
             if data is not None:
                 self.data = data
         elif data is not None:
-            if isinstance(data, (bytearray, str)):
+            if isinstance(data, binary_type):
                 data = io.BytesIO(data)
             if isinstance(data, io.IOBase):
                 self._read(data)
@@ -154,19 +166,19 @@ class Record(object):
         record_data = self.data
         
         if record_type == '':
-            header_flags = 0; record_name = ''; record_data = ''
-        elif record_type.startswith("urn:nfc:wkt:"):
+            header_flags = 0; record_name = b''; record_data = b''
+        elif record_type[:12] == b"urn:nfc:wkt:":
             header_flags = 1; record_type = record_type[12:]
-        elif re.match(r'[a-zA-Z0-9-]+/[a-zA-Z0-9-+.]+', record_type):
-            header_flags = 2; record_type = record_type
-        elif re.match(r'[a-zA-Z][a-zA-Z0-9+-.]*://', record_type):
-            header_flags = 3; record_type = record_type
-        elif record_type.startswith("urn:nfc:ext:"):
+        elif re.match(b'[a-zA-Z0-9\-]+/[a-zA-Z0-9\-\+\.]+', record_type):
+            header_flags = 2
+        elif re.match(b'[a-zA-Z][a-zA-Z0-9\+\-\.]*://', record_type):
+            header_flags = 3
+        elif record_type[:12] == b"urn:nfc:ext:":
             header_flags = 4; record_type = record_type[12:]
-        elif record_type == 'unknown':
-            header_flags = 5; record_type = ''
-        elif record_type == 'unchanged':
-            header_flags = 6; record_type = ''
+        elif record_type == b'unknown':
+            header_flags = 5; record_type = b''
+        elif record_type == b'unchanged':
+            header_flags = 6; record_type = b''
 
         type_length = len(record_type)
         data_length = len(record_data)
@@ -198,16 +210,16 @@ class Record(object):
         or the string 'unknown', or the string 'unchanged', or starts
         with 'urn:nfc:wkt:', or starts with 'urn:nfc:ext:', or matches
         the mime-type format, or matches the absolute-URI format."""
-        return str(self._type)
+        return bytes(self._type)
 
     @type.setter
     def type(self, value):
-        value = str(value)
-        if (value in ('', 'unknown', 'unchanged') or
-            value.startswith("urn:nfc:wkt:") or
-            value.startswith("urn:nfc:ext:") or
-            re.match(r'[a-zA-Z0-9-]+/[a-zA-Z0-9-+.]+', value) or
-            re.match(r'[a-zA-Z][a-zA-Z0-9+-.]*://', value)):
+        value = bytes(value)
+        if (value in (b'', b'unknown', b'unchanged') or
+            (value[:12] == b"urn:nfc:wkt:") or
+            (value[:12] == b"urn:nfc:ext:") or
+            re.match(b'[a-zA-Z0-9\-]+/[a-zA-Z0-9\-\+\.]+', value) or
+            re.match(b'[a-zA-Z][a-zA-Z0-9\-\+\.]*://', value)):
             self._type = bytearray(value)
         else:
             log.error("'{0}' is not an acceptable record type".format(value))
@@ -218,28 +230,28 @@ class Record(object):
         """The record identifier as an octet string. Any type that can
         be coverted into a sequence of characters in range(0,256) can
         be assigned."""
-        return str(self._name)
+        return bytes(self._name)
 
     @name.setter
     def name(self, value):
-        self._name = bytearray(str(value))
+        self._name = bytearray(bytes(value))
 
     @property
     def data(self):
         """The record payload as an octet string. Any type that can be
         coverted into a sequence of characters in range(0,256) can be
         assigned."""
-        return str(self._data)
+        return bytes(self._data)
 
     @data.setter
     def data(self, value):
-        self._data = bytearray(str(value))
+        self._data = bytearray(bytes(value))
 
     def __iter__(self):
         from itertools import islice
-        return islice(str(self), None)
+        return islice(bytes(self.encode()), None)
 
-    def __str__(self):
+    def encode(self):
         stream = io.BytesIO()
         self._write(stream)
         stream.seek(0, 0)
@@ -247,9 +259,9 @@ class Record(object):
 
     def __repr__(self):
         return "nfc.ndef.Record('{0}', '{1}', '{2}')".format(
-            self.type.encode('string_escape'),
-            self.name.encode('string_escape'),
-            self.data.encode('string_escape'))
+            strescape(self.type),
+            strescape(self.name),
+            strescape(self.data))
 
     def pretty(self, indent=0):
         """Returns a string with a formatted representation that might

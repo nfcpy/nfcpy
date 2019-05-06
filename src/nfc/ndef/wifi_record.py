@@ -26,41 +26,42 @@
 import logging
 log = logging.getLogger(__name__)
 
+import binascii
 import io
 import struct
 from .record import Record
 from .error import DecodeError, EncodeError
 
-VERSION1     = "\x10\x4A"
-CREDENTIAL   = "\x10\x0e"
-AUTH_TYPE    = "\x10\x03"
-CRYPT_TYPE   = "\x10\x0F"
-MAC_ADDRESS  = "\x10\x20"
-NETWORK_IDX  = "\x10\x26"
-NETWORK_KEY  = "\x10\x27"
-NETWORK_NAME = "\x10\x45"
-OOB_PASSWORD = "\x10\x2C"
-VENDOR_EXT   = "\x10\x49"
-VENDOR_WFA   = "\x00\x37\x2A"
-VERSION2     = "\x00"
-KEY_SHAREABLE = "\x02"
+VERSION1     = b"\x10\x4A"
+CREDENTIAL   = b"\x10\x0e"
+AUTH_TYPE    = b"\x10\x03"
+CRYPT_TYPE   = b"\x10\x0F"
+MAC_ADDRESS  = b"\x10\x20"
+NETWORK_IDX  = b"\x10\x26"
+NETWORK_KEY  = b"\x10\x27"
+NETWORK_NAME = b"\x10\x45"
+OOB_PASSWORD = b"\x10\x2C"
+VENDOR_EXT   = b"\x10\x49"
+VENDOR_WFA   = b"\x00\x37\x2A"
+VERSION2     = b"\x00"
+KEY_SHAREABLE = b"\x02"
 
 auth_type_names = {
-    '\x00\x01': 'Open',
-    '\x00\x02': 'WPA-Personal',
-    '\x00\x04': 'Shared',
-    '\x00\x08': 'WPA-Enterprise',
-    '\x00\x10': 'WPA2-Enterprise',
-    '\x00\x20': 'WPA2-Personal',
-    '\x00\x22': 'WPA/WPA2-Personal'
+    b'\x00\x01': b'Open',
+    b'\x00\x02': b'WPA-Personal',
+    b'\x00\x04': b'Shared',
+    b'\x00\x08': b'WPA-Enterprise',
+    b'\x00\x10': b'WPA2-Enterprise',
+    b'\x00\x20': b'WPA2-Personal',
+    b'\x00\x22': b'WPA/WPA2-Personal'
     }
 
 crypt_type_names = {
-        '\x00\x01': 'None',
-        '\x00\x02': 'WEP',
-        '\x00\x04': 'TKIP',
-        '\x00\x08': 'AES',
-        '\x00\x0C': 'AES/TKIP'
+        b'\x00\x01': b'None',
+        b'\x00\x02': b'WEP',
+        b'\x00\x04': b'TKIP',
+        b'\x00\x08': b'AES',
+        b'\x00\x0C': b'AES/TKIP'
     }
 
 auth_type_keys = \
@@ -71,8 +72,8 @@ crypt_type_keys = \
     
 class WifiConfigRecord(Record):
     def __init__(self, record=None):
-        Record.__init__(self, 'application/vnd.wfa.wsc')
-        self._version = '\x20'
+        Record.__init__(self, b'application/vnd.wfa.wsc')
+        self._version = b'\x20'
         self._credentials = list()
         self._other = list()
         if record:
@@ -82,11 +83,11 @@ class WifiConfigRecord(Record):
             self.data = record.data
         else:
             self._credentials.append({
-                    'network-name': '',
-                    'authentication' : 'Open',
-                    'encryption' : 'None',
-                    'network-key' : '',
-                    'mac-address' : 'ff:ff:ff:ff:ff:ff'
+                    b'network-name': b'',
+                    b'authentication' : b'Open',
+                    b'encryption' : b'None',
+                    b'network-key' : b'',
+                    b'mac-address' : b'ff:ff:ff:ff:ff:ff'
                     })
 
     @property
@@ -142,7 +143,7 @@ class WifiConfigRecord(Record):
             raise ValueError("major number must be in range(2,16)")
         if minor < 0 or minor > 15:
             raise ValueError("minor number must be in range(0,16)")
-        self._version = chr((major << 4) | (minor & 0xF))
+        self._version = struct.pack("B", (major << 4) | (minor & 0xF))
 
     @property
     def credentials(self):
@@ -174,44 +175,44 @@ class WifiConfigRecord(Record):
             if k == NETWORK_IDX:
                 pass # attribute 'network index' is deprecated
             elif k == NETWORK_NAME:
-                credential["network-name"] = v
+                credential[b"network-name"] = v
             elif k == NETWORK_KEY:
-                credential["network-key"] = v
+                credential[b"network-key"] = v
             elif k == KEY_SHAREABLE:
-                credential['shareable'] = bool(ord(v))
+                credential[b'shareable'] = bool(ord(v))
             elif k == AUTH_TYPE:
-                credential['authentication'] = \
-                    auth_type_names.get(v, v.encode('hex'))
+                credential[b'authentication'] = \
+                    auth_type_names.get(v, binascii.hexlify(v))
             elif k == CRYPT_TYPE:
-                credential['encryption'] = \
-                    crypt_type_names.get(v, v.encode('hex'))
+                credential[b'encryption'] = \
+                    crypt_type_names.get(v, binascii.hexlify(v))
             elif k == MAC_ADDRESS:
-                credential['mac-address'] = \
-                    ':'.join([c.encode('hex') for c in v])
+                credential[b'mac-address'] = \
+                    b':'.join([binascii.hexlify(c) for c in v])
             else:
-                credential.setdefault('other', []).append((k, v))
+                credential.setdefault(b'other', []).append((k, v))
         return credential
 
     def _write_credential(self, credential):
         f = io.BytesIO()
         try:
-            network_name = credential['network-name']
-            auth_type = credential['authentication']
-            crypt_type = credential['encryption']
-            network_key = credential['network-key']
-            mac_address = credential['mac-address']
-            shareable = credential.get('shareable', None)
-            other = credential.get('other', list())
+            network_name = credential[b'network-name']
+            auth_type = credential[b'authentication']
+            crypt_type = credential[b'encryption']
+            network_key = credential[b'network-key']
+            mac_address = credential[b'mac-address']
+            shareable = credential.get(b'shareable', None)
+            other = credential.get(b'other', list())
         except KeyError:
             raise EncodeError("missing required credential attribute")
 
         try: auth_type = auth_type_keys[auth_type]
-        except KeyError: auth_type = auth_type.decode('hex')
+        except KeyError: auth_type = binascii.unhexlify(auth_type)
         try: crypt_type = crypt_type_keys[crypt_type]
-        except KeyError: crypt_type = crypt_type.decode('hex')
-        mac_address = mac_address.replace(':', '').decode('hex')
+        except KeyError: crypt_type = binascii.unhexlify(crypt_type)
+        mac_address = binascii.unhexlify(mac_address.replace(b':', b''))
 
-        write_attribute(f, NETWORK_IDX, '\x01')
+        write_attribute(f, NETWORK_IDX, b'\x01')
         write_attribute(f, NETWORK_NAME, network_name)
         write_attribute(f, AUTH_TYPE, auth_type)
         write_attribute(f, CRYPT_TYPE, crypt_type)
@@ -220,7 +221,7 @@ class WifiConfigRecord(Record):
 
         vendor_wfa = [(k, v) for k, v in other if len(k) == 1]
         if shareable is not None:
-            vendor_wfa = [(KEY_SHAREABLE, chr(int(shareable)))] + vendor_wfa
+            vendor_wfa = [(KEY_SHAREABLE, struct.pack("B", int(shareable)))] + vendor_wfa
         if len(vendor_wfa) > 0:
             write_attribute(f, VENDOR_EXT, VENDOR_WFA + 
                             write_elements(vendor_wfa))
@@ -237,12 +238,12 @@ class WifiConfigRecord(Record):
             lines.append(("identifier", repr(self.name)))
         lines.append(("version", self.version))
         for credential in self.credentials:
-            shareable = str(credential.get('shareable', False))
-            lines.append(("network name", credential['network-name']))
-            lines.append(("network key", credential['network-key']))
-            lines.append(("authentication", credential['authentication']))
-            lines.append(("encryption", credential['encryption']))
-            lines.append(("mac address", credential['mac-address']))
+            shareable = str(credential.get(b'shareable', False))
+            lines.append(("network name", credential[b'network-name']))
+            lines.append(("network key", credential[b'network-key']))
+            lines.append(("authentication", credential[b'authentication']))
+            lines.append(("encryption", credential[b'encryption']))
+            lines.append(("mac address", credential[b'mac-address']))
             lines.append(("shareable", shareable))
         for key, value in self.other:
             lines.append((key, value))
@@ -254,8 +255,8 @@ class WifiConfigRecord(Record):
     
 class WifiPasswordRecord(Record):
     def __init__(self, record=None):
-        Record.__init__(self, 'application/vnd.wfa.wsc')
-        self._version = '\x20'
+        Record.__init__(self, b'application/vnd.wfa.wsc')
+        self._version = b'\x20'
         self._passwords = list()
         self._other = list()
         if record:
@@ -265,15 +266,15 @@ class WifiPasswordRecord(Record):
             self.data = record.data
         else:
             self._passwords.append({
-                    'public-key-hash': 20 * '\x00',
-                    'password-id' : 0,
-                    'password' : '',
+                    b'public-key-hash': 20 * b'\x00',
+                    b'password-id' : 0,
+                    b'password' : b'',
                     })
 
     @property
     def data(self):
         f = io.BytesIO()
-        write_attribute(f, VERSION1, '\x10')
+        write_attribute(f, VERSION1, b'\x10')
 
         for password in self.passwords:
             write_attribute(f, OOB_PASSWORD, self._write_password(password))
@@ -321,7 +322,7 @@ class WifiPasswordRecord(Record):
             raise ValueError("major number must be in range(2,16)")
         if minor < 0 or minor > 15:
             raise ValueError("minor number must be in range(0,16)")
-        self._version = chr((major << 4) | (minor & 0xF))
+        self._version = struct.pack("B", (major << 4) | (minor & 0xF))
 
     @property
     def passwords(self):
@@ -349,17 +350,17 @@ class WifiPasswordRecord(Record):
         if len(s) < 22:
             raise DecodeError("wifi oob password less than 22 byte")
         password = dict()
-        password['public-key-hash'] = s[0:20]
-        password['password-id'] = struct.unpack('>H', s[20:22])[0]
-        password['password'] = s[22:]
+        password[b'public-key-hash'] = s[0:20]
+        password[b'password-id'] = struct.unpack('>H', s[20:22])[0]
+        password[b'password'] = s[22:]
         return password
 
     def _write_password(self, password):
         f = io.BytesIO()
         try:
-            pkhash = password['public-key-hash']
-            pwd_id = password['password-id']
-            passwd = password['password']
+            pkhash = password[b'public-key-hash']
+            pwd_id = password[b'password-id']
+            passwd = password[b'password']
         except KeyError:
             raise EncodeError("missing required attributes in oob password")
         if len(pkhash) != 20:
@@ -374,10 +375,10 @@ class WifiPasswordRecord(Record):
             lines.append(("identifier", repr(self.name)))
         lines.append(("version", self.version))
         for password in self.passwords:
-            public_key_hash = password['public-key-hash'].encode("hex")
+            public_key_hash = binascii.hexlify(password[b'public-key-hash'])
             lines.append(("public key hash", public_key_hash))
-            lines.append(("password id", str(password['password-id'])))
-            lines.append(("device password", password['password']))
+            lines.append(("password id", str(password[b'password-id'])))
+            lines.append(("device password", password[b'password']))
         for key, value in self.other:
             lines.append((key, value))
         
