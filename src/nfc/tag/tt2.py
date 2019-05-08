@@ -590,17 +590,14 @@ class Type2Tag(Tag):
             try:
                 data = self.clf.exchange(data, timeout)
                 break
-            except nfc.clf.CommunicationError as error:
-                reason = error.__class__.__name__
-                log.debug("%s after %d retries" % (reason, retry))
-        else:
-            if type(error) is nfc.clf.TimeoutError:
+            except nfc.clf.TimeoutError:
                 raise Type2TagCommandError(nfc.tag.TIMEOUT_ERROR)
-            if type(error) is nfc.clf.TransmissionError:
+            except nfc.clf.TransmissionError:
                 raise Type2TagCommandError(nfc.tag.RECEIVE_ERROR)
-            if type(error) is nfc.clf.ProtocolError:
+            except nfc.clf.ProtocolError:
                 raise Type2TagCommandError(nfc.tag.PROTOCOL_ERROR)
-            raise RuntimeError("unexpected " + repr(error))
+            except nfc.clf.CommunicationError as error:
+                raise RuntimeError("unexpected " + repr(error))
 
         elapsed = time.time() - started
         log.debug("<< {0} ({1:f}s)".format(hexlify(data), elapsed))

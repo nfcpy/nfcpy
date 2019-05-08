@@ -698,16 +698,14 @@ class Type3Tag(nfc.tag.Tag):
             try:
                 rsp = self.clf.exchange(cmd, timeout)
                 break
-            except nfc.clf.CommunicationError as error:
-                reason = error.__class__.__name__
-                log.debug("%s after %d retries" % (reason, retry))
-        else:
-            if type(error) is nfc.clf.TimeoutError:
+            except nfc.clf.TimeoutError:
                 raise Type3TagCommandError(nfc.tag.TIMEOUT_ERROR)
-            if type(error) is nfc.clf.TransmissionError:
+            except nfc.clf.TransmissionError:
                 raise Type3TagCommandError(nfc.tag.RECEIVE_ERROR)
-            if type(error) is nfc.clf.ProtocolError:  # pragma: no branch
+            except nfc.clf.ProtocolError:  # pragma: no branch
                 raise Type3TagCommandError(nfc.tag.PROTOCOL_ERROR)
+            except nfc.clf.CommunicationError as error:
+                raise RuntimeError("unexpected " + repr(error))
 
         if rsp[0] != len(rsp):
             log.debug("incorrect response length {0:02x}".format(rsp[0]))
