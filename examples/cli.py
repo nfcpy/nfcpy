@@ -68,6 +68,9 @@ class CommandLineInterface(object):
         
         self.options = argument_parser.parse_args()
 
+        if self.options.command == None:
+            argument_parser.error('too few arguments')
+
         lvl = logging.ERROR if self.options.quiet else logging.INFO
         if self.options.debug and not self.options.logfile:
             lvl = logging.DEBUG - (1 if self.options.verbose else 0)

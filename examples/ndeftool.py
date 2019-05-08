@@ -476,6 +476,10 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    has_func = hasattr(args, 'func')
+    if not has_func:
+        parser.error('too few arguments')
+
     verbosity = logging.INFO if args.verbose else logging.ERROR
     verbosity = logging.DEBUG if args.debug else verbosity
     logging.basicConfig(level=verbosity, format='%(levelname)s: %(message)s')
