@@ -82,6 +82,9 @@ from binascii import hexlify
 import nfc
 import nfc.clf
 
+if sys.version_info[0] == 2:
+    memoryview = buffer  # noqa: F821
+
 def main(args):
     if args['--debug']:
         loglevel = logging.DEBUG - (1 if args['--verbose'] else 0)
@@ -247,7 +250,7 @@ def listen_dep(timeout, clf, args):
             logging.warning("communication not verified")
             return target
         
-        logging.debug("send DEP_RES %s", hexlify(buffer(dep_res, 1)))
+        logging.debug("send DEP_RES %s", hexlify(memoryview(dep_res, 1)))
         try:
             data = clf.exchange(dep_res, timeout=1)
             assert data and data[0]==len(data)

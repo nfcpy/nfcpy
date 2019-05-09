@@ -52,6 +52,10 @@ import operator
 from binascii import hexlify
 
 import logging
+import sys
+if sys.version_info[0] == 2:
+    memoryview = buffer  # noqa: F821
+
 log = logging.getLogger(__name__)
 
 
@@ -189,7 +193,7 @@ class Device(nfc.clf.device.Device):
         else:
             sensf_req = chr(len(target.sensf_req)+1) + target.sensf_req
 
-        log.debug("send SENSF_REQ " + hexlify(buffer(sensf_req, 1)))
+        log.debug("send SENSF_REQ " + hexlify(memoryview(sensf_req, 1)))
         try:
             self._send_data(target.brty, sensf_req, self.addr)
             brty, data, addr = self._recv_data(1.0, target.brty)
