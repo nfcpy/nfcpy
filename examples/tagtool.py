@@ -536,13 +536,13 @@ class TagTool(CommandLineInterface):
     def emulate_tt3_tag(self, tag):
         def ndef_read(block_number, rb, re):
             log.debug("tt3 read block #{0}".format(block_number))
-            if block_number < len(self.options.tt3_data) / 16:
+            if block_number < len(self.options.tt3_data) // 16:
                 first, last = block_number*16, (block_number+1)*16
                 block_data = self.options.tt3_data[first:last]
                 return block_data
         def ndef_write(block_number, block_data, wb, we):
             log.debug("tt3 write block #{0}".format(block_number))
-            if block_number < len(self.options.tt3_data) / 16:
+            if block_number < len(self.options.tt3_data) // 16:
                 first, last = block_number*16, (block_number+1)*16
                 self.options.tt3_data[first:last] = block_data
                 return True

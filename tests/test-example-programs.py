@@ -82,4 +82,4 @@ for server, client in test_programs:
 
 elapsed = int(time.time() - started)
 print("completed tests in {0} minutes {1} seconds"
-      .format(elapsed / 60, elapsed % 60))
+      .format(elapsed // 60, elapsed % 60))

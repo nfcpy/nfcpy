@@ -20,7 +20,7 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-
+from __future__ import division
 import logging
 log = logging.getLogger('main')
 
@@ -103,7 +103,7 @@ class PhdcTagAgent(PhdcAgent):
         if read_begin is True:
             self.ndef_read_lock.acquire()
         try:
-            if block < len(self.ndef_data_area) / 16:
+            if block < len(self.ndef_data_area) // 16:
                 data = self.ndef_data_area[block*16:(block+1)*16]
                 log.debug("[tt3] got read block #{0} {1}".format(
                         block, str(data).encode("hex")))
@@ -120,7 +120,7 @@ class PhdcTagAgent(PhdcAgent):
         try:
             log.debug("[tt3] got write block #{0} {1}".format(
                     block, str(data).encode("hex")))
-            if block < len(self.ndef_data_area) / 16:
+            if block < len(self.ndef_data_area) // 16:
                 self.ndef_data_area[block*16:(block+1)*16] = data
                 return True
         finally:
