@@ -30,6 +30,10 @@ import time
 import errno
 import threading
 
+import sys
+if sys.version_info[0] == 2:
+    range = xrange  # noqa: F821
+
 import logging
 log = logging.getLogger(__name__)
 
@@ -837,7 +841,7 @@ class ContactlessFrontend(object):
             self.target = None  # forget captured target
             self.device.mute()  # deactivate the rf field
 
-            for i in xrange(max(1, options.get('iterations', 1))):
+            for i in range(max(1, options.get('iterations', 1))):
                 started = time.time()
                 for target in targets:
                     log.debug("sense {0}".format(target))
