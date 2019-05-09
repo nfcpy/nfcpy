@@ -95,7 +95,7 @@ class TTY(object):
                     try:
                         termios.tcgetattr(open('/dev/%s' % tty))
                         ttys[i] = '/dev/%s' % tty
-                    except termios.error as error:
+                    except termios.error:
                         pass
                     except IOError as error:
                         log.debug(error)

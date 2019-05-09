@@ -180,7 +180,7 @@ class Chipset(object):
             try:
                 self.write_frame(head + data + tail)
                 frame = self.read_frame(timeout=100)
-            except IOError as error:
+            except IOError:
                 self.log.error("input/output error while waiting for ack")
                 raise IOError(errno.EIO, os.strerror(errno.EIO))
 
