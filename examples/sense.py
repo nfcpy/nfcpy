@@ -20,7 +20,7 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-
+from __future__ import print_function
 import re
 import time
 import errno
@@ -122,7 +122,7 @@ def main(args):
                 print("lost connection to local device")
             else: print(error)
         except nfc.clf.UnsupportedTargetError as error:
-            print error
+            print(error)
         except KeyboardInterrupt:
             pass
         finally:

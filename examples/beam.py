@@ -20,7 +20,7 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-
+from __future__ import print_function
 import logging
 log = logging.getLogger('main')
 
@@ -196,7 +196,7 @@ def add_recv_print_parser(parser):
 
 def run_recv_print_action(args, llc, rcvd_ndef_msg):
     log.info('print ndef message {0!r}'.format(rcvd_ndef_msg.type))
-    print rcvd_ndef_msg.pretty()
+    print(rcvd_ndef_msg.pretty())
 
 def add_recv_save_parser(parser):
     parser.set_defaults(func=run_recv_save_action)
