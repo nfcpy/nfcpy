@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# -*- coding: future_fstrings -*-
+# -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
 # Copyright 2012 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
@@ -122,7 +122,7 @@ def main(args):
                 print("lost connection to local device")
             else: print(error)
         except nfc.clf.UnsupportedTargetError as error:
-            print error
+            print(error)
         except KeyboardInterrupt:
             pass
         finally:

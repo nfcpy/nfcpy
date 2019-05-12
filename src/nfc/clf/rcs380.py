@@ -1,4 +1,4 @@
-# -*- coding: future_fstrings -*-
+# -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
 # Copyright 2012, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
@@ -206,7 +206,7 @@ class Chipset(object):
 
     def send_command(self, cmd_code, cmd_data):
         cmd_data = bytearray(cmd_data)
-        log.log(logging.DEBUG-1, f"{self.CMD[cmd_code]} {hexlify(cmd_data)}")
+        log.log(logging.DEBUG-1, "{} {}".format(self.CMD[cmd_code], hexlify(cmd_data)))
         if self.transport is not None:
             cmd = bytearray([0xD6, cmd_code]) + cmd_data
             self.transport.write(bytes(Frame(cmd)))
@@ -394,7 +394,7 @@ class Device(device.Device):
                 log.debug(error)
             return None
 
-        log.debug(f"rcvd SENS_RES {hexlify(sens_res)}")
+        log.debug("rcvd SENS_RES {}".format(hexlify(sens_res)))
 
         if sens_res[0] & 0x1F == 0:
             log.debug("type 1 tag target found")
@@ -403,7 +403,7 @@ class Device(device.Device):
             target = nfc.clf.RemoteTarget(target.brty, sens_res=sens_res)
             if sens_res[1] & 0x0F == 0b1100:
                 rid_cmd = bytearray.fromhex("78 0000 00000000")
-                log.debug(f"send RID_CMD {hexlify(rid_cmd)}")
+                log.debug("send RID_CMD {}".format(hexlify(rid_cmd)))
                 try:
                     target.rid_res = self.chipset.in_comm_rf(rid_cmd, 30)
                 except CommunicationError as error:
@@ -424,23 +424,23 @@ class Device(device.Device):
                 for i, sel_cmd in zip(range(0, len(uid), 4), b"\x93\x95\x97"):
                     sel_req = bytearray([sel_cmd, 0x70]) + uid[i:i+4]
                     sel_req.append(reduce(operator.xor, sel_req[2:6]))  # BCC
-                    log.debug(f"send SEL_REQ {hexlify(sel_req)}")
+                    log.debug("send SEL_REQ {}".format(hexlify(sel_req)))
                     sel_res = self.chipset.in_comm_rf(sel_req, 30)
-                    log.debug(f"rcvd SEL_RES {hexlify(sel_res)}")
+                    log.debug("rcvd SEL_RES {}".format(hexlify(sel_res)))
                 uid = target.sel_req
             else:
                 uid = bytearray()
                 for sel_cmd in b"\x93\x95\x97":
                     self.chipset.in_set_protocol(add_crc=0, check_crc=0)
                     sdd_req = bytearray([sel_cmd, 0x20])
-                    log.debug(f"send SDD_REQ {hexlify(sdd_req)}")
+                    log.debug("send SDD_REQ {}".format(hexlify(sdd_req)))
                     sdd_res = self.chipset.in_comm_rf(sdd_req, 30)
-                    log.debug("rcvd SDD_RES {hexlify(sdd_res)}")
+                    log.debug("rcvd SDD_RES {}".format(hexlify(sdd_res)))
                     self.chipset.in_set_protocol(add_crc=1, check_crc=1)
                     sel_req = bytearray([sel_cmd, 0x70]) + sdd_res
-                    log.debug(f"send SEL_REQ {hexlify(sel_req)}")
+                    log.debug("send SEL_REQ {}".format(hexlify(sel_req)))
                     sel_res = self.chipset.in_comm_rf(sel_req, 30)
-                    log.debug(f"rcvd SEL_RES {hexlify(sel_res)}")
+                    log.debug("rcvd SEL_RES {}".format(hexlify(sel_res)))
                     if sel_res[0] & 0b00000100:
                         uid = uid + sdd_res[1:4]
                     else:
@@ -472,7 +472,7 @@ class Device(device.Device):
         sensb_req = (target.sensb_req if target.sensb_req else
                      bytearray.fromhex("050010"))
 
-        log.debug(f"send SENSB_REQ {hexlify(sensb_req)}")
+        log.debug("send SENSB_REQ {}".format(hexlify(sensb_req)))
         try:
             sensb_res = self.chipset.in_comm_rf(sensb_req, 30)
         except CommunicationError as error:
@@ -481,7 +481,7 @@ class Device(device.Device):
             return None
 
         if len(sensb_res) >= 12 and sensb_res[0] == 0x50:
-            log.debug(f"rcvd SENSB_RES {hexlify(sensb_res)}")
+            log.debug("rcvd SENSB_RES {}".format(hexlify(sensb_res)))
             return nfc.clf.RemoteTarget(target.brty, sensb_res=sensb_res)
 
     def sense_ttf(self, target):
@@ -501,7 +501,7 @@ class Device(device.Device):
         sensf_req = (target.sensf_req if target.sensf_req else
                      bytearray.fromhex("00FFFF0100"))
 
-        log.debug(f"send SENSF_REQ {hexlify(sensf_req)}")
+        log.debug("send SENSF_REQ {}".format(hexlify(sensf_req)))
         try:
             frame = bytearray([len(sensf_req)+1]) + sensf_req
             frame = self.chipset.in_comm_rf(frame, 10)
@@ -511,7 +511,7 @@ class Device(device.Device):
             return None
 
         if len(frame) >= 18 and frame[0] == len(frame) and frame[1] == 1:
-            log.debug(f"rcvd SENSF_RES {hexlify(frame[1:])}")
+            log.debug("rcvd SENSF_RES {}".format(hexlify(frame[1:])))
             return nfc.clf.RemoteTarget(target.brty, sensf_res=frame[1:])
 
     def sense_dep(self, target):

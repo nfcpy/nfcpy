@@ -1,4 +1,4 @@
-# -*- coding: future_fstrings -*-
+# -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
 # Copyright 2009, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
@@ -125,7 +125,7 @@ class BlockCode:
 
     def __str__(self):
         s = "BlockCode(number={0}, access={1:03b}, service={2})"
-        return s.format(self.number, self.access, self.service)
+        return s.format(self.number, self.access, self.service).encode()
 
     def pack(self):
         """Pack the block code for transmission. Returns a 2-3 byte string."""
@@ -631,9 +631,9 @@ class Type3Tag(nfc.tag.Tag):
         timeout = 302.1E-6 * ((b + 1) * len(block_list) + a + 1) * 4**e
 
         data = bytearray([len(service_list)]) \
-               + "".join([sc.pack() for sc in service_list]) \
+               + b"".join([sc.pack() for sc in service_list]) \
                + bytearray([len(block_list)]) \
-               + "".join([bc.pack() for bc in block_list]) \
+               + b"".join([bc.pack() for bc in block_list]) \
                + bytearray(data)
 
         log.debug("write w/o encryption service/block list: {0} / {1}".format(

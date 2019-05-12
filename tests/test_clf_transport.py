@@ -1,4 +1,4 @@
-# -*- coding: future_fstrings -*-
+# -*- coding: latin-1 -*-
 from __future__ import absolute_import, division
 
 import nfc

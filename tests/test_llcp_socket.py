@@ -1,4 +1,4 @@
-# -*- coding: future_fstrings -*-tf-8 -*-
+# -*- coding: latin-1 -*-tf-8 -*-
 from __future__ import absolute_import, division
 
 import pytest
