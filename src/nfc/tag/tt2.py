@@ -1,14 +1,15 @@
-# -*- coding: future_fstrings -*-
+# -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
 # Copyright 2009, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
 # Licence.
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # You may obtain a copy of the Licence at:
 #
+
 # https://joinup.ec.europa.eu/software/page/eupl
 #
 # Unless required by applicable law or agreed to in

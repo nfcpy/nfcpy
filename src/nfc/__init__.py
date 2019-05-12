@@ -1,4 +1,4 @@
-# -*- coding: future_fstrings -*-
+# -*- coding: latin-1 -*-
 # -----------------------------------------------------------------------------
 # Copyright 2009, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
@@ -32,7 +32,7 @@ logging.getLogger(__name__).setLevel(logging.INFO)
 
 # METADATA ####################################################################
 
-__version__ = "0.13.5"
+__version__ = "0.13.6"
 
 __title__ = "nfcpy"
 __description__ = "Python module for Near Field Communication."

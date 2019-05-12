@@ -1,4 +1,4 @@
-# -*- coding: future_fstrings -*-
+# -*- coding: latin-1 -*-
 
 # -----------------------------------------------------------------------------
 # Copyright 2009, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
@@ -160,7 +160,7 @@ class Chipset(object):
         """
         if cmd_data is not None:
             assert len(cmd_data) <= self.host_command_frame_max_size - 2
-            self.log.log(logging.DEBUG-1, f"{self.CMD[cmd_code]} {hexlify(cmd_data)} {timeout:.3f}")
+            self.log.log(logging.DEBUG-1, "{} {} {:.3f}".format(self.CMD[cmd_code], hexlify(cmd_data), timeout))
 
             if len(cmd_data) < 254:
                 head = self.SOF + bytearray([len(cmd_data)+2]) + bytearray([254-len(cmd_data)])

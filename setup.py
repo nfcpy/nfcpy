@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# -*- coding: future_fstrings -*-tf-8 -*-
+# -*- coding: utf-8 -*-
 import codecs
 import os
 import re
@@ -27,7 +27,7 @@ CLASSIFIERS = [
     "License :: OSI Approved :: European Union Public Licence 1.1 (EUPL 1.1)",
 ]
 INSTALL_REQUIRES = ["libusb1", "pyserial", "ndeflib", "pydes"]
-PYTHON_REQUIRES = ">=2.6, >=3.6"
+PYTHON_REQUIRES = ">=2.6"
 
 ###############################################################################
 

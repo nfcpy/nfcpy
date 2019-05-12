@@ -1,4 +1,4 @@
-# -*- coding: future_fstrings -*-tf-8 -*-
+# -*- coding: latin-1 -*-tf-8 -*-
 #
 # nfcpy documentation build configuration file
 #
