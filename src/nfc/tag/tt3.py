@@ -709,6 +709,7 @@ class Type3Tag(nfc.tag.Tag):
                 raise Type3TagCommandError(nfc.tag.RECEIVE_ERROR)
             if type(error) is nfc.clf.ProtocolError:  # pragma: no branch
                 raise Type3TagCommandError(nfc.tag.PROTOCOL_ERROR)
+            raise RuntimeError("unpxpected " + repr(error))
 
         if rsp[0] != len(rsp):
             log.debug("incorrect response length {0:02x}".format(rsp[0]))
