@@ -151,6 +151,7 @@ class TestContactlessFrontend(object):
         target.sel_res = HEX('00')
         target.sdd_res = HEX('0416C6C2D73881')
         clf.device.sense_tta.return_value = target
+        clf.device.send_cmd_recv_rsp.return_value = HEX('AF')
         rdwr_options = {'iterations': 1, 'targets': [b'106A']}
         assert clf.connect(rdwr=rdwr_options, terminate=terminate) is True
 
