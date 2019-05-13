@@ -419,10 +419,24 @@ class FelicaLite(tt3.Type3Tag):
 
     def dump(self):
         def oprint(octets):
-            return ' '.join(['%02x' % x for x in octets])
+            def fnc(i):
+                if i is None:
+                    return '??'
+                elif i < 0:
+                    return '??'
+                else:
+                    return '%02x' % i
+            return ' '.join([fnc(x) for x in octets])
 
         def cprint(octets):
-            return ''.join([chr(x) if 32 <= x <= 126 else '.' for x in octets])
+            def fnc(i):
+                if i is None:
+                    return '.'
+                elif 32 <= i <= 126:
+                    return chr(i)
+                else:
+                    return '.'
+            return ''.join([fnc(x) for x in octets])
 
         userblocks = list()
         for i in range(0, 14):

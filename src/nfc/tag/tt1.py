@@ -291,10 +291,24 @@ class Type1Tag(Tag):
         # non-existing block can be detected.
 
         def oprint(octets):
-            return ' '.join(['??' if x < 0 else '%02x' % x for x in octets])
+            def fnc(i):
+                if i is None:
+                    return '??'
+                elif i < 0:
+                    return '??'
+                else:
+                    return '%02x' % i
+            return ' '.join([fnc(x) for x in octets])
 
         def cprint(octets):
-            return ''.join([chr(x) if 32 <= x <= 126 else '.' for x in octets])
+            def fnc(i):
+                if i is None:
+                    return '.'
+                elif 32 <= i <= 126:
+                    return chr(i)
+                else:
+                    return '.'
+            return ''.join([fnc(x) for x in octets])
 
         def lprint(fmt, d, i):
             return fmt.format(i, oprint(d), cprint(d))

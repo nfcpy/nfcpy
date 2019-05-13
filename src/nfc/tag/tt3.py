@@ -299,10 +299,17 @@ class Type3Tag(nfc.tag.Tag):
 
         """
         def lprint(fmt, data, index):
-            ispchr = lambda x: x >= 32 and x <= 126  # noqa: E731
+            def ispchr(i):
+                if i is None:
+                    return False
+                elif 32 <= i <= 126:
+                    return True
+                else:
+                    return False
 
             def print_bytes(octets):
-                return ' '.join(['%02x' % x for x in octets])
+                return ' '.join(
+                    [('??' if x is None else ('%02x' % x)) for x in octets])
 
             def print_chars(octets):
                 return ''.join([chr(x) if ispchr(x) else '.' for x in octets])
