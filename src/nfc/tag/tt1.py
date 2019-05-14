@@ -470,6 +470,7 @@ class Type1Tag(Tag):
     def transceive(self, data, timeout=0.1):
         log.debug(">> {0} ({1:f}s)".format(hexlify(data), timeout))
 
+        err = None
         started = time.time()
         for retry in range(3):
             try:
@@ -478,14 +479,15 @@ class Type1Tag(Tag):
             except nfc.clf.CommunicationError as error:
                 reason = error.__class__.__name__
                 log.debug("%s after %d retries" % (reason, retry))
+                err = error
         else:
-            if type(error) is nfc.clf.TimeoutError:
+            if type(err) is nfc.clf.TimeoutError:
                 raise Type1TagCommandError(nfc.tag.TIMEOUT_ERROR)
-            if type(error) is nfc.clf.TransmissionError:
+            if type(err) is nfc.clf.TransmissionError:
                 raise Type1TagCommandError(nfc.tag.RECEIVE_ERROR)
-            if type(error) is nfc.clf.ProtocolError:
+            if type(err) is nfc.clf.ProtocolError:
                 raise Type1TagCommandError(nfc.tag.PROTOCOL_ERROR)
-            raise RuntimeError("unexpected " + repr(error))
+            raise RuntimeError("unexpected " + repr(err))
 
         elapsed = time.time() - started
         log.debug("<< {0} ({1:f}s)".format(hexlify(data), elapsed))

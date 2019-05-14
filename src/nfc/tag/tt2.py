@@ -591,6 +591,7 @@ class Type2Tag(Tag):
             # "unrecoverable timeout error".
             raise Type2TagCommandError(nfc.tag.TIMEOUT_ERROR)
 
+        err = None
         started = time.time()
         for retry in range(1 + retries):
             try:
@@ -599,14 +600,15 @@ class Type2Tag(Tag):
             except nfc.clf.CommunicationError as error:
                 reason = error.__class__.__name__
                 log.debug("%s after %d retries" % (reason, retry))
+                err = error
         else:
-            if type(error) is nfc.clf.TimeoutError:
+            if type(err) is nfc.clf.TimeoutError:
                 raise Type2TagCommandError(nfc.tag.TIMEOUT_ERROR)
-            if type(error) is nfc.clf.TransmissionError:
+            if type(err) is nfc.clf.TransmissionError:
                 raise Type2TagCommandError(nfc.tag.RECEIVE_ERROR)
-            if type(error) is nfc.clf.ProtocolError:
+            if type(err) is nfc.clf.ProtocolError:
                 raise Type2TagCommandError(nfc.tag.PROTOCOL_ERROR)
-            raise RuntimeError("unexpected " + repr(error))
+            raise RuntimeError("unexpected " + repr(err))
 
         elapsed = time.time() - started
         log.debug("<< {0} ({1:f}s)".format(hexlify(data), elapsed))

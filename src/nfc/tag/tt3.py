@@ -701,6 +701,7 @@ class Type3Tag(nfc.tag.Tag):
         log.debug(">> {0:02x} {1:02x} {2} {3} ({4}s)".format(
             cmd[0], cmd[1], hexlify(cmd[2:10]), hexlify(cmd[10:]), timeout))
 
+        err = None
         started = time.time()
         for retry in range(3):
             try:
@@ -709,14 +710,15 @@ class Type3Tag(nfc.tag.Tag):
             except nfc.clf.CommunicationError as error:
                 reason = error.__class__.__name__
                 log.debug("%s after %d retries" % (reason, retry))
+                err = error
         else:
-            if type(error) is nfc.clf.TimeoutError:
+            if type(err) is nfc.clf.TimeoutError:
                 raise Type3TagCommandError(nfc.tag.TIMEOUT_ERROR)
-            if type(error) is nfc.clf.TransmissionError:
+            if type(err) is nfc.clf.TransmissionError:
                 raise Type3TagCommandError(nfc.tag.RECEIVE_ERROR)
-            if type(error) is nfc.clf.ProtocolError:  # pragma: no branch
+            if type(err) is nfc.clf.ProtocolError:  # pragma: no branch
                 raise Type3TagCommandError(nfc.tag.PROTOCOL_ERROR)
-            raise RuntimeError("unpxpected " + repr(error))
+            raise RuntimeError("unpxpected " + repr(err))
 
         if rsp[0] != len(rsp):
             log.debug("incorrect response length {0:02x}".format(rsp[0]))
