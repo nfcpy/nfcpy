@@ -125,13 +125,18 @@ class BlockCode:
 
     def __str__(self):
         s = "BlockCode(number={0}, access={1:03b}, service={2})"
-        return s.format(self.number, self.access, self.service).encode()
+        return s.format(self.number, self.access, self.service)
+
+    def __bytes__(self):
+        return str(self).encode()
 
     def pack(self):
         """Pack the block code for transmission. Returns a 2-3 byte string."""
         bn, am, sx = self.number, self.access, self.service
-        return chr(bool(bn < 256) << 7 | (am & 0x7) << 4 | (sx & 0xf)) + \
-            (chr(bn) if bn < 256 else pack("<H", bn))
+        return bytes(
+                bytearray([bool(bn < 256) << 7 | (am & 0x7) << 4 | (sx & 0xf)]) +
+               (bytearray([bn]) if bn < 256 else pack("<H", bn))
+        )
 
 
 class Type3Tag(nfc.tag.Tag):
@@ -253,7 +258,7 @@ class Type3Tag(nfc.tag.Tag):
     def __str__(self):
         s = " PMM={pmm} SYS={sys:04X}"
         return nfc.tag.Tag.__str__(self) + s.format(
-            pmm=hexlify(self.pmm).upper(), sys=self.sys)
+            pmm=hexlify(self.pmm).decode().upper(), sys=self.sys)
 
     def _is_present(self):
         # Check if the card still responds to the acquired system code
@@ -555,8 +560,8 @@ class Type3Tag(nfc.tag.Tag):
                + b''.join([bc.pack() for bc in block_list])
 
         log.debug("read w/o encryption service/block list: {0} / {1}".format(
-            ' '.join([hexlify(sc.pack()) for sc in service_list]),
-            ' '.join([hexlify(bc.pack()) for bc in block_list])))
+            ' '.join([hexlify(sc.pack()).decode() for sc in service_list]),
+            ' '.join([hexlify(bc.pack()).decode() for bc in block_list])))
 
         data = self.send_cmd_recv_rsp(0x06, data, timeout)
 
@@ -637,8 +642,8 @@ class Type3Tag(nfc.tag.Tag):
                + bytearray(data)
 
         log.debug("write w/o encryption service/block list: {0} / {1}".format(
-            ' '.join([hexlify(sc.pack()) for sc in service_list]),
-            ' '.join([hexlify(bc.pack()) for bc in block_list])))
+            ' '.join([hexlify(sc.pack()).decode() for sc in service_list]),
+            ' '.join([hexlify(bc.pack()).decode() for bc in block_list])))
 
         self.send_cmd_recv_rsp(0x08, data, timeout)
 
@@ -748,7 +753,7 @@ class Type3TagEmulation(nfc.tag.TagEmulation):
     def __str__(self):
         """x.__str__() <==> str(x)"""
         return "Type3TagEmulation IDm={id} PMm={pmm} SYS={sys}".format(
-            id=hexlify(self.idm), pmm=hexlify(self.pmm), sys=hexlify(self.sys))
+            id=hexlify(self.idm).decode(), pmm=hexlify(self.pmm).decode(), sys=hexlify(self.sys).decode())
 
     def add_service(self, service_code, block_read_func, block_write_func):
         def default_block_read(block_number, rb, re):

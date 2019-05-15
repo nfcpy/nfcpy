@@ -220,12 +220,13 @@ class MifareUltralightC(tt2.Type2Tag):
 
         ra = os.urandom(8)
         iv = bytes(rsp[1:9])
-        m2 = triple_des(key, CBC, iv).encrypt(ra + rb[1:8] + rb[0])
+
+        m2 = triple_des(key, CBC, iv).encrypt(ra + rb[1:8] + bytes(bytearray([rb[0]])))
 
         log.debug("sending response")
-        log.debug("ra = {}".format(hexlify(ra)))
-        log.debug("iv = {}".format(hexlify(iv)))
-        log.debug("m2 = {}".format(hexlify(m2)))
+        log.debug("ra = {}".format(hexlify(ra).decode()))
+        log.debug("iv = {}".format(hexlify(iv).decode()))
+        log.debug("m2 = {}".format(hexlify(m2).decode()))
         try:
             rsp = self.transceive(b"\xAF" + m2)
         except tt2.Type2TagCommandError:
@@ -234,10 +235,10 @@ class MifareUltralightC(tt2.Type2Tag):
         m3 = bytes(rsp[1:9])
         iv = m2[8:16]
         log.debug("received confirmation")
-        log.debug("iv = {}".format(hexlify(iv)))
-        log.debug("m3 = {}".format(hexlify(m3)))
+        log.debug("iv = {}".format(hexlify(iv).decode()))
+        log.debug("m3 = {}".format(hexlify(m3).decode()))
 
-        return triple_des(key, CBC, iv).decrypt(m3) == ra[1:9] + ra[0]
+        return triple_des(key, CBC, iv).decrypt(m3) == ra[1:9] + bytes(bytearray([ra[0]]))
 
 
 class NTAG203(tt2.Type2Tag):

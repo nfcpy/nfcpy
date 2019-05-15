@@ -794,17 +794,17 @@ class Device(device.Device):
             offset = 1 if brty == "106A" else 0
             try:
                 if brty == "106A" and data[0] != 0xF0:
-                    log.warn("rcvd frame has invalid start byte")
+                    log.warning("rcvd frame has invalid start byte")
                 elif data[offset] != len(data) - offset:
-                    log.warn("rcvd frame has incorrect length byte")
+                    log.warning("rcvd frame has incorrect length byte")
                 elif data[offset+1] != 0xD4:
-                    log.warn("rcvd frame command byte 1 is not D4h")
+                    log.warning("rcvd frame command byte 1 is not D4h")
                 elif data[offset+2] not in cmd_set:
-                    log.warn("rcvd frame command byte 2 not in %r" % cmd_set)
+                    log.warning("rcvd frame command byte 2 not in %r" % cmd_set)
                 else:
                     return data[offset+1:]
             except (IndexError):
-                log.warn("rcvd frame with less than header size")
+                log.warning("rcvd frame with less than header size")
 
         def send_res_recv_req(brty, data, timeout):
             if data:
@@ -825,10 +825,10 @@ class Device(device.Device):
                     log.debug("%s send ATR_RES %s", brty, hexlify(atr_res))
                     data = send_res_recv_req(brty, atr_res, 1000)
                 else:
-                    log.warn("ATR_REQ must be 16 to 64 byte")
+                    log.warning("ATR_REQ must be 16 to 64 byte")
                     data = None
             except (CommunicationError) as error:
-                log.warn(str(error))
+                log.warning(str(error))
                 data = None
 
         def send_dsl_res(brty, data):

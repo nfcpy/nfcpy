@@ -959,11 +959,11 @@ class TestServiceDiscovery:
             nfc.llcp.pdu.ServiceNameLookup(1, 1, sdres=[(101, 0)])
 
     def test_dequeue_miu_is_exhausted(self, sdp):
-        sdp.sdreq.append((2, 'urn:nfc:sn:svc'))
-        recv_sdreq = [(101, 'urn:nfc:sn:service')]
+        sdp.sdreq.append((2, b'urn:nfc:sn:svc'))
+        recv_sdreq = [(101, b'urn:nfc:sn:service')]
         sdp.enqueue(nfc.llcp.pdu.ServiceNameLookup(1, 1, sdreq=recv_sdreq))
         assert sdp.dequeue(0, 0) == nfc.llcp.pdu.ServiceNameLookup(1, 1)
         assert sdp.dequeue(8, 0) == \
             nfc.llcp.pdu.ServiceNameLookup(1, 1, sdres=[(101, 0)])
         assert sdp.dequeue(128, 0) == \
-            nfc.llcp.pdu.ServiceNameLookup(1, 1, sdreq=[(2, 'urn:nfc:sn:svc')])
+            nfc.llcp.pdu.ServiceNameLookup(1, 1, sdreq=[(2, b'urn:nfc:sn:svc')])

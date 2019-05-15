@@ -102,7 +102,7 @@ class TransmissionControlObject(object):
 
     def bind(self, addr):
         if self.addr and addr and self.addr != addr:
-            log.warn("socket rebound from {0} to {1}".format(self.addr, addr))
+            log.warning("socket rebound from {0} to {1}".format(self.addr, addr))
         self.addr = addr
         return self.addr
 
@@ -153,7 +153,7 @@ class TransmissionControlObject(object):
                 self.recv_ready.notify()
                 return True
             else:
-                log.warn("discard {0}".format(rcvd_pdu))
+                log.warning("discard {0}".format(rcvd_pdu))
                 return False
 
     def dequeue(self, miu_size, icv_size, notify=True):
@@ -320,10 +320,10 @@ class LogicalDataLink(TransmissionControlObject):
     #
     def enqueue(self, rcvd_pdu):
         if not rcvd_pdu.name == "UI":
-            log.warn("ignore %s PDU on logical data link", rcvd_pdu.name)
+            log.warning("ignore %s PDU on logical data link", rcvd_pdu.name)
             return False
         if len(rcvd_pdu.data) > self.recv_miu:
-            log.warn("received UI PDU exceeds local link MIU")
+            log.warning("received UI PDU exceeds local link MIU")
             return False
         return super(LogicalDataLink, self).enqueue(rcvd_pdu)
 
@@ -605,7 +605,7 @@ class DataLinkConnection(TransmissionControlObject):
 
         elif self.state.LISTEN and rcvd_pdu.name == "CONNECT":
             if super(DataLinkConnection, self).enqueue(rcvd_pdu) is False:
-                log.warn("full backlog on listening socket")
+                log.warning("full backlog on listening socket")
                 self.send_queue.append(pdu.DisconnectedMode(
                     rcvd_pdu.ssap, rcvd_pdu.dsap, reason=0x20))
 

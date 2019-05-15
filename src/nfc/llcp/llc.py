@@ -781,7 +781,7 @@ class LogicalLinkController(object):
         socket.connect(dest)
         log.debug("connected ({0} ===> {1})".format(socket.addr, socket.peer))
         if socket.send_miu > self.cfg['send-miu']:
-            log.warn("reducing outbound miu to not exceed the link miu")
+            log.warning("reducing outbound miu to not exceed the link miu")
             socket.send_miu = self.cfg['send-miu']
 
     def listen(self, socket, backlog):
@@ -809,7 +809,7 @@ class LogicalLinkController(object):
             log.debug("new data link connection ({0} <=== {1})"
                       .format(client.addr, client.peer))
             if client.send_miu > self.cfg['send-miu']:
-                log.warn("reducing outbound miu to comply with link miu")
+                log.warning("reducing outbound miu to comply with link miu")
                 client.send_miu = self.cfg['send-miu']
             return client
 
