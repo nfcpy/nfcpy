@@ -489,7 +489,7 @@ class Type2Tag(Tag):
                 INVALID_PAGE_ERROR if self.target else nfc.tag.RECEIVE_ERROR)
 
         if len(data) != 16:
-            log.debug(f"invalid response {hexlify(data)}")
+            log.debug("invalid response {}".format(hexlify(data)))
             raise Type2TagCommandError(INVALID_RESPONSE_ERROR)
 
         return data
@@ -511,7 +511,7 @@ class Type2Tag(Tag):
         rsp = self.transceive(bytearray([0xA2, page % 256]) + data)
 
         if len(rsp) != 1:
-            log.debug(f"invalid response {hexlify(data)}")
+            log.debug("invalid response {}".format(hexlify(data)))
             raise Type2TagCommandError(INVALID_RESPONSE_ERROR)
 
         if rsp[0] != 0x0A:  # NAK

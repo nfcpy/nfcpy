@@ -59,7 +59,7 @@ class Parameter:
                 raise DecodeError("MIUX TLV length error")
             V = struct.unpack('>H', V)[0]
             if V & 0xF800:
-                log.warn("MIUX TLV reserved bits set")
+                log.warning("MIUX TLV reserved bits set")
                 V = V & 0x07FF
         elif T == Parameter.WKS:
             if L != 2:
@@ -74,22 +74,22 @@ class Parameter:
                 raise DecodeError("RW TLV length error")
             V = struct.unpack('B', V)[0]
             if V & 0xF0:
-                log.warn("RW TLV reserved bits set")
+                log.warning("RW TLV reserved bits set")
                 V = V & 0x0F
         elif T == Parameter.SN and L == 0:
-            log.warn("SN TLV with zero-length service name")
+            log.warning("SN TLV with zero-length service name")
         elif T == Parameter.OPT:
             if L != 1:
                 raise DecodeError("OPT TLV length error")
             V = struct.unpack_from('B', V)[0]
             if V & 0xF8:
-                log.warn("OPT TLV reserved bits set")
+                log.warning("OPT TLV reserved bits set")
                 V = V & 0x07
         elif T == Parameter.SDREQ:
             if L == 0:
                 raise DecodeError("SDREQ TLV length error")
             if L == 1:
-                log.warn("SDREQ TLV with zero-length service name")
+                log.warning("SDREQ TLV with zero-length service name")
             V = struct.unpack('B%ds' % (L-1), V)
         elif T == Parameter.SDRES:
             if L != 2:
@@ -97,12 +97,12 @@ class Parameter:
             V = struct.unpack('BB', V)
         elif T == Parameter.ECPK:
             if L == 0:
-                log.warn("ECPK TLV with zero-length value")
+                log.warning("ECPK TLV with zero-length value")
             if L & 1:
-                log.warn("ECPK TLV with odd length value")
+                log.warning("ECPK TLV with odd length value")
         elif T == Parameter.RN:
             if L == 0:
-                log.warn("RN TLV with zero-length value")
+                log.warning("RN TLV with zero-length value")
 
         return (T, L, V)
 
@@ -271,7 +271,7 @@ class ParameterExchange(ProtocolDataUnit):
             elif T == Parameter.OPT:
                 pax_pdu._opt = V
             else:
-                log.warn("invalid TLV %r in PAX PDU", (T, L, V))
+                log.warning("invalid TLV %r in PAX PDU", (T, L, V))
             offset, size = offset + 2 + L, size - 2 - L
         return pax_pdu
 
@@ -516,7 +516,7 @@ class Connect(ProtocolDataUnit):
             elif T == Parameter.SN:
                 connect_pdu.sn = V
             else:
-                log.warn("invalid TLV %r in CONNECT PDU", (T, L, V))
+                log.warning("invalid TLV %r in CONNECT PDU", (T, L, V))
             offset, size = offset + 2 + L, size - 2 - L
         return connect_pdu
 
@@ -588,7 +588,7 @@ class ConnectionComplete(ProtocolDataUnit):
             elif T == Parameter.RW:
                 cc_pdu.rw = V
             else:
-                log.warn("invalid TLV %r in CC PDU", (T, L, V))
+                log.warning("invalid TLV %r in CC PDU", (T, L, V))
             offset, size = offset + 2 + L, size - 2 - L
         return cc_pdu
 
@@ -738,7 +738,7 @@ class ServiceNameLookup(ProtocolDataUnit):
             elif T == Parameter.SDRES:
                 snl_pdu.sdres.append(V)
             else:
-                log.warn("invalid TLV %r in SNL PDU", (T, L, V))
+                log.warning("invalid TLV %r in SNL PDU", (T, L, V))
             offset, size = offset + 2 + L, size - 2 - L
         return snl_pdu
 
@@ -850,7 +850,7 @@ class ReceiveReady(NumberedProtocolDataUnit):
     def decode(cls, data, offset, size):
         dsap, ssap, ns, nr = cls.decode_header(data, offset, size)
         if ns != 0:
-            log.warn("reserved bits set in sequence field")
+            log.warning("reserved bits set in sequence field")
         return cls(dsap, ssap, nr)
 
     def encode(self):
@@ -870,7 +870,7 @@ class ReceiveNotReady(NumberedProtocolDataUnit):
     def decode(cls, data, offset, size):
         dsap, ssap, ns, nr = cls.decode_header(data, offset, size)
         if ns != 0:
-            log.warn("reserved bits set in sequence field")
+            log.warning("reserved bits set in sequence field")
         return cls(dsap, ssap, nr)
 
     def encode(self):

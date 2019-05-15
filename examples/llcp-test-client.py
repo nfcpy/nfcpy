@@ -848,7 +848,7 @@ class TestProgram(CommandLineInterface):
         if llc.secure_data_transfer is False:
             raise TestSkip("secure data transfer is not enabled")
         if self.options.test.index('15') != len(self.options.test) - 1:
-            log.warn("Test 15 causes link termination, further tests skipped")
+            log.warning("Test 15 causes link termination, further tests skipped")
             del self.options.test[self.options.test.index('15')+1:]
         
         socket = nfc.llcp.Socket(llc, nfc.llcp.LOGICAL_DATA_LINK)
@@ -904,7 +904,7 @@ class TestProgram(CommandLineInterface):
         if llc.secure_data_transfer is False:
             raise TestSkip("secure data transfer is not enabled")
         if self.options.test.index('16') != len(self.options.test) - 1:
-            log.warn("Test 16 causes link termination, further tests skipped")
+            log.warning("Test 16 causes link termination, further tests skipped")
             del self.options.test[self.options.test.index('16')+1:]
         
         socket1 = nfc.llcp.Socket(llc, nfc.llcp.LOGICAL_DATA_LINK)
@@ -971,7 +971,7 @@ class TestProgram(CommandLineInterface):
         if llc.secure_data_transfer is False:
             raise TestSkip("secure data transfer is not enabled")
         if self.options.test.index('17') != len(self.options.test) - 1:
-            log.warn("Test 17 causes link termination, further tests skipped")
+            log.warning("Test 17 causes link termination, further tests skipped")
             del self.options.test[self.options.test.index('17')+1:]
         
         socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
@@ -1027,7 +1027,7 @@ class TestProgram(CommandLineInterface):
         if llc.secure_data_transfer is False:
             raise TestSkip("secure data transfer is not enabled")
         if self.options.test.index('18') != len(self.options.test) - 1:
-            log.warn("Test 18 causes link termination, further tests skipped")
+            log.warning("Test 18 causes link termination, further tests skipped")
             del self.options.test[self.options.test.index('18')+1:]
         
         socket1 = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)

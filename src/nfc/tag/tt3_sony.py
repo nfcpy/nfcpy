@@ -486,7 +486,7 @@ class FelicaLite(tt3.Type3Tag):
         # reversed order.
         assert len(data) % 8 == 0 and len(key) == 16 and len(iv) == 8
         key = bytes(key[8:] + key[:8]) if flip_key else bytes(key)
-        txt = [b''.join(reversed(x)) for x in zip(*[iter(bytes(data))]*8)]
+        txt = [bytes(bytearray(reversed(x))) for x in zip(*[iter(bytes(data))]*8)]
         return triple_des(key, CBC, bytes(iv)).encrypt(b''.join(txt))[:-9:-1]
 
     def protect(self, password=None, read_protect=False, protect_from=0):

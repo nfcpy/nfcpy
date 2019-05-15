@@ -74,7 +74,10 @@ intersphinx_mapping = {
     'ndeflib': ('https://ndeflib.readthedocs.io/en/stable', None),
 }
 autodoc_member_order = 'bysource'
-autodoc_default_flags = ['members', 'show-inheritance']
+autodoc_default_options = {
+    'members': '',
+    'show-inheritance': True,
+}
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']

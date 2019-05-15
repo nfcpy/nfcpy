@@ -225,7 +225,7 @@ class Initiator(DataExchangeProtocol):
                 for i in range(3):
                     req = RTOX(res.data[0], self.did, self.nad)
                     rwt = res.data[0] * self.rwt
-                    log.warn("target requested %.3f sec more time", rwt)
+                    log.warning("target requested %.3f sec more time", rwt)
                     res = self.send_dep_req_recv_dep_res(req, rwt, timeout)
                     if res.pfb.fmt != DEP_RES.TimeoutExtension:
                         break
@@ -254,7 +254,7 @@ class Initiator(DataExchangeProtocol):
                 for i in range(3):
                     req = RTOX(res.data[0], self.did, self.nad)
                     rwt = res.data[0] * self.rwt
-                    log.warn("target requested %.3f sec more time", rwt)
+                    log.warning("target requested %.3f sec more time", rwt)
                     res = self.send_dep_req_recv_dep_res(req, rwt, timeout)
                     if res.pfb.fmt != DEP_RES.TimeoutExtension:
                         break
@@ -328,7 +328,7 @@ class Initiator(DataExchangeProtocol):
 
         if rwt > timeout:
             text = "response waiting time %.3f exceeds the timeout of %.3f sec"
-            log.warn(text, rwt, timeout)
+            log.warning(text, rwt, timeout)
 
         deadline = time.time() + timeout
         while True:
@@ -665,7 +665,7 @@ class Target(DataExchangeProtocol):
 #
 class ATR_REQ_RES(object):
     def __str__(self):
-        nfcid3, gb = [hexlify(ba) for ba in [self.nfcid3, self.gb]]
+        nfcid3, gb = [hexlify(ba).decode() for ba in [self.nfcid3, self.gb]]
         return self.PDU_SHOW.format(self=self, nfcid3=nfcid3, gb=gb)
 
     @property
@@ -805,6 +805,10 @@ class DEP_REQ_RES(object):
         self.data = bytearray() if data is None else data
 
     def __str__(self):
+        data = hexlify(self.data).decode()
+        return self.PDU_SHOW.format(self=self, data=data)
+
+    def bytes(self):
         data = hexlify(self.data)
         return self.PDU_SHOW.format(self=self, data=data)
 
@@ -859,7 +863,7 @@ class DSL_REQ_RES(object):
             return cls(data[2] if len(data) == 3 else None)
 
     def encode(self):
-        return self.PDU_CODE + (bytearray("") if self.did is None else bytearray([self.did]))
+        return self.PDU_CODE + (bytearray(b"") if self.did is None else bytearray([self.did]))
 
 
 class DSL_REQ(DSL_REQ_RES):

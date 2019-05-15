@@ -248,7 +248,7 @@ class Tag(object):
             s = self.type + ' ' + repr(self._product)
         except AttributeError:
             s = self.type
-        return f"{s} ID={hexlify(self.identifier).upper()}"
+        return "{} ID={}".format(s, hexlify(self.identifier).decode().upper())
 
     @property
     def clf(self):
