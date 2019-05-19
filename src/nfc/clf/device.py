@@ -121,7 +121,7 @@ def connect(path):
 
     if path.startswith("udp"):
         path = path.split(':')
-        host = str(path[1]) if len(path) > 1 and path[1] else '127.0.0.1'
+        host = str(path[1]) if len(path) > 1 and path[1] else 'localhost'
         port = int(path[2]) if len(path) > 2 and path[2] else 54321
         driver = importlib.import_module("nfc.clf.udp")
         device = driver.init(host, port)
