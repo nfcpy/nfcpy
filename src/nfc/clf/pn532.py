@@ -169,7 +169,8 @@ class Chipset(pn53x.Chipset):
             self.chipset_error(data)
 
     def tg_init_as_target(self, mode, mifare_params, felica_params, nfcid3t,
-                          general_bytes=b'', historical_bytes=b'', timeout=None):
+                          general_bytes=b'', historical_bytes=b'',
+                          timeout=None):
         assert type(mode) is int and mode & 0b11111000 == 0
         assert len(mifare_params) == 6
         assert len(felica_params) == 18

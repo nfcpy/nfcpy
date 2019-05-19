@@ -21,7 +21,7 @@
 # -----------------------------------------------------------------------------
 import logging
 import warnings
-from binascii import hexlify, unhexlify
+from binascii import hexlify
 from ndef import message_decoder, message_encoder
 
 logging.captureWarnings(True)

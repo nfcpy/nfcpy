@@ -1176,7 +1176,9 @@ class LocalTarget(Target):
     @property
     def brty(self):
         """A string that combines bitrate and technology type, e.g. '106A'."""
-        return self._brty_send if self._brty_send == self._brty_recv else self._brty_send+"/"+self._brty_recv
+        return self._brty_send \
+            if self._brty_send == self._brty_recv \
+            else self._brty_send+"/"+self._brty_recv
 
     @brty.setter
     def brty(self, value):
