@@ -26,6 +26,7 @@ import logging
 log = logging.getLogger('main')
 
 import argparse
+import struct
 
 from .cli import CommandLineInterface, TestFail
 
@@ -94,8 +95,8 @@ class TestProgram(CommandLineInterface):
 
         ndef_message_sent = list()
         ndef_message_rcvd = list()
-
-        payload = bytes(bytearray(range(122 - 29)))
+        l = 122 - 29
+        payload = struct.pack("{}B".format(l), *range(l))
         record = nfc.ndef.Record("application/octet-stream", "1", payload)
         ndef_message_sent.append(nfc.ndef.Message(record))
 
@@ -132,7 +133,8 @@ class TestProgram(CommandLineInterface):
         ndef_message_sent = list()
         ndef_message_rcvd = list()
 
-        payload = bytes(bytearray(range(2171 - 29)))
+        l = 2171 - 29
+        payload = struct.pack("{}B".format(l), *range(l))
         record = nfc.ndef.Record("application/octet-stream", "1", payload)
         ndef_message_sent.append(nfc.ndef.Message(record))
 
@@ -170,7 +172,7 @@ class TestProgram(CommandLineInterface):
         ndef_message_sent = list()
         ndef_message_rcvd = list()
 
-        payload = bytes(bytearray([x % 256 for x in range(50)]))
+        payload = struct.pack("50B", *[x % 256 for x in range(50)])
         record = nfc.ndef.Record("application/octet-stream", "1", payload)
         ndef_message_sent.append(nfc.ndef.Message(record))
         record = nfc.ndef.Record("application/octet-stream", "2", payload)
@@ -215,7 +217,8 @@ class TestProgram(CommandLineInterface):
     def test_05(self, llc):
         """Undeliverable resource"""
 
-        payload = bytes(bytearray(range(122 - 29)))
+        l = 122-29
+        payload = struct.pack("{}B".format(l), *range(l))
         record = nfc.ndef.Record("application/octet-stream", "1", payload)
         ndef_message_sent = nfc.ndef.Message(record)
 
@@ -275,7 +278,8 @@ class TestProgram(CommandLineInterface):
     def test_07(self, llc):
         """Default server limits"""
 
-        payload = bytes(bytearray([x % 256 for x in range(1024 - 32)]))
+        l = 1024 - 32
+        payload = struct.pack("{}B".format(l), *[x % 256 for x in range(l)])
         record = nfc.ndef.Record("application/octet-stream", "1", payload)
         ndef_message = nfc.ndef.Message(record)
 

@@ -45,7 +45,8 @@ class BluetoothConfigRecord(Record):
     @property
     def data(self):
         f = io.BytesIO()
-        f.write(bytes(bytearray(reversed(self._bdaddr))))
+        f.write(struct.pack(
+                "{}B".format(self._bdaddr), *reversed(self._bdaddr)))
         for key, value in self.eir.items():
             f.write(struct.pack("B", 1 + len(value))
                     + struct.pack("B", key)

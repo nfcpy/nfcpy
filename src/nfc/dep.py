@@ -24,6 +24,7 @@ import nfc.clf
 import os
 import time
 import collections
+import struct
 from binascii import hexlify
 
 import logging
@@ -374,10 +375,10 @@ class Initiator(DataExchangeProtocol):
 
     def encode_frame(self, packet):
         frame = packet.encode()
-        frame = bytearray([len(frame) + 1]) + frame
+        frame = struct.pack("B", len(frame) + 1) + frame
         if self.target.brty == '106A':
             frame = b'\xF0' + frame
-        return frame
+        return bytearray(frame)
 
     def decode_frame(self, frame):
         if self.target.brty == '106A' and frame.pop(0) != 0xF0:
@@ -452,9 +453,10 @@ class Target(DataExchangeProtocol):
             self.rwt = 4096/13.56E6 * pow(2, rwt)
             self.did = atr_req.did if atr_req.did > 0 else None
             self.acm = not (target.sens_res or target.sensf_res)
-            self.cmd = bytearray([len(target.dep_req)+1]) + target.dep_req
+            self.cmd = bytearray(
+                struct.pack("B", len(target.dep_req)+1) + target.dep_req)
             if target.brty == "106A":
-                self.cmd = bytearray([0xF0]) + self.cmd
+                self.cmd = bytearray(b"\xF0" + self.cmd)
             self.target = target
 
             self.pcnt.rcvd["ATR"] += 1
@@ -640,10 +642,10 @@ class Target(DataExchangeProtocol):
 
     def encode_frame(self, packet):
         frame = packet.encode()
-        frame = bytearray([len(frame) + 1]) + frame
+        frame = struct.pack("B", len(frame) + 1) + frame
         if self.target.brty == '106A':
             frame = b'\xF0' + frame
-        return frame
+        return bytearray(frame)
 
     def decode_frame(self, frame):
         if self.target.brty == '106A' and frame.pop(0) != 0xF0:
@@ -830,7 +832,7 @@ class DEP_REQ_RES(object):
     def encode(self):
         pfb = self.pfb
         pfb = (pfb.fmt << 4) | (pfb.nad << 3) | (pfb.did << 2) | (pfb.pni)
-        data = self.PDU_CODE + bytearray([pfb])
+        data = self.PDU_CODE + struct.pack("B", pfb)
         if self.pfb.did:
             data.append(self.did)
         if self.pfb.nad:
@@ -864,9 +866,9 @@ class DSL_REQ_RES(object):
             return cls(data[2] if len(data) == 3 else None)
 
     def encode(self):
-        return self.PDU_CODE + (bytearray(b"")
+        return self.PDU_CODE + (b""
                                 if self.did is None
-                                else bytearray([self.did]))
+                                else struct.pack("B", self.did))
 
 
 class DSL_REQ(DSL_REQ_RES):

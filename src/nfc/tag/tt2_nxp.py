@@ -23,6 +23,7 @@ import nfc.clf
 from . import tt2
 
 import os
+import struct
 from binascii import hexlify
 from pyDes import triple_des, CBC
 
@@ -223,7 +224,7 @@ class MifareUltralightC(tt2.Type2Tag):
         iv = bytes(rsp[1:9])
 
         m2 = triple_des(key, CBC, iv).encrypt(
-                ra + rb[1:8] + bytes(bytearray([rb[0]])))
+                ra + rb[1:8] + struct.pack("B", rb[0]))
 
         log.debug("sending response")
         log.debug("ra = {}".format(hexlify(ra).decode()))
@@ -241,7 +242,7 @@ class MifareUltralightC(tt2.Type2Tag):
         log.debug("m3 = {}".format(hexlify(m3).decode()))
 
         return triple_des(key, CBC, iv).decrypt(m3) == \
-            ra[1:9] + bytes(bytearray([ra[0]]))
+            ra[1:9] + struct.pack("B", ra[0])
 
 
 class NTAG203(tt2.Type2Tag):
