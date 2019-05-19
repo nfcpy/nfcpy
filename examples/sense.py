@@ -25,6 +25,7 @@ import re
 import time
 import errno
 import argparse
+import struct
 import logging
 logging.basicConfig(format='%(relativeCreated)d ms [%(name)s] %(message)s')
 
@@ -85,7 +86,7 @@ def main(args):
                     if atr_req[15] == 0xFF:
                         atr_req[15] = 0x30 | (len(atr_req) > 16) << 1
                     try:
-                        data = chr(len(atr_req)+1) + atr_req
+                        data = struct.pack("B", len(atr_req)+1) + atr_req
                         if target.brty == "106A":
                             data.insert(0, 0xF0)
                         data = clf.exchange(data, 1.0)

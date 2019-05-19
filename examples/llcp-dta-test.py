@@ -39,7 +39,6 @@ from .cli import CommandLineInterface, TestFail, TestSkip
 import nfc
 import nfc.llcp
 import nfc.llcp.pdu
-from nfc.llcp.pdu import UnknownProtocolDataUnit
 
 
 def hexstr(octets, delimiter=''):
