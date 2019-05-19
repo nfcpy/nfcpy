@@ -195,7 +195,7 @@ class Type4Tag(nfc.tag.Tag):
             for self._aid in (ndef_aid_v2, ndef_aid_v1):
                 try:
                     self.tag.send_apdu(0, 0xA4, 0x04, 0x00, self._aid)
-                    log.debug("selected {}".format(hexlify(self._aid)))
+                    log.debug("selected {}".format(hexlify(self._aid).decode()))
                     return True
                 except Type4TagCommandError as error:
                     if error.errno <= 0:
@@ -205,10 +205,10 @@ class Type4Tag(nfc.tag.Tag):
             p2 = 0x00 if self._aid == ndef_aid_v1 else 0x0C
             try:
                 self.tag.send_apdu(0, 0xA4, 0x00, p2, fid)
-                log.debug("selected {}".format(hexlify(fid)))
+                log.debug("selected {}".format(hexlify(fid).decode()))
                 return True
             except Type4TagCommandError:
-                log.debug("failed to select {}".format(hexlify(fid)))
+                log.debug("failed to select {}".format(hexlify(fid).decode()))
 
         def _read_binary(self, offset, size):
             (p1, p2) = pack(">H", offset)
@@ -267,7 +267,7 @@ class Type4Tag(nfc.tag.Tag):
 
             ndef_control_tlv_format = ">2sHBB" if tag == 4 else ">2sIBB"
             ndef_file, mfs, rf, wf = unpack(ndef_control_tlv_format, val)
-            log.debug("ndef file identifier %s", hexlify(ndef_file))
+            log.debug("ndef file identifier %s", hexlify(ndef_file).decode())
             log.debug("ndef file size limit %d", mfs)
             log.debug("ndef file read flag is %d", rf)
             log.debug("ndef file write flag is %d", wf)
@@ -433,9 +433,9 @@ class Type4Tag(nfc.tag.Tag):
         specifying the seconds to wait.
 
         """
-        log.debug(">> {0}".format(hexlify(data)))
+        log.debug(">> {0}".format(hexlify(data).decode()))
         data = self._dep.exchange(data, timeout)
-        log.debug("<< {0}".format(hexlify(data) if data else "None"))
+        log.debug("<< {0}".format(hexlify(data).decode() if data else "None"))
         return data
 
     def send_apdu(self, cla, ins, p1, p2, data=None, mrl=0, check_status=True):
@@ -512,7 +512,7 @@ class Type4ATag(Type4Tag):
         else:
             rats_cmd = bytearray.fromhex("E0 80")
         rats_res = self.clf.exchange(rats_cmd, timeout=0.03)
-        log.debug("rcvd RATS response: {0}".format(hexlify(rats_res)))
+        log.debug("rcvd RATS response: {0}".format(hexlify(rats_res).decode()))
 
         fsci, fwti = rats_res[1] & 0x0F, rats_res[3] >> 4
         if fsci > 8:
@@ -548,7 +548,7 @@ class Type4BTag(Type4Tag):
         else:
             attrib_cmd = b'\x1D' + self._nfcid + b'\x00\x08\x01\x00'
         attrib_res = self.clf.exchange(attrib_cmd, timeout=0.03)
-        log.debug("rcvd ATTRIB response {0}".format(hexlify(attrib_res)))
+        log.debug("rcvd ATTRIB response {0}".format(hexlify(attrib_res).decode()))
 
         fsci, fwti = target.sensb_res[10] >> 4, target.sensb_res[11] >> 4
         if fsci > 8:

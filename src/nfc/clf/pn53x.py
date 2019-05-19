@@ -160,7 +160,7 @@ class Chipset(object):
         """
         if cmd_data is not None:
             assert len(cmd_data) <= self.host_command_frame_max_size - 2
-            self.log.log(logging.DEBUG-1, "{} {} {:.3f}".format(self.CMD[cmd_code], hexlify(cmd_data), timeout))
+            self.log.log(logging.DEBUG-1, "{} {} {:.3f}".format(self.CMD[cmd_code], hexlify(cmd_data).decode(), timeout))
 
             if len(cmd_data) < 254:
                 head = self.SOF + bytearray([len(cmd_data)+2]) + bytearray([254-len(cmd_data)])
@@ -708,7 +708,7 @@ class Device(device.Device):
 
         nfcf_params = bytearray(range(18))
         nfca_params = target.sens_res + target.sdd_res[1:4] + target.sel_res
-        self.log.debug("nfca_params %s", hexlify(nfca_params))
+        self.log.debug("nfca_params %s", hexlify(nfca_params).decode())
 
         # We can use TgInitAsTarget to exclusively answer Type A
         # activation when the CIU automatic mode detector is disabled
