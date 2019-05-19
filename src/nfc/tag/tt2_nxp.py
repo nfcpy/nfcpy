@@ -223,8 +223,8 @@ class MifareUltralightC(tt2.Type2Tag):
         ra = os.urandom(8)
         iv = bytes(rsp[1:9])
 
-        m2 = triple_des(key, CBC, iv).encrypt(
-                ra + rb[1:8] + struct.pack("B", rb[0]))
+        m2 = triple_des(key, CBC, iv).encrypt(ra + rb[1:8] + (
+            struct.pack("B", rb[0]) if isinstance(rb[0], int) else rb[0]))
 
         log.debug("sending response")
         log.debug("ra = {}".format(hexlify(ra).decode()))
@@ -241,8 +241,9 @@ class MifareUltralightC(tt2.Type2Tag):
         log.debug("iv = {}".format(hexlify(iv).decode()))
         log.debug("m3 = {}".format(hexlify(m3).decode()))
 
-        return triple_des(key, CBC, iv).decrypt(m3) == \
-            ra[1:9] + struct.pack("B", ra[0])
+        return triple_des(key, CBC, iv).decrypt(m3) == ra[1:9] \
+            + (struct.pack("B", ra[0]) if isinstance(ra[0], int) else ra[0])
+
 
 
 class NTAG203(tt2.Type2Tag):

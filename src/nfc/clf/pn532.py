@@ -389,12 +389,13 @@ def init(transport):
         initial_timeout = 100   # milliseconds
         change_baudrate = True  # try higher speeds
         if sys.platform.startswith('linux'):
-            board = ""  # Raspi board will identify through device tree
+            board = b""  # Raspi board will identify through device tree
             try:
-                board = open('/proc/device-tree/model').read().strip('\x00')
+                board = open('/proc/device-tree/model', "rb").read().strip(
+                        b'\x00')
             except IOError:
                 pass
-            if board.startswith("Raspberry Pi"):
+            if board.startswith(b"Raspberry Pi"):
                 log.debug("running on {}".format(board))
                 if transport.port.startswith("/dev/ttyUSB"):
                     log.debug("ttyUSB requires more time for first ack")

@@ -488,9 +488,12 @@ class FelicaLite(tt3.Type3Tag):
         # reversed order.
         assert len(data) % 8 == 0 and len(key) == 16 and len(iv) == 8
         key = bytes(key[8:] + key[:8]) if flip_key else bytes(key)
-        txt = b''.join([struct.pack("{}B".format(len(x)), *reversed(x))
-                        for x in zip(*[iter(bytes(data))]*8)])
-        return triple_des(key, CBC, bytes(iv)).encrypt(txt)[:-9:-1]
+        txt = b''.join([
+            struct.pack("{}B".format(len(x)), *reversed(x))
+            if isinstance(x[0], int)
+            else b''.join(reversed(x))
+            for x in zip(*[iter(bytes(data))]*8)])
+        return bytearray(triple_des(key, CBC, bytes(iv)).encrypt(txt)[:-9:-1])
 
     def protect(self, password=None, read_protect=False, protect_from=0):
         """Protect a FeliCa Lite Tag.
@@ -583,9 +586,9 @@ class FelicaLite(tt3.Type3Tag):
         # Perform internal authentication, i.e. ensure that the tag
         # has the same card key as in password. If the password is
         # empty, we'll try with the factory key.
-        key = struct.pack("16B", *password[0:16]) if password else b"\0" * 16
+        key = b"\0" * 16 if not password else password[0:16]
 
-        log.debug("authenticate with key {}".format(hexlify(key)))
+        log.debug("authenticate with key {}".format(hexlify(key).decode()))
         self._authenticated = False
         self.read_from_ndef_service = self.read_without_mac
         self.write_to_ndef_service = self.write_without_mac
@@ -594,8 +597,8 @@ class FelicaLite(tt3.Type3Tag):
         # that we write to the rc block. Because the tag works little endian,
         # we reverse the order of rc1 and rc2 bytes when writing.
         rc = os.urandom(16)
-        log.debug("rc1 = {}".format(hexlify(rc[:8])))
-        log.debug("rc2 = {}".format(hexlify(rc[8:])))
+        log.debug("rc1 = {}".format(hexlify(rc[:8]).decode()))
+        log.debug("rc2 = {}".format(hexlify(rc[8:]).decode()))
         self.write_without_mac(rc[7::-1] + rc[15:7:-1], 0x80)
 
         # The session key becomes the triple_des encryption of the random
@@ -844,9 +847,7 @@ class FelicaLiteS(FelicaLite):
                     return False
 
             # if password is empty use factory key of 16 zero bytes
-            key = bytearray(password[0:16].encode("ascii")
-                            if password
-                            else b'\0' * 16)
+            key = password[0:16].encode("ascii") if password else b'\0' * 16
 
             log.debug("protect with key {}".format(hexlify(key)))
             ckv = self.read_without_mac(0x86)
