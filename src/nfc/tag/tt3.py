@@ -134,9 +134,8 @@ class BlockCode:
         """Pack the block code for transmission. Returns a 2-3 byte string."""
         bn, am, sx = self.number, self.access, self.service
         return bytes(
-                bytearray([bool(bn < 256) << 7 | (am & 0x7) << 4 | (sx & 0xf)]) +
-               (bytearray([bn]) if bn < 256 else pack("<H", bn))
-        )
+                bytearray([bool(bn < 256) << 7 | (am & 0x7) << 4 | (sx & 0xf)])
+                + (bytearray([bn]) if bn < 256 else pack("<H", bn)))
 
 
 class Type3Tag(nfc.tag.Tag):
@@ -554,10 +553,11 @@ class Type3Tag(nfc.tag.Tag):
         a, b, e = self.pmm[5] & 7, self.pmm[5] >> 3 & 7, self.pmm[5] >> 6
         timeout = 302.1E-6 * ((b + 1) * len(block_list) + a + 1) * 4**e
 
-        data = bytearray([len(service_list)]) \
-               + b''.join([sc.pack() for sc in service_list]) \
-               + bytearray([len(block_list)]) \
-               + b''.join([bc.pack() for bc in block_list])
+        data = bytearray([
+            len(service_list)]) \
+            + b''.join([sc.pack() for sc in service_list]) \
+            + bytearray([len(block_list)]) \
+            + b''.join([bc.pack() for bc in block_list])
 
         log.debug("read w/o encryption service/block list: {0} / {1}".format(
             ' '.join([hexlify(sc.pack()).decode() for sc in service_list]),
@@ -635,11 +635,12 @@ class Type3Tag(nfc.tag.Tag):
         a, b, e = self.pmm[6] & 7, self.pmm[6] >> 3 & 7, self.pmm[6] >> 6
         timeout = 302.1E-6 * ((b + 1) * len(block_list) + a + 1) * 4**e
 
-        data = bytearray([len(service_list)]) \
-               + b"".join([sc.pack() for sc in service_list]) \
-               + bytearray([len(block_list)]) \
-               + b"".join([bc.pack() for bc in block_list]) \
-               + bytearray(data)
+        data = bytearray([
+            len(service_list)]) \
+            + b"".join([sc.pack() for sc in service_list]) \
+            + bytearray([len(block_list)]) \
+            + b"".join([bc.pack() for bc in block_list]) \
+            + bytearray(data)
 
         log.debug("write w/o encryption service/block list: {0} / {1}".format(
             ' '.join([hexlify(sc.pack()).decode() for sc in service_list]),
@@ -727,7 +728,7 @@ class Type3Tag(nfc.tag.Tag):
             return rsp[2:]
         if check_status and rsp[10] != 0:
             log.debug("tag returned error status {}".format(
-                    hexlify(rsp[10:12].decode())))
+                    hexlify(rsp[10:12]).decode()))
             raise Type3TagCommandError(unpack(">H", rsp[10:12])[0])
         if not check_status:
             log.debug("<< {0:02x} {1:02x} {2} {3}".format(
@@ -757,7 +758,9 @@ class Type3TagEmulation(nfc.tag.TagEmulation):
     def __str__(self):
         """x.__str__() <==> str(x)"""
         return "Type3TagEmulation IDm={id} PMm={pmm} SYS={sys}".format(
-            id=hexlify(self.idm).decode(), pmm=hexlify(self.pmm).decode(), sys=hexlify(self.sys).decode())
+            id=hexlify(self.idm).decode(),
+            pmm=hexlify(self.pmm).decode(),
+            sys=hexlify(self.sys).decode())
 
     def add_service(self, service_code, block_read_func, block_write_func):
         def default_block_read(block_number, rb, re):
@@ -862,7 +865,8 @@ class Type3TagEmulation(nfc.tag.TagEmulation):
                 return bytearray([1 << (i % 8), 0xA2])
             block_data.extend(one_block_data)
 
-        return bytearray([0, 0, int(math.floor(len(block_data)/16))]) + block_data
+        return bytearray([0, 0, int(math.floor(len(block_data)/16))]) \
+            + block_data
 
     def write_without_encryption(self, cmd_data):
         service_list = cmd_data.pop(0) * [[None, None]]

@@ -38,7 +38,10 @@ def hexdump(octets, sep=""):
 
 def chrdump(octets, sep=""):
     return sep.join(
-        (("{:c}".format(x) if 32 <= x <= 126 else ".") if x is not None else ".") for x in octets)
+            (("{:c}".format(x) if 32 <= x <= 126 else ".")
+             if x is not None
+             else ".")
+            for x in octets)
 
 
 def pagedump(page, octets, info=None):

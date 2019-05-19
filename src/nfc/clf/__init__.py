@@ -1116,7 +1116,7 @@ class Target(object):
                 continue
             value = self.__dict__[name]
             if isinstance(value, (bytearray, str)):
-                value = binascii.hexlify(value).upper()
+                value = binascii.hexlify(value).decode().upper()
             attrs.append("{0}={1}".format(name, value))
         return "{brty} {attrs}".format(brty=self.brty, attrs=' '.join(attrs))
 

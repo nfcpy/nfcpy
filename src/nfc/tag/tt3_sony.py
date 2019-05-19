@@ -248,7 +248,8 @@ class FelicaStandard(tt3.Type3Tag):
         a, b, e = self.pmm[2] & 7, self.pmm[2] >> 3 & 7, self.pmm[2] >> 6
         timeout = 302E-6 * ((b + 1) * len(service_list) + a + 1) * 4**e
         pack = lambda x: x.pack()  # noqa: E731
-        data = bytearray([len(service_list)]) + b''.join(map(pack, service_list))
+        data = bytearray([len(service_list)]) \
+            + b''.join(map(pack, service_list))
         data = self.send_cmd_recv_rsp(0x02, data, timeout, check_status=False)
         if len(data) != 1 + len(service_list) * 2:
             log.debug("insufficient data received from tag")
@@ -486,7 +487,8 @@ class FelicaLite(tt3.Type3Tag):
         # reversed order.
         assert len(data) % 8 == 0 and len(key) == 16 and len(iv) == 8
         key = bytes(key[8:] + key[:8]) if flip_key else bytes(key)
-        txt = [bytes(bytearray(reversed(x))) for x in zip(*[iter(bytes(data))]*8)]
+        txt = [bytes(bytearray(reversed(x)))
+               for x in zip(*[iter(bytes(data))]*8)]
         return triple_des(key, CBC, bytes(iv)).encrypt(b''.join(txt))[:-9:-1]
 
     def protect(self, password=None, read_protect=False, protect_from=0):
@@ -841,7 +843,9 @@ class FelicaLiteS(FelicaLite):
                     return False
 
             # if password is empty use factory key of 16 zero bytes
-            key = bytearray(password[0:16].encode("ascii") if password else b"\0" * 16)
+            key = bytearray(password[0:16].encode("ascii")
+                            if password
+                            else b'\0' * 16)
 
             log.debug("protect with key {}".format(hexlify(key)))
             ckv = self.read_without_mac(0x86)

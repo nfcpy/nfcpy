@@ -160,7 +160,8 @@ class Chipset(object):
         """
         if cmd_data is not None:
             assert len(cmd_data) <= self.host_command_frame_max_size - 2
-            self.log.log(logging.DEBUG-1, "{} {} {:.3f}".format(self.CMD[cmd_code], hexlify(cmd_data).decode(), timeout))
+            self.log.log(logging.DEBUG-1, "{} {} {:.3f}".format(
+                    self.CMD[cmd_code], hexlify(cmd_data).decode(), timeout))
 
             if len(cmd_data) < 254:
                 head = self.SOF + bytearray([len(cmd_data)+2]) + bytearray([254-len(cmd_data)])
@@ -736,7 +737,8 @@ class Device(device.Device):
                 continue
 
             if target.sel_res[0] & 0x60 == 0x00:
-                self.log.debug("rcvd TT2_CMD %s", hexlify(memoryview(data)[1:]))
+                self.log.debug("rcvd TT2_CMD %s",
+                               hexlify(memoryview(data)[1:]).decode())
                 target = nfc.clf.LocalTarget(brty, tt2_cmd=data[1:])
                 target.sens_res = nfca_params[0:2]
                 target.sdd_res = b'\x08' + nfca_params[2:5]
@@ -748,8 +750,8 @@ class Device(device.Device):
                 (rats_cmd, rats_res) = (data[1:], target.rats_res)
                 if not rats_res:
                     rats_res = default_rats_res
-                self.log.debug("rcvd RATS_CMD %s", hexlify(rats_cmd))
-                self.log.debug("send RATS_RES %s", hexlify(rats_res))
+                self.log.debug("rcvd RATS_CMD %s", hexlify(rats_cmd).decode())
+                self.log.debug("send RATS_RES %s", hexlify(rats_res).decode())
                 try:
                     self.chipset.tg_response_to_initiator(rats_res)
                     data = self.chipset.tg_get_initiator_command(1.0)
@@ -771,7 +773,8 @@ class Device(device.Device):
             elif (target.sel_res[0] & 0x40 and data[1] == 0xF0
                   and len(data) >= 19 and data[2] == len(data)-2
                   and data[3:5] == b'\xD4\x00'):
-                self.log.debug("rcvd ATR_REQ %s", hexlify(memoryview(data)[3:]))
+                self.log.debug("rcvd ATR_REQ %s",
+                               hexlify(memoryview(data)[3:]).decode())
                 target = nfc.clf.LocalTarget(brty, atr_req=data[3:])
                 target.sens_res = nfca_params[0:2]
                 target.sdd_res = b'\x08' + nfca_params[2:5]
