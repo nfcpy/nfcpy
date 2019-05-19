@@ -164,7 +164,8 @@ class Chipset(object):
                     self.CMD[cmd_code], hexlify(cmd_data).decode(), timeout))
 
             if len(cmd_data) < 254:
-                head = self.SOF + bytearray([len(cmd_data)+2]) + bytearray([254-len(cmd_data)])
+                head = self.SOF + bytearray([len(cmd_data)+2]) \
+                       + bytearray([254-len(cmd_data)])
             else:
                 head = self.SOF + b'\xFF\xFF' + pack(">H", len(cmd_data)+2)
                 head.append((256 - sum(head[-2:])) & 0xFF)
@@ -175,7 +176,7 @@ class Chipset(object):
             try:
                 self.write_frame(head + data + tail)
                 frame = self.read_frame(timeout=100)
-            except IOError as error:
+            except IOError:
                 self.log.error("input/output error while waiting for ack")
                 raise IOError(errno.EIO, os.strerror(errno.EIO))
 
@@ -344,7 +345,8 @@ class Chipset(object):
 
     def rf_configuration(self, cfg_item, cfg_data):
         """Send an RFConfiguration command."""
-        self.command(0x32, bytearray([cfg_item]) + bytearray(cfg_data), timeout=0.1)
+        self.command(0x32, bytearray([cfg_item]) + bytearray(cfg_data),
+                     timeout=0.1)
 
     def in_jump_for_dep(self, act_pass, br, passive_data, nfcid3, gi):
         """Send an InJumpForDEP command.
@@ -404,7 +406,8 @@ class Chipset(object):
             self.chipset_error(data)
 
     def in_data_exchange(self, data, timeout, more=False):
-        data = self.command(0x40, bytearray([int(more) << 6 | 0x01]) + data, timeout)
+        data = self.command(0x40, bytearray([int(more) << 6 | 0x01]) + data,
+                            timeout)
         if data is None or data[0] & 0x3f != 0:
             self.chipset_error(data[0] & 0x3f if data else None)
         return data[1:], bool(data[0] & 0x40)
@@ -807,7 +810,8 @@ class Device(device.Device):
             ("CIU_Command",   0b00000000),  # Idle command
             ("CIU_FIFOLevel", 0b10000000),  # clear fifo
         ]
-        regs.extend(zip(25*["CIU_FIFOData"], nfca_params + nfcf_params + b"\0"))
+        regs.extend(zip(25*["CIU_FIFOData"],
+                        nfca_params + nfcf_params + b"\0"))
         regs.append(("CIU_Command", 0b00000001))  # Configure command
         self.chipset.write_register(*regs)
         regs = [
@@ -956,7 +960,8 @@ class Device(device.Device):
         raise NotImplementedError(cname + '._init_as_target()')
 
     def _send_atr_response(self, atr_res, timeout):
-        self.chipset.tg_response_to_initiator(bytearray([len(atr_res)+1]) + atr_res)
+        self.chipset.tg_response_to_initiator(
+                bytearray([len(atr_res)+1]) + atr_res)
         return self.chipset.tg_get_initiator_command(timeout)
 
     def _send_psl_response(self, psl_req, psl_res, timeout):

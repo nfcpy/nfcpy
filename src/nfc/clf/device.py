@@ -106,6 +106,7 @@ def connect(path):
             for dev in devices:
                 log.debug("trying {0} on {1}".format(drv, dev))
                 driver = importlib.import_module("nfc.clf." + drv)
+                tty = None
                 try:
                     tty = transport.TTY(dev)
                     device = driver.init(tty)
@@ -113,13 +114,14 @@ def connect(path):
                     return device
                 except IOError as error:
                     log.debug(error)
-                    tty.close()
+                    if tty is not None:
+                        tty.close()
                     if not globbed:
                         raise
 
     if path.startswith("udp"):
         path = path.split(':')
-        host = str(path[1]) if len(path) > 1 and path[1] else 'localhost'
+        host = str(path[1]) if len(path) > 1 and path[1] else '127.0.0.1'
         port = int(path[2]) if len(path) > 2 and path[2] else 54321
         driver = importlib.import_module("nfc.clf.udp")
         device = driver.init(host, port)

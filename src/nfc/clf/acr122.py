@@ -223,7 +223,8 @@ class Chipset(pn532.Chipset):
         """Send a host command and return the chip response.
 
         """
-        log.log(logging.DEBUG-1, "{} {}".format(self.CMD[cmd_code], hexlify(cmd_data).decode()))
+        log.log(logging.DEBUG-1, "{} {}".format(self.CMD[cmd_code],
+                                                hexlify(cmd_data).decode()))
 
         frame = bytearray([0xD4, cmd_code]) + bytearray(cmd_data)
         frame = bytearray([0xFF, 0x00, 0x00, 0x00, len(frame)]) + frame
