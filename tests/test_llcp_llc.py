@@ -966,4 +966,5 @@ class TestServiceDiscovery:
         assert sdp.dequeue(8, 0) == \
             nfc.llcp.pdu.ServiceNameLookup(1, 1, sdres=[(101, 0)])
         assert sdp.dequeue(128, 0) == \
-            nfc.llcp.pdu.ServiceNameLookup(1, 1, sdreq=[(2, b'urn:nfc:sn:svc')])
+            nfc.llcp.pdu.ServiceNameLookup(1, 1,
+                                           sdreq=[(2, b'urn:nfc:sn:svc')])

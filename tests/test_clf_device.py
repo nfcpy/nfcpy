@@ -20,8 +20,8 @@ def HEX(s):
     return bytearray.fromhex(s)
 
 
-@pytest.fixture()  # noqa: F811
-def device(mocker):
+@pytest.fixture()
+def device(mocker):  # noqa: F811
     mocker.patch('nfc.clf.device.Device.__init__').return_value = None
     return nfc.clf.device.Device()
 
@@ -118,13 +118,13 @@ class TestDevice(object):
         assert device.check_crc_b(HEX('0000470F')) is True
 
 
-@pytest.mark.parametrize("found, instance_type", [  # noqa: F811
+@pytest.mark.parametrize("found, instance_type", [
     (None, type(None)),
     (list(), type(None)),
     ([(0x0000, 0x0000, 0, 0)], type(None)),
     ([(0x054c, 0x0193, 1, 2)], nfc.clf.device.Device),
 ])
-def test_connect_usb(mocker, device, found, instance_type):
+def test_connect_usb(mocker, device, found, instance_type):  # noqa: F811
     sys_platform, sys.platform = sys.platform, 'testing'
     mocker.patch('nfc.clf.transport.USB')
     mocker.patch('nfc.clf.transport.USB.find').return_value = found
@@ -150,10 +150,10 @@ def test_connect_usb_driver_init_error(mocker):  # noqa: F811
     sys.platform = sys_platform
 
 
-@pytest.mark.parametrize("access", [  # noqa: F811
+@pytest.mark.parametrize("access", [
     True, False
 ])
-def test_connect_usb_linux_check_access(mocker, device, access):
+def test_connect_usb_linux_check_access(mocker, device, access):  # noqa: F811
     found = [(0x054c, 0x0193, 1, 2)]
     sys_platform, sys.platform = sys.platform, 'linux'
     mocker.patch('nfc.clf.transport.USB')
@@ -170,12 +170,12 @@ def test_connect_usb_linux_check_access(mocker, device, access):
     sys.platform = sys_platform
 
 
-@pytest.mark.parametrize("found, result_type", [  # noqa: F811
+@pytest.mark.parametrize("found, result_type", [
     (None, type(None)),
     (([], None, True), type(None)),
     ((['/dev/ttyS0'], 'pn532', True), nfc.clf.device.Device),
 ])
-def test_connect_tty(mocker, device, found, result_type):
+def test_connect_tty(mocker, device, found, result_type):  # noqa: F811
     sys_platform, sys.platform = sys.platform, 'testing'
     mocker.patch('nfc.clf.transport.USB')
     mocker.patch('nfc.clf.transport.USB.find').return_value = None

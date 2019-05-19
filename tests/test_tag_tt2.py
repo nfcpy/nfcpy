@@ -29,8 +29,8 @@ def target():
     return target
 
 
-@pytest.fixture()  # noqa: F811
-def clf(mocker, target):
+@pytest.fixture()
+def clf(mocker, target):  # noqa: F811
     clf = nfc.ContactlessFrontend()
     mocker.patch.object(clf, 'exchange', autospec=True)
     mocker.patch.object(clf, 'sense', autospec=True)

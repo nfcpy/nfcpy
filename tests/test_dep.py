@@ -18,8 +18,8 @@ def HEX(s):
     return bytearray.fromhex(s)
 
 
-@pytest.fixture()  # noqa: F811
-def clf(mocker):
+@pytest.fixture()
+def clf(mocker):  # noqa: F811
     clf = nfc.ContactlessFrontend()
     mocker.patch.object(clf, 'sense', autospec=True)
     mocker.patch.object(clf, 'listen', autospec=True)

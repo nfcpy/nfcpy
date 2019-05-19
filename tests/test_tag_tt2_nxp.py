@@ -29,8 +29,8 @@ def target():
     return target
 
 
-@pytest.fixture()  # noqa: F811
-def clf(mocker, target):
+@pytest.fixture()
+def clf(mocker, target):  # noqa: F811
     mocker.patch('os.urandom', new=lambda n: bytes(bytearray(range(n))))
 
     clf = nfc.ContactlessFrontend()
@@ -223,14 +223,15 @@ class TestUltralightC:
         assert tag.protect(None) is False
         assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
-    @pytest.mark.parametrize("pwd, cc, auth", [  # noqa: F811
+    @pytest.mark.parametrize("pwd, cc, auth", [
         (b'', 'E11000', True),
         (b'IEMKAERB!NACUOYF', 'E11000', True),
         (b'IEMKAERB!NACUOYF+ignored', 'E11000', True),
         (b'', '000000', True),
         (b'', 'E11000', False),
     ])
-    def test_protect_with_password(self, mocker, tag, pwd, cc, auth):
+    def test_protect_with_password(
+            self, mocker, tag, pwd, cc, auth):  # noqa: F811
         mocker.patch.object(tag, 'authenticate', autospec=True)
         tag.authenticate.return_value = auth
 
@@ -254,10 +255,11 @@ class TestUltralightC:
         assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
         tag.authenticate.assert_called_once_with(b'IEMKAERB!NACUOYF')
 
-    @pytest.mark.parametrize("protect_from_page", [  # noqa: F811
+    @pytest.mark.parametrize("protect_from_page", [
         1, 2, 3, 4, 48, 49
     ])
-    def test_protect_from_page(self, mocker, tag, protect_from_page):
+    def test_protect_from_page(
+            self, mocker, tag, protect_from_page):  # noqa: F811
         mocker.patch.object(tag, 'authenticate', autospec=True)
         tag.authenticate.return_value = True
 
@@ -335,15 +337,16 @@ class TestUltralightC:
         assert tag.ndef.is_readable is False
         assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
-    @pytest.mark.parametrize("rw, rf, wf", [  # noqa: F811
+    @pytest.mark.parametrize("rw, rf, wf", [
         ('00', True, True),
         ('08', True, False),
         ('80', False, True),
         ('88', False, False),
         ('ff', False, False),
     ])
-    def test_read_ndef_with_authenticate(self, mocker, tag, rw, rf, wf):
-        mocker.patch.object(tag, '_authenticate', autospec=True)
+    def test_read_ndef_with_authenticate(
+            self, mocker, tag, rw, rf, wf):  # noqa: F811
+        mocker.patch.object(tag, '_authenticate', autospec=True)  # noqa: F811
         tag._authenticate.return_value = True
 
         commands = [
@@ -736,11 +739,11 @@ class BaseNTAG21x:
             tag.protect(password=b'abc')
         assert str(excinfo.value) == "password must be at least 6 bytes"
 
-    @pytest.mark.parametrize("pwd, key", [  # noqa: F811
+    @pytest.mark.parametrize("pwd, key", [
         ('', 'FFFFFFFF0000'),
         ('12345678abcdef', '12345678abcd'),
     ])
-    def test_protect_with_password(self, mocker, tag, pwd, key):
+    def test_protect_with_password(self, mocker, tag, pwd, key):  # noqa: F811
         mocker.patch.object(tag, 'authenticate', autospec=True)
         tag.authenticate.return_value = True
 
@@ -808,8 +811,9 @@ class BaseNTAG21x:
         assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
         tag.authenticate.assert_called_once_with(HEX('ffffffff0000'))
 
-    @pytest.mark.parametrize("protect_from_page", [4, 255, 256])  # noqa: F811
-    def test_protect_protect_from(self, mocker, tag, protect_from_page):
+    @pytest.mark.parametrize("protect_from_page", [4, 255, 256])
+    def test_protect_protect_from(
+            self, mocker, tag, protect_from_page):  # noqa: F811
         from_page = max(3, min(protect_from_page, 255))
         commands = [
             (HEX('30 %02x' % self.cfgpage), 0.005),
@@ -829,7 +833,7 @@ class BaseNTAG21x:
         assert tag.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
         tag.authenticate.assert_called_once_with(HEX('ffffffff0000'))
 
-    @pytest.mark.parametrize("rw, rf, wf, rfa, wfa", [  # noqa: F811
+    @pytest.mark.parametrize("rw, rf, wf, rfa, wfa", [
         ('00', True, True, True, True),
         ('08', True, False, True, True),
         ('80', False, True, True, True),
@@ -838,7 +842,8 @@ class BaseNTAG21x:
         ('f0', False, True, False, True),
         ('ff', False, False, False, False),
     ])
-    def test_authenticated_read_ndef(self, mocker, tag, rw, rf, wf, rfa, wfa):
+    def test_authenticated_read_ndef(
+            self, mocker, tag, rw, rf, wf, rfa, wfa):  # noqa: F811
         mocker.patch.object(tag, '_authenticate', autospec=True)
         tag._authenticate.return_value = True
 

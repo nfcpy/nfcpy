@@ -27,19 +27,19 @@ def test_print_data():
 
 
 class TestContactlessFrontend(object):
-    @pytest.fixture()  # noqa: F811
-    def device_connect(self, mocker):
+    @pytest.fixture()
+    def device_connect(self, mocker):  # noqa: F811
         return mocker.patch('nfc.clf.device.connect')
 
-    @pytest.fixture()  # noqa: F811
-    def device(self, mocker):
+    @pytest.fixture()
+    def device(self, mocker):  # noqa: F811
         device = mocker.Mock(spec=nfc.clf.device.Device)
         device.path = "usb:001:001"
         device.vendor_name = "Vendor"
         device.product_name = "Product"
         return device
 
-    @pytest.fixture()  # noqa: F811
+    @pytest.fixture()
     def clf(self, device_connect, device):
         device_connect.return_value = device
         clf = nfc.clf.ContactlessFrontend('test')
@@ -57,8 +57,8 @@ class TestContactlessFrontend(object):
         assert str(clf) == "Vendor Product on usb:001:001"
         return clf
 
-    @pytest.fixture()  # noqa: F811
-    def terminate(self, mocker):
+    @pytest.fixture()
+    def terminate(self, mocker):  # noqa: F811
         return mocker.Mock(return_value=False)
 
     def test_init(self, device_connect):

@@ -22,7 +22,8 @@ def HEX(s):
 
 def FRAME(brty, hexstr):
     hexstr = hexstr.replace(' ', '')
-    return ('{:s} {:s}'.format(brty, hexstr).encode("utf-8"), ('127.0.0.1', 54321))
+    return ('{:s} {:s}'.format(brty, hexstr).encode("utf-8"),
+            ('127.0.0.1', 54321))
 
 
 def CMD106A(hexstr):
@@ -73,8 +74,8 @@ def RSP_SIZES(exchange):
     return [len(rsp[0]) for cmd, rsp in exchange]
 
 
-@pytest.fixture()  # noqa: F811
-def device(mocker):
+@pytest.fixture()
+def device(mocker):  # noqa: F811
     nameinfo = ('127.0.0.1', '54321')
     mocker.patch('nfc.clf.udp.select.select').return_value = ([1], [], [])
     mocker.patch('nfc.clf.udp.socket.getnameinfo').return_value = nameinfo
