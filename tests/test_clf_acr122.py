@@ -31,8 +31,8 @@ def RSP(hexstr):
     return struct.pack('<BIxxxBx', 0x80, len(rsp), 0x81) + rsp
 
 
-@pytest.fixture()  # noqa: F811
-def transport(mocker):
+@pytest.fixture()
+def transport(mocker):  # noqa: F811
     mocker.patch('nfc.clf.transport.USB.__init__').return_value = None
     transport = nfc.clf.transport.USB(1, 1)
     mocker.patch.object(transport, 'write', autospec=True)

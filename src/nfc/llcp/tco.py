@@ -102,7 +102,7 @@ class TransmissionControlObject(object):
 
     def bind(self, addr):
         if self.addr and addr and self.addr != addr:
-            log.warning("socket rebound from {0} to {1}".format(self.addr, addr))
+            log.warning("socket rebound from {} to {}".format(self.addr, addr))
         self.addr = addr
         return self.addr
 
@@ -202,7 +202,9 @@ class RawAccessPoint(TransmissionControlObject):
         self.state.ESTABLISHED = True
 
     def __str__(self):
-        return "RAW {addr:2} ->  ?".format(addr=self.addr if self.addr is not None else "None")
+        return "RAW {:2} ->  ?".format(self.addr
+                                       if self.addr is not None
+                                       else "None")
 
     def setsockopt(self, option, value):
         if self.state.SHUTDOWN:

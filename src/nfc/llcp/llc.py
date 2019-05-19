@@ -279,7 +279,8 @@ class LogicalLinkController(object):
 
         def __str__(self):
             s = "sent/rcvd {0}/{1}".format(self.sent_count, self.rcvd_count)
-            for name in sorted(set(list(self.sent.keys()) + list(self.rcvd.keys()))):
+            for name in sorted(set(list(self.sent.keys())
+                                   + list(self.rcvd.keys()))):
                 s += " {name} {sent}/{rcvd}".format(
                     name=name, sent=self.sent[name], rcvd=self.rcvd[name])
             return s
@@ -660,7 +661,9 @@ class LogicalLinkController(object):
 
         if rcvd_pdu.name == "CONNECT" and rcvd_pdu.dsap == 1:
             # connect-by-name
-            addr = self.snl.get(rcvd_pdu.sn if isinstance(rcvd_pdu.sn, str) else rcvd_pdu.sn.decode("utf-8"))
+            addr = self.snl.get(rcvd_pdu.sn
+                                if isinstance(rcvd_pdu.sn, str)
+                                else rcvd_pdu.sn.decode("utf-8"))
             if not addr or self.sap[addr] is None:
                 dm_reason = 0x10 if rcvd_pdu.sn is None else 0x02
                 dm_pdu = pdu.DisconnectedMode(rcvd_pdu.ssap, 1, dm_reason)

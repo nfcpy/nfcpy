@@ -123,24 +123,30 @@ class Device(nfc.clf.device.Device):
                 for i, sel_cmd in zip(range(0, len(uid), 4), b"\x93\x95\x97"):
                     sel_req = bytearray([sel_cmd, 0x70]) + uid[i:i+4]
                     sel_req.append(reduce(operator.xor, sel_req[2:6]))  # BCC
-                    log.debug("send SEL_REQ {}".format(hexlify(sel_req).decode()))
+                    log.debug("send SEL_REQ {}".format(
+                            hexlify(sel_req).decode()))
                     self._send_data(brty, sel_req, addr)
                     brty, sel_res, addr = self._recv_data(0.5, brty)
-                    log.debug("rcvd SEL_RES {}".format(hexlify(sel_res).decode()))
+                    log.debug("rcvd SEL_RES {}".format(
+                            hexlify(sel_res).decode()))
                 uid = target.sel_req
             else:
                 uid = bytearray()
                 for sel_cmd in b"\x93\x95\x97":
                     sdd_req = bytearray([sel_cmd, 0x20])
-                    log.debug("send SDD_REQ {}".format(hexlify(sdd_req).decode()))
+                    log.debug("send SDD_REQ {}".format(
+                            hexlify(sdd_req).decode()))
                     self._send_data(brty, sdd_req, addr)
                     brty, sdd_res, addr = self._recv_data(0.5, brty)
-                    log.debug("rcvd SDD_RES {}".format(hexlify(sdd_res).decode()))
+                    log.debug("rcvd SDD_RES {}".format(
+                            hexlify(sdd_res).decode()))
                     sel_req = bytearray([sel_cmd, 0x70]) + sdd_res
-                    log.debug("send SEL_REQ {}".format(hexlify(sel_req).decode()))
+                    log.debug("send SEL_REQ {}".format(
+                            hexlify(sel_req).decode()))
                     self._send_data(brty, sel_req, addr)
                     brty, sel_res, addr = self._recv_data(0.5, brty)
-                    log.debug("rcvd SEL_RES {}".format(hexlify(sel_res).decode()))
+                    log.debug("rcvd SEL_RES {}".format(
+                            hexlify(sel_res).decode()))
                     if sel_res[0] & 0b00000100:
                         uid = uid + sdd_res[1:4]
                     else:
@@ -190,7 +196,8 @@ class Device(nfc.clf.device.Device):
         else:
             sensf_req = bytearray([len(target.sensf_req)+1]) + target.sensf_req
 
-        log.debug("send SENSF_REQ {}".format(hexlify(memoryview(sensf_req)[1:]).decode()))
+        log.debug("send SENSF_REQ {}".format(
+                hexlify(memoryview(sensf_req)[1:]).decode()))
         try:
             self._send_data(target.brty, sensf_req, self.addr)
             brty, data, addr = self._recv_data(1.0, target.brty)
@@ -249,15 +256,18 @@ class Device(nfc.clf.device.Device):
                 self._send_data(brty, sens_res, addr)
             elif data == b"\x93\x20":
                 log.debug("rcvd SDD_REQ CL1 %s", hexlify(data).decode())
-                log.debug("send SDD_RES CL1 %s", hexlify(sdd_res[0:5]).decode())
+                log.debug("send SDD_RES CL1 %s",
+                          hexlify(sdd_res[0:5]).decode())
                 self._send_data(brty, sdd_res[0:5], addr)
             elif data == b"\x95\x20" and len(sdd_res) > 5:
                 log.debug("rcvd SDD_REQ CL2 %s", hexlify(data).decode())
-                log.debug("send SDD_RES CL2 %s", hexlify(sdd_res[5:10]).decode())
+                log.debug("send SDD_RES CL2 %s",
+                          hexlify(sdd_res[5:10]).decode())
                 self._send_data(brty, sdd_res[5:10], addr)
             elif data == b"\x97\x20" and len(sdd_res) > 10:
                 log.debug("rcvd SDD_REQ CL3 %s", hexlify(data).decode())
-                log.debug("send SDD_RES CL3 %s", hexlify(sdd_res[10:15]).decode())
+                log.debug("send SDD_RES CL3 %s",
+                          hexlify(sdd_res[10:15]).decode())
                 self._send_data(brty, sdd_res[10:15], addr)
             elif data == b"\x93\x70" + sdd_res[0:5]:
                 log.debug("rcvd SEL_REQ Cl1 %s", hexlify(data).decode())
@@ -312,7 +322,8 @@ class Device(nfc.clf.device.Device):
                 req = "ALLB_REQ" if data[1] & 0x08 else "SENSB_REQ"
                 sensb_req = data
                 log.debug("rcvd %s %s", req, hexlify(sensb_req).decode())
-                log.debug("send SENSB_RES %s", hexlify(target.sensb_res).decode())
+                log.debug("send SENSB_RES %s",
+                          hexlify(target.sensb_res).decode())
                 self._send_data(brty, target.sensb_res, addr)
                 brty, data, addr = self._recv_data(wait, target.brty)
                 return nfc.clf.LocalTarget(brty, sensb_req=sensb_req,
@@ -356,7 +367,8 @@ class Device(nfc.clf.device.Device):
                         if sensf_req[3] == 1:
                             data += sensf_res[17:19]
                         if sensf_req[3] == 2:
-                            data += bytearray([0x00, 1 << (target.brty == "424F")])
+                            data += bytearray(
+                                    [0x00, 1 << (target.brty == "424F")])
                         data = bytearray([len(data)+1]) + data
                         self._send_data(brty, data, addr)
                     else:
@@ -441,9 +453,12 @@ class Device(nfc.clf.device.Device):
                 if data.startswith(b'\xD4\x04'):
                     target.psl_req = data[:]
                     target.psl_res = b'\xD5\x05' + target.psl_req[2:3]
-                    log.debug("rcvd PSL_REQ %s", hexlify(target.psl_req).decode())
-                    log.debug("send PSL_RES %s", hexlify(target.psl_res).decode())
-                    data = bytearray([len(target.psl_res) + 1]) + target.psl_res
+                    log.debug("rcvd PSL_REQ %s",
+                              hexlify(target.psl_req).decode())
+                    log.debug("send PSL_RES %s",
+                              hexlify(target.psl_res).decode())
+                    data = bytearray([len(target.psl_res) + 1]) \
+                        + target.psl_res
                     if brty == '106A':
                         data.insert(0, 0xF0)
                     self._send_data(brty, data, addr)

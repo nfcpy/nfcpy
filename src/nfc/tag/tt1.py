@@ -415,7 +415,8 @@ class Type1Tag(Tag):
         log.debug("read segment {0}".format(segment))
         if segment < 0 or segment > 15:
             raise ValueError("invalid segment number")
-        cmd = bytearray([0x10, segment << 4] + [0x00 for _ in range(8)]) + self.uid
+        cmd = bytearray([0x10, segment << 4] + [0x00 for _ in range(8)]) \
+            + self.uid
         rsp = self.transceive(cmd)
         if len(rsp) < 129:
             raise Type1TagCommandError(RESPONSE_ERROR)

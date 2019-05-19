@@ -157,7 +157,8 @@ class MifareUltralightC(tt2.Type2Tag):
         self.write(47, key2[4:8])
 
         # protect from memory page
-        self.write(42, bytearray([max(3, min(protect_from, 0x30))]) + b"\0\0\0")
+        self.write(42, bytearray([max(3, min(protect_from, 0x30))]) +
+                   b"\0\0\0")
 
         # set read protection flag
         self.write(43, b"\0\0\0\0" if read_protect else b"\x01\0\0\0")
@@ -221,7 +222,8 @@ class MifareUltralightC(tt2.Type2Tag):
         ra = os.urandom(8)
         iv = bytes(rsp[1:9])
 
-        m2 = triple_des(key, CBC, iv).encrypt(ra + rb[1:8] + bytes(bytearray([rb[0]])))
+        m2 = triple_des(key, CBC, iv).encrypt(
+                ra + rb[1:8] + bytes(bytearray([rb[0]])))
 
         log.debug("sending response")
         log.debug("ra = {}".format(hexlify(ra).decode()))
@@ -238,7 +240,8 @@ class MifareUltralightC(tt2.Type2Tag):
         log.debug("iv = {}".format(hexlify(iv).decode()))
         log.debug("m3 = {}".format(hexlify(m3).decode()))
 
-        return triple_des(key, CBC, iv).decrypt(m3) == ra[1:9] + bytes(bytearray([ra[0]]))
+        return triple_des(key, CBC, iv).decrypt(m3) == \
+            ra[1:9] + bytes(bytearray([ra[0]]))
 
 
 class NTAG203(tt2.Type2Tag):

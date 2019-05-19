@@ -540,9 +540,11 @@ class OpenSSLWrapper:
 
 libcrypto = ctypes.util.find_library('crypto')
 if libcrypto is not None:
-    if not sys.platform.startswith('linux') and not sys.platform.startswith('darwin'):
+    if not sys.platform.startswith('linux') \
+            and not sys.platform.startswith('darwin'):
         log.debug("OpenSSL crypto library binding is only tested on Linux")
-    elif not libcrypto.startswith('libcrypto.so.1.0') and not libcrypto.endswith('libcrypto.dylib'):
+    elif not libcrypto.startswith('libcrypto.so.1.0') \
+            and not libcrypto.endswith('libcrypto.dylib'):
         log.warning("OpenSSL {} is not supported".format(libcrypto))
     else:
         OpenSSL = OpenSSLWrapper(libcrypto)

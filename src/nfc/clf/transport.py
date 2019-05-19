@@ -41,7 +41,7 @@ except ImportError:  # pragma: no cover
 try:
     import termios
 except ImportError:  # pragma: no cover
-    assert os.name is not 'posix'
+    assert os.name != 'posix'
 
 import logging
 log = logging.getLogger(__name__)
@@ -94,7 +94,7 @@ class TTY(object):
                     try:
                         termios.tcgetattr(open('/dev/%s' % tty))
                         ttys[i] = '/dev/%s' % tty
-                    except termios.error as error:
+                    except termios.error:
                         pass
                     except IOError as error:
                         log.debug(error)

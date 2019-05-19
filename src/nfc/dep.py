@@ -46,7 +46,8 @@ class DataExchangeProtocol(object):
 
         def __str__(self):
             s = "sent/rcvd {0}/{1}".format(self.sent_count, self.rcvd_count)
-            for name in sorted(set(list(self.sent.keys()) + list(self.rcvd.keys()))):
+            for name in sorted(set(list(self.sent.keys())
+                                   + list(self.rcvd.keys()))):
                 s += " {name} {sent}/{rcvd}".format(
                     name=name, sent=self.sent[name], rcvd=self.rcvd[name])
             return s
@@ -863,7 +864,9 @@ class DSL_REQ_RES(object):
             return cls(data[2] if len(data) == 3 else None)
 
     def encode(self):
-        return self.PDU_CODE + (bytearray(b"") if self.did is None else bytearray([self.did]))
+        return self.PDU_CODE + (bytearray(b"")
+                                if self.did is None
+                                else bytearray([self.did]))
 
 
 class DSL_REQ(DSL_REQ_RES):
