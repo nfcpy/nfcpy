@@ -58,6 +58,7 @@ log = logging.getLogger(__name__)
 
 class Device(nfc.clf.device.Device):
     def __init__(self, host, port):
+        host = socket.gethostbyname(host)
         host, port = socket.getnameinfo((host, port), socket.NI_NUMERICHOST)
         self.addr = (host, int(port))
         self._path = "%s:%s" % (host, port)
