@@ -27,18 +27,17 @@
 # specification before final release by the NFC Forum.
 #
 import logging
+
 log = logging.getLogger('main')
 
 import os
 import time
-import errno
 import datetime
 import argparse
-import itertools
 import collections
 from threading import Thread
 
-from cli import CommandLineInterface, TestFail, TestSkip
+from .cli import CommandLineInterface, TestFail, TestSkip
 
 import nfc
 import nfc.llcp
@@ -46,13 +45,16 @@ import nfc.llcp.pdu
 
 default_miu = 128
 
+
 def info(message, *args, **kwargs):
     log.info("  " + message, *args, **kwargs)
+
 
 description = """
 Execute some Logical Link Control Protocol (LLCP) tests. The peer
 device must have the LLCP validation test servers running.
 """
+
 
 def get_connection_less_echo_server_sap(llc, options):
     cl_echo_server = options.cl_echo_sap
@@ -63,6 +65,7 @@ def get_connection_less_echo_server_sap(llc, options):
     info("connection-less echo server on sap {0}".format(cl_echo_server))
     return cl_echo_server
 
+
 def get_connection_mode_echo_server_sap(llc, options):
     co_echo_server = options.co_echo_sap
     if not co_echo_server:
@@ -71,6 +74,7 @@ def get_connection_mode_echo_server_sap(llc, options):
         raise TestFail("no connection-mode echo server on peer device")
     info("connection-mode echo server addr is {0}".format(co_echo_server))
     return co_echo_server
+
 
 def get_data_link_connection(socket, dsap, ssap, miu, rw, sn=None):
     try:
@@ -88,20 +92,21 @@ def get_data_link_connection(socket, dsap, ssap, miu, rw, sn=None):
         socket.close()
         raise TestFail(str(error))
 
+
 class TestProgram(CommandLineInterface):
     def __init__(self):
         parser = argparse.ArgumentParser(
-            usage='%(prog)s [OPTION]...',
-            formatter_class=argparse.RawDescriptionHelpFormatter,
-            description=description)
+                usage='%(prog)s [OPTION]...',
+                formatter_class=argparse.RawDescriptionHelpFormatter,
+                description=description)
         parser.add_argument(
-            "--cl-echo", type=int, dest="cl_echo_sap", metavar="SAP",
-            help="connection-less echo server address")
+                "--cl-echo", type=int, dest="cl_echo_sap", metavar="SAP",
+                help="connection-less echo server address")
         parser.add_argument(
-            "--co-echo", type=int, dest="co_echo_sap", metavar="SAP",
-            help="connection-oriented echo server address")
+                "--co-echo", type=int, dest="co_echo_sap", metavar="SAP",
+                help="connection-oriented echo server address")
         super(TestProgram, self).__init__(
-            parser, groups="test llcp dbg clf")
+                parser, groups="test llcp dbg clf")
 
     def on_llcp_startup(self, llc):
         self.on_llc_exchange_call = None
@@ -117,7 +122,7 @@ class TestProgram(CommandLineInterface):
         if self.on_llc_exchange_exit:
             rcvd_pdu = self.on_llc_exchange_exit(rcvd_pdu)
         return rcvd_pdu
-        
+
     def test_01(self, llc):
         """Link activation, symmetry and deactivation
 
@@ -143,7 +148,7 @@ class TestProgram(CommandLineInterface):
                 info('link running for %d second, %s', i, llc.pcnt)
         except AssertionError as error:
             raise TestFail(str(error))
-            
+
     def test_02(self, llc):
         """Connection-less information transfer
 
@@ -184,7 +189,8 @@ class TestProgram(CommandLineInterface):
         TestData = collections.namedtuple("TestData", "sent rcvd")
 
         def send_and_receive(socket, send_count, packet_length):
-            timestamp = lambda: datetime.datetime.fromtimestamp(time.time())
+            def timestamp():
+                return datetime.datetime.fromtimestamp(time.time())
             test_data = TestData(sent=[], rcvd=[])
             cl_server = socket.getpeername()
             info_text = "  %s message %d at %s"
@@ -199,7 +205,8 @@ class TestProgram(CommandLineInterface):
                     if socket.poll("recv", timeout=5.0):
                         data, addr = socket.recvfrom()
                         test_data.rcvd.append((data, addr, timestamp()))
-                        info(info_text, "rcvd", i, test_data.rcvd[-1][2].time())
+                        info(info_text, "rcvd", i,
+                             test_data.rcvd[-1][2].time())
             except (AssertionError, nfc.llcp.Error) as error:
                 raise TestFail(error)
             if len(test_data.rcvd) == 0:
@@ -219,7 +226,7 @@ class TestProgram(CommandLineInterface):
                 if rcvd_data != sent_data:
                     raise TestFail("received data does not match sent data")
                 info("  message %d rcvd %.3f s after sent",
-                     i+1, (rcvd_time-sent_time).total_seconds())
+                     i + 1, (rcvd_time - sent_time).total_seconds())
             return True
 
         def run_step_2(socket):
@@ -235,7 +242,7 @@ class TestProgram(CommandLineInterface):
                 if rcvd_data != sent_data:
                     raise TestFail("received data does not match sent data")
                 info("  message %d rcvd %.3f s after sent",
-                     i+1, (rcvd_time-sent_time).total_seconds())
+                     i + 1, (rcvd_time - sent_time).total_seconds())
             return True
 
         def run_step_3(socket):
@@ -251,7 +258,7 @@ class TestProgram(CommandLineInterface):
                 if rcvd_data != sent_data:
                     raise TestFail("received data does not match sent data")
                 info("  message %d rcvd %.3f s after sent",
-                     i+1, (rcvd_time-sent_time).total_seconds())
+                     i + 1, (rcvd_time - sent_time).total_seconds())
             return True
 
         def run_step_4(socket):
@@ -267,7 +274,7 @@ class TestProgram(CommandLineInterface):
                 if rcvd_data != sent_data:
                     raise TestFail("received data does not match sent data")
                 info("  message %d rcvd %.3f s after sent",
-                     i+1, (rcvd_time-sent_time).total_seconds())
+                     i + 1, (rcvd_time - sent_time).total_seconds())
             return True
 
         def run_step_5(socket):
@@ -284,24 +291,29 @@ class TestProgram(CommandLineInterface):
                 if rcvd_data != sent_data:
                     raise TestFail("received data does not match sent data")
                 info("  message %d rcvd %.3f s after sent",
-                     i+1, (rcvd_time-sent_time).total_seconds())
+                     i + 1, (rcvd_time - sent_time).total_seconds())
             return True
 
         cl_echo_server = get_connection_less_echo_server_sap(llc, self.options)
-        socket = nfc.llcp.Socket(llc, nfc.llcp.LOGICAL_DATA_LINK)
-        socket.setsockopt(nfc.llcp.SO_RCVBUF, 10)
-        assert socket.getsockopt(nfc.llcp.SO_RCVBUF) == 10
+        sock = nfc.llcp.Socket(llc, nfc.llcp.LOGICAL_DATA_LINK)
+        sock.setsockopt(nfc.llcp.SO_RCVBUF, 10)
+        assert sock.getsockopt(nfc.llcp.SO_RCVBUF) == 10
         info("socket recv buffer set to 10")
-        socket.connect(cl_echo_server)
+        sock.connect(cl_echo_server)
         try:
-            if run_step_1(socket): info("  PASS")
-            if run_step_2(socket): info("  PASS")
-            if run_step_3(socket): info("  PASS")
-            if run_step_4(socket): info("  PASS")
-            if run_step_5(socket): info("  PASS")
+            if run_step_1(sock):
+                info("  PASS")
+            if run_step_2(sock):
+                info("  PASS")
+            if run_step_3(sock):
+                info("  PASS")
+            if run_step_4(sock):
+                info("  PASS")
+            if run_step_5(sock):
+                info("  PASS")
         finally:
-            socket.close()
-            
+            sock.close()
+
     def test_03(self, llc):
         """Connection-oriented information transfer
 
@@ -330,7 +342,8 @@ class TestProgram(CommandLineInterface):
         socket.setsockopt(nfc.llcp.SO_RCVBUF, 2)
         if socket.getsockopt(nfc.llcp.SO_RCVBUF) == 2:
             info("socket recv window set 2")
-        else: raise TestFail("could not set the socket recv window")
+        else:
+            raise TestFail("could not set the socket recv window")
         co_echo_server = self.options.co_echo_sap
         if not co_echo_server:
             co_echo_server = llc.resolve("urn:nfc:sn:co-echo")
@@ -343,7 +356,7 @@ class TestProgram(CommandLineInterface):
         socket.send(default_miu * "\xFF")
         t0 = time.time()
         info("sent one information pdu")
-        if socket.poll("acks", timeout = 5):
+        if socket.poll("acks", timeout=5):
             elapsed = time.time() - t0
             info("got confirm after {0:.3f}".format(elapsed))
             if not elapsed < 1.9:
@@ -353,7 +366,8 @@ class TestProgram(CommandLineInterface):
             info("got message after {0:.3f}".format(time.time() - t0))
             if not elapsed > 2.0:
                 raise TestFail("echo'd data received too early")
-        else: raise TestFail("no data received within 5 seconds")
+        else:
+            raise TestFail("no data received within 5 seconds")
         socket.close()
 
     def test_04(self, llc):
@@ -381,47 +395,52 @@ class TestProgram(CommandLineInterface):
            verify that the echo service responds with a correct DM PDU.
         """
         sent_data = []
-        rcvd_data = []
+        receive_data = []
 
-        def receiver(llc, socket, rcvd_data):
+        def receiver(_llc, socket, rcvd_data):
             while socket.poll("recv", timeout=5):
-                data = socket.recv()
-                if data: rcvd_data.append((data, time.time()))
+                d = socket.recv()
+                if d:
+                    rcvd_data.append((d, time.time()))
 
-        socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
-        socket.setsockopt(nfc.llcp.SO_RCVBUF, 2)
-        if socket.getsockopt(nfc.llcp.SO_RCVBUF) == 2:
+        sock = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
+        sock.setsockopt(nfc.llcp.SO_RCVBUF, 2)
+        if sock.getsockopt(nfc.llcp.SO_RCVBUF) == 2:
             info("receive window set to 2")
-        else: raise TestFail("failed to set receive window to 2")
+        else:
+            raise TestFail("failed to set receive window to 2")
         co_echo_server = self.options.co_echo_sap
         if not co_echo_server:
             co_echo_server = llc.resolve("urn:nfc:sn:co-echo")
         if not co_echo_server:
             raise TestFail("no connection-mode echo server on peer device")
         info("connection-mode echo server on sap {0}".format(co_echo_server))
-        recv_thread = Thread(target=receiver, args=(llc, socket, rcvd_data))
+        recv_thread = Thread(target=receiver, args=(llc, sock, receive_data))
         try:
-            socket.connect(co_echo_server)
-            peer_sap = socket.getpeername()
+            sock.connect(co_echo_server)
+            peer_sap = sock.getpeername()
             info("connected with sap {0}".format(peer_sap))
             recv_thread.start()
             count = 20
             info("now sending {0} messages".format(count))
             for i in range(count):
                 data = default_miu * chr(i)
-                if socket.send(data):
-                    info("sent message {0}".format(i+1))
+                if sock.send(data):
+                    info("sent message {0}".format(i + 1))
                     sent_data.append((data, time.time()))
             recv_thread.join()
             for i in range(count):
-                r = "correct" if rcvd_data[i][0] == rcvd_data[i][0] else "wrong"
-                t = rcvd_data[i][1] - sent_data[i][1]
+                r = "correct" if receive_data[i][0] == receive_data[i][
+                    0] else "wrong"
+                t = receive_data[i][1] - sent_data[i][1]
                 info("message {i:2} received after {t:.3f} sec was {r}"
-                         .format(i=i, t=t, r=r))
+                     .format(i=i, t=t, r=r))
         finally:
-            try: recv_thread.join()
-            except RuntimeError: pass # wasn't started
-            socket.close()
+            try:
+                recv_thread.join()
+            except RuntimeError:
+                pass  # wasn't started
+            sock.close()
 
     def test_05(self, llc):
         """Handling of receiver busy condition
@@ -450,7 +469,8 @@ class TestProgram(CommandLineInterface):
         socket.setsockopt(nfc.llcp.SO_RCVBUF, 0)
         if socket.getsockopt(nfc.llcp.SO_RCVBUF) == 0:
             info("receive window set to 0")
-        else: raise TestFail("failed to set receive window to 0")
+        else:
+            raise TestFail("failed to set receive window to 0")
         co_echo_server = self.options.co_echo_sap
         if not co_echo_server:
             co_echo_server = llc.resolve("urn:nfc:sn:co-echo")
@@ -465,7 +485,7 @@ class TestProgram(CommandLineInterface):
             for i in range(4):
                 data = default_miu * chr(i)
                 if socket.send(data):
-                    info("sent message {0}".format(i+1))
+                    info("sent message {0}".format(i + 1))
             for i in range(4):
                 time.sleep(1.0)
                 if socket.getsockopt(nfc.llcp.SO_SNDBSY):
@@ -511,7 +531,8 @@ class TestProgram(CommandLineInterface):
             socket1.connect(co_echo_server)
             peer_sap = socket1.getpeername()
             info("first connection established with sap {0}".format(peer_sap))
-            try: socket2.connect(co_echo_server)
+            try:
+                socket2.connect(co_echo_server)
             except nfc.llcp.ConnectRefused as e:
                 info("second connection rejected with reason {0:02x}h"
                      .format(e.reason))
@@ -555,7 +576,7 @@ class TestProgram(CommandLineInterface):
                 if socket.poll("recv", timeout=5):
                     if socket.recv() == "here's nfcpy":
                         info("got echo after {0:.3f} sec"
-                             .format(time.time()-t0))
+                             .format(time.time() - t0))
                     else:
                         raise TestFail("received wrong data from echo server")
                 else:
@@ -598,13 +619,13 @@ class TestProgram(CommandLineInterface):
             if not cl_echo_server:
                 raise TestFail("connection-less echo server not available")
             info("connection-less echo server on sap %d" % cl_echo_server)
-            addr = socket.getsockname()
+            # addr = socket.getsockname()
             sdu1 = 50 * b"\x01"
             sdu2 = 50 * b"\x02"
             sdu3 = 50 * b"\x03"
 
             info("step 1: send two datagrams with 50 byte payload")
-            with llc.lock: # temporarily stop llc (only for testing)
+            with llc.lock:  # temporarily stop llc (only for testing)
                 socket.sendto(sdu1, cl_echo_server, nfc.llcp.MSG_DONTWAIT)
                 socket.sendto(sdu2, cl_echo_server, nfc.llcp.MSG_DONTWAIT)
             if not socket.poll("recv", timeout=5):
@@ -617,9 +638,9 @@ class TestProgram(CommandLineInterface):
             if not socket.recv() == sdu2:
                 raise TestFail("second message came back wrong")
             info("received second message")
-            
+
             info("step2: send three datagrams with 50 byte payload")
-            with llc.lock: # temporarily stop llc (only for testing)
+            with llc.lock:  # temporarily stop llc (only for testing)
                 socket.sendto(sdu1, cl_echo_server, nfc.llcp.MSG_DONTWAIT)
                 socket.sendto(sdu2, cl_echo_server, nfc.llcp.MSG_DONTWAIT)
                 socket.sendto(sdu3, cl_echo_server, nfc.llcp.MSG_DONTWAIT)
@@ -696,7 +717,7 @@ class TestProgram(CommandLineInterface):
             if not peer == addr:
                 raise TestFail("received from wrong sap in step 3")
             t1 = time.time()
-            info("step 3: received echo after {0:.3} seconds".format(t1-t0))
+            info("step 3: received echo after {0:.3} seconds".format(t1 - t0))
         addr = llc.resolve("urn:nfc:sn:sdp-test")
         if not addr == 0:
             raise TestFail("'urn:nfc:sn:sdp-test' did not yield 0")
@@ -709,13 +730,13 @@ class TestProgram(CommandLineInterface):
         pdu = get_data_link_connection(socket, sap, 63, 128, 1)
         sdu = os.urandom(pdu.miu + 1)
         pdu = nfc.llcp.pdu.Information(pdu.ssap, pdu.dsap, 0, 0, sdu)
-        info("remote MIU is {0} octet, sending 1 more".format(len(sdu)-1))
+        info("remote MIU is {0} octet, sending 1 more".format(len(sdu) - 1))
         try:
             socket.send(pdu)
             assert socket.poll("recv", 5), "no response in 5 seconds"
             pdu = socket.recv()
-            assert pdu.name == "FRMR",  "expected FRMR PDU not %s" % pdu.name
-            assert pdu.rej_flags == 4,  "expected FRMR FLAGS == 0100b"
+            assert pdu.name == "FRMR", "expected FRMR PDU not %s" % pdu.name
+            assert pdu.rej_flags == 4, "expected FRMR FLAGS == 0100b"
             assert pdu.rej_ptype == 12, "expected FRMR PTYPE == 1100b"
         except (AssertionError, nfc.llcp.Error) as error:
             raise TestFail(str(error))
@@ -733,8 +754,8 @@ class TestProgram(CommandLineInterface):
             socket.send(pdu)
             assert socket.poll("recv", 5), "no response in 5 seconds"
             pdu = socket.recv()
-            assert pdu.name == "FRMR",  "expected FRMR PDU not %s" % pdu.name
-            assert pdu.rej_flags == 1,  "expected FRMR FLAGS == 0001b"
+            assert pdu.name == "FRMR", "expected FRMR PDU not %s" % pdu.name
+            assert pdu.rej_flags == 1, "expected FRMR FLAGS == 0001b"
             assert pdu.rej_ptype == 12, "expected FRMR PTYPE == 1100b"
         except (AssertionError, nfc.llcp.Error) as error:
             raise TestFail(str(error))
@@ -747,7 +768,8 @@ class TestProgram(CommandLineInterface):
         socket.setsockopt(nfc.llcp.SO_RCVBUF, 2)
         if socket.getsockopt(nfc.llcp.SO_RCVBUF) == 2:
             info("socket recv window set 2")
-        else: raise TestFail("could not set the socket recv window")
+        else:
+            raise TestFail("could not set the socket recv window")
         socket.setsockopt(nfc.llcp.SO_RCVMIU, 300)
         co_echo_server = self.options.co_echo_sap
         if not co_echo_server:
@@ -762,16 +784,17 @@ class TestProgram(CommandLineInterface):
         socket.send(miu * "\xFF")
         t0 = time.time()
         info("sent one information pdu")
-        if socket.poll("acks", timeout = 5):
+        if socket.poll("acks", timeout=5):
             elapsed = time.time() - t0
             info("got confirm after {0:.3f}".format(elapsed))
             if not elapsed < 1.9:
                 raise TestFail("no confirmation within 1.9 seconds")
             if not socket.poll("recv", timeout=5):
                 raise TestFail("did not receive second message within 5 sec")
-            data = socket.recv()
+            # data = socket.recv()
             info("got message after {0:.3f}".format(time.time() - t0))
-        else: raise TestFail("no data received within 5 seconds")
+        else:
+            raise TestFail("no data received within 5 seconds")
         socket.close()
 
     def test_13(self, llc):
@@ -789,14 +812,14 @@ class TestProgram(CommandLineInterface):
             peer_sap = socket1.getpeername()
             info("first connection established with sap {0}".format(peer_sap))
             socket1.send("I'm the first connection")
-            assert(socket1.recv() == "I'm the first connection")
+            assert (socket1.recv() == "I'm the first connection")
             socket1.close()
             info("first connection terminated")
             socket2.connect(co_echo_server)
             peer_sap = socket2.getpeername()
             info("second connection established with sap {0}".format(peer_sap))
             socket2.send("I'm the second connection")
-            assert(socket2.recv() == "I'm the second connection")
+            assert (socket2.recv() == "I'm the second connection")
             socket2.close()
         finally:
             pass
@@ -818,11 +841,11 @@ class TestProgram(CommandLineInterface):
         service_name = "urn:nfc:sn:co-echo-invalid"
         try:
             socket.connect(service_name)
-            raise TestFail("connect to '" + service_name +"' not rejected")
+            raise TestFail("connect to '" + service_name + "' not rejected")
         except nfc.llcp.ConnectRefused as e:
             info("connect to '{0}' rejected with reason {1}".format(
                     service_name, e.reason))
-            if not e.reason in (0x02, 0x10, 0x11):
+            if e.reason not in (0x02, 0x10, 0x11):
                 raise TestFail("invalid DM reason code {0}".format(e.reason))
         except nfc.llcp.Error as error:
             raise TestFail(str(error))
@@ -848,9 +871,10 @@ class TestProgram(CommandLineInterface):
         if llc.secure_data_transfer is False:
             raise TestSkip("secure data transfer is not enabled")
         if self.options.test.index('15') != len(self.options.test) - 1:
-            log.warning("Test 15 causes link termination, further tests skipped")
-            del self.options.test[self.options.test.index('15')+1:]
-        
+            log.warning(
+                "Test 15 causes link termination, further tests skipped")
+            del self.options.test[self.options.test.index('15') + 1:]
+
         socket = nfc.llcp.Socket(llc, nfc.llcp.LOGICAL_DATA_LINK)
         try:
             socket.bind()
@@ -860,7 +884,7 @@ class TestProgram(CommandLineInterface):
             if not cl_echo_server:
                 raise TestFail("connection-less echo server not available")
             info("connection-less echo server on sap %d" % cl_echo_server)
-            
+
             sdu1 = 50 * b'\x01'
             sdu2 = 50 * b'\x02'
 
@@ -880,7 +904,7 @@ class TestProgram(CommandLineInterface):
             if not llc.link.SHUTDOWN:
                 raise TestFail("link not terminated")
             info("link terminated as required")
-            
+
         finally:
             socket.close()
 
@@ -904,9 +928,10 @@ class TestProgram(CommandLineInterface):
         if llc.secure_data_transfer is False:
             raise TestSkip("secure data transfer is not enabled")
         if self.options.test.index('16') != len(self.options.test) - 1:
-            log.warning("Test 16 causes link termination, further tests skipped")
-            del self.options.test[self.options.test.index('16')+1:]
-        
+            log.warning(
+                "Test 16 causes link termination, further tests skipped")
+            del self.options.test[self.options.test.index('16') + 1:]
+
         socket1 = nfc.llcp.Socket(llc, nfc.llcp.LOGICAL_DATA_LINK)
         socket2 = nfc.llcp.Socket(llc, nfc.llcp.LOGICAL_DATA_LINK)
         socket1.bind()
@@ -915,7 +940,8 @@ class TestProgram(CommandLineInterface):
         socket2_sap = socket2.getsockname()
 
         def on_llc_exchange_call(send_pdu, timeout):
-            if send_pdu and send_pdu.name=="UI" and send_pdu.ssap==socket1_sap:
+            if send_pdu and send_pdu.name == "UI" \
+                    and send_pdu.ssap == socket1_sap:
                 send_pdu.ssap = socket2_sap
             return send_pdu
 
@@ -926,7 +952,7 @@ class TestProgram(CommandLineInterface):
             if not cl_echo_server:
                 raise TestFail("connection-less echo server not available")
             info("connection-less echo server on sap %d" % cl_echo_server)
-            
+
             sdu1 = 50 * b'\x01'
             sdu2 = 50 * b'\x02'
 
@@ -947,7 +973,7 @@ class TestProgram(CommandLineInterface):
             if not llc.link.SHUTDOWN:
                 raise TestFail("link not terminated")
             info("link terminated as required")
-            
+
         finally:
             socket1.close()
             socket2.close()
@@ -971,9 +997,10 @@ class TestProgram(CommandLineInterface):
         if llc.secure_data_transfer is False:
             raise TestSkip("secure data transfer is not enabled")
         if self.options.test.index('17') != len(self.options.test) - 1:
-            log.warning("Test 17 causes link termination, further tests skipped")
-            del self.options.test[self.options.test.index('17')+1:]
-        
+            log.warning(
+                "Test 17 causes link termination, further tests skipped")
+            del self.options.test[self.options.test.index('17') + 1:]
+
         socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
         try:
             co_echo_server = self.options.co_echo_sap
@@ -983,7 +1010,7 @@ class TestProgram(CommandLineInterface):
                 raise TestFail("connection-mode echo server not available")
             info("connection-mode echo server on sap %d" % co_echo_server)
             socket.connect(co_echo_server)
-            
+
             sdu1 = 50 * b'\x01'
             sdu2 = 50 * b'\x02'
 
@@ -1003,7 +1030,7 @@ class TestProgram(CommandLineInterface):
             if not llc.link.SHUTDOWN:
                 raise TestFail("link not terminated")
             info("link terminated as required")
-            
+
         finally:
             socket.close()
 
@@ -1027,9 +1054,10 @@ class TestProgram(CommandLineInterface):
         if llc.secure_data_transfer is False:
             raise TestSkip("secure data transfer is not enabled")
         if self.options.test.index('18') != len(self.options.test) - 1:
-            log.warning("Test 18 causes link termination, further tests skipped")
-            del self.options.test[self.options.test.index('18')+1:]
-        
+            log.warning(
+                "Test 18 causes link termination, further tests skipped")
+            del self.options.test[self.options.test.index('18') + 1:]
+
         socket1 = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
         socket2 = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
         socket1.bind()
@@ -1038,7 +1066,8 @@ class TestProgram(CommandLineInterface):
         socket2_sap = socket2.getsockname()
 
         def on_llc_exchange_call(send_pdu, timeout):
-            if send_pdu and send_pdu.name=="I" and send_pdu.ssap==socket1_sap:
+            if send_pdu and send_pdu.name == "I" \
+                    and send_pdu.ssap == socket1_sap:
                 send_pdu.ssap = socket2_sap
             return send_pdu
 
@@ -1050,7 +1079,7 @@ class TestProgram(CommandLineInterface):
                 raise TestFail("connection-mode echo server not available")
             info("connection-mode echo server on sap %d" % co_echo_server)
             socket1.connect(co_echo_server)
-            
+
             sdu1 = 50 * b'\x01'
             sdu2 = 50 * b'\x02'
 
@@ -1071,10 +1100,11 @@ class TestProgram(CommandLineInterface):
             if not llc.link.SHUTDOWN:
                 raise TestFail("link not terminated")
             info("link terminated as required")
-            
+
         finally:
             socket1.close()
             socket2.close()
+
 
 if __name__ == '__main__':
     TestProgram().run()

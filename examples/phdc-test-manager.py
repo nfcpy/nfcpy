@@ -22,21 +22,26 @@
 # -----------------------------------------------------------------------------
 
 import logging
+
 log = logging.getLogger('main')
 
 import time
 import string
 import struct
-import inspect
 import argparse
 from threading import Thread
-import Queue as queue
+from binascii import hexlify
+try:
+    import queue
+except ImportError:
+    import Queue as queue
 
-from cli import CommandLineInterface
+from .cli import CommandLineInterface
 
 import nfc
 import nfc.ndef
 import nfc.llcp
+
 
 def trace(func):
     def traced_func(*args, **kwargs):
@@ -45,20 +50,24 @@ def trace(func):
             _args = ', '.join([_args, "{0}".format(kwargs).strip("{}")])
         log.debug("{func}({args})".format(func=func.__name__, args=_args))
         return func(*args, **kwargs)
+
     return traced_func
 
+
 def printable(data):
-    printable = string.digits + string.letters + string.punctuation + ' '
-    return ''.join([c if c in printable else '.' for c in data])
+    chars = "".join(string.printable.split()) + " "
+    return ''.join([c if c in chars else '.' for c in data])
+
 
 def format_data(data):
     s = []
     for i in range(0, len(data), 16):
         s.append("  %04x: " % i)
-        s[-1] += ' '.join(["%02x" % ord(c) for c in data[i:i+16]]) + ' '
-        s[-1] += (8 + 16*3 - len(s[-1])) * ' '
-        s[-1] += printable(data[i:i+16])
+        s[-1] += ' '.join(["%02x" % ord(c) for c in data[i:i + 16]]) + ' '
+        s[-1] += (8 + 16 * 3 - len(s[-1])) * ' '
+        s[-1] += printable(data[i:i + 16])
     return '\n'.join(s)
+
 
 class PhdcManager(Thread):
     def __init__(self):
@@ -76,7 +85,7 @@ class PhdcManager(Thread):
         except queue.Empty:
             apdu = ""
         return apdu
-                
+
     def send(self, apdu):
         self.oqueue.put(apdu)
 
@@ -85,6 +94,7 @@ class PhdcManager(Thread):
             return self.iqueue.get(block=True, timeout=timeout)
         except queue.Empty:
             return None
+
 
 class PhdcTagManager(PhdcManager):
     def __init__(self, tag, apdu):
@@ -102,7 +112,7 @@ class PhdcTagManager(PhdcManager):
                 if self.tag.ndef.message.type == "urn:nfc:wkt:PHD":
                     data = bytearray(self.tag.ndef.message[0].data)
                     if data[0] & 0x8F == (self.mc % 16) | 0x80:
-                        log.info("[phdc] <<< " + str(data).encode("hex"))
+                        log.info("[phdc] <<< " + hexlify(data).decode())
                         empty_ndef_msg = nfc.ndef.Message(nfc.ndef.Record())
                         self.tag.ndef.message = empty_ndef_msg
                         self.mc += 1
@@ -119,7 +129,7 @@ class PhdcTagManager(PhdcManager):
         log.info("[phdc] >>> {0}".format(record.data.encode("hex")))
         self.tag.ndef.message = nfc.ndef.Message(record)
         self.mc += 1
-        
+
     def run(self):
         log.info("entering phdc manager run loop")
         while True:
@@ -132,7 +142,8 @@ class PhdcTagManager(PhdcManager):
                 self.enqueue(None)
                 break
         log.info("leaving phdc manager run loop")
-        
+
+
 thermometer_assoc_req = \
     "E200 0032 8000 0000" \
     "0001 002A 5079 0026" \
@@ -153,6 +164,7 @@ thermometer_assoc_res = \
 assoc_release_req = "E40000020000"
 assoc_release_res = "E50000020000"
 
+
 def phdc_tag_manager(tag):
     if tag.ndef.message.type == "urn:nfc:wkt:PHD":
         phd_data = bytearray(tag.ndef.message[0].data)
@@ -162,19 +174,21 @@ def phdc_tag_manager(tag):
             log.info("entering ieee manager")
             while True:
                 apdu = manager.recv(timeout=None)
-                if apdu is None: break
-                log.info("[ieee] <<< {0}".format(str(apdu).encode("hex")))
-                if apdu.startswith("\xE2\x00"):
+                if apdu is None:
+                    break
+                log.info("[ieee] <<< {0}".format(hexlify(apdu).decode()))
+                if apdu.startswith(b"\xE2\x00"):
                     apdu = bytearray.fromhex(thermometer_assoc_res)
-                elif apdu.startswith("\xE4\x00"):
+                elif apdu.startswith(b"\xE4\x00"):
                     apdu = bytearray.fromhex(assoc_release_res)
                 else:
                     apdu = apdu[::-1]
                 time.sleep(0.2)
-                log.info("[ieee] >>> {0}".format(str(apdu).encode("hex")))
+                log.info("[ieee] >>> {0}".format(hexlify(apdu).decode()))
                 manager.send(apdu)
             log.info("leaving ieee manager")
-    
+
+
 class PhdcPeerManager(Thread):
     def __init__(self, llc, service_name):
         socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
@@ -184,7 +198,7 @@ class PhdcPeerManager(Thread):
         socket.setsockopt(nfc.llcp.SO_RCVBUF, 2)
         socket.listen(backlog=1)
         super(PhdcPeerManager, self).__init__(
-            target=self.listen, args=(socket,))
+                target=self.listen, args=(socket,))
 
     def listen(self, socket):
         try:
@@ -196,27 +210,29 @@ class PhdcPeerManager(Thread):
                 log.info("entering ieee manager")
                 while True:
                     data = client.recv()
-                    if data == None: break
+                    if data is None:
+                        break
                     log.info("rcvd {0} byte data".format(len(data)))
                     size = struct.unpack(">H", data[0:2])[0]
                     apdu = data[2:]
                     while len(apdu) < size:
                         data = client.recv()
-                        if data == None: break
+                        if data is None:
+                            break
                         log.info("rcvd {0} byte data".format(len(data)))
                         apdu += data
-                    log.info("[ieee] <<< {0}".format(str(apdu).encode("hex")))
-                    if apdu.startswith("\xE2\x00"):
+                    log.info("[ieee] <<< {0}".format(hexlify(apdu).decode()))
+                    if apdu.startswith(b"\xE2\x00"):
                         apdu = bytearray.fromhex(thermometer_assoc_res)
-                    elif apdu.startswith("\xE4\x00"):
+                    elif apdu.startswith(b"\xE4\x00"):
                         apdu = bytearray.fromhex(assoc_release_res)
                     else:
                         apdu = apdu[::-1]
                     time.sleep(0.2)
-                    log.info("[ieee] >>> {0}".format(str(apdu).encode("hex")))
+                    log.info("[ieee] >>> {0}".format(hexlify(apdu).decode()))
                     data = struct.pack(">H", len(apdu)) + apdu
                     for i in range(0, len(data), miu):
-                        client.send(str(data[i:i+miu]))
+                        client.send(str(data[i:i + miu]))
                 log.info("remote peer {0} closed connection".format(peer))
                 log.info("leaving ieee manager")
                 client.close()
@@ -226,18 +242,21 @@ class PhdcPeerManager(Thread):
         finally:
             socket.close()
 
+
 class TestProgram(CommandLineInterface):
     def __init__(self):
         parser = argparse.ArgumentParser()
         super(TestProgram, self).__init__(
-            parser, groups="llcp rdwr dbg clf")
+                parser, groups="llcp rdwr dbg clf")
+        self.phdc_manager_1 = None
+        self.phdc_manager_2 = None
 
     def on_llcp_startup(self, llc):
         validation_service_name = "urn:nfc:xsn:nfc-forum.org:phdc-validation"
         self.phdc_manager_1 = PhdcPeerManager(llc, "urn:nfc:sn:phdc")
         self.phdc_manager_2 = PhdcPeerManager(llc, validation_service_name)
         return llc
-        
+
     def on_llcp_connect(self, llc):
         self.phdc_manager_1.start()
         self.phdc_manager_2.start()
@@ -258,6 +277,7 @@ class TestProgram(CommandLineInterface):
                 phdc_tag_manager(tag)
                 return False
         return True
+
 
 if __name__ == '__main__':
     TestProgram().run()
