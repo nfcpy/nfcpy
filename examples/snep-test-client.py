@@ -95,7 +95,7 @@ class TestProgram(CommandLineInterface):
         ndef_message_sent = list()
         ndef_message_rcvd = list()
 
-        payload = ''.join([chr(x) for x in range(122 - 29)])
+        payload = bytes(bytearray(range(122 - 29)))
         record = nfc.ndef.Record("application/octet-stream", "1", payload)
         ndef_message_sent.append(nfc.ndef.Message(record))
 
@@ -132,7 +132,7 @@ class TestProgram(CommandLineInterface):
         ndef_message_sent = list()
         ndef_message_rcvd = list()
 
-        payload = ''.join([chr(x % 256) for x in range(2171 - 29)])
+        payload = bytes(bytearray(range(2171 - 29)))
         record = nfc.ndef.Record("application/octet-stream", "1", payload)
         ndef_message_sent.append(nfc.ndef.Message(record))
 
@@ -170,7 +170,7 @@ class TestProgram(CommandLineInterface):
         ndef_message_sent = list()
         ndef_message_rcvd = list()
 
-        payload = ''.join([chr(x % 256) for x in range(50)])
+        payload = bytes(bytearray([x % 256 for x in range(50)]))
         record = nfc.ndef.Record("application/octet-stream", "1", payload)
         ndef_message_sent.append(nfc.ndef.Message(record))
         record = nfc.ndef.Record("application/octet-stream", "2", payload)
@@ -215,7 +215,7 @@ class TestProgram(CommandLineInterface):
     def test_05(self, llc):
         """Undeliverable resource"""
 
-        payload = ''.join([chr(x) for x in range(122 - 29)])
+        payload = bytes(bytearray(range(122 - 29)))
         record = nfc.ndef.Record("application/octet-stream", "1", payload)
         ndef_message_sent = nfc.ndef.Message(record)
 
@@ -275,7 +275,7 @@ class TestProgram(CommandLineInterface):
     def test_07(self, llc):
         """Default server limits"""
 
-        payload = ''.join([chr(x % 256) for x in range(1024 - 32)])
+        payload = bytes(bytearray([x % 256 for x in range(1024 - 32)]))
         record = nfc.ndef.Record("application/octet-stream", "1", payload)
         ndef_message = nfc.ndef.Message(record)
 

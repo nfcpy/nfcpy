@@ -30,6 +30,7 @@ import logging
 
 log = logging.getLogger('main')
 
+import struct
 import os
 import time
 import datetime
@@ -196,7 +197,7 @@ class TestProgram(CommandLineInterface):
             info_text = "  %s message %d at %s"
             try:
                 for i in range(1, send_count + 1):
-                    data, addr = packet_length * chr(i), cl_server
+                    data, addr = packet_length * struct.pack("B", i), cl_server
                     assert socket.sendto(data, addr), "message send failed"
                     test_data.sent.append((data, addr, timestamp()))
                     info(info_text, "sent", i, test_data.sent[-1][2].time())
@@ -424,7 +425,7 @@ class TestProgram(CommandLineInterface):
             count = 20
             info("now sending {0} messages".format(count))
             for i in range(count):
-                data = default_miu * chr(i)
+                data = default_miu * struct.pack("B", i)
                 if sock.send(data):
                     info("sent message {0}".format(i + 1))
                     sent_data.append((data, time.time()))
@@ -483,7 +484,7 @@ class TestProgram(CommandLineInterface):
             info("connected with sap {0}".format(peer_sap))
             info("now sending 4 messages")
             for i in range(4):
-                data = default_miu * chr(i)
+                data = default_miu * struct.pack("B", i)
                 if socket.send(data):
                     info("sent message {0}".format(i + 1))
             for i in range(4):
