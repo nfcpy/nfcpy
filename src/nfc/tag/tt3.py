@@ -718,22 +718,26 @@ class Type3Tag(nfc.tag.Tag):
             log.debug("incorrect response code {0:02x}".format(rsp[1]))
             raise Type3TagCommandError(RSP_CODE_ERROR)
         if send_idm and rsp[2:10] != self.idm:
-            log.debug("wrong tag or transaction id {}".format(hexlify(rsp[2:10])))
+            log.debug("wrong tag or transaction id {}".format(
+                    hexlify(rsp[2:10]).decode()))
             raise Type3TagCommandError(TAG_IDM_ERROR)
         if not send_idm:
             log.debug("<< {0:02x} {1:02x} {2}".format(
-                rsp[0], rsp[1], hexlify(rsp[2:])))
+                rsp[0], rsp[1], hexlify(rsp[2:]).decode()))
             return rsp[2:]
         if check_status and rsp[10] != 0:
-            log.debug("tag returned error status {}".format(hexlify(rsp[10:12])))
+            log.debug("tag returned error status {}".format(
+                    hexlify(rsp[10:12].decode())))
             raise Type3TagCommandError(unpack(">H", rsp[10:12])[0])
         if not check_status:
             log.debug("<< {0:02x} {1:02x} {2} {3}".format(
-                rsp[0], rsp[1], hexlify(rsp[2:10]), hexlify(rsp[10:])))
+                rsp[0], rsp[1], hexlify(rsp[2:10]).decode(),
+                hexlify(rsp[10:]).decode()))
             return rsp[10:]
         log.debug("<< {0:02x} {1:02x} {2} {3} {4} ({elapsed:f}s)".format(
-            rsp[0], rsp[1], hexlify(rsp[2:10]), hexlify(rsp[10:12]),
-            hexlify(rsp[12:]), elapsed=time.time()-started))
+            rsp[0], rsp[1], hexlify(rsp[2:10]).decode(),
+            hexlify(rsp[10:12]).decode(), hexlify(rsp[12:]).decode(),
+            elapsed=time.time()-started))
         return rsp[12:]
 
 
@@ -798,7 +802,9 @@ class Type3TagEmulation(nfc.tag.TagEmulation):
                 return bytearray([10 + len(rsp), 0x0D]) + self.idm + rsp
 
     def send_response(self, rsp, timeout):
-        log.debug("rsp: {}".format(hexlify(rsp) if rsp is not None else 'None'))
+        log.debug("rsp: {}".format(hexlify(rsp).decode()
+                                   if rsp is not None
+                                   else 'None'))
         return self.clf.exchange(rsp, timeout)
 
     def polling(self, cmd_data):
