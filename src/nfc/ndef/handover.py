@@ -256,7 +256,7 @@ class HandoverRequestRecord(Record):
         log.debug("parse '{0}' record".format(self.type))
         if len(string) > 0:
             f = io.BytesIO(string)
-            self.version = Version(f.read(1))
+            self.version = Version(f.read(1).decode("utf-8"))
             if self.version.major != 1:
                 raise DecodeError("unsupported major version")
             if self.version >= Version('\x12'):
@@ -410,7 +410,7 @@ class HandoverSelectMessage(object):
         to expand this list."""
         return self._carriers
     
-    def add_carrier(self, carrier_record, power_state, aux_data_records=[]):
+    def add_carrier(self, carrier_record, power_state, aux_data_records=None):
         """Add a new carrier to the handover select message.
 
         :param carrier_record: a record providing carrier information
@@ -424,6 +424,7 @@ class HandoverSelectMessage(object):
         >>> hs.add_carrier(some_carrier_record, "active")
         """
         carrier = Carrier(carrier_record, power_state)
+        aux_data_records = [] if aux_data_records is None else aux_data_records
         for aux in aux_data_records:
             carrier.auxiliary_data_records.append(aux)
         self.carriers.append(carrier)
@@ -494,7 +495,7 @@ class HandoverSelectRecord(Record):
         log.debug("parse '{0}' record".format(self.type))
         if len(string) > 0:
             f = io.BytesIO(string)
-            self.version = Version(f.read(1))
+            self.version = Version(f.read(1).decode("utf-8"))
             if self.version.major != 1:
                 raise DecodeError("unsupported major version")
             while f.tell() < len(string):
@@ -629,12 +630,13 @@ class AlternativeCarrier(object):
                 
     def encode(self):
         f = io.BytesIO()
-        f.write(chr(carrier_power_states.index(self.carrier_power_state)))
-        f.write(chr(len(self.carrier_data_reference)))
+        f.write(struct.pack(
+                "B", carrier_power_states.index(self.carrier_power_state)))
+        f.write(struct.pack("B", len(self.carrier_data_reference)))
         f.write(self.carrier_data_reference)
-        f.write(chr(len(self.auxiliary_data_reference_list)))
+        f.write(struct.pack("B", len(self.auxiliary_data_reference_list)))
         for auxiliary_data_reference in self.auxiliary_data_reference_list:
-            f.write(chr(len(auxiliary_data_reference)))
+            f.write(struct.pack("B", len(auxiliary_data_reference)))
             f.write(auxiliary_data_reference)
         f.seek(0, 0)
         return f.read()
@@ -688,15 +690,15 @@ class HandoverError(object):
             raise DecodeError("non matching error reason and data")
     
     def encode(self):
-        try: payload = chr(self.reason)
+        try: payload = struct.pack("B", self.reason)
         except ValueError: raise EncodeError("error reason out of limits")
         try:
             if self.reason == 1:
-                payload += chr(self.data)
+                payload += struct.pack("B", self.data)
             elif self.reason == 2:
                 payload += struct.pack(">L", self.data)
             elif self.reason == 3:
-                payload += chr(self.data)
+                payload += struct.pack("B", self.data)
             else:
                 raise EncodeError("reserved error reason %d" % self.reason)
         except (TypeError, struct.error):
@@ -766,7 +768,7 @@ class Carrier(object):
 
 #------------------------------------------------------------------------------
 def read_octet_sequence(f):
-    length = ord(f.read(1))
+    length = struct.pack("B", f.read(1))
     string = f.read(length)
     if len(string) < length:
         s = "expected octet sequence of length {0} but got just {1}"
