@@ -152,19 +152,19 @@ class TTY(object):
             if frame is None or len(frame) == 0:
                 raise IOError(errno.ETIMEDOUT, os.strerror(errno.ETIMEDOUT))
             if frame.startswith(b"\x00\x00\xff\x00\xff\x00"):
-                log.log(logging.DEBUG-1, "<<< %s", hexlify(frame))
+                log.log(logging.DEBUG-1, "<<< %s", hexlify(frame).decode())
                 return frame
             LEN = frame[3]
             if LEN == 0xFF:
                 frame += self.tty.read(3)
                 LEN = frame[5] << 8 | frame[6]
             frame += self.tty.read(LEN + 1)
-            log.log(logging.DEBUG-1, "<<< %s", hexlify(frame))
+            log.log(logging.DEBUG-1, "<<< %s", hexlify(frame).decode())
             return frame
 
     def write(self, frame):
         if self.tty is not None:
-            log.log(logging.DEBUG-1, ">>> %s", hexlify(frame))
+            log.log(logging.DEBUG-1, ">>> %s", hexlify(frame).decode())
             self.tty.flushInput()
             try:
                 self.tty.write(frame)
@@ -324,12 +324,12 @@ class USB(object):
                 raise IOError(errno.EIO, os.strerror(errno.EIO))
 
             frame = bytearray(frame)
-            log.log(logging.DEBUG-1, "<<< %s", hexlify(frame))
+            log.log(logging.DEBUG-1, "<<< %s", hexlify(frame).decode())
             return frame
 
     def write(self, frame, timeout=0):
         if self.usb_out is not None:
-            log.log(logging.DEBUG-1, ">>> %s", hexlify(frame))
+            log.log(logging.DEBUG-1, ">>> %s", hexlify(frame).decode())
             try:
                 ep_addr = self.usb_out.getAddress()
                 self.usb_dev.bulkWrite(ep_addr, bytes(frame), timeout)
