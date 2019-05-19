@@ -9,6 +9,7 @@ import mock
 import pytest
 from pytest_mock import mocker  # noqa: F401
 
+import struct
 import logging
 logging.basicConfig(level=logging.WARN)
 logging_level = logging.getLogger().getEffectiveLevel()
@@ -31,7 +32,8 @@ def target():
 
 @pytest.fixture()
 def clf(mocker, target):  # noqa: F811
-    mocker.patch('os.urandom', new=lambda n: bytes(bytearray(range(n))))
+    mocker.patch('os.urandom',
+                 new=lambda n: struct.pack("{}B".format(n), *range(n)))
 
     clf = nfc.ContactlessFrontend()
     mocker.patch.object(clf, 'exchange', autospec=True)

@@ -23,6 +23,7 @@ import nfc.tag
 from . import tt3
 
 import os
+import struct
 from binascii import hexlify
 from pyDes import triple_des, CBC
 from struct import pack, unpack
@@ -487,9 +488,9 @@ class FelicaLite(tt3.Type3Tag):
         # reversed order.
         assert len(data) % 8 == 0 and len(key) == 16 and len(iv) == 8
         key = bytes(key[8:] + key[:8]) if flip_key else bytes(key)
-        txt = [bytes(bytearray(reversed(x)))
-               for x in zip(*[iter(bytes(data))]*8)]
-        return triple_des(key, CBC, bytes(iv)).encrypt(b''.join(txt))[:-9:-1]
+        txt = b''.join([struct.pack("{}B".format(len(x)), *reversed(x))
+                        for x in zip(*[iter(bytes(data))]*8)])
+        return triple_des(key, CBC, bytes(iv)).encrypt(txt)[:-9:-1]
 
     def protect(self, password=None, read_protect=False, protect_from=0):
         """Protect a FeliCa Lite Tag.
@@ -582,7 +583,7 @@ class FelicaLite(tt3.Type3Tag):
         # Perform internal authentication, i.e. ensure that the tag
         # has the same card key as in password. If the password is
         # empty, we'll try with the factory key.
-        key = bytes(bytearray(password[0:16])) if password else b"\0" * 16
+        key = struct.pack("16B", *password[0:16]) if password else b"\0" * 16
 
         log.debug("authenticate with key {}".format(hexlify(key)))
         self._authenticated = False
@@ -601,8 +602,8 @@ class FelicaLite(tt3.Type3Tag):
         # challenge under the card key and with an initialization vector of
         # all zero.
         sk = triple_des(key, CBC, b'\00' * 8).encrypt(rc)
-        log.debug("sk1 = {}".format(hexlify(sk[:8])))
-        log.debug("sk2 = {}".format(hexlify(sk[8:])))
+        log.debug("sk1 = {}".format(hexlify(sk[:8]).decode()))
+        log.debug("sk2 = {}".format(hexlify(sk[8:]).decode()))
 
         # By reading the id and mac block together we get the mac that the
         # tag has generated over the id block data under it's session key

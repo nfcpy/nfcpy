@@ -806,8 +806,8 @@ class DataProtectionSetup(ProtocolDataUnit):
     def __str__(self):
         return super(DataProtectionSetup, self).__str__() + \
             " ECPK={0} RN={1}".format(
-                'None' if self.ecpk is None else hexlify(self.ecpk),
-                'None' if self.rn is None else hexlify(self.rn))
+                'None' if self.ecpk is None else hexlify(self.ecpk).decode(),
+                'None' if self.rn is None else hexlify(self.rn).decode())
 
 
 # -----------------------------------------------------------------------------
@@ -901,7 +901,7 @@ class UnknownProtocolDataUnit(ProtocolDataUnit):
 
     def __str__(self):
         return (super(UnknownProtocolDataUnit, self).__str__()
-                + " PAYLOAD={}".format(hexlify(self.payload)))
+                + " PAYLOAD={}".format(hexlify(self.payload).decode()))
 
 
 # -----------------------------------------------------------------------------
