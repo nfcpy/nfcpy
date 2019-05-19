@@ -245,7 +245,6 @@ class MifareUltralightC(tt2.Type2Tag):
             + (struct.pack("B", ra[0]) if isinstance(ra[0], int) else ra[0])
 
 
-
 class NTAG203(tt2.Type2Tag):
     """The NTAG203 is a plain memory Tag with 144 bytes user data memory
     plus a 16-bit one-way counter. It does not have any security
