@@ -29,6 +29,7 @@
 import time
 import struct
 import argparse
+import errno
 try:
     import queue
 except ImportError:
@@ -67,7 +68,7 @@ class PatternNumberReceiver(Thread):
                     log.info("received pattern number %02Xh", pattern_number)
                     self.options.pattern_number = pattern_number
         except nfc.llcp.Error as e:
-            (log.debug if e.errno == nfc.llcp.errno.EPIPE else log.error)(e)
+            (log.debug if e.errno == errno.EPIPE else log.error)(e)
         finally:
             self.socket.close()
 
@@ -109,7 +110,7 @@ class ConnectionLessEchoServer(Thread):
                     send_socket.sendto(data, echo_out_addr)
                 log.info("no more data, start waiting")
         except nfc.llcp.Error as e:
-            (log.debug if e.errno == nfc.llcp.errno.EPIPE else log.error)(e)
+            (log.debug if e.errno == errno.EPIPE else log.error)(e)
         finally:
             log.info("close connection-less echo server socket")
             send_socket.close()
@@ -142,7 +143,7 @@ class ConnectionModeEchoServer(Thread):
                 log.info("accepted data link connection from sap %d", srcsap)
                 self.recv(socket, socket.llc)
         except nfc.llcp.Error as e:
-            (log.debug if e.errno == nfc.llcp.errno.EPIPE else log.error)(e)
+            (log.debug if e.errno == errno.EPIPE else log.error)(e)
         finally:
             log.info("close connection-mode echo server socket")
             self.listen_socket.close()

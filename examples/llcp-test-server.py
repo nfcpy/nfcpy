@@ -28,6 +28,7 @@
 #
 import time
 import argparse
+import errno
 try:
     import queue
 except ImportError:
@@ -80,7 +81,7 @@ class ConnectionLessEchoServer(Thread):
                     socket.sendto(data, addr)
                 log.info("no more data, start waiting")
         except nfc.llcp.Error as e:
-            (log.debug if e.errno == nfc.llcp.errno.EPIPE else log.error)(e)
+            (log.debug if e.errno == errno.EPIPE else log.error)(e)
         finally:
             log.info("close connection-less echo server socket")
             socket.close()
@@ -183,7 +184,7 @@ class ConnectionModeEchoServer(Thread):
                 log.info("client sap {0} connected".format(peer))
                 self.serve(client_socket)
         except nfc.llcp.Error as e:
-            (log.debug if e.errno == nfc.llcp.errno.EPIPE else log.error)(e)
+            (log.debug if e.errno == errno.EPIPE else log.error)(e)
         finally:
             log.info("close connection-mode echo server socket")
             socket.close()
@@ -220,7 +221,7 @@ class ConnectionModeDumpServer(Thread):
                 log.info("client sap {0} connected".format(peer))
                 Thread(target=self.serve, args=(client_socket,)).start()
         except nfc.llcp.Error as e:
-            (log.debug if e.errno == nfc.llcp.errno.EPIPE else log.error)(e)
+            (log.debug if e.errno == errno.EPIPE else log.error)(e)
         finally:
             log.info("close connection-mode dump server socket")
             socket.close()

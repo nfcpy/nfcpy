@@ -25,6 +25,7 @@ import logging
 
 log = logging.getLogger('main')
 
+import errno
 import time
 import string
 import struct
@@ -238,7 +239,7 @@ class PhdcPeerManager(Thread):
                 client.close()
 
         except nfc.llcp.Error as e:
-            (log.debug if e.errno == nfc.llcp.errno.EPIPE else log.error)(e)
+            (log.debug if e.errno == errno.EPIPE else log.error)(e)
         finally:
             socket.close()
 
