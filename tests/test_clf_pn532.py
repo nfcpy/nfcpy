@@ -22,8 +22,8 @@ logging.getLogger("nfc.clf").setLevel(logging_level)
 logging.getLogger("nfc.clf.pn533").setLevel(logging_level)
 
 
-@pytest.fixture()  # noqa: F811
-def transport(mocker):
+@pytest.fixture()
+def transport(mocker):  # noqa: F811
     transport = nfc.clf.transport.TTY()
     mocker.patch.object(transport, 'open', autospec=True)
     mocker.patch.object(transport, 'close', autospec=True)

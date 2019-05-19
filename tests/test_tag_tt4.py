@@ -20,8 +20,7 @@ def HEX(s):
     return bytearray.fromhex(s)
 
 
-@pytest.mark.parametrize(  # noqa: F811
-    "rats_response, max_send, max_recv, result", [
+@pytest.mark.parametrize("rats_response, max_send, max_recv, result", [
     ('067077010280', 256, 256, "Type4ATag MIU=15 FWT=0.000302"),
     ('067177110280', 256, 256, "Type4ATag MIU=23 FWT=0.000604"),
     ('067277210280', 256, 256, "Type4ATag MIU=31 FWT=0.001208"),
@@ -40,7 +39,8 @@ def HEX(s):
     ('067F77F10280', 256, 256, "Type4ATag MIU=255 FWT=0.004833"),
     ('067F77F10280', 255, 255, "Type4ATag MIU=254 FWT=0.004833"),
 ])
-def test_init_T4A(mocker, rats_response, max_send, max_recv, result):
+def test_init_T4A(
+        mocker, rats_response, max_send, max_recv, result):  # noqa: F811
     clf = nfc.ContactlessFrontend()
     mocker.patch.object(clf, 'exchange', autospec=True)
     mocker.patch('nfc.ContactlessFrontend.max_send_data_size',
@@ -61,8 +61,7 @@ def test_init_T4A(mocker, rats_response, max_send, max_recv, result):
     assert str(tag) == result
 
 
-@pytest.mark.parametrize(  # noqa: F811
-    "sensb_res, max_send, max_recv, result", [
+@pytest.mark.parametrize("sensb_res, max_send, max_recv, result", [
     ('5030702A1C00000011000105', 256, 256, "Type4BTag MIU=15 FWT=0.000302"),
     ('5030702A1C00000011001115', 256, 256, "Type4BTag MIU=23 FWT=0.000604"),
     ('5030702A1C00000011002125', 256, 256, "Type4BTag MIU=31 FWT=0.001208"),
@@ -81,7 +80,8 @@ def test_init_T4A(mocker, rats_response, max_send, max_recv, result):
     ('5030702A1C0000001100F1F5', 256, 256, "Type4BTag MIU=255 FWT=0.004833"),
     ('5030702A1C0000001100F1F5', 255, 255, "Type4BTag MIU=254 FWT=0.004833"),
 ])
-def test_init_T4B(mocker, sensb_res, max_send, max_recv, result):
+def test_init_T4B(
+        mocker, sensb_res, max_send, max_recv, result):  # noqa: F811
     clf = nfc.ContactlessFrontend()
     mocker.patch.object(clf, 'exchange', autospec=True)
     mocker.patch('nfc.ContactlessFrontend.max_send_data_size',
@@ -107,8 +107,8 @@ def test_init_wrong_technology():
 
 
 class TestType4Tag:
-    @pytest.fixture()  # noqa: F811
-    def clf(self, mocker):
+    @pytest.fixture()
+    def clf(self, mocker):  # noqa: F811
         clf = nfc.ContactlessFrontend()
         mocker.patch.object(clf, 'exchange', autospec=True)
         mocker.patch('nfc.ContactlessFrontend.max_send_data_size',
@@ -610,8 +610,8 @@ class TestType4Tag:
 
 
 class TestIsoDepInitiator:
-    @pytest.fixture()  # noqa: F811
-    def clf(self, mocker):
+    @pytest.fixture()
+    def clf(self, mocker):  # noqa: F811
         clf = nfc.ContactlessFrontend()
         mocker.patch.object(clf, 'exchange', autospec=True)
         mocker.patch('nfc.ContactlessFrontend.max_send_data_size',
