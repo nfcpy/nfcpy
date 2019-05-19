@@ -139,7 +139,7 @@ if __name__ == '__main__':
               "tty[:(usb|com)[:port]] (usb virtual or com port)"))
 
     args = parser.parse_args()
-    print args
+    print(args)
 
     if args.device is None:
         args.device = ['']
