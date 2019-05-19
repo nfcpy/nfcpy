@@ -22,13 +22,12 @@
 # -----------------------------------------------------------------------------
 
 import logging
+
 log = logging.getLogger('main')
 
-import time
 import argparse
-from threading import Thread
 
-from cli import CommandLineInterface, TestFail
+from .cli import CommandLineInterface, TestFail
 
 import nfc
 import nfc.snep
@@ -36,25 +35,29 @@ import nfc.ndef
 
 validation_server = "urn:nfc:xsn:nfc-forum.org:snep-validation"
 
+
 def info(message, prefix="  "):
     log.info(prefix + message)
+
 
 description = """
 Execute some Simple NDEF Exchange Protocol (SNEP) tests. The peer
 device must have the SNEP validation test servers running.
 """
+
+
 class TestProgram(CommandLineInterface):
     def __init__(self):
         parser = argparse.ArgumentParser(
-            usage='%(prog)s [OPTION]...',
-            formatter_class=argparse.RawDescriptionHelpFormatter,
-            description=description)
+                usage='%(prog)s [OPTION]...',
+                formatter_class=argparse.RawDescriptionHelpFormatter,
+                description=description)
         super(TestProgram, self).__init__(
-            parser, groups="test llcp dbg clf")
+                parser, groups="test llcp dbg clf")
 
     def test_00(self, llc):
         """Read NDEF data to send from file 'beam.ndef'"""
-        
+
         try:
             data = open("beam.ndef", "rb").read()
         except IOError:
@@ -67,7 +70,7 @@ class TestProgram(CommandLineInterface):
 
     def test_01(self, llc):
         """Connect and terminate"""
-        
+
         snep = nfc.snep.SnepClient(llc, max_ndef_msg_recv_size=1024)
         try:
             info("1st connect to {0}".format(validation_server))
@@ -88,11 +91,11 @@ class TestProgram(CommandLineInterface):
 
     def test_02(self, llc):
         """Unfragmented message exchange"""
-        
+
         ndef_message_sent = list()
         ndef_message_rcvd = list()
 
-        payload = ''.join([chr(x) for x in range(122-29)])
+        payload = ''.join([chr(x) for x in range(122 - 29)])
         record = nfc.ndef.Record("application/octet-stream", "1", payload)
         ndef_message_sent.append(nfc.ndef.Message(record))
 
@@ -125,11 +128,11 @@ class TestProgram(CommandLineInterface):
 
     def test_03(self, llc):
         """Fragmented message exchange"""
-        
+
         ndef_message_sent = list()
         ndef_message_rcvd = list()
 
-        payload = ''.join([chr(x%256) for x in range(2171-29)])
+        payload = ''.join([chr(x % 256) for x in range(2171 - 29)])
         record = nfc.ndef.Record("application/octet-stream", "1", payload)
         ndef_message_sent.append(nfc.ndef.Message(record))
 
@@ -163,17 +166,17 @@ class TestProgram(CommandLineInterface):
 
     def test_04(self, llc):
         """Multiple ndef messages"""
-        
+
         ndef_message_sent = list()
         ndef_message_rcvd = list()
 
-        payload = ''.join([chr(x%256) for x in range(50)])
+        payload = ''.join([chr(x % 256) for x in range(50)])
         record = nfc.ndef.Record("application/octet-stream", "1", payload)
         ndef_message_sent.append(nfc.ndef.Message(record))
         record = nfc.ndef.Record("application/octet-stream", "2", payload)
         ndef_message_sent.append(nfc.ndef.Message(record))
 
-        snep = nfc.snep.SnepClient(llc, max_ndef_msg_recv_size=10000)    
+        snep = nfc.snep.SnepClient(llc, max_ndef_msg_recv_size=10000)
         try:
             info("connect to {0}".format(validation_server))
             snep.connect(validation_server)
@@ -212,7 +215,7 @@ class TestProgram(CommandLineInterface):
     def test_05(self, llc):
         """Undeliverable resource"""
 
-        payload = ''.join([chr(x) for x in range(122-29)])
+        payload = ''.join([chr(x) for x in range(122 - 29)])
         record = nfc.ndef.Record("application/octet-stream", "1", payload)
         ndef_message_sent = nfc.ndef.Message(record)
 
@@ -272,7 +275,7 @@ class TestProgram(CommandLineInterface):
     def test_07(self, llc):
         """Default server limits"""
 
-        payload = ''.join([chr(x%256) for x in range(1024-32)])
+        payload = ''.join([chr(x % 256) for x in range(1024 - 32)])
         record = nfc.ndef.Record("application/octet-stream", "1", payload)
         ndef_message = nfc.ndef.Message(record)
 
@@ -300,6 +303,7 @@ class TestProgram(CommandLineInterface):
         finally:
             info("disconnect from server")
             snep.close()
+
 
 if __name__ == '__main__':
     TestProgram().run()

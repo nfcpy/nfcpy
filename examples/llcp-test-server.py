@@ -28,16 +28,20 @@
 #
 import time
 import argparse
-import Queue as queue
+try:
+    import queue
+except ImportError:
+    import Queue as queue
 from threading import Thread
-
 import logging
+
 log = logging.getLogger('main')
 
-from cli import CommandLineInterface
+from .cli import CommandLineInterface
 
 import nfc
 import nfc.llcp
+
 
 class ConnectionLessEchoServer(Thread):
     """The connection-less mode echo server accepts connection-less
@@ -53,13 +57,14 @@ class ConnectionLessEchoServer(Thread):
     buffer empty condition then re-enables the delay timer start event
     for the next service data unit.
     """
+
     def __init__(self, llc):
         socket = nfc.llcp.Socket(llc, nfc.llcp.LOGICAL_DATA_LINK)
         socket.bind('urn:nfc:sn:cl-echo')
         log.info("bound connection-less echo server to port {0}"
                  .format(socket.getsockname()))
         super(ConnectionLessEchoServer, self).__init__(
-            target=self.listen, args=(socket,))
+                target=self.listen, args=(socket,))
         self.name = "ConnectionLessEchoServerThread"
 
     def listen(self, socket):
@@ -79,6 +84,7 @@ class ConnectionLessEchoServer(Thread):
         finally:
             log.info("close connection-less echo server socket")
             socket.close()
+
 
 class ConnectionModeEchoServer(Thread):
     """The connection-oriented mode echo server waits for a connect
@@ -100,13 +106,14 @@ class ConnectionModeEchoServer(Thread):
     The echo service determines itself as busy if it is unable to
     accept further incoming service data units.
     """
+
     def __init__(self, llc):
         socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
         socket.bind('urn:nfc:sn:co-echo')
         log.info("bound connection-mode echo server to port {0}"
                  .format(socket.getsockname()))
         super(ConnectionModeEchoServer, self).__init__(
-            target=self.listen, args=(socket,))
+                target=self.listen, args=(socket,))
         self.name = "ConnectionModeEchoServerThread"
 
     def echo(self, socket, echo_queue):
@@ -116,10 +123,10 @@ class ConnectionModeEchoServer(Thread):
             if data == 0:
                 log.info("echo thread got quit event")
                 return
-            if data != None:
+            if data is not None:
                 log.info("data available, wait 2 seconds")
                 time.sleep(2.0)
-            while data != None:
+            while data is not None:
                 if not echo_queue.full():
                     socket.setsockopt(nfc.llcp.SO_RCVBSY, False)
                 try:
@@ -128,15 +135,19 @@ class ConnectionModeEchoServer(Thread):
                                  .format(len(data), peer))
                 except nfc.llcp.Error:
                     log.info("failed to send data")
-                    try: echo_queue.get_nowait()
-                    except queue.Empty: pass
+                    try:
+                        echo_queue.get_nowait()
+                    except queue.Empty:
+                        pass
                     return
-                try: data = echo_queue.get_nowait()
-                except queue.Empty: data = None
+                try:
+                    data = echo_queue.get_nowait()
+                except queue.Empty:
+                    data = None
                 if data == 0:
                     log.info("echo thread got quit event")
                     return
-                if data != None:
+                if data is not None:
                     log.info("more data available")
 
     def serve(self, socket):
@@ -147,14 +158,17 @@ class ConnectionModeEchoServer(Thread):
         log.info("serving connection from sap {0}".format(peer))
         while socket.poll("recv"):
             data = socket.recv()
-            if data == None: break
+            if data is None:
+                break
             log.info("rcvd {0} byte from sap {1}".format(len(data), peer))
             if echo_queue.full():
                 socket.setsockopt(nfc.llcp.SO_RCVBSY, True)
             echo_queue.put(data)
         log.info("remote peer {0} closed closed connection".format(peer))
-        try: echo_queue.put_nowait(int(0))
-        except queue.Full: pass
+        try:
+            echo_queue.put_nowait(int(0))
+        except queue.Full:
+            pass
         echo_thread.join()
         socket.close()
         log.info("serve thread terminated")
@@ -174,6 +188,7 @@ class ConnectionModeEchoServer(Thread):
             log.info("close connection-mode echo server socket")
             socket.close()
 
+
 class ConnectionModeDumpServer(Thread):
     def __init__(self, llc):
         socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
@@ -181,7 +196,7 @@ class ConnectionModeDumpServer(Thread):
         log.info("bound connection-mode dump server to port {0}"
                  .format(socket.getsockname()))
         super(ConnectionModeDumpServer, self).__init__(
-            target=self.listen, args=(socket,))
+                target=self.listen, args=(socket,))
         self.name = "ConnectionModeEchoDumpThread"
 
     def serve(self, socket):
@@ -189,7 +204,8 @@ class ConnectionModeDumpServer(Thread):
         log.info("serving connection from sap {0}".format(peer))
         while socket.poll("recv"):
             data = socket.recv()
-            if data == None: break
+            if data is None:
+                break
             log.info("dump: {0} byte from sap {1}".format(len(data), peer))
         socket.close()
         log.info("server thread terminated")
@@ -209,22 +225,27 @@ class ConnectionModeDumpServer(Thread):
             log.info("close connection-mode dump server socket")
             socket.close()
 
+
 class TestProgram(CommandLineInterface):
     def __init__(self):
         parser = argparse.ArgumentParser()
         super(TestProgram, self).__init__(parser, "llcp dbg clf")
+        self.cl_echo_server = None
+        self.cm_echo_server = None
+        self.cm_dump_server = None
 
     def on_llcp_startup(self, llc):
         self.cl_echo_server = ConnectionLessEchoServer(llc)
         self.cm_echo_server = ConnectionModeEchoServer(llc)
         self.cm_dump_server = ConnectionModeDumpServer(llc)
         return llc
-        
+
     def on_llcp_connect(self, llc):
         self.cl_echo_server.start()
         self.cm_echo_server.start()
         self.cm_dump_server.start()
         return True
+
 
 if __name__ == '__main__':
     TestProgram().run()

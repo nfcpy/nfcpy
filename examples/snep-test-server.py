@@ -22,16 +22,16 @@
 # -----------------------------------------------------------------------------
 
 import logging
-log = logging.getLogger('main')
-
-import time
 import argparse
 
-from cli import CommandLineInterface
+from .cli import CommandLineInterface
 
 import nfc
 import nfc.snep
 import nfc.ndef
+
+log = logging.getLogger('main')
+
 
 class DefaultServer(nfc.snep.SnepServer):
     def __init__(self, llc):
@@ -42,6 +42,7 @@ class DefaultServer(nfc.snep.SnepServer):
         log.info("default snep server got put request")
         log.info(ndef_message.pretty())
         return nfc.snep.Success
+
 
 class ValidationServer(nfc.snep.SnepServer):
     def __init__(self, llc):
@@ -66,24 +67,29 @@ class ValidationServer(nfc.snep.SnepServer):
             log.info(ndef_message.pretty())
             if len(str(ndef_message)) <= acceptable_length:
                 return ndef_message
-            else: return nfc.snep.ExcessData
+            else:
+                return nfc.snep.ExcessData
         return nfc.snep.NotFound
+
 
 class TestProgram(CommandLineInterface):
     def __init__(self):
         parser = argparse.ArgumentParser()
         super(TestProgram, self).__init__(
-            parser, groups="llcp dbg clf")
+                parser, groups="llcp dbg clf")
+        self.default_snep_server = None
+        self.validation_snep_server = None
 
     def on_llcp_startup(self, llc):
         self.default_snep_server = DefaultServer(llc)
         self.validation_snep_server = ValidationServer(llc)
         return llc
-        
+
     def on_llcp_connect(self, llc):
         self.default_snep_server.start()
         self.validation_snep_server.start()
         return True
+
 
 if __name__ == '__main__':
     TestProgram().run()

@@ -21,15 +21,15 @@
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
 import logging
+
 log = logging.getLogger('main')
 
 import os
 import sys
-import time
 import argparse
 import random
 
-from cli import CommandLineInterface, TestFail
+from .cli import CommandLineInterface, TestFail
 
 import nfc
 import nfc.llcp
@@ -46,19 +46,22 @@ mime_wfasc = "application/vnd.wfa.wsc"
 dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
 gobject.threads_init()
 
+
 def info(message, prefix="  "):
     log.info(prefix + message)
 
+
 class BluetoothAdapter(object):
     def __init__(self):
-	self.mainloop = gobject.MainLoop()
-	bus = dbus.SystemBus()
+        self.connected = False
+        self.mainloop = gobject.MainLoop()
+        bus = dbus.SystemBus()
         proxy = bus.get_object("org.bluez", "/")
-	manager = dbus.Interface(proxy, "org.bluez.Manager")
-	adapter_path = manager.DefaultAdapter()
+        manager = dbus.Interface(proxy, "org.bluez.Manager")
+        adapter_path = manager.DefaultAdapter()
         proxy = bus.get_object("org.bluez", adapter_path)
-	self.adapter = dbus.Interface(proxy, "org.bluez.Adapter")
-	self.oob_adapter = dbus.Interface(proxy, "org.bluez.OutOfBand")
+        self.adapter = dbus.Interface(proxy, "org.bluez.Adapter")
+        self.oob_adapter = dbus.Interface(proxy, "org.bluez.OutOfBand")
 
     @property
     def device_address(self):
@@ -83,8 +86,8 @@ class BluetoothAdapter(object):
     def set_ssp_data(self, bdaddr, ssp_hash, ssp_rand):
         ssp_hash = dbus.Array(ssp_hash)
         ssp_rand = dbus.Array(ssp_rand)
-	self.oob_adapter.AddRemoteData(bdaddr, ssp_hash, ssp_rand)
-        
+        self.oob_adapter.AddRemoteData(bdaddr, ssp_hash, ssp_rand)
+
     def create_pairing(self, bdaddr, ssp_hash=None, ssp_rand=None):
         def create_device_reply(device):
             info("Bluetooth pairing succeeded!")
@@ -101,16 +104,17 @@ class BluetoothAdapter(object):
             pairing_mode = "DisplayYesNo"
         else:
             pairing_mode = "NoInputNoOutput"
-            
+
         self.adapter.CreatePairedDevice(
-            bdaddr, "/test/agent_oob", pairing_mode,
-            reply_handler=create_device_reply,
-            error_handler=create_device_error)
+                bdaddr, "/test/agent_oob", pairing_mode,
+                reply_handler=create_device_reply,
+                error_handler=create_device_error)
 
         self.connected = False
         self.mainloop.run()
         return self.connected
-    
+
+
 def handover_connect(llc, options):
     client = nfc.handover.HandoverClient(llc)
     try:
@@ -120,10 +124,10 @@ def handover_connect(llc, options):
     except nfc.llcp.ConnectRefused:
         if not options.quirks:
             raise TestFail("unable to connect to the handover server")
-        
+
     log.error("unable to connect to the handover server")
     log.warning("[quirks] trying the snep server get method")
-    client = nfc.snep.SnepClient()
+    client = nfc.snep.SnepClient(llc)
     try:
         client.connect("urn:nfc:sn:snep")
         info("[quirks] connected to the remote default snep server")
@@ -131,10 +135,12 @@ def handover_connect(llc, options):
     except nfc.llcp.ConnectRefused:
         raise TestFail("unable to connect to the default snep server")
 
+
 # global object to store the handover response in quirks mode when the
 # handover message exchange is via the snep default server, as done by
 # the initial Android Jelly Bean release.
 quirks_handover_snep_response = None
+
 
 def handover_send(client, message, miu=128):
     if isinstance(client, nfc.handover.HandoverClient):
@@ -156,9 +162,10 @@ def handover_send(client, message, miu=128):
     else:
         raise ValueError("wrong client argument type")
 
+
 def handover_recv(client, timeout, raw=False):
     message = None
-    
+
     if isinstance(client, nfc.handover.HandoverClient):
         message = client._recv(timeout)
     elif isinstance(client, nfc.snep.SnepClient):
@@ -168,61 +175,68 @@ def handover_recv(client, timeout, raw=False):
             quirks_handover_snep_response = None
     else:
         raise ValueError("wrong client argument type")
-    
+
     if message is None:
         raise TestFail("no answer within {0} seconds".format(int(timeout)))
     if not message.type == "urn:nfc:wkt:Hs":
         raise TestFail("unexpected message type '{0}'".format(message.type))
-    
+
     if not raw:
         try:
             message = nfc.ndef.HandoverSelectMessage(message)
         except nfc.ndef.DecodeError:
             raise TestFail("invalid handover select message")
-        
+
     return message
-    
+
+
 description = """
 Execute connection handover tests. The peer device must have a
 connection handover service running.
 """
+
+
 class TestProgram(CommandLineInterface):
     def __init__(self):
         parser = argparse.ArgumentParser(
-            usage='%(prog)s [OPTION]... [CARRIER]...',
-            formatter_class=argparse.RawDescriptionHelpFormatter,
-            description=description)
+                usage='%(prog)s [OPTION]... [CARRIER]...',
+                formatter_class=argparse.RawDescriptionHelpFormatter,
+                description=description)
         parser.add_argument(
-            "carriers", metavar="CARRIER", nargs="*",
-            type=argparse.FileType('r'),
-            help="supported carrier")
+                "carriers", metavar="CARRIER", nargs="*",
+                type=argparse.FileType('r'),
+                help="supported carrier")
         parser.add_argument(
-            "--relax", action="store_true",
-            help="relax on verifying optional parts")        
+                "--relax", action="store_true",
+                help="relax on verifying optional parts")
         parser.add_argument(
-            "--skip-local", action="store_true",
-            help="skip local carrier detection")
+                "--skip-local", action="store_true",
+                help="skip local carrier detection")
+
         def miu(string):
             value = int(string)
-            if value <128 or value > 2176:
+            if value < 128 or value > 2176:
                 msg = "invalid choice: %d (choose from 128 to 2176)" % value
                 raise argparse.ArgumentTypeError(msg)
             return value
+
         parser.add_argument(
-            "--recv-miu", type=miu, metavar="INT", default=128,
-            help="data link connection receive miu (default: %(default)s)")
+                "--recv-miu", type=miu, metavar="INT", default=128,
+                help="data link connection receive miu (default: %(default)s)")
+
         def buf(string):
             value = int(string)
-            if value <0 or value > 15:
+            if value < 0 or value > 15:
                 msg = "invalid choice: %d (choose from 0 to 15)" % value
                 raise argparse.ArgumentTypeError(msg)
             return value
+
         parser.add_argument(
             "--recv-buf", type=buf, metavar="INT", default=2,
             help="data link connection receive window (default: %(default)s)")
-        
+
         super(TestProgram, self).__init__(
-            parser, groups="test llcp dbg clf iop")
+                parser, groups="test llcp dbg clf iop")
 
         if sum([1 for f in self.options.carriers if f.name == "<stdin>"]) > 1:
             log.error("only one carrier file may be read from stdin")
@@ -230,27 +244,29 @@ class TestProgram(CommandLineInterface):
 
         if self.options.quirks:
             self.options.relax = True
-            
+
         requestable = nfc.ndef.HandoverRequestMessage(version="1.0")
-        
+
         for index, carrier in enumerate(self.options.carriers):
             data = carrier.read()
-            try: data = data.decode("hex")
-            except TypeError: pass
+            try:
+                data = data.decode("hex")
+            except TypeError:
+                pass
             message = nfc.ndef.Message(data)
             if message.type in ("urn:nfc:wkt:Hs", "urn:nfc:wkt:Hr"):
                 message = (nfc.ndef.HandoverSelectMessage(message)
                            if message.type == "urn:nfc:wkt:Hs" else
                            nfc.ndef.HandoverRequestMessage(message))
-                for carrier in message.carriers:
+                for c in message.carriers:
                     requestable.add_carrier(
-                        carrier.record, carrier.power_state,
-                        carrier.auxiliary_data_records)
+                            c.record, c.power_state,
+                            c.auxiliary_data_records)
                     log.info("add specified carrier: {0}".format(carrier.type))
             else:
                 requestable.add_carrier(message[0], "active", message[1:])
                 log.info("add specified carrier: {0}".format(message.type))
-            
+
         if not self.options.skip_local:
             if sys.platform == "linux2":
                 hci0 = BluetoothAdapter()
@@ -263,7 +279,7 @@ class TestProgram(CommandLineInterface):
                 log.info("add discovered carrier: {0}".format(record.type))
 
         self.options.carriers = requestable.carriers
-        
+
     def test_01(self, llc):
         """Presence and connectivity"""
 
@@ -342,7 +358,7 @@ class TestProgram(CommandLineInterface):
             message.nonce = random.randint(0, 0xffff)
             message.add_carrier(record, "active")
             data = bytearray(str(message))
-            data[5] = 0xf0 # set desired version number
+            data[5] = 0xf0  # set desired version number
             handover_send(client, str(data), miu=128)
             message = handover_recv(client, timeout=3.0)
             if message.version.major != 1 and message.version.minor != 2:
@@ -376,7 +392,7 @@ class TestProgram(CommandLineInterface):
             handover_send(client, message)
             message = handover_recv(client, timeout=3.0)
             info("received {0!r}\n".format(message.type)
-                     + message.pretty(2))
+                 + message.pretty(2))
 
             if len(message.carriers) != 1:
                 raise TestFail("one selected carrier is expected")
@@ -394,12 +410,12 @@ class TestProgram(CommandLineInterface):
                 log.warning("there is no class of device attribute")
             if len(record.service_class_uuid_list) == 0:
                 log.warning("there are no service class uuids attribute")
-            if not record.simple_pairing_hash is None:
+            if record.simple_pairing_hash is not None:
                 if self.options.relax:
                     log.warning("ssp hash not expected in just-works mode")
                 else:
                     raise TestFail("ssp hash not expected in just-works mode")
-            if not record.simple_pairing_rand is None:
+            if record.simple_pairing_rand is not None:
                 if self.options.relax:
                     log.warning("ssp rand not expected in just-works mode")
                 else:
@@ -416,6 +432,7 @@ class TestProgram(CommandLineInterface):
         """Bluetooth secure pairing"""
 
         client = handover_connect(llc, self.options)
+        hci0 = None
         try:
             message = nfc.ndef.HandoverRequestMessage(version="1.2")
             message.nonce = random.randint(0, 0xffff)
@@ -442,7 +459,7 @@ class TestProgram(CommandLineInterface):
             handover_send(client, message)
             message = handover_recv(client, timeout=3.0)
             info("received {0!r}\n".format(message.type)
-                     + message.pretty(2))
+                 + message.pretty(2))
 
             if len(message.carriers) != 1:
                 raise TestFail("one selected carrier is expected")
@@ -475,8 +492,8 @@ class TestProgram(CommandLineInterface):
 
         ssp_hash = record.simple_pairing_hash
         ssp_rand = record.simple_pairing_rand
-        connected = hci0.create_pairing(record.device_address,
-                                        ssp_hash, ssp_rand)
+        connected = False if hci0 is not None else \
+            hci0.create_pairing(record.device_address, ssp_hash, ssp_rand)
         if not connected:
             raise TestFail("Bluetooth connection was not established")
 
@@ -494,7 +511,7 @@ class TestProgram(CommandLineInterface):
             handover_send(client, message)
             message = handover_recv(client, timeout=3.0)
             info("received {0!r}\n".format(message.type)
-                     + message.pretty(2))
+                 + message.pretty(2))
 
             if message.version.major != 1:
                 raise TestFail("handover major version is not 1")
@@ -518,7 +535,7 @@ class TestProgram(CommandLineInterface):
             handover_send(client, message)
             message = handover_recv(client, timeout=3.0)
             info("received {0!r}\n".format(message.type)
-                     + message.pretty(2))
+                 + message.pretty(2))
 
             if message.version.major != 1:
                 raise TestFail("handover major version is not 1")
@@ -545,7 +562,7 @@ class TestProgram(CommandLineInterface):
             handover_send(client, message)
             message = handover_recv(client, timeout=3.0)
             info("received {0!r}\n".format(message.type)
-                     + message.pretty(2))
+                 + message.pretty(2))
 
         finally:
             client.close()
@@ -576,7 +593,7 @@ class TestProgram(CommandLineInterface):
             message = handover_recv(client, timeout=3.0, raw=True)
             try:
                 info("received {0!r}\n".format(message.type) +
-                         nfc.ndef.HandoverSelectMessage(message).pretty(2))
+                     nfc.ndef.HandoverSelectMessage(message).pretty(2))
             except nfc.ndef.DecodeError:
                 raise TestFail("decoding errors in received message")
 
@@ -596,10 +613,10 @@ class TestProgram(CommandLineInterface):
                 data = bytearray(record.data)
                 if data[0] & 0xfc != 0:
                     raise TestFail("rfu bits set in 1st octet of ac record")
-                data = data[2+data[1]:] # carrier data reference
+                data = data[2 + data[1]:]  # carrier data reference
                 aux_ref_count = data.pop(0)
                 for i in range(aux_ref_count):
-                    data = data[1+data[1]:] # auxiliary data reference
+                    data = data[1 + data[1]:]  # auxiliary data reference
                 if len(data) != 0:
                     raise TestFail("reserved bytes used at end of ac record")
 
@@ -637,7 +654,7 @@ class TestProgram(CommandLineInterface):
             handover_send(client, message)
             message = handover_recv(client, timeout=3.0)
             info("received {0!r}\n".format(message.type)
-                     + message.pretty(2))
+                 + message.pretty(2))
 
             if len(message.carriers) != 1:
                 raise TestFail("one selected carrier is expected")
@@ -645,6 +662,7 @@ class TestProgram(CommandLineInterface):
                 raise TestFail("a Bluetooth carrier is expected")
         finally:
             client.close()
+
 
 if __name__ == '__main__':
     TestProgram().run()
