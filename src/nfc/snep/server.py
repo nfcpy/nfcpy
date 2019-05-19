@@ -25,6 +25,7 @@
 import nfc.llcp
 import nfc.ndef
 
+import struct
 from threading import Thread
 from struct import pack, unpack
 
@@ -131,10 +132,10 @@ class SnepServer(Thread):
         acceptable_length = unpack(">L", snep_request[6:10])[0]
         response = self._get(acceptable_length, snep_request[10:])
         if type(response) == int:
-            response_code = chr(response)
+            response_code = struct.pack("B", response)
             ndef_message = ""
         else:
-            response_code = chr(0x81)
+            response_code = struct.pack("B", 0x81)
             ndef_message = response
         ndef_length = pack(">L", len(ndef_message))
         return b"\x10" + response_code + ndef_length + ndef_message
@@ -160,7 +161,7 @@ class SnepServer(Thread):
     def __put(self, snep_request):
         response = self._put(snep_request[6:])
         ndef_length = b"\x00\x00\x00\x00"
-        return b"\x10" + chr(response) + ndef_length
+        return b"\x10" + struct.pack("B", response) + ndef_length
 
     def _put(self, ndef_message_data):
         log.debug("SNEP PUT ({0})".format(ndef_message_data.encode("hex")))

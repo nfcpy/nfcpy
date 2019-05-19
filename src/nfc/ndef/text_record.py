@@ -24,6 +24,7 @@
 #
 import logging
 log = logging.getLogger(__name__)
+import struct
 
 from .record import Record
 
@@ -67,7 +68,8 @@ class TextRecord(Record):
         
     @property
     def data(self):
-        sb = chr(len(self.language) | ((self.encoding == "UTF-16") << 7))
+        sb = struct.pack(
+                "B", len(self.language) | ((self.encoding == "UTF-16") << 7))
         return sb + self.language + self._text.encode(self.encoding)
 
     @data.setter

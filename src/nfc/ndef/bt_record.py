@@ -45,11 +45,13 @@ class BluetoothConfigRecord(Record):
     @property
     def data(self):
         f = io.BytesIO()
-        f.write(str(bytearray(reversed(self._bdaddr))))
+        f.write(bytes(bytearray(reversed(self._bdaddr))))
         for key, value in self.eir.items():
-            f.write(chr(1 + len(value)) + chr(key) + str(value))
+            f.write(struct.pack("B", 1 + len(value))
+                    + struct.pack("B", key)
+                    + struct.pack("B", value))
         oob_length = 2 + f.tell()
-        f.seek(0,0)
+        f.seek(0, 0)
         return struct.pack('<H', oob_length) + f.read()
     
     @data.setter
@@ -151,11 +153,11 @@ class BluetoothConfigRecord(Record):
         L = list()
         try: uuid_list = self.eir[0x03]
         except KeyError: uuid_list = self.eir.get(0x02, '')
-        for x in struct.unpack("<"+"H"*(len(uuid_list)/2), uuid_list):
+        for x in struct.unpack("<"+"H"*(len(uuid_list)//2), uuid_list):
             L.append("{0:08x}-0000-1000-8000-00805f9b34fb".format(x))
         try: uuid_list = self.eir[0x05]
         except KeyError: uuid_list = self.eir.get(0x04, '')
-        for x in struct.unpack("<"+"L"*(len(uuid_list)/4), uuid_list):
+        for x in struct.unpack("<"+"L"*(len(uuid_list)//4), uuid_list):
             L.append("{0:08x}-0000-1000-8000-00805f9b34fb".format(x))
         try: uuid_list = self.eir[0x07]
         except KeyError: uuid_list = self.eir.get(0x06, '')
