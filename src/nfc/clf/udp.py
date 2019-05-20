@@ -172,7 +172,7 @@ class Device(nfc.clf.device.Device):
         sensb_req = (target.sensb_req if target.sensb_req else
                      bytearray.fromhex("050010"))
 
-        log.debug("send SENSB_REQ %s",hexlify(sensb_req).decode())
+        log.debug("send SENSB_REQ %s", hexlify(sensb_req).decode())
         try:
             self._send_data(target.brty, sensb_req, self.addr)
             brty, sensb_res, addr = self._recv_data(1.0, target.brty)
