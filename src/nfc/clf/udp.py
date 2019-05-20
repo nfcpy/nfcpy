@@ -88,14 +88,14 @@ class Device(nfc.clf.device.Device):
         sens_req = (target.sens_req if target.sens_req else
                     bytearray.fromhex("26"))
 
-        log.debug("send SENS_REQ {}".format(hexlify(sens_req).decode()))
+        log.debug("send SENS_REQ %s", hexlify(sens_req).decode())
         try:
             self._send_data(target.brty, sens_req, self.addr)
             brty, sens_res, addr = self._recv_data(1.0, target.brty)
         except nfc.clf.TimeoutError:
             return None
 
-        log.debug("rcvd SENS_RES {}".format(hexlify(sens_res).decode()))
+        log.debug("rcvd SENS_RES %s", hexlify(sens_res).decode())
 
         if sens_res[0] & 0x1F == 0:
             log.debug("type 1 tag target found")
@@ -103,7 +103,7 @@ class Device(nfc.clf.device.Device):
             target.sens_res = sens_res
             if sens_res[1] & 0x0F == 0b1100:
                 rid_cmd = bytearray.fromhex("78 0000 00000000")
-                log.debug("send RID_CMD {}".format(hexlify(rid_cmd).decode()))
+                log.debug("send RID_CMD %s", hexlify(rid_cmd).decode())
                 try:
                     self._send_data(brty, rid_cmd, self.addr)
                     brty, rid_res, addr = self._recv_data(1.0, brty)
@@ -172,7 +172,7 @@ class Device(nfc.clf.device.Device):
         sensb_req = (target.sensb_req if target.sensb_req else
                      bytearray.fromhex("050010"))
 
-        log.debug("send SENSB_REQ {}".format(hexlify(sensb_req).decode()))
+        log.debug("send SENSB_REQ %s",hexlify(sensb_req).decode())
         try:
             self._send_data(target.brty, sensb_req, self.addr)
             brty, sensb_res, addr = self._recv_data(1.0, target.brty)
@@ -180,7 +180,7 @@ class Device(nfc.clf.device.Device):
             return None
 
         if len(sensb_res) >= 12 and sensb_res[0] == 0x50:
-            log.debug("rcvd SENSB_RES {}".format(hexlify(sensb_res).decode()))
+            log.debug("rcvd SENSB_RES %s", hexlify(sensb_res).decode())
             return nfc.clf.RemoteTarget(brty, sensb_res=sensb_res, _addr=addr)
 
     def sense_ttf(self, target):
@@ -206,7 +206,7 @@ class Device(nfc.clf.device.Device):
             return None
 
         if len(data) >= 18 and data[0] == len(data) and data[1] == 1:
-            log.debug("rcvd SENSF_RES {}".format(hexlify(data[1:]).decode()))
+            log.debug("rcvd SENSF_RES %s", hexlify(data[1:]).decode())
             return nfc.clf.RemoteTarget(brty, sensf_res=data[1:], _addr=addr)
 
     def sense_dep(self, target):
