@@ -644,7 +644,7 @@ class Device(device.Device):
                             log.debug("TC(1) = {:08b}".format(tc))
                         if ta_tb_tc:
                             log.debug("T({}) = {}".format(
-                                len(ta_tb_tc), hexlify(ta_tb_tc)))
+                                len(ta_tb_tc), hexlify(ta_tb_tc).decode()))
                         did_supported = tc is None or bool(tc & 0x02)
                         cmd_with_did = bool(cmd[0] & 0x08)
                         if (((cmd_with_did and did_supported and cmd[1] == did)

@@ -222,7 +222,7 @@ class Tag(object):
             small. ::
 
                 if tag.ndef is not None:
-                    print(hexlify(tag.ndef.octets))
+                    print(hexlify(tag.ndef.octets).decode())
 
             """
             return bytes(self._data)

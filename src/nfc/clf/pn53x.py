@@ -734,7 +734,8 @@ class Device(device.Device):
                     return None
 
             brty = ("106A", "212F", "424F")[(data[0] & 0x70) >> 4]
-            self.log.debug("%s rcvd %s", brty, hexlify(memoryview(data)[1:]))
+            self.log.debug("%s rcvd %s",
+                           brty, hexlify(memoryview(data)[1:]).decode())
             if brty != target.brty or len(data) < 2:
                 log.debug("received bitrate does not match %s", target.brty)
                 continue
@@ -762,11 +763,14 @@ class Device(device.Device):
                     self.log.error(error)
                     return
                 if data and data[0] & 0xF0 == 0xC0:  # S(DESELECT)
-                    self.log.debug("rcvd S(DESELECT) %s", hexlify(data))
-                    self.log.debug("send S(DESELECT) %s", hexlify(data))
+                    self.log.debug("rcvd S(DESELECT) %s",
+                                   hexlify(data).decode())
+                    self.log.debug("send S(DESELECT) %s",
+                                   hexlify(data).decode())
                     self.chipset.tg_response_to_initiator(data)
                 elif data:
-                    self.log.debug("rcvd TT4_CMD %s", hexlify(data))
+                    self.log.debug("rcvd TT4_CMD %s",
+                                   hexlify(data).decode())
                     target = nfc.clf.LocalTarget(brty, tt4_cmd=data)
                     target.sens_res = nfca_params[0:2]
                     target.sdd_res = b'\x08' + nfca_params[2:5]
@@ -804,7 +808,7 @@ class Device(device.Device):
 
         nfca_params = bytearray(6)
         nfcf_params = bytearray(target.sensf_res[1:])
-        self.log.debug("nfcf_params %s", hexlify(nfcf_params))
+        self.log.debug("nfcf_params %s", hexlify(nfcf_params).decode())
 
         regs = [
             ("CIU_Command",   0b00000000),  # Idle command
@@ -842,7 +846,7 @@ class Device(device.Device):
                 fifo_data = bytearray(self.chipset.read_register(*fifo_read))
                 if fifo_data and len(fifo_data) == fifo_data[0]:
                     self.log.debug("%s rcvd %s", target.brty,
-                                   hexlify(fifo_data))
+                                   hexlify(fifo_data).decode())
                     if fifo_data[2:10] == nfcf_params[0:8]:
                         target = nfc.clf.LocalTarget(target.brty)
                         target.sensf_res = b'\x01' + nfcf_params
@@ -861,8 +865,8 @@ class Device(device.Device):
 
         nfca_params = target.sens_res + target.sdd_res[1:4] + target.sel_res
         nfcf_params = target.sensf_res[1:19]
-        self.log.debug("nfca_params %s", hexlify(nfca_params))
-        self.log.debug("nfcf_params %s", hexlify(nfcf_params))
+        self.log.debug("nfca_params %s", hexlify(nfca_params).decode())
+        self.log.debug("nfcf_params %s", hexlify(nfcf_params).decode())
         assert len(nfca_params) == 6
         assert len(nfcf_params) == 18
 
@@ -882,8 +886,8 @@ class Device(device.Device):
                     raise error
             else:
                 if not (data[1] == len(data)-1 and data[2:4] == b'\xD4\x00'):
-                    info = "expected ATR_REQ but got %s"
-                    self.log.debug(info, hexlify(memoryview(data)[1:]))
+                    self.log.debug("expected ATR_REQ but got %s",
+                                   hexlify(memoryview(data)[1:]).decode())
                 else:
                     break
         else:
@@ -900,7 +904,8 @@ class Device(device.Device):
                              if mode == "passive" else None)
 
         try:
-            self.log.debug("%s send ATR_RES %s", brty, hexlify(atr_res))
+            self.log.debug("%s send ATR_RES %s", brty,
+                           hexlify(atr_res).decode())
             data = self._send_atr_response(atr_res, timeout=1.0)
         except Chipset.Error as error:
             self.log.error(error)
@@ -914,7 +919,7 @@ class Device(device.Device):
         psl_req = psl_res = None
         if data and data.startswith(b'\x06\xD4\x04'):
             self.log.debug("%s rcvd PSL_REQ %s", brty,
-                           hexlify(memoryview(data)[1:]))
+                           hexlify(memoryview(data)[1:]).decode())
             try:
                 psl_req = data[1:]
                 assert len(psl_req) == 5, "psl_req length mismatch"
@@ -924,7 +929,8 @@ class Device(device.Device):
                 return None
             try:
                 psl_res = b'\xD5\x05' + psl_req[2:3]
-                self.log.debug("%s send PSL_RES %s", brty, hexlify(psl_res))
+                self.log.debug("%s send PSL_RES %s", brty,
+                               hexlify(psl_res).decode())
                 brty = self._send_psl_response(psl_req, psl_res, timeout=0.5)
                 data = self.chipset.tg_get_initiator_command(timeout)
             except Chipset.Error as error:
@@ -973,7 +979,7 @@ class Device(device.Device):
             rx_mode = (rx_mode & 0b11111100) | ((0, 2)[dsi > 0])
         self.log.debug("set CIU_RxMode to {:08b}".format(rx_mode))
         self.chipset.write_register(("CIU_RxMode", rx_mode))
-        self.log.debug("send PSL_RES {}".format(hexlify(psl_res)))
+        self.log.debug("send PSL_RES %s", hexlify(psl_res).decode())
         data = bytearray([len(psl_res)+1]) + psl_res
         self.chipset.tg_response_to_initiator(data)
         tx_mode = self.chipset.read_register("CIU_TxMode")

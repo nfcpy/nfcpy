@@ -541,7 +541,7 @@ class FelicaLite(tt3.Type3Tag):
             # if password is empty use factory key of 16 zero bytes
             key = password[0:16] if password else b"\0"*16
 
-            log.debug("protect with key {}".format(hexlify(key)))
+            log.debug("protect with key %s", hexlify(key).decode())
             self.write_without_mac(key[7::-1] + key[15:7:-1], 0x87)
 
         if protect_from < 14:
@@ -557,7 +557,7 @@ class FelicaLite(tt3.Type3Tag):
         log.debug("write protect system blocks 82,83,84,86,87")
         mc[2] = 0x00  # set system blocks 82,83,84,86,87 to read only
 
-        log.debug("write memory configuration {0}".format(hexlify(mc)))
+        log.debug("write memory configuration %s", hexlify(mc).decode())
         self.write_without_mac(mc, 0x88)
         return True
 
@@ -672,7 +672,7 @@ class FelicaLite(tt3.Type3Tag):
         attribute_data = bytearray(16)
         attribute_data[:14] = pack(">BBBHxxxxxBxxx", version, 4, 1, nmaxb, 1)
         attribute_data[14:] = pack(">H", sum(attribute_data[:14]))
-        log.debug("set ndef attributes {}".format(hexlify(attribute_data)))
+        log.debug("set ndef attributes %s", hexlify(attribute_data).decode())
         self.write_without_mac(attribute_data, 0)
 
         # Overwrite the ndef message area if a wipe is requested.

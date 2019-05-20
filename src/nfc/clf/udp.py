@@ -541,7 +541,7 @@ class Device(nfc.clf.device.Device):
 
     def _send_data(self, brty, data, addr):
         data = (b"%s %s" % (brty.encode("utf-8"), hexlify(data))).strip()
-        log.log(logging.DEBUG-1, ">>> %s to %s:%d", data, *addr)
+        log.log(logging.DEBUG-1, ">>> %s to %s:%s", data.decode(), addr)
         ret = self.socket.sendto(data, addr)
         if ret != len(data):
             raise nfc.clf.TransmissionError("failed to send data")
