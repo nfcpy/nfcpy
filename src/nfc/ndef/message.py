@@ -56,18 +56,19 @@ class Message(object):
                 self.append(args[0])
             elif isinstance(args[0], (list, tuple)):
                 self.extend(args[0])
-            else: raise TypeError("invalid argument type")
+            else:
+                raise TypeError("invalid argument type")
         elif len(args) > 1:
             self.extend(args)
         
     def _read(self, f):
         log.debug("parse ndef message at offset {0}".format(f.tell()))
         record = nfc.ndef.Record(data=f)
-        if record._message_begin == False:
+        if record._message_begin is False:
             log.error("message begin flag not set at begin of ndef")
             raise nfc.ndef.FormatError("message begin flag not set")
         self._records.append(record)
-        while self._records[-1]._message_end == False:
+        while self._records[-1]._message_end is False:
             self._records.append(nfc.ndef.Record(data=f))
         log.debug("ndef message complete at offset {0}".format(f.tell()))
 
@@ -176,5 +177,5 @@ class Message(object):
         lwidth = max([len(line[0]) for line in lines])
         lines = [(line[0].ljust(lwidth),) + line[1:] for line in lines]
         lines = [" = ".join(line) for line in lines]
-        return ("\n").join([line for line in lines])
+        return "\n".join([line for line in lines])
         
