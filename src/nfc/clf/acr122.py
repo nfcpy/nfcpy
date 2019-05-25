@@ -159,7 +159,7 @@ class Chipset(pn532.Chipset):
             log.error("{0} not supported, need 2.x".format(reader_version[7:]))
             raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
 
-        log.debug("initialize " + str(reader_version))
+        log.debug("initialize " + reader_version.decode())
 
         # set icc power on
         log.debug("CCID ICC-POWER-ON")

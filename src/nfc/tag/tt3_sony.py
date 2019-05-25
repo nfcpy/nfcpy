@@ -849,7 +849,7 @@ class FelicaLiteS(FelicaLite):
             # if password is empty use factory key of 16 zero bytes
             key = password[0:16].encode("ascii") if password else b'\0' * 16
 
-            log.debug("protect with key {}".format(hexlify(key)))
+            log.debug("protect with key %s", hexlify(key).decode())
             ckv = self.read_without_mac(0x86)
             ckv = min(unpack("<H", ckv[0:2])[0] + 1, 0xffff)
             log.debug("new card key version is {0}".format(ckv))
@@ -881,7 +881,7 @@ class FelicaLiteS(FelicaLite):
         mc[5] = 0x01  # but allow write with mac to ck and ckv block
 
         # Write the new memory control block.
-        log.debug("write memory configuration {0}".format(hexlify(mc)))
+        log.debug("write memory configuration %s", hexlify(mc).decode())
         self.write_without_mac(mc, 0x88)
         return True
 
@@ -952,7 +952,7 @@ class FelicaLiteS(FelicaLite):
 
         # The write count is the first three byte of the wcnt block.
         wcnt = self.read_without_mac(0x90)[0:3]
-        log.debug("write count is {}".format(hexlify(wcnt[::-1])))
+        log.debug("write count is %s", hexlify(wcnt[::-1]).decode())
 
         # We must generate the mac_a block to write the data. The data
         # to encrypt to the mac is composed of write count and block

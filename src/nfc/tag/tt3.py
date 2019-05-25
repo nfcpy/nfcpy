@@ -219,7 +219,9 @@ class Type3Tag(nfc.tag.Tag):
 
             data = data[0:attributes['ln']]
             log.debug("got {0} byte ndef data {1}{2}".format(
-                len(data), hexlify(data[0:32]), ('', '...')[len(data) > 32]))
+                    len(data),
+                    hexlify(data[0:32]).decode(),
+                    ('', '...')[len(data) > 32]))
 
             return data
 
@@ -229,7 +231,9 @@ class Type3Tag(nfc.tag.Tag):
             self._write_attribute_data(attributes)
 
             log.debug("set {0} byte ndef data {1}{2}".format(
-                len(data), hexlify(data[0:32]), ('', '...')[len(data) > 32]))
+                    len(data),
+                    hexlify(data[0:32]).decode(),
+                    ('', '...')[len(data) > 32]))
 
             last_block_number = 1 + (len(data) + 15) // 16
             attributes['ln'] = len(data)  # because we may need to pad zeros
@@ -441,7 +445,7 @@ class Type3Tag(nfc.tag.Tag):
         attribute_data[0:5] = pack(">BBBH", version, nbr, nbw, nmaxb)
         attribute_data[10] = 0x01 if nbw > 0 else 0x00
         attribute_data[14:16] = pack(">H", sum(attribute_data[0:14]))
-        log.debug("set ndef attributes {}".format(hexlify(attribute_data)))
+        log.debug("set ndef attributes %s", hexlify(attribute_data).decode())
         self.write_to_ndef_service(attribute_data, 0)
 
         # If required, we will also overwrite the memory with the
@@ -692,7 +696,8 @@ class Type3Tag(nfc.tag.Tag):
         idm = self.idm if send_idm else bytearray()
         cmd = bytearray([2+len(idm)+len(cmd_data), cmd_code]) + idm + cmd_data
         log.debug(">> {0:02x} {1:02x} {2} {3} ({4}s)".format(
-            cmd[0], cmd[1], hexlify(cmd[2:10]), hexlify(cmd[10:]), timeout))
+                cmd[0], cmd[1], hexlify(cmd[2:10]).decode(),
+                hexlify(cmd[10:]).decode(), timeout))
 
         started = time.time()
         error = None
@@ -778,7 +783,7 @@ class Type3TagEmulation(nfc.tag.TagEmulation):
         self.services[service_code] = (block_read_func, block_write_func)
 
     def process_command(self, cmd):
-        log.debug("cmd: {}".format(hexlify(cmd) if cmd else str(cmd)))
+        log.debug("cmd: %s", hexlify(cmd).decode() if cmd else str(cmd))
         if len(cmd) != cmd[0]:
             log.error("tt3 command length error")
             return None

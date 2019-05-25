@@ -677,6 +677,7 @@ class ContactlessFrontend(object):
         instance or :const:`None`.
 
         >>> import nfc, nfc.clf
+        >>> from binascii import hexlify
         >>> clf = nfc.ContactlessFrontend("usb")
         >>> target1 = nfc.clf.RemoteTarget("106A")
         >>> target2 = nfc.clf.RemoteTarget("212F")
@@ -742,10 +743,12 @@ class ContactlessFrontend(object):
 
         >>> atr = bytearray.fromhex("D4000102030405060708091000000030")
         >>> target = clf.sense(nfc.clf.RemoteTarget("106A", atr_req=atr))
-        >>> if target and target.atr_res: print(target.atr_res.encode("hex"))
+        >>> if target and target.atr_res:
+        >>>     print(hexlify(target.atr_res).decode())
         d501c023cae6b3182afe3dee0000000e3246666d01011103020013040196
         >>> target = clf.sense(nfc.clf.RemoteTarget("424F", atr_req=atr))
-        >>> if target and target.atr_res: print(target.atr_res.encode("hex"))
+        >>> if target and target.atr_res:
+        >>>     print(hexlify(target.atr_res).decode())
         d501dc0104f04584e15769700000000e3246666d01011103020013040196
 
         Some drivers must modify the ATR_REQ to cope with hardware

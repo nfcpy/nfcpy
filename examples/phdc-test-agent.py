@@ -67,7 +67,7 @@ class PhdcAgent(Thread):
         return apdu
 
     def send(self, apdu):
-        log.info("[ieee] >>> {0}".format(str(apdu).encode("hex")))
+        log.info("[ieee] >>> %s", hexlify(apdu).decode())
         self.oqueue.put(apdu)
 
     def recv(self, timeout):
@@ -76,7 +76,7 @@ class PhdcAgent(Thread):
         except queue.Empty:
             pass
         else:
-            log.info("[ieee] <<< {0}".format(str(apdu).encode("hex")))
+            log.info("[ieee] <<< %s", hexlify(apdu).decode())
             return apdu
 
 
@@ -112,11 +112,10 @@ class PhdcTagAgent(PhdcAgent):
         try:
             if block < len(self.ndef_data_area) / 16:
                 data = self.ndef_data_area[block * 16:(block + 1) * 16]
-                log.debug("[tt3] got read block #{0} {1}".format(
-                        block, str(data).encode("hex")))
+                log.debug("[tt3] got read block #%d %s", block, hexlify(data).decode())
                 return data
             else:
-                log.debug("[tt3] got read block #{0}".format(block))
+                log.debug("[tt3] got read block #%d", block)
         finally:
             if read_end is True:
                 self.ndef_read_lock.release()
@@ -125,8 +124,7 @@ class PhdcTagAgent(PhdcAgent):
         if write_begin is True:
             self.ndef_write_lock.acquire()
         try:
-            log.debug("[tt3] got write block #{0} {1}".format(
-                    block, str(data).encode("hex")))
+            log.debug("[tt3] got write block #%d %s", block, hexlify(data).decode())
             if block < len(self.ndef_data_area) / 16:
                 self.ndef_data_area[block * 16:(block + 1) * 16] = data
                 return True
@@ -141,7 +139,7 @@ class PhdcTagAgent(PhdcAgent):
     def recv_phd_message(self):
         attr = nfc.tag.tt3.NdefAttributeData(self.ndef_data_area[0:16])
         if attr.valid and not attr.writing and attr.length > 0:
-            # print str(self.ndef_data_area[16:16+attr.length]).encode("hex")
+            # print(hexlify(self.ndef_data_area[16:16+attr.length]).decode())
             try:
                 message = nfc.ndef.Message(
                         self.ndef_data_area[16:16 + attr.length])
@@ -403,11 +401,11 @@ class PhdcP2pAgentTest(CommandLineInterface):
 
                     apdu = bytearray.fromhex(line)
                     apdu = struct.pack(">H", len(apdu)) + apdu
-                    log.info("send {0}".format(str(apdu).encode("hex")))
+                    log.info("send %s", hexlify(apdu).decode())
                     socket.send(str(apdu))
 
                     apdu = socket.recv()
-                    log.info("rcvd {0}".format(str(apdu).encode("hex")))
+                    log.info("rcvd %s", hexlify(apdu).decode())
         except IOError as e:
             log.error(e)
 
@@ -432,11 +430,11 @@ class PhdcP2pAgentTest(CommandLineInterface):
         apdu = bytearray.fromhex(thermometer_assoc_req)
         apdu = struct.pack(">H", len(apdu)) + apdu
         info("send thermometer association request")
-        info("send {0}".format(str(apdu).encode("hex")))
+        log.info("send %s", hexlify(apdu).decode())
         socket.send(str(apdu))
 
         apdu = socket.recv()
-        info("rcvd {0}".format(str(apdu).encode("hex")))
+        log.info("rcvd %s", hexlify(apdu).decode())
         if apdu.startswith(b"\xE3\x00"):
             info("rcvd association response")
 
@@ -445,11 +443,11 @@ class PhdcP2pAgentTest(CommandLineInterface):
         apdu = bytearray.fromhex(assoc_release_req)
         apdu = struct.pack(">H", len(apdu)) + apdu
         info("send association release request")
-        info("send {0}".format(str(apdu).encode("hex")))
+        log.info("send %s", hexlify(apdu).decode())
         socket.send(str(apdu))
 
         apdu = socket.recv()
-        info("rcvd {0}".format(str(apdu).encode("hex")))
+        log.info("rcvd %s", hexlify(apdu).decode())
         if apdu.startswith(b"\xE5\x00"):
             info("rcvd association release response")
 
@@ -474,11 +472,11 @@ class PhdcP2pAgentTest(CommandLineInterface):
         apdu = bytearray.fromhex(thermometer_assoc_req)
         apdu = struct.pack(">H", len(apdu)) + apdu
         info("send thermometer association request")
-        info("send {0}".format(str(apdu).encode("hex")))
+        info("send %s", hexlify(apdu).decode())
         socket.send(str(apdu))
 
         apdu = socket.recv()
-        info("rcvd {0}".format(str(apdu).encode("hex")))
+        info("rcvd %s", hexlify(apdu).decode())
         if apdu.startswith(b"\xE3\x00"):
             info("rcvd association response")
 
@@ -494,11 +492,11 @@ class PhdcP2pAgentTest(CommandLineInterface):
         apdu = bytearray.fromhex(thermometer_assoc_req)
         apdu = struct.pack(">H", len(apdu)) + apdu
         info("send thermometer association request")
-        info("send {0}".format(str(apdu).encode("hex")))
+        info("send %s", hexlify(apdu).decode())
         socket.send(str(apdu))
 
         apdu = socket.recv()
-        info("rcvd {0}".format(str(apdu).encode("hex")))
+        info("rcvd %s", hexlify(apdu).decode())
         if apdu.startswith(b"\xE3\x00"):
             info("rcvd association response")
 
@@ -507,11 +505,11 @@ class PhdcP2pAgentTest(CommandLineInterface):
         apdu = bytearray.fromhex(assoc_release_req)
         apdu = struct.pack(">H", len(apdu)) + apdu
         info("send association release request")
-        info("send {0}".format(str(apdu).encode("hex")))
+        info("send %s", hexlify(apdu).decode())
         socket.send(str(apdu))
 
         apdu = socket.recv()
-        info("rcvd {0}".format(str(apdu).encode("hex")))
+        info("rcvd %s", hexlify(apdu).decode())
         if apdu.startswith(b"\xE5\x00"):
             info("rcvd association release response")
 

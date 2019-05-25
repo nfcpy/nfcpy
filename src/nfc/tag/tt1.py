@@ -207,7 +207,7 @@ class Type1Tag(Tag):
 
         def _write_ndef_data(self, data):
             log.debug("write ndef data {0}{1}".format(
-                hexlify(data[:10]), '...' if len(data) > 10 else ''))
+                hexlify(data[:10]).decode(), '...' if len(data) > 10 else ''))
 
             tag_memory = self._tag_memory
             skip_bytes = self._skip_bytes
@@ -451,7 +451,7 @@ class Type1Tag(Tag):
             raise Type1TagCommandError(WRITE_ERROR)
 
     def transceive(self, data, timeout=0.1):
-        log.debug(">> {0} ({1:f}s)".format(hexlify(data), timeout))
+        log.debug(">> {0} ({1:f}s)".format(hexlify(data).decode(), timeout))
 
         started = time.time()
         error = None
@@ -473,7 +473,7 @@ class Type1Tag(Tag):
             raise RuntimeError("unexpected " + repr(error))
 
         elapsed = time.time() - started
-        log.debug("<< {0} ({1:f}s)".format(hexlify(data), elapsed))
+        log.debug("<< {0} ({1:f}s)".format(hexlify(data).decode(), elapsed))
         return data
 
 

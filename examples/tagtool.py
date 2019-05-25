@@ -31,6 +31,7 @@ import struct
 import argparse
 import hmac
 import hashlib
+from binascii import hexlify
 
 from .cli import CommandLineInterface
 
@@ -356,13 +357,13 @@ class TagTool(CommandLineInterface):
         if tag.ndef:
             data = tag.ndef.message
             if self.options.output.name == "<stdout>":
-                self.options.output.write(str(data).encode("hex"))
+                self.options.output.write(hexlify(data).decode())
                 if self.options.loop:
                     self.options.output.write('\n')
                 else:
                     self.options.output.flush()
             else:
-                self.options.output.write(str(data))
+                self.options.output.write(data)
 
     def load_tag(self, tag):
         try:

@@ -215,7 +215,7 @@ class Initiator(DataExchangeProtocol):
             pfb = DEP_REQ.PFB(pdu_type, nad is not None, did is not None, 0)
             return DEP_REQ(pfb, did, nad, data=bytearray([rtox]))
 
-        # log.debug("dep raw >> " + str(send_data).encode("hex"))
+        # log.debug("dep raw >> %s", hexlify(send_data).decode())
         send_data = bytearray(send_data)
 
         while send_data:
@@ -272,7 +272,7 @@ class Initiator(DataExchangeProtocol):
             recv_data += res.data
             self.pni = (self.pni + 1) & 0x3
 
-        # log.debug("dep raw << " + str(recv_data).encode("hex"))
+        # log.debug("dep raw << %s", hexlify(recv_data).decode())
         return recv_data
 
     def send_dep_req_recv_dep_res(self, req, rwt, timeout):

@@ -512,7 +512,7 @@ class Device(device.Device):
                 log.debug(error)
             return None
 
-        if len(frame) >= 18 and frame[0] == len(frame) and frame[1] == 1:
+        if 18 <= len(frame) == frame[0] and frame[1] == 1:
             log.debug("rcvd SENSF_RES %s", hexlify(frame[1:]).decode())
             return nfc.clf.RemoteTarget(target.brty, sensf_res=frame[1:])
 
@@ -584,8 +584,8 @@ class Device(device.Device):
                     log.debug(error)
                 else:
                     brty = ('106A', '212F', '424F')[data[0]-11]
-                    log.debug("%s rcvd %s", brty,
-                              hexlify(memoryview(data)[7:]).decode())
+                    log.debug("%s rcvd %s",
+                              brty, hexlify(memoryview(data)[7:]).decode())
                     if brty == "106A" and data[2] & 0x03 == 3:
                         self.chipset.tg_set_protocol(rf_off_error=True)
                         return nfc.clf.LocalTarget(

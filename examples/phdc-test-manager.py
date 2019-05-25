@@ -127,7 +127,7 @@ class PhdcTagManager(PhdcManager):
     def write_phd_message(self, apdu):
         data = bytearray([(self.mc % 16) | 0x80]) + apdu
         record = nfc.ndef.Record("urn:nfc:wkt:PHD", data=str(data))
-        log.info("[phdc] >>> {0}".format(record.data.encode("hex")))
+        log.info("[phdc] >>> %s", hexlify(record.data).decode())
         self.tag.ndef.message = nfc.ndef.Message(record)
         self.mc += 1
 

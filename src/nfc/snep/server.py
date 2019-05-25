@@ -28,6 +28,7 @@ import nfc.ndef
 import struct
 from threading import Thread
 from struct import pack, unpack
+from binascii import hexlify
 
 import logging
 log = logging.getLogger(__name__)
@@ -141,7 +142,7 @@ class SnepServer(Thread):
         return b"\x10" + response_code + ndef_length + ndef_message
 
     def _get(self, acceptable_length, ndef_message_data):
-        log.debug("SNEP GET ({0})".format(ndef_message_data.encode("hex")))
+        log.debug("SNEP GET (%s)", hexlify(ndef_message_data).decode)
         try:
             ndef_message = nfc.ndef.Message(ndef_message_data)
         except (nfc.ndef.LengthError, nfc.ndef.FormatError) as err:
@@ -164,7 +165,7 @@ class SnepServer(Thread):
         return b"\x10" + struct.pack("B", response) + ndef_length
 
     def _put(self, ndef_message_data):
-        log.debug("SNEP PUT ({0})".format(ndef_message_data.encode("hex")))
+        log.debug("SNEP PUT (%s)", hexlify(ndef_message_data).decode())
         try:
             ndef_message = nfc.ndef.Message(ndef_message_data)
         except (nfc.ndef.LengthError, nfc.ndef.FormatError) as err:

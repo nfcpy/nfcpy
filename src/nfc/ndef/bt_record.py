@@ -27,6 +27,7 @@ log = logging.getLogger(__name__)
 
 import io
 import struct
+from binascii import hexlify
 from uuid import UUID
 from .record import Record
 from .error import *
@@ -188,8 +189,10 @@ class BluetoothConfigRecord(Record):
         and transmitted as EIR type 0x0D in little endian byte
         order. Set to None if not received or not to be
         transmitted."""
-        try: return int(self.eir[0x0D][::-1].encode("hex"), 16)
-        except KeyError: return None
+        try:
+            return int(hexlify(self.eir[0x0D][::-1]).decode(), 16)
+        except KeyError:
+            return None
 
     @class_of_device.setter
     def class_of_device(self, value):        
@@ -214,13 +217,15 @@ class BluetoothConfigRecord(Record):
                 lines.append(("class of device", "{0:b}".format(cod)))
         if self.simple_pairing_hash:
             simple_pairing_hash = str(self.simple_pairing_hash)
-            lines.append(("pubkey hash", simple_pairing_hash.encode("hex")))
+            lines.append(("pubkey hash", hexlify(simple_pairing_hash).decode()))
         if self.simple_pairing_rand:
             simple_pairing_rand = str(self.simple_pairing_rand)
-            lines.append(("randomizer", simple_pairing_rand.encode("hex")))
+            lines.append(("randomizer", hexlify(simple_pairing_rand).decode()))
         for service_class_uuid in self.service_class_uuid_list:
-            try: service_class = service_class_uuid_map[service_class_uuid]
-            except KeyError: service_class = service_class_uuid
+            try:
+                service_class = service_class_uuid_map[service_class_uuid]
+            except KeyError:
+                service_class = service_class_uuid
             lines.append(("service class", service_class))
         for key, value in self.eir.items():
             if key not in (3, 5, 7, 8, 9, 13, 14, 15):
@@ -229,7 +234,7 @@ class BluetoothConfigRecord(Record):
         indent = indent * ' '
         lwidth = max([len(line[0]) for line in lines])
         lines = [line[0].ljust(lwidth) + " = " + line[1] for line in lines]
-        return ("\n").join([indent + line for line in lines])
+        return "\n".join([indent + line for line in lines])
 
 def decode_class_of_device(cod):
     mdc, sdc = cod >> 8 & 0x1f, cod >> 2 & 0x3f

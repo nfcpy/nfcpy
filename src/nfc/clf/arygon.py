@@ -62,7 +62,8 @@ def init(transport):
     transport.tty.write(b"0av")  # read version
     response = transport.tty.readline()
     if response.startswith(b"FF00000600V"):
-        log.debug("Arygon Reader AxxB Version %s", response[11:].strip())
+        log.debug("Arygon Reader AxxB Version %s",
+                  response[11:].strip().decode())
         transport.tty.timeout = 0.5
         transport.tty.write(b"0at05")
         if transport.tty.readline().startswith(b"FF0000"):
@@ -83,7 +84,8 @@ def init(transport):
     transport.tty.write(b"0av")  # read version
     response = transport.tty.readline()
     if response.startswith(b"FF00000600V"):
-        log.debug("Arygon Reader AxxA Version %s", response[11:].strip())
+        log.debug("Arygon Reader AxxA Version %s",
+                  response[11:].strip().decode())
         transport.tty.timeout = 0.5
         transport.tty.write(b"0at05")
         if transport.tty.readline().startswith(b"FF0000"):

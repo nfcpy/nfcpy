@@ -31,6 +31,7 @@ import mimetypes
 import random
 import string
 import hashlib
+from binascii import hexlify
 
 import nfc
 import nfc.ndef
@@ -166,9 +167,9 @@ def make_smartposter(args):
 
     message = nfc.ndef.Message(record)
     if args.outfile.name == "<stdout>":
-        args.outfile.write(str(message).encode("hex"))
+        args.outfile.write(hexlify(message).decode())
     else:
-        args.outfile.write(str(message))
+        args.outfile.write(message)
 
 
 def make_wifipassword_parser(parser):
@@ -203,9 +204,9 @@ def make_wifipassword(args):
 
     message = nfc.ndef.Message(record)
     if args.outfile.name == "<stdout>":
-        args.outfile.write(str(message).encode("hex"))
+        args.outfile.write(hexlify(message).decode())
     else:
-        args.outfile.write(str(message))
+        args.outfile.write(message)
 
 
 def make_wificonfig_parser(parser):
@@ -281,9 +282,9 @@ def make_wificonfig(args):
         message = nfc.ndef.Message(record)
 
     if args.outfile.name == "<stdout>":
-        args.outfile.write(str(message).encode("hex"))
+        args.outfile.write(hexlify(message).decode())
     else:
-        args.outfile.write(str(message))
+        args.outfile.write(message)
 
 
 def make_bluetoothcfg_parser(parser):
@@ -361,9 +362,9 @@ def make_bluetoothcfg(args):
         message = nfc.ndef.Message(record)
 
     if args.outfile.name == "<stdout>":
-        args.outfile.write(str(message).encode("hex"))
+        args.outfile.write(hexlify(message).decode())
     else:
-        args.outfile.write(str(message))
+        args.outfile.write(message)
 
 
 def add_pack_parser(parser):
@@ -420,9 +421,9 @@ def pack(args):
 
     message = nfc.ndef.Message(record)
     if args.outfile.name == "<stdout>":
-        args.outfile.write(str(message).encode("hex"))
+        args.outfile.write(hexlify(message).decode())
     else:
-        args.outfile.write(str(message))
+        args.outfile.write(message)
 
 
 def add_split_parser(parser):
@@ -457,7 +458,7 @@ def split(args):
         if not args.keepmf:
             record._message_begin = record._message_end = False
         if args.input.name == "<stdin>":
-            print(str(record).encode("hex"))
+            print(hexlify(record).decode())
         else:
             fn = os.path.splitext(os.path.split(args.input.name)[1])
             fn = fn[0] + "-{0:03d}".format(index + 1) + fn[1]
@@ -492,9 +493,9 @@ def cat(args):
                  .format(record.type, f.name))
         message.append(record)
     if args.output.name == "<stdout>":
-        args.output.write(str(message).encode("hex"))
+        args.output.write(hexlify(message).decode())
     else:
-        args.output.write(str(message))
+        args.output.write(message)
 
 
 if __name__ == '__main__':

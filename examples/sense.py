@@ -26,6 +26,7 @@ import time
 import errno
 import argparse
 import struct
+from binascii import hexlify
 import logging
 logging.basicConfig(format='%(relativeCreated)d ms [%(name)s] %(message)s')
 
@@ -98,7 +99,7 @@ def main(args):
                     except nfc.clf.CommunicationError as error:
                         print(repr(error) + " for NFC-DEP ATR_REQ")
                     except AssertionError:
-                        print("invalid ATR_RES: %r" % str(data.encode("hex")))
+                        print("invalid ATR_RES: %r" % hexlify(data).decode())
                 
                 if target and target.atr_res:
                     did = target.atr_req[12]

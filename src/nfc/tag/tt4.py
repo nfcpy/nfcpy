@@ -195,8 +195,7 @@ class Type4Tag(nfc.tag.Tag):
             for self._aid in (ndef_aid_v2, ndef_aid_v1):
                 try:
                     self.tag.send_apdu(0, 0xA4, 0x04, 0x00, self._aid)
-                    log.debug("selected {}".format(
-                            hexlify(self._aid).decode()))
+                    log.debug("selected %s", hexlify(self._aid).decode())
                     return True
                 except Type4TagCommandError as error:
                     if error.errno <= 0:
@@ -206,10 +205,10 @@ class Type4Tag(nfc.tag.Tag):
             p2 = 0x00 if self._aid == ndef_aid_v1 else 0x0C
             try:
                 self.tag.send_apdu(0, 0xA4, 0x00, p2, fid)
-                log.debug("selected {}".format(hexlify(fid).decode()))
+                log.debug("selected %s", hexlify(fid).decode())
                 return True
             except Type4TagCommandError:
-                log.debug("failed to select {}".format(hexlify(fid).decode()))
+                log.debug("failed to select %s", hexlify(fid).decode())
 
         def _read_binary(self, offset, size):
             (p1, p2) = pack(">H", offset)
@@ -549,8 +548,7 @@ class Type4BTag(Type4Tag):
         else:
             attrib_cmd = b'\x1D' + self._nfcid + b'\x00\x08\x01\x00'
         attrib_res = self.clf.exchange(attrib_cmd, timeout=0.03)
-        log.debug("rcvd ATTRIB response {0}".format(
-                hexlify(attrib_res).decode()))
+        log.debug("rcvd ATTRIB response %s", hexlify(attrib_res).decode())
 
         fsci, fwti = target.sensb_res[10] >> 4, target.sensb_res[11] >> 4
         if fsci > 8:
