@@ -85,7 +85,10 @@ def device(mocker):  # noqa: F811
     device._device_name = "IP-Stack"
     device._chipset_name = "UDP"
     yield device
-    device.close()
+    try:
+        device.close()
+    except StopIteration:
+        pass
 
 
 def test_init(mocker):  # noqa: F811
