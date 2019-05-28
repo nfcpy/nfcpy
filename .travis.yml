@@ -1,4 +1,6 @@
+dist: xenial
 sudo: false
+
 cache:
   directories:
     - $HOME/.cache/pip
@@ -12,15 +14,19 @@ matrix:
       env: TOXENV=py27
     - python: "3.5"
       env: TOXENV=py35
+    - python: "3.6"
+      env: TOXENV=py35
+    - python: "3.7"
+      env: TOXENV=py35
 
     # Meta
-    - python: "3.5"
+    - python: "3.7"
       env: TOXENV=flake8
-    - python: "3.5"
+    - python: "3.7"
       env: TOXENV=manifest
-#    - python: "2.7"
-#      env: TOXENV=docs
-    - python: "3.5"
+    - python: "3.7"
+      env: TOXENV=docs
+    - python: "3.7"
       env: TOXENV=readme
 
 
