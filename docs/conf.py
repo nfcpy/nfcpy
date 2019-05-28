@@ -1,4 +1,4 @@
-# -*- coding: latin-1 -*-tf-8 -*-
+# -*- coding: latin-1 -*-
 #
 # nfcpy documentation build configuration file
 #
