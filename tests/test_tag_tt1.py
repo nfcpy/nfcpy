@@ -503,8 +503,8 @@ class TestTagCommands:
         tag.clf.exchange.side_effect = nfc.clf.CommunicationError
         with pytest.raises(RuntimeError) as excinfo:
             tag.transceive(HEX('01'))
-        assert repr(excinfo.value) == \
-            "RuntimeError('unexpected CommunicationError()',)"
+        assert repr(excinfo.value).startswith(
+            "RuntimeError('unexpected CommunicationError()'")
         tag.clf.exchange.assert_called_with(HEX('01'), 0.1)
         assert tag.clf.exchange.call_count == 3
 
