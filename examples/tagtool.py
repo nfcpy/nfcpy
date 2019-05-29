@@ -31,13 +31,13 @@ import struct
 import argparse
 import hmac
 import hashlib
-from binascii import hexlify
+import binascii
+import ndef
 
 from cli import CommandLineInterface
 
 import nfc
 import nfc.clf
-import nfc.ndef
 
 
 def parse_version(string):
@@ -104,13 +104,13 @@ def add_show_parser(parser):
 def add_dump_parser(parser):
     parser.add_argument(
             "-o", dest="output", metavar="FILE",
-            type=argparse.FileType('w'), default="-",
+            type=argparse.FileType('wb'), default="-",
             help="save ndef to FILE (writes binary data)")
 
 
 def add_load_parser(parser):
     parser.add_argument(
-            "input", metavar="FILE", type=argparse.FileType('r'),
+            "input", metavar="FILE", type=argparse.FileType('rb'),
             help="ndef data file ('-' reads from stdin)")
 
 
@@ -122,9 +122,9 @@ def add_format_parser(parser):
             "--version", metavar="x.y", type=parse_version,
             help="ndef mapping version, default is latest")
     subparsers = parser.add_subparsers(
-            title="tag type subcommands", dest="tagtype",
-            metavar='{tt1,tt2,tt3}',
-            help="tag type specific arguments")
+            title="tag type subcommands", metavar='{tt1,tt2,tt3}',
+            dest="tagtype", help="tag type specific arguments")
+    subparsers.required = True
     subparsers.add_parser('any')
     description = (
         "The tag type specific arguments are intended to give full "
@@ -209,6 +209,7 @@ def add_emulate_parser(parser):
             nargs="?", default=None,
             help="ndef message to serve ('-' reads from stdin)")
     subparsers = parser.add_subparsers(title="Tag Types", dest="tagtype")
+    subparsers.required = True
     add_emulate_tt3_parser(subparsers.add_parser(
             'tt3', help='emulate a type 3 tag'))
 
@@ -275,6 +276,7 @@ class TagTool(CommandLineInterface):
                 help="unlock with password if supported")
         subparsers = parser.add_subparsers(
                 title="commands", dest="command")
+        subparsers.required = True
         add_show_parser(subparsers.add_parser(
                 'show', help='pretty print ndef data'))
         add_dump_parser(subparsers.add_parser(
@@ -294,8 +296,7 @@ class TagTool(CommandLineInterface):
                               "format":  self.format_tag,
                               "protect": self.protect_tag, }
 
-        super(TagTool, self).__init__(
-                parser, groups="rdwr card dbg clf")
+        super(TagTool, self).__init__(parser, groups="rdwr card dbg clf")
 
     def on_rdwr_startup(self, targets):
         if self.options.command in self.rdwr_commands.keys():
@@ -347,7 +348,11 @@ class TagTool(CommandLineInterface):
             print("  message   = %d byte" % tag.ndef.length)
             if tag.ndef.length > 0:
                 print("NDEF Message:")
-                print(tag.ndef.message.pretty())
+                for i, record in enumerate(tag.ndef.records):
+                    print("record", i + 1)
+                    print("  type =", repr(record.type))
+                    print("  name =", repr(record.name))
+                    print("  data =", repr(record.data))
 
         if self.options.verbose:
             print("Memory Dump:")
@@ -355,9 +360,9 @@ class TagTool(CommandLineInterface):
 
     def dump_tag(self, tag):
         if tag.ndef:
-            data = tag.ndef.message
+            data = tag.ndef.octets
             if self.options.output.name == "<stdout>":
-                self.options.output.write(hexlify(data).decode())
+                self.options.output.write(binascii.hexlify(data).decode())
                 if self.options.loop:
                     self.options.output.write('\n')
                 else:
@@ -371,8 +376,8 @@ class TagTool(CommandLineInterface):
         except AttributeError:
             self.options.data = self.options.input.read()
             try:
-                self.options.data = self.options.data.decode("hex")
-            except TypeError:
+                self.options.data = binascii.unhexlify(self.options.data)
+            except binascii.Error:
                 pass
 
         if tag.ndef is None:
@@ -383,27 +388,38 @@ class TagTool(CommandLineInterface):
             print("This Tag is not writeable.")
             return
 
-        new_ndef_message = nfc.ndef.Message(self.options.data)
-        if new_ndef_message == tag.ndef.message:
+        if self.options.data == tag.ndef.octets:
             print("The Tag already contains the message to write.")
             return
 
-        if len(str(new_ndef_message)) > tag.ndef.capacity:
+        if len(self.options.data) > tag.ndef.capacity:
             print("The new message exceeds the Tag's capacity.")
             return
 
-        print("Old message:")
-        print(tag.ndef.message.pretty())
-        tag.ndef.message = new_ndef_message
-        print("New message:")
-        print(tag.ndef.message.pretty())
+        if tag.ndef.length > 0:
+            print("Old NDEF Message:")
+            for i, record in enumerate(tag.ndef.records):
+                print("record", i + 1)
+                print("  type =", repr(record.type))
+                print("  name =", repr(record.name))
+                print("  data =", repr(record.data))
+
+        tag.ndef.records = list(ndef.message_decoder(self.options.data))
+
+        if tag.ndef.length > 0:
+            print("New NDEF Message:")
+            for i, record in enumerate(tag.ndef.records):
+                print("record", i + 1)
+                print("  type =", repr(record.type))
+                print("  name =", repr(record.name))
+                print("  data =", repr(record.data))
 
     def format_tag(self, tag):
-        if (self.options.tagtype != "any" and
-                self.options.tagtype[2] != tag.type[4]):
-            print("This is not a Type {0} Tag but you said so."
-                  .format(self.options.tagtype[2]))
-            return
+        if not self.options.tagtype == "any":
+            if not self.options.tagtype[2] == tag.type[4]:
+                print("This is not a Type {0} Tag but you said so."
+                      .format(self.options.tagtype[2]))
+                return
 
         if self.options.version is None:
             version = {'Type1Tag': 0x12, 'Type2Tag': 0x12,
@@ -419,11 +435,10 @@ class TagTool(CommandLineInterface):
              'any': lambda t: None}[self.options.tagtype](tag)
             print("Formatted %s" % tag)
             if tag.ndef:
-                print("  readable  = %s" % ("no", "yes")[tag.ndef.is_readable])
-                print(
-                    "  writeable = %s" % ("no", "yes")[tag.ndef.is_writeable])
-                print("  capacity  = %d byte" % tag.ndef.capacity)
-                print("  message   = %d byte" % tag.ndef.length)
+                print("  readable = %s" % ("no", "yes")[tag.ndef.is_readable])
+                print("  writable = %s" % ("no", "yes")[tag.ndef.is_writeable])
+                print("  capacity = %d byte" % tag.ndef.capacity)
+                print("  message  = %d byte" % tag.ndef.length)
         elif formatted is None:
             print("Sorry, this tag can not be formatted.")
         else:
@@ -512,8 +527,8 @@ class TagTool(CommandLineInterface):
             if self.options.input:
                 self.options.data = self.options.input.read()
                 try:
-                    self.options.data = self.options.data.decode("hex")
-                except TypeError:
+                    self.options.data = binascii.unhexlify(self.options.data)
+                except binascii.Error:
                     pass
             else:
                 self.options.data = ""
@@ -545,11 +560,11 @@ class TagTool(CommandLineInterface):
             attribute_data[14:16] = struct.pack(">H", sum(attribute_data[:14]))
             self.options.tt3_data = attribute_data + ndef_data_area
 
-        idm = bytearray.fromhex(self.options.idm)
-        pmm = bytearray.fromhex(self.options.pmm)
-        _sys = bytearray.fromhex(self.options.sys)
+        idm = bytes.fromhex(self.options.idm)
+        pmm = bytes.fromhex(self.options.pmm)
+        _sys = bytes.fromhex(self.options.sys)
 
-        target.brty = bytes(self.options.bitrate) + b"F"
+        target.brty = self.options.bitrate + "F"
         target.sensf_res = b"\x01" + idm + pmm + _sys
         return target
 
