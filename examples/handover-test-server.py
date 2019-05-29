@@ -28,7 +28,7 @@ import sys
 import time
 import argparse
 
-from .cli import CommandLineInterface
+from cli import CommandLineInterface
 
 import nfc
 import nfc.llcp

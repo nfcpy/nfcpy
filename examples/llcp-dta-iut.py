@@ -40,7 +40,7 @@ import logging
 
 log = logging.getLogger('main')
 
-from .cli import CommandLineInterface
+from cli import CommandLineInterface
 
 import nfc
 import nfc.llcp

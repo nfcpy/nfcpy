@@ -29,7 +29,7 @@ import sys
 import argparse
 import random
 
-from .cli import CommandLineInterface, TestFail
+from cli import CommandLineInterface, TestFail
 
 import nfc
 import nfc.llcp

@@ -28,7 +28,7 @@ log = logging.getLogger('main')
 import argparse
 import struct
 
-from .cli import CommandLineInterface, TestFail
+from cli import CommandLineInterface, TestFail
 
 import nfc
 import nfc.snep

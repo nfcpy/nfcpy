@@ -37,7 +37,7 @@ except ImportError:
     import Queue as queue
 from threading import Thread, Lock
 
-from .cli import CommandLineInterface, TestFail
+from cli import CommandLineInterface, TestFail
 
 import nfc
 import nfc.ndef

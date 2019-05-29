@@ -24,7 +24,7 @@
 import logging
 import argparse
 
-from .cli import CommandLineInterface
+from cli import CommandLineInterface
 
 import nfc
 import nfc.snep

@@ -33,7 +33,7 @@ import threading
 import mimetypes
 import sys
 
-from .cli import CommandLineInterface
+from cli import CommandLineInterface
 
 import nfc
 import nfc.snep

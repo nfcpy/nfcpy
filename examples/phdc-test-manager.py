@@ -37,7 +37,7 @@ try:
 except ImportError:
     import Queue as queue
 
-from .cli import CommandLineInterface
+from cli import CommandLineInterface
 
 import nfc
 import nfc.ndef

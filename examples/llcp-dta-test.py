@@ -34,7 +34,7 @@ import time
 import struct
 import argparse
 
-from .cli import CommandLineInterface, TestFail, TestSkip
+from cli import CommandLineInterface, TestFail, TestSkip
 
 import nfc
 import nfc.llcp

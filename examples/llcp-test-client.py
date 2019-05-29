@@ -38,7 +38,7 @@ import argparse
 import collections
 from threading import Thread
 
-from .cli import CommandLineInterface, TestFail, TestSkip
+from cli import CommandLineInterface, TestFail, TestSkip
 
 import nfc
 import nfc.llcp
