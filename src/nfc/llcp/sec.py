@@ -531,18 +531,13 @@ class OpenSSLWrapper:
             else:
                 out_buf = ctypes.create_string_buffer(out_len)
                 out_len = c_int(out_len)
-            r = OpenSSL.crypto.EVP_EncryptUpdate(
+            r = OpenSSL.crypto.EVP_DecryptUpdate(
                 self._ctx, out_buf, ctypes.byref(out_len), message, msg_len)
             if r != 1:
                 raise AssertionError("EVP_DecryptUpdate")
             return out_buf.raw[0:out_len.value] if out_buf else b''
 
 
-libcrypto = ctypes.util.find_library('crypto')
+libcrypto = ctypes.util.find_library('crypto.so.1.0')
 if libcrypto is not None:
-    if not sys.platform.startswith('linux'):
-        log.debug("OpenSSL crypto library binding is only tested on Linux")
-    elif not libcrypto.startswith('libcrypto.so.1.0'):
-        log.warning("OpenSSL {} is not supported".format(libcrypto))
-    else:
-        OpenSSL = OpenSSLWrapper(libcrypto)
+    OpenSSL = OpenSSLWrapper(libcrypto)
