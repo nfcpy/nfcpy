@@ -44,14 +44,15 @@ filetype = file if sys.version_info[0] == 2 else io.IOBase
 
 def add_send_parser(parser):
     subparsers = parser.add_subparsers(
-            title="send item", dest="send", description="""\
+            title="send item", dest="send_action", description="""\
             Construct beam data from the send item and transmit to the peer 
             device when touched. Use 'beam.py send {item} -h' to learn 
             additional and/or required arguments per send item.""")
+    subparsers.required = True
     add_send_link_parser(subparsers.add_parser(
-        "link", help="send hyperlink", description="""\
-        Construct an NDEF Smartposter message with URI and the optional 
-        title argument and send it to the peer when connected."""))
+            "link", help="send hyperlink", description="""\
+            Construct an NDEF Smartposter message with URI and the optional
+            title argument and send it to the peer when connected."""))
     add_send_text_parser(subparsers.add_parser(
             "text", help="send plain text", description="""\
             Construct an NDEF Text message with the input string as 
@@ -192,10 +193,11 @@ def run_send_ndef_action(args, llc):
 
 def add_recv_parser(parser):
     subparsers = parser.add_subparsers(
-            title="receive action", dest="recv", description="""\
+            title="receive action", dest="recv_action", description="""\
             On receipt of incoming beam data perform the specified
             action. Use 'beam.py recv {action} -h' to learn additional and/or
             required arguments per action.""")
+    subparsers.required = True
     add_recv_print_parser(subparsers.add_parser(
             "print", help="print received message", description="""\
             Print the received NDEF message and do nothing else."""))
@@ -291,6 +293,7 @@ class Main(CommandLineInterface):
         parser = argparse.ArgumentParser()
         subparsers = parser.add_subparsers(
                 title="actions", dest="action")
+        subparsers.required = True
         add_send_parser(subparsers.add_parser(
                 'send', help='send data to beam receiver'))
         add_recv_parser(subparsers.add_parser(
