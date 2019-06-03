@@ -28,7 +28,7 @@ from cli import CommandLineInterface
 
 import nfc
 import nfc.snep
-import nfc.ndef
+import ndef
 
 log = logging.getLogger('main')
 
@@ -53,19 +53,19 @@ class ValidationServer(nfc.snep.SnepServer):
     def put(self, ndef_message):
         log.info("validation snep server got put request")
         key = (ndef_message.type, ndef_message.name)
-        log.info("store ndef message under key " + str(key))
+        log.info("store ndef message under key {}".format(key))
         self.ndef_message_store[key] = ndef_message
         return nfc.snep.Success
 
     def get(self, acceptable_length, ndef_message):
         log.info("validation snep server got get request")
         key = (ndef_message.type, ndef_message.name)
-        log.info("client requests ndef message with key " + str(key))
+        log.info("client requests ndef message with key {}".format(key))
         if key in self.ndef_message_store:
             ndef_message = self.ndef_message_store[key]
             log.info("found matching ndef message")
             log.info(ndef_message.pretty())
-            if len(str(ndef_message)) <= acceptable_length:
+            if len(bytes(ndef_message)) <= acceptable_length:
                 return ndef_message
             else:
                 return nfc.snep.ExcessData
@@ -75,8 +75,7 @@ class ValidationServer(nfc.snep.SnepServer):
 class TestProgram(CommandLineInterface):
     def __init__(self):
         parser = argparse.ArgumentParser()
-        super(TestProgram, self).__init__(
-                parser, groups="llcp dbg clf")
+        super(TestProgram, self).__init__(parser, groups="llcp dbg clf")
         self.default_snep_server = None
         self.validation_snep_server = None
 

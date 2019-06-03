@@ -132,9 +132,9 @@ class SnepServer(Thread):
     def __get(self, snep_request):
         acceptable_length = unpack(">L", snep_request[6:10])[0]
         response = self._get(acceptable_length, snep_request[10:])
-        if type(response) == int:
+        if isinstance(response, int):
             response_code = struct.pack("B", response)
-            ndef_message = ""
+            ndef_message = b""
         else:
             response_code = struct.pack("B", 0x81)
             ndef_message = response
@@ -142,7 +142,7 @@ class SnepServer(Thread):
         return b"\x10" + response_code + ndef_length + ndef_message
 
     def _get(self, acceptable_length, ndef_message_data):
-        log.debug("SNEP GET (%s)", hexlify(ndef_message_data).decode)
+        log.debug("SNEP GET (%s)", hexlify(ndef_message_data).decode())
         try:
             ndef_message = nfc.ndef.Message(ndef_message_data)
         except (nfc.ndef.LengthError, nfc.ndef.FormatError) as err:
@@ -150,7 +150,7 @@ class SnepServer(Thread):
             return 0xC2
         else:
             rsp = self.get(acceptable_length, ndef_message)
-            return str(rsp) if isinstance(rsp, nfc.ndef.Message) else rsp
+            return bytes(rsp) if isinstance(rsp, nfc.ndef.Message) else rsp
 
     def get(self, acceptable_length, ndef_message):
         """Handle Get requests. This method should be overwritten by a
