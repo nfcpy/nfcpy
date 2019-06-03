@@ -126,7 +126,7 @@ class PhdcTagManager(PhdcManager):
     @trace
     def write_phd_message(self, apdu):
         data = bytearray([(self.mc % 16) | 0x80]) + apdu
-        record = nfc.ndef.Record("urn:nfc:wkt:PHD", data=str(data))
+        record = nfc.ndef.Record("urn:nfc:wkt:PHD", data=bytes(data))
         log.info("[phdc] >>> %s", hexlify(record.data).decode())
         self.tag.ndef.message = nfc.ndef.Message(record)
         self.mc += 1
@@ -233,7 +233,7 @@ class PhdcPeerManager(Thread):
                     log.info("[ieee] >>> {0}".format(hexlify(apdu).decode()))
                     data = struct.pack(">H", len(apdu)) + apdu
                     for i in range(0, len(data), miu):
-                        client.send(str(data[i:i + miu]))
+                        client.send(bytes(data[i:i + miu]))
                 log.info("remote peer {0} closed connection".format(peer))
                 log.info("leaving ieee manager")
                 client.close()
@@ -273,7 +273,7 @@ class TestProgram(CommandLineInterface):
             log.info("  data size = %d byte" % len(tag.ndef.message))
             if len(tag.ndef.message):
                 log.info("NDEF message dump:")
-                log.info(format_data(str(tag.ndef.message)))
+                log.info(format_data(bytes(tag.ndef.message)))
                 log.info(tag.ndef.message.pretty())
                 phdc_tag_manager(tag)
                 return False

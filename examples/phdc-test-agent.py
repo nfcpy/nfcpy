@@ -96,7 +96,7 @@ class PhdcTagAgent(PhdcAgent):
         phd_msg = nfc.ndef.Message(phd_rec)
 
         self.ndef_data_area = bytes(attr) + bytearray(attr.capacity)
-        self.ndef_data_area[16:16 + 7 + len(apdu)] = bytearray(str(phd_msg))
+        self.ndef_data_area[16:16 + 7 + len(apdu)] = bytearray(bytes(phd_msg))
 
         tag.add_service(0x0009, self.ndef_read, self.ndef_write)
         tag.add_service(0x000B, self.ndef_read, lambda: False)
@@ -152,17 +152,17 @@ class PhdcTagAgent(PhdcAgent):
                     log.info("[phdc] <<< " + hexlify(data).decode())
                     self.mc += 1
                     attr.length = 0
-                    self.ndef_data_area[0:16] = bytearray(str(attr))
+                    self.ndef_data_area[0:16] = bytearray(bytes(attr))
                     return data[1:]
 
     def send_phd_message(self):
         apdu = self.dequeue(timeout=0.1)
         data = bytearray([0x80 | (self.mc % 16)]) + apdu
-        record = nfc.ndef.Record("urn:nfc:wkt:PHD", data=str(data))
+        record = nfc.ndef.Record("urn:nfc:wkt:PHD", data=bytes(data))
         with self.ndef_read_lock:
             if not self.terminate:
                 log.info("[phdc] >>> " + hexlify(data).decode())
-                data = bytearray(str(nfc.ndef.Message(record)))
+                data = bytearray(bytes(nfc.ndef.Message(record)))
                 attr = nfc.tag.tt3.NdefAttributeData(self.ndef_data_area[0:16])
                 attr.length = len(data)
                 self.ndef_data_area[0:16 + attr.length] = bytes(attr) + data
@@ -228,7 +228,7 @@ class PhdcTagAgentTest(CommandLineInterface):
         pmm = bytearray.fromhex("01E0000000FFFF00")
         _sys = bytearray.fromhex("12FC")
 
-        target.brty = str(self.options.bitrate) + "F"
+        target.brty = "{:d}F".format(self.options.bitrate)
         target.sensf_res = b"\x01" + idm + pmm + _sys
         return target
 
@@ -402,7 +402,7 @@ class PhdcP2pAgentTest(CommandLineInterface):
                     apdu = bytearray.fromhex(line)
                     apdu = struct.pack(">H", len(apdu)) + apdu
                     log.info("send %s", hexlify(apdu).decode())
-                    socket.send(str(apdu))
+                    socket.send(bytes(apdu))
 
                     apdu = socket.recv()
                     log.info("rcvd %s", hexlify(apdu).decode())
@@ -431,7 +431,7 @@ class PhdcP2pAgentTest(CommandLineInterface):
         apdu = struct.pack(">H", len(apdu)) + apdu
         info("send thermometer association request")
         log.info("send %s", hexlify(apdu).decode())
-        socket.send(str(apdu))
+        socket.send(bytes(apdu))
 
         apdu = socket.recv()
         log.info("rcvd %s", hexlify(apdu).decode())
@@ -444,7 +444,7 @@ class PhdcP2pAgentTest(CommandLineInterface):
         apdu = struct.pack(">H", len(apdu)) + apdu
         info("send association release request")
         log.info("send %s", hexlify(apdu).decode())
-        socket.send(str(apdu))
+        socket.send(bytes(apdu))
 
         apdu = socket.recv()
         log.info("rcvd %s", hexlify(apdu).decode())
@@ -473,7 +473,7 @@ class PhdcP2pAgentTest(CommandLineInterface):
         apdu = struct.pack(">H", len(apdu)) + apdu
         info("send thermometer association request")
         info("send %s", hexlify(apdu).decode())
-        socket.send(str(apdu))
+        socket.send(bytes(apdu))
 
         apdu = socket.recv()
         info("rcvd %s", hexlify(apdu).decode())
@@ -493,7 +493,7 @@ class PhdcP2pAgentTest(CommandLineInterface):
         apdu = struct.pack(">H", len(apdu)) + apdu
         info("send thermometer association request")
         info("send %s", hexlify(apdu).decode())
-        socket.send(str(apdu))
+        socket.send(bytes(apdu))
 
         apdu = socket.recv()
         info("rcvd %s", hexlify(apdu).decode())
@@ -506,7 +506,7 @@ class PhdcP2pAgentTest(CommandLineInterface):
         apdu = struct.pack(">H", len(apdu)) + apdu
         info("send association release request")
         info("send %s", hexlify(apdu).decode())
-        socket.send(str(apdu))
+        socket.send(bytes(apdu))
 
         apdu = socket.recv()
         info("rcvd %s", hexlify(apdu).decode())
@@ -535,7 +535,7 @@ class PhdcP2pAgentTest(CommandLineInterface):
         log.info("send ieee apdu of size {0} byte".format(len(apdu)))
         apdu = struct.pack(">H", len(apdu)) + apdu
         for i in range(0, len(apdu), miu):
-            socket.send(str(apdu[i:i + miu]))
+            socket.send(bytes(apdu[i:i + miu]))
 
         sent_apdu = apdu[2:]
 
