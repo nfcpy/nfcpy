@@ -354,7 +354,7 @@ class TestProgram(CommandLineInterface):
         socket.connect(co_echo_server)
         peer_sap = socket.getpeername()
         info("connected with sap {0}".format(peer_sap))
-        socket.send(default_miu * "\xFF")
+        socket.send(default_miu * b"\xFF")
         t0 = time.time()
         info("sent one information pdu")
         if socket.poll("acks", timeout=5):
@@ -571,11 +571,11 @@ class TestProgram(CommandLineInterface):
             if peer_sap == 1:
                 raise TestFail("connection established with SDP port")
             info("connection established with sap {0}".format(peer_sap))
-            if socket.send("here's nfcpy"):
+            if socket.send(b"here's nfcpy"):
                 t0 = time.time()
                 info("sent test message")
                 if socket.poll("recv", timeout=5):
-                    if socket.recv() == "here's nfcpy":
+                    if socket.recv() == b"here's nfcpy":
                         info("got echo after {0:.3f} sec"
                              .format(time.time() - t0))
                     else:
@@ -708,12 +708,12 @@ class TestProgram(CommandLineInterface):
         info("step 2: resolved 'urn:nfc:sn:cl-echo' to sap {0}".format(addr))
         socket = nfc.llcp.Socket(llc, nfc.llcp.LOGICAL_DATA_LINK)
         t0 = time.time()
-        if socket.sendto(128 * "\xA9", addr):
+        if socket.sendto(128 * b"\xA9", addr):
             info("step 3: sent 128 byte message to sap {0}".format(addr))
             if not socket.poll("recv", timeout=5):
                 raise TestFail("did not receive echo within 5 seconds")
             data, peer = socket.recvfrom()
-            if not data == 128 * "\xA9":
+            if not data == 128 * b"\xA9":
                 raise TestFail("received wrong data in step 3")
             if not peer == addr:
                 raise TestFail("received from wrong sap in step 3")
@@ -782,7 +782,7 @@ class TestProgram(CommandLineInterface):
         peer_sap = socket.getpeername()
         info("connected with sap {0}".format(peer_sap))
         miu = socket.getsockopt(nfc.llcp.SO_SNDMIU)
-        socket.send(miu * "\xFF")
+        socket.send(miu * b"\xFF")
         t0 = time.time()
         info("sent one information pdu")
         if socket.poll("acks", timeout=5):
@@ -812,15 +812,15 @@ class TestProgram(CommandLineInterface):
             socket1.connect(co_echo_server)
             peer_sap = socket1.getpeername()
             info("first connection established with sap {0}".format(peer_sap))
-            socket1.send("I'm the first connection")
-            assert (socket1.recv() == "I'm the first connection")
+            socket1.send(b"I'm the first connection")
+            assert (socket1.recv() == b"I'm the first connection")
             socket1.close()
             info("first connection terminated")
             socket2.connect(co_echo_server)
             peer_sap = socket2.getpeername()
             info("second connection established with sap {0}".format(peer_sap))
-            socket2.send("I'm the second connection")
-            assert (socket2.recv() == "I'm the second connection")
+            socket2.send(b"I'm the second connection")
+            assert (socket2.recv() == b"I'm the second connection")
             socket2.close()
         finally:
             pass

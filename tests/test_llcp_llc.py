@@ -312,7 +312,7 @@ class TestLogicalLinkController:
             with pytest.raises(TypeError) as excinfo:
                 llc.sendto(ldl, u'123', 16, nfc.llcp.MSG_DONTWAIT)
             assert str(excinfo.value) == \
-                "the message argument must be a byte string"
+                "message data must be a bytes-like object"
 
         def test_sendto_with_unbound_socket(self, llc, ldl):
             assert llc.sendto(ldl, b'123', 16, nfc.llcp.MSG_DONTWAIT) is True

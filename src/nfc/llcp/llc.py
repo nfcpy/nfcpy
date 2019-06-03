@@ -40,11 +40,12 @@ log = logging.getLogger(__name__)
 RAW_ACCESS_POINT, LOGICAL_DATA_LINK, DATA_LINK_CONNECTION = range(3)
 
 wks_map = {
-    "urn:nfc:sn:sdp": 1,
-    "urn:nfc:sn:snep": 4,
+    b"urn:nfc:sn:sdp": 1,
+    b"urn:nfc:sn:snep": 4,
 }
 
-service_name_format = re.compile(r"^urn:nfc:[x]?sn:[a-zA-Z][a-zA-Z0-9-_:\.]*$")
+service_name_format = \
+    re.compile(b"^urn:nfc:[x]?sn:[a-zA-Z][a-zA-Z0-9-_:\\.]*$")
 
 
 class ServiceAccessPoint(object):
@@ -175,7 +176,7 @@ class ServiceDiscovery(object):
         with self.resp:
             if self.snl is None:
                 return None
-            log.debug("resolve service name '{0}'".format(name))
+            log.debug("resolve service name %r", name)
             try:
                 return self.snl[name]
             except KeyError:
@@ -299,7 +300,7 @@ class LogicalLinkController(object):
             self.cfg['llcp-sec'] = False
         log.debug("llc cfg {0}".format(self.cfg))
         self.sec = None
-        self.snl = dict({"urn:nfc:sn:sdp": 1})
+        self.snl = dict({b"urn:nfc:sn:sdp": 1})
         self.sap = 64 * [None]
         self.sap[0] = ServiceAccessPoint(0, self)
         self.sap[1] = ServiceDiscovery(self)
@@ -661,9 +662,7 @@ class LogicalLinkController(object):
 
         if rcvd_pdu.name == "CONNECT" and rcvd_pdu.dsap == 1:
             # connect-by-name
-            addr = self.snl.get(rcvd_pdu.sn
-                                if isinstance(rcvd_pdu.sn, str)
-                                else rcvd_pdu.sn.decode("utf-8"))
+            addr = self.snl.get(rcvd_pdu.sn)
             if not addr or self.sap[addr] is None:
                 dm_reason = 0x10 if rcvd_pdu.sn is None else 0x02
                 dm_pdu = pdu.DisconnectedMode(rcvd_pdu.ssap, 1, dm_reason)
@@ -688,7 +687,9 @@ class LogicalLinkController(object):
                 log.debug("can't dispatch PDU %s", rcvd_pdu)
 
     def resolve(self, name):
-        return self.sap[1].resolve(name)
+        if isinstance(name, (bytes, bytearray)):
+            return self.sap[1].resolve(bytes(name))
+        return self.sap[1].resolve(name.encode('latin'))
 
     def socket(self, socket_type):
         if socket_type == RAW_ACCESS_POINT:
@@ -727,9 +728,9 @@ class LogicalLinkController(object):
         elif isinstance(addr_or_name, int):
             self._bind_by_addr(socket, addr_or_name)
         elif isinstance(addr_or_name, (bytes, bytearray)):
-            self._bind_by_name(socket, addr_or_name.decode("utf-8"))
+            self._bind_by_name(socket, bytes(addr_or_name))
         elif isinstance(addr_or_name, str):
-            self._bind_by_name(socket, addr_or_name)
+            self._bind_by_name(socket, addr_or_name.encode('latin'))
         else:
             raise err.Error(errno.EFAULT)
 
@@ -830,8 +831,8 @@ class LogicalLinkController(object):
             # FIXME: set socket send miu when activated
             socket.send_miu = self.cfg['send-miu']
             return socket.send(message, flags)
-        if not isinstance(message, bytes):
-            raise TypeError("the message argument must be a byte string")
+        if not isinstance(message, (bytes, bytearray)):
+            raise TypeError("message data must be a bytes-like object")
         if isinstance(socket, tco.LogicalDataLink):
             if dest is None:
                 raise err.Error(errno.EDESTADDRREQ)

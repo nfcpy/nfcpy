@@ -126,7 +126,7 @@ class Socket(object):
         return self.llc.sendto(self._tco, data, addr, flags)
 
     def recv(self):
-        """Receive data from the socket. The return value is a string
+        """Receive data from the socket. The return value is a bytes object
         representing the data received. The maximum amount of data
         that may be returned is determined by the link or connection
         maximum information unit size."""
@@ -134,7 +134,7 @@ class Socket(object):
 
     def recvfrom(self):
         """Receive data from the socket. The return value is a pair
-        (string, address) where string is a string representing the
+        (bytes, address) where string is a string representing the
         data received and address is the address of the socket sending
         the data."""
         return self.llc.recvfrom(self._tco)

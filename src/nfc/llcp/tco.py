@@ -460,6 +460,9 @@ class DataLinkConnection(TransmissionControlObject):
             if isinstance(dest, (bytes, bytearray)):
                 send_pdu = pdu.Connect(1, self.addr, self.recv_miu,
                                        self.recv_win, bytes(dest))
+            elif isinstance(dest, str):
+                send_pdu = pdu.Connect(1, self.addr, self.recv_miu,
+                                       self.recv_win, dest.encode('latin'))
             elif isinstance(dest, int):
                 send_pdu = pdu.Connect(dest, self.addr, self.recv_miu,
                                        self.recv_win)
