@@ -620,7 +620,7 @@ class TestProgram(CommandLineInterface):
             if not cl_echo_server:
                 raise TestFail("connection-less echo server not available")
             info("connection-less echo server on sap %d" % cl_echo_server)
-            # addr = socket.getsockname()
+
             sdu1 = 50 * b"\x01"
             sdu2 = 50 * b"\x02"
             sdu3 = 50 * b"\x03"
@@ -792,7 +792,7 @@ class TestProgram(CommandLineInterface):
                 raise TestFail("no confirmation within 1.9 seconds")
             if not socket.poll("recv", timeout=5):
                 raise TestFail("did not receive second message within 5 sec")
-            # data = socket.recv()
+            socket.recv()
             info("got message after {0:.3f}".format(time.time() - t0))
         else:
             raise TestFail("no data received within 5 seconds")
