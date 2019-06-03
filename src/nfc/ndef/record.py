@@ -141,8 +141,8 @@ class Record(object):
             raise FormatError(s.format(tnf))
             
         self._message_begin, self._message_end = mbf, mef
-        self._type = type_name_prefix[tnf] + record_type.decode("utf-8")
-        self._name = record_name.decode("utf-8")
+        self._type = type_name_prefix[tnf] + record_type.decode('latin')
+        self._name = record_name.decode()
         self._data = bytearray(record_data)
         log.debug("parsed {0}".format(repr(self)))
 
@@ -189,8 +189,8 @@ class Record(object):
         if name_length > 0:
             f.write(struct.pack(">B", name_length))
 
-        f.write(record_type.encode("utf-8"))
-        f.write(record_name.encode("utf-8"))
+        f.write(record_type.encode('latin'))
+        f.write(record_name.encode('latin'))
         f.write(record_data)
 
     @property

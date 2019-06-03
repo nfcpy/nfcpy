@@ -36,7 +36,7 @@ log = logging.getLogger(__name__)
 
 
 def print_data(data):
-    return 'None' if data is None else binascii.hexlify(data).decode("utf-8")
+    return 'None' if data is None else binascii.hexlify(data).decode('latin')
 
 
 class ContactlessFrontend(object):

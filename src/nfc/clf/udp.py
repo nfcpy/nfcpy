@@ -540,7 +540,7 @@ class Device(nfc.clf.device.Device):
                     raise error
 
     def _send_data(self, brty, data, addr):
-        data = (b"%s %s" % (brty.encode("utf-8"), hexlify(data))).strip()
+        data = (b"%s %s" % (brty.encode('latin'), hexlify(data))).strip()
         log.log(logging.DEBUG-1, ">>> %s to %s:%s", data.decode(), addr)
         ret = self.socket.sendto(data, addr)
         if ret != len(data):

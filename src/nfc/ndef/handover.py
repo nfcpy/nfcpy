@@ -256,7 +256,7 @@ class HandoverRequestRecord(Record):
         log.debug("parse '{0}' record".format(self.type))
         if len(string) > 0:
             f = io.BytesIO(string)
-            self.version = Version(f.read(1).decode("utf-8"))
+            self.version = Version(f.read(1).decode('latin'))
             if self.version.major != 1:
                 raise DecodeError("unsupported major version")
             if self.version >= Version('\x12'):
@@ -495,7 +495,7 @@ class HandoverSelectRecord(Record):
         log.debug("parse '{0}' record".format(self.type))
         if len(string) > 0:
             f = io.BytesIO(string)
-            self.version = Version(f.read(1).decode("utf-8"))
+            self.version = Version(f.read(1).decode('latin'))
             if self.version.major != 1:
                 raise DecodeError("unsupported major version")
             while f.tell() < len(string):
