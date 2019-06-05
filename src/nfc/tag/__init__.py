@@ -136,41 +136,6 @@ class Tag(object):
             return different
 
         @property
-        def message(self):
-            """Read or write an :class:`nfc.ndef.Message`.
-
-            .. deprecated:: 0.12
-               Use :attr:`records`.
-
-            """
-            warnings.warn(
-                'The Tag.ndef.message attribute will be removed in a future'
-                ' version when the ndeflib replaces the nfc.ndef submodule.'
-                ' Use Tag.ndef.records to get or set a list of NDEF Records'
-                ' as implemented by https://github.com/nfcpy/ndeflib.',
-                DeprecationWarning
-            )
-            import nfc.ndef
-
-            try:
-                return nfc.ndef.Message(self.octets)
-            except nfc.ndef.parser_error as error:
-                log.error(repr(error))
-
-            return nfc.ndef.Message(nfc.ndef.Record())
-
-        @message.setter
-        def message(self, msg):
-            warnings.warn(
-                'The Tag.ndef.message attribute will be removed in a future'
-                ' version when the ndeflib replaces the nfc.ndef submodule.'
-                ' Use Tag.ndef.records to get or set a list of NDEF Records'
-                ' as implemented by https://github.com/nfcpy/ndeflib.',
-                DeprecationWarning
-            )
-            self.octets = bytes(msg)
-
-        @property
         def records(self):
             """Read or write a list of NDEF Records.
 
