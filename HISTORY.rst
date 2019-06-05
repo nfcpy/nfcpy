@@ -1,6 +1,17 @@
 Changelog for nfcpy
 ===================
 
+0.13.6 (2019-06-05)
+-------------------
+
+* Corrections to LLCP SEC module:
+  - fixed a bug in encrypt_update
+  - explicitly load libcrypto 1.0
+
+* Variable name fix in examples/beam.py by @turbolocust
+
+* Python3 compatibility contribution by @henrycjc.
+
 0.13.5 (2018-05-19)
 -------------------
 
