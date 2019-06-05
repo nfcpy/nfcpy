@@ -19,7 +19,6 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-import sys
 import struct
 import ctypes
 import ctypes.util

@@ -42,7 +42,7 @@ except ImportError:  # pragma: no cover
 try:
     import termios
 except ImportError:  # pragma: no cover
-    assert os.name is not 'posix'
+    assert os.name != 'posix'
 
 import logging
 log = logging.getLogger(__name__)
