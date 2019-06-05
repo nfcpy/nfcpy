@@ -99,9 +99,6 @@ def test_write_ndef(mocker, tag):  # noqa: F811
     tag.ndef.records = [ndef.Record('unknown')]
     assert tag.ndef.octets == HEX('D50000')
 
-    tag.ndef.message = nfc.ndef.Message(nfc.ndef.Record())
-    assert tag.ndef.octets == HEX('D00000')
-
 
 def test_tag_dump(tag):
     assert tag.dump() == []
