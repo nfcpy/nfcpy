@@ -22,15 +22,17 @@
 #
 # Negotiated Connection Handover - Server Base Class
 #
-import nfc.llcp
-
-from threading import Thread
-
+import threading
+import binascii
 import logging
+import ndef
+import nfc
+
+
 log = logging.getLogger(__name__)
 
 
-class HandoverServer(Thread):
+class HandoverServer(threading.Thread):
     """ NFC Forum Connection Handover server
     """
     def __init__(self, llc, request_size_limit=0x10000,
@@ -42,16 +44,16 @@ class HandoverServer(Thread):
         log.info("handover server bound to port {0} (MIU={1}, RW={2})"
                  .format(socket.getsockname(), recv_miu, recv_buf))
         socket.listen(backlog=2)
-        Thread.__init__(self, name='urn:nfc:sn:handover',
-                        target=self.listen, args=(llc, socket))
+        threading.Thread.__init__(self, name='urn:nfc:sn:handover',
+                                  target=self.listen, args=(llc, socket))
 
     def listen(self, llc, socket):
         log.debug("handover listen thread started")
         try:
             while True:
                 client_socket = socket.accept()
-                client_thread = Thread(target=HandoverServer.serve,
-                                       args=(client_socket, self))
+                client_thread = threading.Thread(target=self.serve,
+                                                 args=(client_socket,))
                 client_thread.start()
         except nfc.llcp.Error as e:
             (log.debug if e.errno == nfc.llcp.errno.EPIPE else log.error)(e)
@@ -59,62 +61,56 @@ class HandoverServer(Thread):
             socket.close()
             log.debug("handover listen thread terminated")
 
-    @staticmethod
-    def serve(socket, handover_server):
+    def serve(self, socket):
         peer_sap = socket.getpeername()
         log.info("serving handover client on remote sap {0}".format(peer_sap))
         send_miu = socket.getsockopt(nfc.llcp.SO_SNDMIU)
         try:
-            while True:
-                request_data = ''
+            while socket.poll("recv"):
+                request = bytearray()
                 while socket.poll("recv"):
-                    data = socket.recv()
-                    if data is not None:
-                        request_data += data
-                        try:
-                            request = nfc.ndef.Message(request_data)
-                            break  # message complete
-                        except nfc.ndef.LengthError:
-                            continue  # need more data
-                    else:
-                        return  # connection closed
-                else:
-                    return  # connection closed
+                    request += socket.recv()
 
-                log.debug("<<< {0!r}".format(request_data))
-                response = handover_server._process_request(request)
-                response_data = str(response)
-                log.debug(">>> {0!r}".format(response_data))
+                    if len(request) == 0:
+                        continue  # need some data
 
-                while len(response_data) > 0:
-                    if socket.send(response_data[0:send_miu]):
-                        response_data = response_data[send_miu:]
-                    else:
-                        return  # connection closed
-        except nfc.llcp.Error as e:
-            (log.debug if e.errno == nfc.llcp.errno.EPIPE else log.error)(e)
+                    try:
+                        list(ndef.message_decoder(request, 'strict', {}))
+                    except ndef.DecodeError:
+                        continue  # need more data
+
+                    response = self._process_request_data(request)
+
+                    for offset in range(0, len(response), send_miu):
+                        fragment = response[offset:offset + send_miu]
+                        if not socket.send(fragment):
+                            return  # connection closed
+
+        except nfc.llcp.Error as error:
+            (log.debug if error.errno == errno.EPIPE else log.error)(error)
         finally:
             socket.close()
             log.debug("handover serve thread terminated")
 
-    def _process_request(self, request):
-        log.debug("rcvd handover request {0}\n{1}"
-                  .format(request.type, request.pretty()))
-        response = nfc.ndef.Message("\xd1\x02\x01Hs\x12")
-        if not request.type == 'urn:nfc:wkt:Hr':
-            log.error("received message which is not a handover request")
-        else:
-            try:
-                request = nfc.ndef.HandoverRequestMessage(request)
-            except nfc.ndef.DecodeError as e:
-                log.error("error decoding 'Hr' message: {0}".format(e))
-            else:
-                response = self.process_request(request)
-        log.debug("send handover response {0}\n{1}"
-                  .format(response.type, response.pretty()))
-        return response
+    def _process_request_data(self, octets):
+        log.debug("<<< %s", binascii.hexlify(octets).decode())
+        try:
+            records = list(ndef.message_decoder(octets, 'relax'))
+        except ndef.DecodeError as error:
+            log.error(repr(error))
+            return b''
 
-    def process_request(self, request):
+        if records[0].type == 'urn:nfc:wkt:Hr':
+            records = self.process_handover_request_message(records)
+        else:
+            log.error("received unknown request message")
+            records = []
+
+        octets = b''.join(ndef.message_encoder(records))
+        log.debug(">>> %s", binascii.hexlify(octets).decode())
+        return octets
+
+    def process_handover_request_message(self, records):
         """Process a handover request message. The *request* argument
         is a :class:`nfc.ndef.HandoverRequestMessage` object. The
         return value must be a :class:`nfc.ndef.HandoverSelectMessage`
@@ -126,4 +122,4 @@ class HandoverServer(Thread):
         :class:`nfc.ndef.HandoverSelectMessage` with no carriers.
         """
         log.warning("default process_request method should be overwritten")
-        return nfc.ndef.HandoverSelectMessage(version="1.2")
+        return [ndef.HandoverSelectRecord('1.2')]

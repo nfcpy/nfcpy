@@ -20,70 +20,19 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
+import threading
+import argparse
+import binascii
 import logging
+import time
+import ndef
+import nfc
+import cli
 
 log = logging.getLogger('main')
 
-import sys
-import time
-import argparse
-
-from cli import CommandLineInterface
-
-import nfc
-import nfc.llcp
-import nfc.ndef
-import nfc.snep
-import nfc.handover
-import threading
-from copy import deepcopy
-
-import gobject
-import dbus.mainloop.glib
-
 mime_btoob = "application/vnd.bluetooth.ep.oob"
 mime_wfasc = "application/vnd.wfa.wsc"
-
-
-class BluetoothAdapter(object):
-    def __init__(self):
-        dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
-        self.mainloop = gobject.MainLoop()
-        bus = dbus.SystemBus()
-        proxy = bus.get_object("org.bluez", "/")
-        manager = dbus.Interface(proxy, "org.bluez.Manager")
-        adapter_path = manager.DefaultAdapter()
-        proxy = bus.get_object("org.bluez", adapter_path)
-        self.adapter = dbus.Interface(proxy, "org.bluez.Adapter")
-        self.oob_adapter = dbus.Interface(proxy, "org.bluez.OutOfBand")
-
-        self.remote_bdaddr = None
-
-    @property
-    def device_address(self):
-        return str(self.adapter.GetProperties()["Address"])
-
-    @property
-    def device_class(self):
-        return int(self.adapter.GetProperties()["Class"])
-
-    @property
-    def device_name(self):
-        return str(self.adapter.GetProperties()["Name"])
-
-    @property
-    def service_uuids(self):
-        return map(str, self.adapter.GetProperties()["UUIDs"])
-
-    def get_ssp_data(self):
-        ssp_hash, ssp_rand = self.oob_adapter.ReadLocalData()
-        return bytearray(ssp_hash), bytearray(ssp_rand)
-
-    def set_ssp_data(self, bdaddr, ssp_hash, ssp_rand):
-        self.remote_bdaddr = dbus.String(bdaddr)
-        ssp_hash = dbus.Array(ssp_hash)
-        ssp_rand = dbus.Array(ssp_rand)
-        self.oob_adapter.AddRemoteData(self.remote_bdaddr, ssp_hash, ssp_rand)
 
 
 class HandoverServer(nfc.handover.HandoverServer):
@@ -92,14 +41,13 @@ class HandoverServer(nfc.handover.HandoverServer):
                 llc, recv_miu=options.recv_miu, recv_buf=options.recv_buf)
         self.select_carrier = select_carrier_func
 
-    def process_request(self, request):
-        return self.select_carrier(request)
+    def process_handover_request_message(self, records):
+        return self.select_carrier(records)
 
 
 class DefaultSnepServer(nfc.snep.SnepServer):
-    def __init__(self, llc, select_carrier_func):
+    def __init__(self, llc):
         super(DefaultSnepServer, self).__init__(llc, 'urn:nfc:sn:snep')
-        self.select_carrier = select_carrier_func
 
     def put(self, ndef_message):
         log.info("default snep server got put request")
@@ -108,16 +56,8 @@ class DefaultSnepServer(nfc.snep.SnepServer):
 
     def get(self, acceptable_length, message):
         log.info("default snep server got GET request")
-        if message.type == 'urn:nfc:wkt:Hr':
-            try:
-                hr = nfc.ndef.HandoverRequestMessage(message)
-            except nfc.ndef.FormatError as e:
-                log.error("error - {0}".format(e))
-                log.warning("quirks: set handover request version to 1.1")
-                message = nfc.ndef.Message(message[:5] + b'\x11' + message[6:])
-                hr = nfc.ndef.HandoverRequestMessage(message)
-            return self.select_carrier(hr)
-        return nfc.snep.NotFound
+        log.info(ndef_message.pretty())
+        return nfc.snep.NotImplemented
 
 
 description = """
@@ -125,7 +65,7 @@ Run a connection handover server component with various test options.
 """
 
 
-class TestProgram(CommandLineInterface):
+class TestProgram(cli.CommandLineInterface):
     def __init__(self):
         parser = argparse.ArgumentParser(
                 usage='%(prog)s [OPTION]... [CARRIER]...',
@@ -133,11 +73,8 @@ class TestProgram(CommandLineInterface):
                 description=description)
         parser.add_argument(
                 "carriers", metavar="CARRIER", nargs="*",
-                type=argparse.FileType('r'),
+                type=argparse.FileType('rb'),
                 help="supported carrier")
-        parser.add_argument(
-                "--skip-local", action="store_true",
-                help="skip local carrier detection")
         parser.add_argument(
                 "--select", metavar="NUM", type=int, default=1,
                 help="select up to NUM carriers (default: %(default)s))")
@@ -174,116 +111,81 @@ class TestProgram(CommandLineInterface):
             log.error("only one carrier file may be read from stdin")
             raise SystemExit(1)
 
-        selectable = nfc.ndef.HandoverSelectMessage(version="1.2")
-
+        self.options.selectable = []
         for index, carrier in enumerate(self.options.carriers):
             data = carrier.read()
             try:
-                data = data.decode("hex")
-            except TypeError:
+                data = binascii.unhexlify(data)
+            except (binascii.Error, TypeError):
                 pass
-            message = nfc.ndef.Message(data)
-            if message.type == "urn:nfc:wkt:Hs":
-                message = nfc.ndef.HandoverSelectMessage(message)
-                for c in message.carriers:
-                    selectable.add_carrier(c.record, c.power_state,
-                                           c.auxiliary_data_records)
-                    log.info("add specified carrier: {0}".format(c.type))
-            else:
-                selectable.add_carrier(message[0], "active", message[1:])
-                log.info("add specified carrier: {0}".format(message.type))
-
-        if not self.options.skip_local:
-            if sys.platform == "linux2":
-                self.hci0 = BluetoothAdapter()
-                record = nfc.ndef.BluetoothConfigRecord()
-                record.device_address = self.hci0.device_address
-                record.class_of_device = self.hci0.device_class
-                record.local_device_name = self.hci0.device_name
-                record.service_class_uuid_list = self.hci0.service_uuids
-                selectable.add_carrier(record, "active")
-                log.info("add discovered carrier: {0}".format(record.type))
-
-        self.options.selectable = selectable
-
-        if self.options.quirks:
-            log.warning("quirks: will accept SNEP GET 'Hr' requests "
-                        "used by Android 4.1.0 devices")
+            records = list(ndef.message_decoder(data))
+            records[0].name = 'carrier-{}'.format(index)
+            log.info("add carrier: {}".format(records[0]))
+            self.options.selectable.append(records)
 
         self.select_carrier_lock = threading.Lock()
-
         self.handover_service = None
         self.snep_service = None
 
     def on_llcp_startup(self, llc):
         self.handover_service = HandoverServer(
                 llc, self.select_carrier, self.options)
-        if self.options.quirks:
-            self.snep_service = DefaultSnepServer(
-                    llc, self.select_carrier)
+        self.snep_service = DefaultSnepServer(llc)
         return llc
 
     def on_llcp_connect(self, llc):
         self.handover_service.start()
-        if self.options.quirks:
-            self.snep_service.start()
+        self.snep_service.start()
         return True
 
-    def select_carrier(self, handover_request):
+    def select_carrier(self, hr_records):
         self.select_carrier_lock.acquire()
-        log.info("<<< Handover Request\n" + handover_request.pretty(2))
-        handover_select = nfc.ndef.HandoverSelectMessage(version="1.2")
+        log.info("<<< %s", '\n  '.join(str(r) for r in hr_records))
 
-        if handover_request.version.minor == 0 and self.options.quirks:
+        hs_records = [ndef.HandoverSelectRecord('1.2')]
+
+        if hr_records[0].version_info.minor == 0 and self.options.quirks:
             log.warning("quirks: accept handover version 1.0 as 1.1")
-        elif handover_request.version.minor not in range(1, 3):
+        elif hr_records[0].version_info.minor not in range(1, 3):
             log.warning("unsupported minor version")
             self.select_carrier_lock.release()
-            return handover_select
+            return hs_records
 
-        for remote_carrier in handover_request.carriers:
-            remote_carrier_type = remote_carrier.type
+        remote_carrier_records = dict(
+            (record.name, record) for record in hr_records[1:] if record.name)
 
-            if self.options.quirks:
-                if remote_carrier.type in ("urn:nfc:wkt:" + mime_btoob,
-                                           "urn:nfc:wkt:" + mime_wfasc):
-                    log.warning("quirks: correct xperia carrier request {0}"
-                                .format(remote_carrier.type))
-                    remote_carrier_type = remote_carrier.type[12:]
+        for ac in hr_records[0].alternative_carriers:
+            record = remote_carrier_records[ac.carrier_data_reference]
+            if record.type == 'urn:nfc:wkt:Hc':
+                remote_carrier_type = record.carrier_type
+            else:
+                remote_carrier_type = record.type
 
-            for local_carrier in deepcopy(self.options.selectable.carriers):
-                if remote_carrier_type == local_carrier.type:
-                    if len(handover_select.carriers) < self.options.select:
-                        log.info("match for {0}".format(local_carrier.type))
-                        if (local_carrier.type == mime_btoob
-                                and hasattr(self, 'hci0')
-                                and remote_carrier.record.simple_pairing_hash
-                                and remote_carrier.record.simple_pairing_rand):
-                            record = local_carrier.record
-                            bdaddr = self.hci0.device_address
-                            if bdaddr == record.device_address:
-                                ssp_hash, ssp_rand = self.hci0.get_ssp_data()
-                                record.simple_pairing_hash = ssp_hash
-                                record.simple_pairing_rand = ssp_rand
-                                self.hci0.set_ssp_data(
-                                    remote_carrier.record.device_address,
-                                    remote_carrier.record.simple_pairing_hash,
-                                    remote_carrier.record.simple_pairing_hash)
-                        handover_select.add_carrier(
-                                local_carrier.record,
-                                local_carrier.power_state,
-                                local_carrier.auxiliary_data_records)
-                    else:
-                        break
+            for carrier_records in self.options.selectable:
+                selected = len(hs_records[0].alternative_carriers)
+                if not selected < self.options.select:
+                    break
 
-        log.info(">>> Handover Select\n" + handover_select.pretty(2))
+                if carrier_records[0].type == 'urn:nfc:wkt:Hc':
+                    local_carrier_type = carrier_records[0].carrier_type
+                else:
+                    local_carrier_type = carrier_records[0].type
+
+                if remote_carrier_type == local_carrier_type:
+                    log.info("match for {0}".format(local_carrier_type))
+                    cdr = carrier_records[0].name
+                    adr = [record.name for record in carrier_records]
+                    hs_records[0].add_alternative_carrier('active', cdr, *adr)
+                    hs_records.extend(carrier_records)
+
+        log.info(">>> %s", '\n  '.join(str(r) for r in hs_records))
         self.select_carrier_lock.release()
 
         if self.options.delay:
             log.info("delay response for {0} ms".format(self.options.delay))
-            time.sleep(self.options.delay / 1000.0)
+            time.sleep(self.options.delay * 1e-3)
 
-        return handover_select
+        return hs_records
 
 
 if __name__ == '__main__':
