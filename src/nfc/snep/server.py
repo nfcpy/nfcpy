@@ -135,7 +135,7 @@ class SnepServer(threading.Thread):
                     response_code = 0x81  # nfc.snep.Success
                     response_data = b''.join(ndef.message_encoder(response))
                 if len(response_data) > acceptable_length:
-                    response_code = 0xC1  # nfc.ndef.ExcessData
+                    response_code = 0xC1  # nfc.snep.ExcessData
                     response_data = b''
             elif request_data[1] == 2:
                 octets = request_data[6:]
