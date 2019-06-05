@@ -104,7 +104,6 @@ class HandoverClient(object):
                 return bytes(octets), records
             except ndef.DecodeError:
                 log.debug("message is incomplete (%d byte)", len(octets))
-                elapsed = time.time() - started
                 if timeout:
                     timeout -= time.time() - started
                     started = time.time()

@@ -25,6 +25,7 @@
 import threading
 import binascii
 import logging
+import errno
 import ndef
 import nfc
 
@@ -55,8 +56,8 @@ class HandoverServer(threading.Thread):
                 client_thread = threading.Thread(target=self.serve,
                                                  args=(client_socket,))
                 client_thread.start()
-        except nfc.llcp.Error as e:
-            (log.debug if e.errno == nfc.llcp.errno.EPIPE else log.error)(e)
+        except nfc.llcp.Error as error:
+            (log.debug if error.errno == errno.EPIPE else log.error)(error)
         finally:
             socket.close()
             log.debug("handover listen thread terminated")
