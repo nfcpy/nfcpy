@@ -108,7 +108,6 @@ class SnepServer(threading.Thread):
                 if len(data) <= send_miu:
                     client_socket.send(data)
                 else:
-                    data = memoryview(data)
                     client_socket.send(data[0:send_miu])
                     if client_socket.recv() == b"\x10\x00\x00\x00\x00\x00":
                         parts = range(send_miu, len(data), send_miu)
@@ -125,16 +124,19 @@ class SnepServer(threading.Thread):
         log.debug("<<< %s", binascii.hexlify(request_data).decode())
         try:
             if request_data[1] == 1 and len(request_data) >= 10:
-                length = struct.unpack(">L", request_data[6:10])[0]
+                acceptable_length = struct.unpack(">L", request_data[6:10])[0]
                 octets = request_data[10:]
                 records = list(ndef.message_decoder(octets, known_types={}))
-                response = self.process_get_request(length, records)
+                response = self.process_get_request(records)
                 if isinstance(response, int):
                     response_code = response
                     response_data = b''
                 else:
                     response_code = 0x81  # nfc.snep.Success
                     response_data = b''.join(ndef.message_encoder(response))
+                if len(response_data) > acceptable_length:
+                    response_code = 0xC1  # nfc.ndef.ExcessData
+                    response_data = b''
             elif request_data[1] == 2:
                 octets = request_data[6:]
                 records = list(ndef.message_decoder(octets, known_types={}))
@@ -158,7 +160,7 @@ class SnepServer(threading.Thread):
         log.debug(">>> %s", binascii.hexlify(response_data).decode())
         return response_data
 
-    def process_get_request(self, acceptable_length, ndef_message):
+    def process_get_request(self, ndef_message):
         """Handle Get requests. This method should be overwritten by a
         subclass of SnepServer to customize it's behavior. The default
         implementation simply returns nfc.snep.NotImplemented.
