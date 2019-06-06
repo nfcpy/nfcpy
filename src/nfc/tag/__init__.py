@@ -20,9 +20,9 @@
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
 import logging
-import warnings
 from binascii import hexlify
 from ndef import message_decoder, message_encoder
+
 
 logging.captureWarnings(True)
 log = logging.getLogger(__name__)

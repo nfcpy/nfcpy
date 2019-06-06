@@ -3,7 +3,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2012 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -20,7 +20,6 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-
 import re
 import time
 import errno
@@ -28,10 +27,11 @@ import argparse
 import struct
 from binascii import hexlify
 import logging
-logging.basicConfig(format='%(relativeCreated)d ms [%(name)s] %(message)s')
-
 import nfc
 import nfc.clf
+
+
+logging.basicConfig(format='%(relativeCreated)d ms [%(name)s] %(message)s')
 
 brty_for_dep = ("106A", "212F", "424F")
 target_pattern = re.compile(r'([0-9]+[A-Z]{1})(?: +(.*)|.*)')
@@ -100,7 +100,7 @@ def main(args):
                         print(repr(error) + " for NFC-DEP ATR_REQ")
                     except AssertionError:
                         print("invalid ATR_RES: %r" % hexlify(data).decode())
-                
+
                 if target and target.atr_res:
                     did = target.atr_req[12]
                     psl = "06D404%02x1203" % did  # PSL_REQ
@@ -126,7 +126,7 @@ def main(args):
                         clf.exchange(request_system_code, timeout=1.0)
                     except nfc.clf.CommunicationError as error:
                         print(repr(error) + " for Request System Code Command")
-                
+
                 if not args.repeat:
                     break
                 time.sleep(args.waittime)
@@ -172,5 +172,5 @@ if __name__ == '__main__':
     parser.add_argument(
         "--device", metavar="path", default="usb",
         help="local device search path (default: %(default)s)")
-    
+
     main(parser.parse_args())

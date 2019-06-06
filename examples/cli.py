@@ -2,7 +2,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2012, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -20,9 +20,6 @@
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
 import logging
-
-log = logging.getLogger('main')
-
 import re
 import time
 import errno
@@ -30,8 +27,10 @@ import inspect
 import threading
 from operator import itemgetter
 import platform
-
 import nfc
+
+
+log = logging.getLogger('main')
 
 
 def get_test_methods(obj):
@@ -116,8 +115,7 @@ class CommandLineInterface(object):
                     self.options.test)
 
     def add_dbg_options(self, argument_parser):
-        group = argument_parser.add_argument_group(
-                title="Debug Options")
+        group = argument_parser.add_argument_group(title="Debug Options")
         group.add_argument(
                 "-d", metavar="MODULE", dest="debug", action="append",
                 default=list(),
@@ -139,8 +137,7 @@ class CommandLineInterface(object):
                 help="show absolute timestamps in screen log")
 
     def add_llcp_options(self, argument_parser):
-        group = argument_parser.add_argument_group(
-                title="Peer Mode Options")
+        group = argument_parser.add_argument_group(title="Peer Mode Options")
         group.add_argument(
                 "--miu", type=int, default=2175, metavar='',
                 help="LLC Link MIU octets (default: %(default)s octets)")
@@ -175,8 +172,7 @@ class CommandLineInterface(object):
                 help="disable secure data transport")
 
     def add_rdwr_options(self, argument_parser):
-        group = argument_parser.add_argument_group(
-                title="Reader Mode Options")
+        group = argument_parser.add_argument_group(title="Reader Mode Options")
         group.add_argument(
                 "--wait", action="store_true",
                 help="wait until tag removed (implicit with '-l')")
@@ -185,15 +181,13 @@ class CommandLineInterface(object):
                 help="poll for a single technology (default: all)")
 
     def add_card_options(self, argument_parser):
-        group = argument_parser.add_argument_group(
-                title="Card Mode Options")
+        argument_parser.add_argument_group(title="Card Mode Options")
 
     def add_clf_options(self, argument_parser):
-        group = argument_parser.add_argument_group(
-                title="Device Options")
+        group = argument_parser.add_argument_group(title="Device Options")
         group.add_argument(
-                "--device", metavar="PATH", action="append", help="""\
-                use contactless reader at: 
+                "--device", metavar="PATH", action="append", help="""
+                use contactless reader at:
                 'usb[:vid[:pid]]' (with vendor and product id),
                 'usb[:bus[:dev]]' (with bus and device number),
                 'tty:port:driver' (with /dev/tty<port> and <driver>),

@@ -3,7 +3,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2009, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -27,9 +27,6 @@
 # specification before final release by the NFC Forum.
 #
 import logging
-
-log = logging.getLogger('test')
-
 import time
 import struct
 import argparse
@@ -39,6 +36,9 @@ from cli import CommandLineInterface, TestFail, TestSkip
 import nfc
 import nfc.llcp
 import nfc.llcp.pdu
+
+
+log = logging.getLogger('test')
 
 
 def hexstr(octets, delimiter=''):
@@ -205,7 +205,7 @@ class TestProgram(CommandLineInterface):
 
     def test_TC_LLC_INI_BV_04(self, llc):
         """Symmetry Procedure as NFC-DEP Initiator
-        
+
         After LLCP Link activation respond to any received PDU with a
         SYMM PDU until 10 SYMM PDUs have been sent. Then deactivate
         the LLCP Link.
@@ -226,7 +226,7 @@ class TestProgram(CommandLineInterface):
 
     def test_TC_LLC_TAR_BV_04(self, llc):
         """Symmetry Procedure as NFC-DEP Target
-        
+
         After LLCP Link activation respond to any received PDU with a
         SYMM PDU until 10 SYMM PDUs have been sent. Then deactivate
         the LLCP Link.
@@ -253,16 +253,16 @@ class TestProgram(CommandLineInterface):
 
     def test_TC_CTL_UND_BV_01(self, llc):
         """Connectionless Transport Maximum Size of Information Field
-        
+
         Set MIU(LT) equal to MIU(IUT) - 1 and establish the LLCP Link.
-        
+
         First send a UI PDU with an SDU exactly the size of the LT's
         Link MIU. The IUT is expected to return the same SDU.
 
         Then send a UI PDU with an SDU exactly the size of the IUT's
         Link MIU. The IUT is expected to not return the SDU because it
         exceeds the LT's Link MIU.
-        
+
         """
         if not llc.cfg['send-miu'] > 128:
             raise TestSkip("IUT Link MIU is not more than 128")
@@ -299,14 +299,14 @@ class TestProgram(CommandLineInterface):
         """Connectionless Transport Maximum Information Unit Exceeded
 
         Set MIU(LT) equal to MIU(IUT) and establish the LLCP Link.
-        
+
         First send a UI PDU with an SDU exactly the size of the IUT's
         Link MIU. The IUT is expected to return the same SDU.
 
         Then send a UI PDU with an SDU that exceeds the size of the
         IUT's Link MIU by one. The IUT is expected to not return the
         SDU because it exceeds the IUT's Link MIU.
-        
+
         """
         socket = nfc.llcp.Socket(llc, nfc.llcp.llc.RAW_ACCESS_POINT)
         socket.bind(self.lt_cl_in_sap)
@@ -340,7 +340,7 @@ class TestProgram(CommandLineInterface):
         """Connectionless Transport No Reception Acknowledgement
 
         Set MIU(LT) equal to MIU(IUT) and establish the LLCP Link.
-        
+
         Send a UI PDU with an SDU exactly the size of the IUT's Link
         MIU. Verify for an amount of time that the IUT does not
         respond on the same logical data link. Then verify that the
@@ -416,67 +416,67 @@ class TestProgram(CommandLineInterface):
 
     def test_TC_CTO_TAR_BV_01_1(self, llc):
         """Connection Establishment with Specific SAP and no Parameters
-        
+
         Send a CONNECT PDU with no paramteters to the echo server
         inbound SAP. Verify that a CC PDU is received and the IUT
         establishes the outbound connection.
-        
+
         """
         self.exec_TC_CTO_TAR_BV_01_x(llc, x=1)
 
     def test_TC_CTO_TAR_BV_01_2(self, llc):
         """Connection Establishment with Specific SAP and MIUX
-        
+
         Send a CONNECT PDU with an MIUX parameter to the echo server
         inbound SAP. Verify that a CC PDU is received and the IUT
         establishes the outbound connection.
-        
+
         """
         self.exec_TC_CTO_TAR_BV_01_x(llc, x=2)
 
     def test_TC_CTO_TAR_BV_01_3(self, llc):
         """Connection Establishment with Specific SAP and RW=0Xh
-        
+
         Send a CONNECT PDU with an RW parameter to the echo server
         inbound SAP. Verify that a CC PDU is received and the IUT
         establishes the outbound connection.
-        
+
         """
         self.exec_TC_CTO_TAR_BV_01_x(llc, x=3)
 
     def test_TC_CTO_TAR_BV_01_4(self, llc):
         """Connection Establishment with Specific SAP and RW=FXh
-        
+
         Send a CONNECT PDU with an RW parameter (with reserved bits
         set to 1) to the echo server inbound SAP. Verify that a CC PDU
         is received and the IUT establishes the outbound connection.
-        
+
         """
         self.exec_TC_CTO_TAR_BV_01_x(llc, x=4)
 
     def test_TC_CTO_TAR_BV_01_5(self, llc):
         """Connection Establishment with Specific SAP and Service Name
-        
+
         Send a CONNECT PDU with an SN parameter to the echo server
         inbound SAP. Verify that a CC PDU is received and the IUT
         establishes the outbound connection.
-        
+
         """
         self.exec_TC_CTO_TAR_BV_01_x(llc, x=5)
 
     def test_TC_CTO_TAR_BV_01_6(self, llc):
         """Connection Establishment with Specific SAP and MIUX,RW,SN
-        
+
         Send a CONNECT PDU with an MIUX, RW, and SN parameter to the
         echo server inbound SAP. Verify that a CC PDU is received and
         the IUT establishes the outbound connection.
-        
+
         """
         self.exec_TC_CTO_TAR_BV_01_x(llc, x=6)
 
     def test_TC_CTO_TAR_BV_01_7(self, llc):
         """Connection Establishment with Specific SAP and Undefined TLV
-        
+
         Send a CONNECT PDU with an undefined parameter TLV to the echo
         server inbound SAP. Verify that a CC PDU is received and the
         IUT establishes the outbound connection.
@@ -526,7 +526,7 @@ class TestProgram(CommandLineInterface):
 
     def test_TC_CTO_TAR_BV_02(self, llc):
         """Connection Establishment with Service Name to SAP 1
-        
+
         Send a CONNECT PDU with SN parameter to SAP 1 to establish the
         echo server inbound connection with connect-by-name. Wait for
         the echo server to establish the outbound connection, then
@@ -574,7 +574,7 @@ class TestProgram(CommandLineInterface):
 
     def test_TC_CTO_TAR_BV_03(self, llc):
         """Connection Establishment Using Service Discovery
-        
+
         Send an SNL PDU to retrieve the SAP address of the echo server
         inbound connection. Then send a CONNECT PDU to the retrieved
         SAP address to establish the inbound connection. Verify that
@@ -624,7 +624,7 @@ class TestProgram(CommandLineInterface):
 
     def test_TC_CTO_TAR_BI_01(self, llc):
         """Target Errors in CONNECT PDU No Service Bound to SAP
-        
+
         Send a CONNECT PDU to an unbound service access point. The IUT
         is expected to respond with a DM PDU with reason code 0x02 (no
         service bound to target service access point).
@@ -645,27 +645,27 @@ class TestProgram(CommandLineInterface):
 
     def test_TC_CTO_TAR_BI_02_1(self, llc):
         """Connect By Name with malformed Service Name URI
-        
+
         Send a CONNECT PDU with service name 'urn:nfc:void' to SAP 1.
         The IUT is expected to return a DM PDU with reason code 02h
         (no service bound to target service access point)
-        
+
         """
         self.exec_TC_CTO_TAR_BI_02_x(llc, x=1)
 
     def test_TC_CTO_TAR_BI_02_2(self, llc):
         """Connect By Name with zero-length Service Name
-        
+
         Send a CONNECT PDU with service name 'urn:nfc:sn:' to SAP 1.
         The IUT is expected to return a DM PDU with reason code 02h
         (no service bound to target service access point)
-        
+
         """
         self.exec_TC_CTO_TAR_BI_02_x(llc, x=2)
 
     def test_TC_CTO_TAR_BI_02_3(self, llc):
         """Connect By Name with SN TLV empty value field
-        
+
         Send a CONNECT PDU with service name '' (SN TLV with zero
         length) to SAP 1. The IUT is expected to return a DM PDU with
         reason code 02h (no service bound to target service access
@@ -676,7 +676,7 @@ class TestProgram(CommandLineInterface):
 
     def test_TC_CTO_TAR_BI_02_4(self, llc):
         """Connect By Name without Service Name TLV
-        
+
         Send a CONNECT PDU with no service name 'urn:nfc:sn:' to SAP 1.
         The SN TLV encodes a complete and valid service name but the
         length field only covers the part 'urn'nfc:sn'. The IUT is
@@ -688,7 +688,7 @@ class TestProgram(CommandLineInterface):
 
     def test_TC_CTO_TAR_BI_02_5(self, llc):
         """Connect By Name without Service Name TLV
-        
+
         Send a CONNECT PDU with service name TLV to SAP 1. The IUT
         is expected to return a DM PDU with reason code 03h (request
         to connect rejected by service layer) or 10h (permanetly no

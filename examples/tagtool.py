@@ -3,7 +3,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2010, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -21,11 +21,7 @@
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
 from __future__ import print_function
-
 import logging
-
-log = logging.getLogger('main')
-
 import sys
 import struct
 import argparse
@@ -36,14 +32,14 @@ import ndef
 
 from cli import CommandLineInterface
 
-import nfc
-import nfc.clf
+
+log = logging.getLogger('main')
 
 
 def parse_version(string):
     try:
         major_version, minor_version = map(int, string.split('.'))
-    except (ValueError, AttributeError) as e:
+    except (ValueError, AttributeError):
         msg = "%r is not a version string, expecting <int>.<int>"
         raise argparse.ArgumentTypeError(msg % string)
     if major_version < 0 or major_version > 15:

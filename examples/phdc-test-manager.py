@@ -3,7 +3,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2010, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -20,11 +20,7 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-
 import logging
-
-log = logging.getLogger('main')
-
 import errno
 import time
 import string
@@ -42,6 +38,9 @@ from cli import CommandLineInterface
 import nfc
 import nfc.ndef
 import nfc.llcp
+
+
+log = logging.getLogger('main')
 
 
 def trace(func):

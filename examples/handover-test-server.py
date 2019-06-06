@@ -3,7 +3,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2012, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -49,14 +49,14 @@ class DefaultSnepServer(nfc.snep.SnepServer):
     def __init__(self, llc):
         super(DefaultSnepServer, self).__init__(llc, 'urn:nfc:sn:snep')
 
-    def put(self, ndef_message):
+    def process_put_request(self, ndef_message):
         log.info("default snep server got put request")
-        log.info(ndef_message.pretty())
+        log.info('\n  '.join(str(record) for record in ndef_message))
         return nfc.snep.Success
 
-    def get(self, acceptable_length, message):
+    def process_get_request(self, ndef_message):
         log.info("default snep server got GET request")
-        log.info(ndef_message.pretty())
+        log.info('\n  '.join(str(record) for record in ndef_message))
         return nfc.snep.NotImplemented
 
 

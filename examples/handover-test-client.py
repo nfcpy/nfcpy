@@ -3,7 +3,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2012 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -24,7 +24,6 @@ from cli import TestFail
 import argparse
 import binascii
 import logging
-import random
 import ndef
 import nfc
 import cli
@@ -67,7 +66,7 @@ def handover_recv(client, timeout, raw=False):
         raise TestFail("no answer within {0} seconds".format(int(timeout)))
 
     if not records[0].type == "urn:nfc:wkt:Hs":
-        raise TestFail("unexpected message type '{0}'".format(message.type))
+        raise TestFail("unexpected message type '{0}'".format(records[0].type))
 
     if not raw:
         try:

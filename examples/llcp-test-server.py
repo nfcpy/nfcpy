@@ -3,7 +3,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2009, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -26,25 +26,22 @@
 # primarily developed for the purpose of validating the LLCP
 # specification before final release by the NFC Forum.
 #
-import time
+import threading
 import argparse
+import logging
 import errno
+import time
+import nfc
+import cli
 try:
     import queue
 except ImportError:
     import Queue as queue
-from threading import Thread
-import logging
 
 log = logging.getLogger('main')
 
-from cli import CommandLineInterface
 
-import nfc
-import nfc.llcp
-
-
-class ConnectionLessEchoServer(Thread):
+class ConnectionLessEchoServer(threading.Thread):
     """The connection-less mode echo server accepts connection-less
     transport mode PDUs. Service data units may have any size between
     zero and the maximum information unit size announced with the LLCP
@@ -87,14 +84,14 @@ class ConnectionLessEchoServer(Thread):
             socket.close()
 
 
-class ConnectionModeEchoServer(Thread):
+class ConnectionModeEchoServer(threading.Thread):
     """The connection-oriented mode echo server waits for a connect
     request and then accepts and processes connection-oriented
     transport mode PDUs. Further connect requests will be rejected
     until termination of the data link connection. When accepting the
     connect request, the receive window parameter is transmitted with
     a value of 2.
-    
+
     The connection-oriented mode echo service stores inbound service
     data units in a linear buffer of service data units. The buffer
     has a capacity of three service data units. The first service data
@@ -103,7 +100,7 @@ class ConnectionModeEchoServer(Thread):
     the buffer to be sent back to the orignal sender until the buffer
     is completely emptied. The buffer empty condition then re-enables
     the delay timer start event for the next service data unit.
-    
+
     The echo service determines itself as busy if it is unable to
     accept further incoming service data units.
     """
@@ -153,7 +150,8 @@ class ConnectionModeEchoServer(Thread):
 
     def serve(self, socket):
         echo_queue = queue.Queue(2)
-        echo_thread = Thread(target=self.echo, args=(socket, echo_queue))
+        echo_thread = threading.Thread(target=self.echo,
+                                       args=(socket, echo_queue))
         echo_thread.start()
         peer = socket.getpeername()
         log.info("serving connection from sap {0}".format(peer))
@@ -190,7 +188,7 @@ class ConnectionModeEchoServer(Thread):
             socket.close()
 
 
-class ConnectionModeDumpServer(Thread):
+class ConnectionModeDumpServer(threading.Thread):
     def __init__(self, llc):
         socket = nfc.llcp.Socket(llc, nfc.llcp.DATA_LINK_CONNECTION)
         socket.bind('urn:nfc:sn:cm-dump')
@@ -219,7 +217,8 @@ class ConnectionModeDumpServer(Thread):
                 client_socket = socket.accept()
                 peer = client_socket.getpeername()
                 log.info("client sap {0} connected".format(peer))
-                Thread(target=self.serve, args=(client_socket,)).start()
+                threading.Thread(target=self.serve,
+                                 args=(client_socket,)).start()
         except nfc.llcp.Error as e:
             (log.debug if e.errno == errno.EPIPE else log.error)(e)
         finally:
@@ -227,7 +226,7 @@ class ConnectionModeDumpServer(Thread):
             socket.close()
 
 
-class TestProgram(CommandLineInterface):
+class TestProgram(cli.CommandLineInterface):
     def __init__(self):
         parser = argparse.ArgumentParser()
         super(TestProgram, self).__init__(parser, "llcp dbg clf")

@@ -3,7 +3,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2010, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -20,11 +20,7 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-
 import logging
-
-log = logging.getLogger('main')
-
 import os
 import sys
 import time
@@ -40,9 +36,10 @@ from threading import Thread, Lock
 from cli import CommandLineInterface, TestFail
 
 import nfc
-import nfc.ndef
 import nfc.llcp
-import nfc.tag.tt3 as tt3
+
+
+log = logging.getLogger('main')
 
 
 def info(message, prefix="  "):
@@ -112,7 +109,8 @@ class PhdcTagAgent(PhdcAgent):
         try:
             if block < len(self.ndef_data_area) / 16:
                 data = self.ndef_data_area[block * 16:(block + 1) * 16]
-                log.debug("[tt3] got read block #%d %s", block, hexlify(data).decode())
+                log.debug("[tt3] got read block #%d %s",
+                          block, hexlify(data).decode())
                 return data
             else:
                 log.debug("[tt3] got read block #%d", block)
@@ -124,7 +122,8 @@ class PhdcTagAgent(PhdcAgent):
         if write_begin is True:
             self.ndef_write_lock.acquire()
         try:
-            log.debug("[tt3] got write block #%d %s", block, hexlify(data).decode())
+            log.debug("[tt3] got write block #%d %s",
+                      block, hexlify(data).decode())
             if block < len(self.ndef_data_area) / 16:
                 self.ndef_data_area[block * 16:(block + 1) * 16] = data
                 return True

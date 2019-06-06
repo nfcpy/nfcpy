@@ -3,7 +3,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2009, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -26,24 +26,21 @@
 # primarily developed for the purpose of validating the LLCP
 # specification before final release by the NFC Forum.
 #
-import logging
-
-log = logging.getLogger('main')
-
-import struct
-import os
-import time
+import collections
 import datetime
 import argparse
-import collections
-from threading import Thread
-
-from cli import CommandLineInterface, TestFail, TestSkip
-
+import logging
+import struct
+import time
 import nfc
-import nfc.llcp
-import nfc.llcp.pdu
+import cli
+import os
 
+from threading import Thread
+from cli import TestFail, TestSkip
+
+
+log = logging.getLogger('main')
 default_miu = 128
 
 
@@ -94,7 +91,7 @@ def get_data_link_connection(socket, dsap, ssap, miu, rw, sn=None):
         raise TestFail(str(error))
 
 
-class TestProgram(CommandLineInterface):
+class TestProgram(cli.CommandLineInterface):
     def __init__(self):
         parser = argparse.ArgumentParser(
                 usage='%(prog)s [OPTION]...',
