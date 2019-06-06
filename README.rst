@@ -5,10 +5,6 @@ Python module for near field communication
    :target: https://pypi.python.org/pypi/nfcpy
    :alt: Python Package
 
-.. image:: http://readthedocs.org/projects/nfcpy/badge/?version=stable
-   :target: http://nfcpy.readthedocs.io/en/stable/?badge=stable
-   :alt: Documentation
-
 .. image:: http://readthedocs.org/projects/nfcpy/badge/?version=latest
    :target: http://nfcpy.readthedocs.io/en/latest/?badge=latest
    :alt: Documentation
