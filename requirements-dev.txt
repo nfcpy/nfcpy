@@ -2,10 +2,11 @@
 #
 # After 'git clone':
 #
-#   virtualenv python-2
-#   source python-2/bin/activate
-#   python setup.py develop
-#   pip install -r requirements-dev.txt
+#   virtualenv -p python2 venv/python && source venv/python2/bin/activate
+#   python setup.py develop && pip install -U pip -r requirements-dev.txt
+#
+#   virtualenv -p python3 venv/python && source venv/python3/bin/activate
+#   python setup.py develop && pip install -U pip -r requirements-dev.txt
 #
 # Before 'git push':
 #
