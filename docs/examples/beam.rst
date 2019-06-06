@@ -99,8 +99,10 @@ explicitly set with the options ``-t`` and ``-n``, respectively. ::
 
 .. option:: -t STRING
 
-   Set the record type. See :doc:`/topics/ndef` for how to specify record
+   Set the record type. See the `ndeflib`_ for how to specify record
    types in *nfcpy*.
+
+.. _ndeflib: https://ndeflib.readthedocs.io/en/stable/ndef.html#record-class
 
 .. option:: -n STRING
 

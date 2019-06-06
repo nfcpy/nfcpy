@@ -47,7 +47,6 @@ the command line: ::
 
    overview
    topics/get-started
-   topics/ndef
    topics/llcp
    topics/snep
    examples/index
