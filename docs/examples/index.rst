@@ -20,7 +20,6 @@ Example Programs
    :hidden:
 
    tagtool
-   ndeftool
    beam
    sense
    listen
