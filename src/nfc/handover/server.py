@@ -112,15 +112,17 @@ class HandoverServer(threading.Thread):
         return octets
 
     def process_handover_request_message(self, records):
-        """Process a handover request message. The *request* argument
-        is a :class:`nfc.ndef.HandoverRequestMessage` object. The
-        return value must be a :class:`nfc.ndef.HandoverSelectMessage`
-        object to be sent back to the client.
+        """Process a handover request message. The *records* argument holds a
+        list of :class:`ndef.Record` objects decoded from the received
+        handover request message octets, where the first record type
+        is ``urn:nfc:wkt:Hr``. The method returns a list of :class:`ndef.Record`
+        objects with the first record type ``urn:nfc:wkt:Hs``.
 
-        This method should be overwritten by a subclass of
-        :class:`HandoverServer` to customize it's behavior. The
-        default implementation returns a version ``1.2``
-        :class:`nfc.ndef.HandoverSelectMessage` with no carriers.
+        This method should be overwritten by a subclass to customize
+        it's behavior. The default implementation returns a
+        :class:`ndef.HandoverSelectRecord` with version ``1.2`` and no
+        alternative carriers.
+
         """
         log.warning("default process_request method should be overwritten")
         return [ndef.HandoverSelectRecord('1.2')]
