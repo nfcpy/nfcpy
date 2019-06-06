@@ -114,9 +114,9 @@ class HandoverServer(threading.Thread):
     def process_handover_request_message(self, records):
         """Process a handover request message. The *records* argument holds a
         list of :class:`ndef.Record` objects decoded from the received
-        handover request message octets, where the first record type
-        is ``urn:nfc:wkt:Hr``. The method returns a list of :class:`ndef.Record`
-        objects with the first record type ``urn:nfc:wkt:Hs``.
+        handover request message octets, where the first record type is
+        ``urn:nfc:wkt:Hr``. The method returns a list of :class:`ndef.Record`
+        objects with the first record typ ``urn:nfc:wkt:Hs``.
 
         This method should be overwritten by a subclass to customize
         it's behavior. The default implementation returns a
