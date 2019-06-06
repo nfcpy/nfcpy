@@ -58,19 +58,19 @@ class HandoverClient(object):
             self.socket.close()
             self.socket = None
 
-    def send(self, records):
+    def send_records(self, records):
         """Send handover request message records to the remote server."""
         log.debug("sending '{0}' message".format(records[0].type))
-        send_miu = self.socket.getsockopt(nfc.llcp.SO_SNDMIU)
         try:
             octets = b''.join(ndef.message_encoder(records))
         except ndef.EncodeError as error:
             log.error(repr(error))
         else:
-            return self._send(octets, send_miu)
+            return self.send_octets(octets)
 
-    def _send(self, octets, miu):
+    def send_octets(self, octets):
         log.debug(">>> %s", binascii.hexlify(octets).decode())
+        miu = self.socket.getsockopt(nfc.llcp.SO_SNDMIU)
         while len(octets) > 0:
             if self.socket.send(octets[0:miu]):
                 octets = octets[miu:]
@@ -78,17 +78,18 @@ class HandoverClient(object):
                 break
         return len(octets) == 0
 
-    def recv(self, timeout=None):
+    def recv_records(self, timeout=None):
         """Receive a handover select message from the remote server."""
-        octets, records = self._recv(timeout)
+        octets = self.recv_octets(timeout)
+        records = list(ndef.message_decoder(octets, 'relax')) if octets else []
         if records and records[0].type == "urn:nfc:wkt:Hs":
             log.debug("received '{0}' message".format(records[0].type))
             return list(ndef.message_decoder(octets, 'relax'))
         else:
-            log.error("received invalid message {0}".format(records[0].type))
+            log.error("received invalid message %s", binascii.hexlify(octets))
             return []
 
-    def _recv(self, timeout=None):
+    def recv_octets(self, timeout=None):
         octets = bytearray()
         started = time.time()
         while self.socket.poll("recv", timeout):
@@ -96,12 +97,11 @@ class HandoverClient(object):
                 octets += self.socket.recv()
             except TypeError:
                 log.debug("data link connection closed")
-                return None, None  # recv() returned None
-
+                return b''  # recv() returned None
             try:
-                records = list(ndef.message_decoder(octets, 'strict', {}))
+                list(ndef.message_decoder(octets, 'strict', {}))
                 log.debug("<<< %s", binascii.hexlify(octets).decode())
-                return bytes(octets), records
+                return bytes(octets)
             except ndef.DecodeError:
                 log.debug("message is incomplete (%d byte)", len(octets))
                 if timeout:

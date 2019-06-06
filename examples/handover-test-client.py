@@ -52,27 +52,21 @@ def handover_connect(llc, options):
 
 def handover_send(client, message, miu=128):
     if isinstance(message, (bytes, bytearray)):
-        if not client._send(message, miu):
+        if not client.send_octets(message, miu):
             raise TestFail("error sending handover request octets")
     else:
-        if not client.send(message):
+        if not client.send_records(message):
             raise TestFail("error sending handover request records")
 
 
 def handover_recv(client, timeout, raw=False):
-    octets, records = client._recv(timeout)
+    records = client.recv_records(timeout)
 
-    if not octets:
+    if not records:
         raise TestFail("no answer within {0} seconds".format(int(timeout)))
 
     if not records[0].type == "urn:nfc:wkt:Hs":
         raise TestFail("unexpected message type '{0}'".format(records[0].type))
-
-    if not raw:
-        try:
-            records = list(ndef.message_decoder(octets, 'relax'))
-        except ndef.DecodeError:
-            raise TestFail("invalid handover select message")
 
     return records
 
@@ -238,7 +232,7 @@ class TestProgram(cli.CommandLineInterface):
 
             handover_send(client, [hr_record, bt_record])
             records = handover_recv(client, timeout=3.0)
-            info("received {}\n".format(records[0].type))
+            info("received {}".format(records[0].type))
             hs_record, bt_record = records
 
             if len(hs_record.alternative_carriers) != 1:
