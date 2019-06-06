@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: latin-1 -*-
 from __future__ import absolute_import, division
 
 import threading
@@ -312,7 +312,7 @@ class TestLogicalLinkController:
             with pytest.raises(TypeError) as excinfo:
                 llc.sendto(ldl, u'123', 16, nfc.llcp.MSG_DONTWAIT)
             assert str(excinfo.value) == \
-                "the message argument must be a byte string"
+                "message data must be a bytes-like object"
 
         def test_sendto_with_unbound_socket(self, llc, ldl):
             assert llc.sendto(ldl, b'123', 16, nfc.llcp.MSG_DONTWAIT) is True
@@ -624,7 +624,7 @@ class TestLogicalLinkController:
             a = pdu.encode_header()
             c = cipher.encrypt(a, pdu.data)
             pdu = type(pdu)(*type(pdu).decode_header(a), data=c)
-            sec_llc.bind(ldl, b'urn:nfc:sn:service')
+            sec_llc.bind(ldl, 'urn:nfc:sn:service')
             sec_llc.dispatch(pdu)
 
         @pytest.mark.parametrize("dpu, ecpk, rand", [
@@ -959,11 +959,12 @@ class TestServiceDiscovery:
             nfc.llcp.pdu.ServiceNameLookup(1, 1, sdres=[(101, 0)])
 
     def test_dequeue_miu_is_exhausted(self, sdp):
-        sdp.sdreq.append((2, 'urn:nfc:sn:svc'))
-        recv_sdreq = [(101, 'urn:nfc:sn:service')]
+        sdp.sdreq.append((2, b'urn:nfc:sn:svc'))
+        recv_sdreq = [(101, b'urn:nfc:sn:service')]
         sdp.enqueue(nfc.llcp.pdu.ServiceNameLookup(1, 1, sdreq=recv_sdreq))
         assert sdp.dequeue(0, 0) == nfc.llcp.pdu.ServiceNameLookup(1, 1)
         assert sdp.dequeue(8, 0) == \
             nfc.llcp.pdu.ServiceNameLookup(1, 1, sdres=[(101, 0)])
         assert sdp.dequeue(128, 0) == \
-            nfc.llcp.pdu.ServiceNameLookup(1, 1, sdreq=[(2, 'urn:nfc:sn:svc')])
+            nfc.llcp.pdu.ServiceNameLookup(1, 1,
+                                           sdreq=[(2, b'urn:nfc:sn:svc')])

@@ -20,8 +20,8 @@ logging.getLogger("nfc.clf").setLevel(logging_level)
 logging.getLogger("nfc.clf.pn531").setLevel(logging_level)
 
 
-@pytest.fixture()  # noqa: F811
-def transport(mocker):
+@pytest.fixture()
+def transport(mocker):  # noqa: F811
     mocker.patch('nfc.clf.transport.USB.__init__').return_value = None
     transport = nfc.clf.transport.USB(1, 1)
     mocker.patch.object(transport, 'write', autospec=True)
@@ -85,7 +85,8 @@ class TestDevice(base_clf_pn53x.TestDevice):
     def device(self, transport):
         transport.write.return_value = None
         transport.read.side_effect = [
-            ACK(), RSP('01 00' + hexlify(bytearray(range(251)))),  # Diagnose
+            ACK(), RSP('01 00'
+                       + hexlify(bytearray(range(251))).decode()),  # Diagnose
             ACK(), RSP('03 0304'),                        # GetFirmwareVersion
             ACK(), RSP('15'),                             # SAMConfiguration
             ACK(), RSP('13'),                             # SetTAMAParameters
@@ -99,7 +100,7 @@ class TestDevice(base_clf_pn53x.TestDevice):
         assert isinstance(device, nfc.clf.pn531.Device)
         assert isinstance(device.chipset, nfc.clf.pn531.Chipset)
         assert transport.write.mock_calls == [call(_) for _ in [
-            CMD('00 00' + hexlify(bytearray(range(251)))),  # Diagnose
+            CMD('00 00' + hexlify(bytearray(range(251))).decode()),  # Diagnose
             CMD('02'),                                    # GetFirmwareVersion
             CMD('14 0100'),                               # SAMConfiguration
             CMD('12 00'),                                 # SetTAMAParameters

@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: latin-1 -*-
 #
 # nfcpy documentation build configuration file
 #
@@ -74,7 +74,10 @@ intersphinx_mapping = {
     'ndeflib': ('https://ndeflib.readthedocs.io/en/stable', None),
 }
 autodoc_member_order = 'bysource'
-autodoc_default_flags = ['members', 'show-inheritance']
+autodoc_default_options = {
+    'members': True,
+    'show-inheritance': True,
+}
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -154,7 +157,14 @@ doctest_global_setup = """
 import nfc
 import sys
 import mock
+
 sys.modules['usb1'] = mock.Mock('usb1')
+
+# Needed to fix udp doctests in getting started example when run on another
+# platform. If not patched, doctest fails on osx or windows.
+m = mock.Mock('platform')
+m.uname = mock.Mock(return_value=('Linux', 'kali', '3.10.0-693.21.1.el7.x86_64', '#1 SMP Wed Mar 7 19:03:37 UTC 2018', 'x86_64', 'x86_64'))
+sys.modules['platform'] = m
 """
 
 

@@ -6,7 +6,6 @@ Module Reference
    nfc
    clf
    tag
-   ndef
    llcp
    snep
    handover

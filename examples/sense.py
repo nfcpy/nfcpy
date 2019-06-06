@@ -3,7 +3,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2012 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -20,19 +20,22 @@
 # See the Licence for the specific language governing
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
-
 import re
 import time
 import errno
 import argparse
+import struct
+from binascii import hexlify
 import logging
-logging.basicConfig(format='%(relativeCreated)d ms [%(name)s] %(message)s')
-
 import nfc
 import nfc.clf
 
+
+logging.basicConfig(format='%(relativeCreated)d ms [%(name)s] %(message)s')
+
 brty_for_dep = ("106A", "212F", "424F")
 target_pattern = re.compile(r'([0-9]+[A-Z]{1})(?: +(.*)|.*)')
+
 
 def main(args):
     if args.debug:
@@ -66,67 +69,79 @@ def main(args):
                 target = clf.sense(*targets, iterations=args.iterations,
                                    interval=args.interval)
                 print("{0} {1}".format(time.strftime("%X"), target))
-                
+                data = b""
                 if (target and args.atr and target.brty in brty_for_dep and
-                    ((target.sel_res and target.sel_res[0] & 0x40) or
-                     (target.sensf_res and target.sensf_res[1:3]=='\1\xFE'))):
+                    ((target.sel_res and target.sel_res[0] & 0x40)
+                     or(target.sensf_res
+                        and target.sensf_res[1:3] == '\1\xFE'))):
                     atr_req = args.atr[:]
-                    if atr_req[0] == 0xFF: atr_req[0] = 0xD4
+                    if atr_req[0] == 0xFF:
+                        atr_req[0] = 0xD4
                     for i in (1, 12, 13, 14):
-                        if atr_req[i] == 0xFF: atr_req[i] = 0x00
+                        if atr_req[i] == 0xFF:
+                            atr_req[i] = 0x00
                     if target.sensf_res:
                         for i in range(2, 10):
                             if atr_req[i] == 0xFF:
                                 atr_req[i] = target.sensf_res[i-1]
                     if atr_req[15] == 0xFF:
-                        atr_req[15] = 0x30 | (len(atr_req)>16)<<1
+                        atr_req[15] = 0x30 | (len(atr_req) > 16) << 1
                     try:
-                        data = chr(len(atr_req)+1) + atr_req
-                        if target.brty == "106A": data.insert(0, 0xF0)
+                        data = struct.pack("B", len(atr_req)+1) + atr_req
+                        if target.brty == "106A":
+                            data.insert(0, 0xF0)
                         data = clf.exchange(data, 1.0)
-                        if target.brty == "106A": assert data.pop(0) == 0xF0
+                        if target.brty == "106A":
+                            assert data.pop(0) == 0xF0
                         assert len(data) == data.pop(0)
                         target.atr_res = data
                         target.atr_req = atr_req
                     except nfc.clf.CommunicationError as error:
                         print(repr(error) + " for NFC-DEP ATR_REQ")
                     except AssertionError:
-                        print("invalid ATR_RES: %r" % str(data.encode("hex")))
-                
+                        print("invalid ATR_RES: %r" % hexlify(data).decode())
+
                 if target and target.atr_res:
                     did = target.atr_req[12]
-                    psl = "06D404%02x1203" % did # PSL_REQ
-                    rls = ("04D40A%02x"%did) if did else "03D40A"
-                    if target.brty == "106A": psl = "F0" + psl
+                    psl = "06D404%02x1203" % did  # PSL_REQ
+                    rls = ("04D40A%02x" % did) if did else "03D40A"
+                    if target.brty == "106A":
+                        psl = "F0" + psl
                     psl, rls = map(bytearray.fromhex, (psl, rls))
-                    try: clf.exchange(psl, 1.0)
+                    try:
+                        clf.exchange(psl, 1.0)
                     except nfc.clf.CommunicationError as error:
                         print(repr(error) + " for NFC-DEP PSL_REQ")
                     else:
                         target.brty = "424F"
-                        try: clf.exchange(rls, 1.0)
+                        try:
+                            clf.exchange(rls, 1.0)
                         except nfc.clf.CommunicationError as error:
                             print(repr(error) + " for NFC-DEP RLS_REQ")
 
-                if (target and target.sensf_res and
-                    target.sensf_res[1:3] != '\x01\xFE'):
+                if target and target.sensf_res \
+                        and target.sensf_res[1:3] != '\x01\xFE':
                     request_system_code = "\x0A\x0C"+target.sensf_res[1:9]
-                    try: clf.exchange(request_system_code, timeout=1.0)
+                    try:
+                        clf.exchange(request_system_code, timeout=1.0)
                     except nfc.clf.CommunicationError as error:
                         print(repr(error) + " for Request System Code Command")
-                
-                if not args.repeat: break
+
+                if not args.repeat:
+                    break
                 time.sleep(args.waittime)
         except IOError as error:
             if error.errno == errno.EIO:
                 print("lost connection to local device")
-            else: print(error)
+            else:
+                print(error)
         except nfc.clf.UnsupportedTargetError as error:
-            print error
+            print(error)
         except KeyboardInterrupt:
             pass
         finally:
             clf.close()
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -157,5 +172,5 @@ if __name__ == '__main__':
     parser.add_argument(
         "--device", metavar="path", default="usb",
         help="local device search path (default: %(default)s)")
-    
+
     main(parser.parse_args())

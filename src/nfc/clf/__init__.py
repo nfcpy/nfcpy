@@ -24,6 +24,7 @@ import nfc.dep
 import nfc.llcp
 from . import device
 
+import binascii
 import os
 import re
 import time
@@ -35,7 +36,7 @@ log = logging.getLogger(__name__)
 
 
 def print_data(data):
-    return 'None' if data is None else str(data).encode("hex")
+    return 'None' if data is None else binascii.hexlify(data).decode('latin')
 
 
 class ContactlessFrontend(object):
@@ -676,6 +677,7 @@ class ContactlessFrontend(object):
         instance or :const:`None`.
 
         >>> import nfc, nfc.clf
+        >>> from binascii import hexlify
         >>> clf = nfc.ContactlessFrontend("usb")
         >>> target1 = nfc.clf.RemoteTarget("106A")
         >>> target2 = nfc.clf.RemoteTarget("212F")
@@ -741,10 +743,12 @@ class ContactlessFrontend(object):
 
         >>> atr = bytearray.fromhex("D4000102030405060708091000000030")
         >>> target = clf.sense(nfc.clf.RemoteTarget("106A", atr_req=atr))
-        >>> if target and target.atr_res: print(target.atr_res.encode("hex"))
+        >>> if target and target.atr_res:
+        >>>     print(hexlify(target.atr_res).decode())
         d501c023cae6b3182afe3dee0000000e3246666d01011103020013040196
         >>> target = clf.sense(nfc.clf.RemoteTarget("424F", atr_req=atr))
-        >>> if target and target.atr_res: print(target.atr_res.encode("hex"))
+        >>> if target and target.atr_res:
+        >>>     print(hexlify(target.atr_res).decode())
         d501dc0104f04584e15769700000000e3246666d01011103020013040196
 
         Some drivers must modify the ATR_REQ to cope with hardware
@@ -837,7 +841,7 @@ class ContactlessFrontend(object):
             self.target = None  # forget captured target
             self.device.mute()  # deactivate the rf field
 
-            for i in xrange(max(1, options.get('iterations', 1))):
+            for i in range(max(1, options.get('iterations', 1))):
                 started = time.time()
                 for target in targets:
                     log.debug("sense {0}".format(target))
@@ -1115,7 +1119,7 @@ class Target(object):
                 continue
             value = self.__dict__[name]
             if isinstance(value, (bytearray, str)):
-                value = str(value).encode("hex").upper()
+                value = binascii.hexlify(value).decode().upper()
             attrs.append("{0}={1}".format(name, value))
         return "{brty} {attrs}".format(brty=self.brty, attrs=' '.join(attrs))
 
@@ -1138,7 +1142,7 @@ class RemoteTarget(Target):
     @property
     def brty(self):
         """A string that combines bitrate and technology type, e.g. '106A'."""
-        return "{0}".format(self._brty_send)
+        return self._brty_send
 
     @brty.setter
     def brty(self, value):
@@ -1175,9 +1179,9 @@ class LocalTarget(Target):
     @property
     def brty(self):
         """A string that combines bitrate and technology type, e.g. '106A'."""
-        return ("{0}".format(self._brty_send)
-                if self._brty_send == self._brty_recv else
-                "{0}/{1}".format(self._brty_send, self._brty_recv))
+        return self._brty_send \
+            if self._brty_send == self._brty_recv \
+            else self._brty_send+"/"+self._brty_recv
 
     @brty.setter
     def brty(self, value):

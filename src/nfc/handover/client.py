@@ -22,11 +22,13 @@
 #
 # Negotiated Connection Handover - Client Base Class
 #
-import nfc.llcp
-
-import time
-
+import binascii
 import logging
+import time
+import ndef
+import nfc
+
+
 log = logging.getLogger(__name__)
 
 
@@ -56,54 +58,57 @@ class HandoverClient(object):
             self.socket.close()
             self.socket = None
 
-    def send(self, message):
-        """Send a handover request message to the remote server."""
-        log.debug("sending '{0}' message".format(message.type))
-        send_miu = self.socket.getsockopt(nfc.llcp.SO_SNDMIU)
+    def send_records(self, records):
+        """Send handover request message records to the remote server."""
+        log.debug("sending '{0}' message".format(records[0].type))
         try:
-            data = str(message)
-        except nfc.llcp.EncodeError as e:
-            log.error("message encoding failed: {0}".format(e))
+            octets = b''.join(ndef.message_encoder(records))
+        except ndef.EncodeError as error:
+            log.error(repr(error))
         else:
-            return self._send(data, send_miu)
+            return self.send_octets(octets)
 
-    def _send(self, data, miu):
-        while len(data) > 0:
-            if self.socket.send(data[0:miu]):
-                data = data[miu:]
+    def send_octets(self, octets):
+        log.debug(">>> %s", binascii.hexlify(octets).decode())
+        miu = self.socket.getsockopt(nfc.llcp.SO_SNDMIU)
+        while len(octets) > 0:
+            if self.socket.send(octets[0:miu]):
+                octets = octets[miu:]
             else:
                 break
-        return bool(len(data) == 0)
+        return len(octets) == 0
 
-    def recv(self, timeout=None):
+    def recv_records(self, timeout=None):
         """Receive a handover select message from the remote server."""
-        message = self._recv(timeout)
-        if message and message.type == "urn:nfc:wkt:Hs":
-            log.debug("received '{0}' message".format(message.type))
-            return nfc.ndef.HandoverSelectMessage(message)
+        octets = self.recv_octets(timeout)
+        records = list(ndef.message_decoder(octets, 'relax')) if octets else []
+        if records and records[0].type == "urn:nfc:wkt:Hs":
+            log.debug("received '{0}' message".format(records[0].type))
+            return list(ndef.message_decoder(octets, 'relax'))
         else:
-            log.error("received invalid message type {0}".format(message.type))
-            return None
+            log.error("received invalid message %s", binascii.hexlify(octets))
+            return []
 
-    def _recv(self, timeout=None):
-        data = ''
+    def recv_octets(self, timeout=None):
+        octets = bytearray()
         started = time.time()
         while self.socket.poll("recv", timeout):
             try:
-                data += self.socket.recv()
-                message = nfc.ndef.Message(data)
-                log.debug("received message\n" + message.pretty())
-                return message
-            except nfc.ndef.LengthError:
-                elapsed = time.time() - started
-                log.debug("message is incomplete (%d byte)", len(data))
-                if timeout:
-                    timeout = timeout - elapsed
-                    log.debug("%.3f seconds left to timeout", timeout)
-                continue  # incomplete message
+                octets += self.socket.recv()
             except TypeError:
                 log.debug("data link connection closed")
-                break  # recv() returned None
+                return b''  # recv() returned None
+            try:
+                list(ndef.message_decoder(octets, 'strict', {}))
+                log.debug("<<< %s", binascii.hexlify(octets).decode())
+                return bytes(octets)
+            except ndef.DecodeError:
+                log.debug("message is incomplete (%d byte)", len(octets))
+                if timeout:
+                    timeout -= time.time() - started
+                    started = time.time()
+                    log.debug("%.3f seconds left to timeout", timeout)
+                continue  # incomplete message
 
     def __enter__(self):
         self.connect()

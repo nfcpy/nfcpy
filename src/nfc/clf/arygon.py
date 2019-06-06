@@ -35,40 +35,41 @@ log = logging.getLogger(__name__)
 
 class ChipsetA(pn531.Chipset):
     def write_frame(self, frame):
-        self.transport.write("2" + frame)
+        self.transport.write(b"2" + frame)
 
 
 class DeviceA(pn531.Device):
     def close(self):
-        self.chipset.transport.tty.write("0au")  # device reset
+        self.chipset.transport.tty.write(b"0au")  # device reset
         self.chipset.close()
         self.chipset = None
 
 
 class ChipsetB(pn532.Chipset):
     def write_frame(self, frame):
-        self.transport.write("2" + frame)
+        self.transport.write(b"2" + frame)
 
 
 class DeviceB(pn532.Device):
     def close(self):
-        self.chipset.transport.tty.write("0au")  # device reset
+        self.chipset.transport.tty.write(b"0au")  # device reset
         self.chipset.close()
         self.chipset = None
 
 
 def init(transport):
     transport.open(transport.port, 115200)
-    transport.tty.write("0av")  # read version
+    transport.tty.write(b"0av")  # read version
     response = transport.tty.readline()
-    if response.startswith("FF00000600V"):
-        log.debug("Arygon Reader AxxB Version %s", response[11:].strip())
+    if response.startswith(b"FF00000600V"):
+        log.debug("Arygon Reader AxxB Version %s",
+                  response[11:].strip().decode())
         transport.tty.timeout = 0.5
-        transport.tty.write("0at05")
-        if transport.tty.readline().startswith("FF0000"):
+        transport.tty.write(b"0at05")
+        if transport.tty.readline().startswith(b"FF0000"):
             log.debug("MCU/TAMA communication set to 230400 bps")
-            transport.tty.write("0ah05")
-            if transport.tty.readline().startswith("FF0000"):
+            transport.tty.write(b"0ah05")
+            if transport.tty.readline().startswith(b"FF0000"):
                 log.debug("MCU/HOST communication set to 230400 bps")
                 transport.tty.baudrate = 230400
                 transport.tty.timeout = 0.1
@@ -80,16 +81,17 @@ def init(transport):
                 return device
 
     transport.open(transport.port, 9600)
-    transport.tty.write("0av")  # read version
+    transport.tty.write(b"0av")  # read version
     response = transport.tty.readline()
-    if response.startswith("FF00000600V"):
-        log.debug("Arygon Reader AxxA Version %s", response[11:].strip())
+    if response.startswith(b"FF00000600V"):
+        log.debug("Arygon Reader AxxA Version %s",
+                  response[11:].strip().decode())
         transport.tty.timeout = 0.5
-        transport.tty.write("0at05")
-        if transport.tty.readline().startswith("FF0000"):
+        transport.tty.write(b"0at05")
+        if transport.tty.readline().startswith(b"FF0000"):
             log.debug("MCU/TAMA communication set to 230400 bps")
-            transport.tty.write("0ah05")
-            if transport.tty.readline().startswith("FF0000"):
+            transport.tty.write(b"0ah05")
+            if transport.tty.readline().startswith(b"FF0000"):
                 log.debug("MCU/HOST communication set to 230400 bps")
                 transport.tty.baudrate = 230400
                 transport.tty.timeout = 0.1

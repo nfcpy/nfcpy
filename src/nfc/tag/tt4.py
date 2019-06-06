@@ -195,7 +195,7 @@ class Type4Tag(nfc.tag.Tag):
             for self._aid in (ndef_aid_v2, ndef_aid_v1):
                 try:
                     self.tag.send_apdu(0, 0xA4, 0x04, 0x00, self._aid)
-                    log.debug("selected " + hexlify(self._aid))
+                    log.debug("selected %s", hexlify(self._aid).decode())
                     return True
                 except Type4TagCommandError as error:
                     if error.errno <= 0:
@@ -205,10 +205,10 @@ class Type4Tag(nfc.tag.Tag):
             p2 = 0x00 if self._aid == ndef_aid_v1 else 0x0C
             try:
                 self.tag.send_apdu(0, 0xA4, 0x00, p2, fid)
-                log.debug("selected " + hexlify(fid))
+                log.debug("selected %s", hexlify(fid).decode())
                 return True
             except Type4TagCommandError:
-                log.debug("failed to select " + hexlify(fid))
+                log.debug("failed to select %s", hexlify(fid).decode())
 
         def _read_binary(self, offset, size):
             (p1, p2) = pack(">H", offset)
@@ -267,7 +267,7 @@ class Type4Tag(nfc.tag.Tag):
 
             ndef_control_tlv_format = ">2sHBB" if tag == 4 else ">2sIBB"
             ndef_file, mfs, rf, wf = unpack(ndef_control_tlv_format, val)
-            log.debug("ndef file identifier %s", hexlify(ndef_file))
+            log.debug("ndef file identifier %s", hexlify(ndef_file).decode())
             log.debug("ndef file size limit %d", mfs)
             log.debug("ndef file read flag is %d", rf)
             log.debug("ndef file write flag is %d", wf)
@@ -327,7 +327,7 @@ class Type4Tag(nfc.tag.Tag):
 
             offset = 0
             while offset < len(data):
-                offset += self._update_binary(offset, buffer(data, offset))
+                offset += self._update_binary(offset, data[offset:])
 
             if nlen:
                 self._update_binary(0, nlen)
@@ -341,7 +341,7 @@ class Type4Tag(nfc.tag.Tag):
             offset = self._nlen_size
             data = bytearray(self._capacity * [wipe % 256])
             while offset < self.capacity:
-                offset += self._update_binary(offset, buffer(data, offset))
+                offset += self._update_binary(offset, data[offset:])
 
         def _dump_ndef_data(self):
             lines = []
@@ -433,9 +433,9 @@ class Type4Tag(nfc.tag.Tag):
         specifying the seconds to wait.
 
         """
-        log.debug(">> {0}".format(hexlify(data)))
+        log.debug(">> {0}".format(hexlify(data).decode()))
         data = self._dep.exchange(data, timeout)
-        log.debug("<< {0}".format(hexlify(data) if data else "None"))
+        log.debug("<< {0}".format(hexlify(data).decode() if data else "None"))
         return data
 
     def send_apdu(self, cla, ins, p1, p2, data=None, mrl=0, check_status=True):
@@ -471,7 +471,7 @@ class Type4Tag(nfc.tag.Tag):
             if mrl and mrl > 256:
                 raise ValueError("unsupported max response length")
             if data:
-                apdu += pack('>B', len(data)) + data
+                apdu += pack('>B', len(data)) + bytes(data)
             if mrl > 0:
                 apdu += pack('>B', 0 if mrl == 256 else mrl)
         else:
@@ -480,7 +480,7 @@ class Type4Tag(nfc.tag.Tag):
             if mrl and mrl > 65536:
                 raise ValueError("invalid max response length")
             if data:
-                apdu += pack(">xH", len(data)) + data
+                apdu += pack(">xH", len(data)) + bytes(data)
             if mrl > 0:
                 le = 0 if mrl == 65536 else mrl
                 apdu += pack(">H", le) if data else pack(">xH", le)
@@ -512,7 +512,7 @@ class Type4ATag(Type4Tag):
         else:
             rats_cmd = bytearray.fromhex("E0 80")
         rats_res = self.clf.exchange(rats_cmd, timeout=0.03)
-        log.debug("rcvd RATS response: {0}".format(hexlify(rats_res)))
+        log.debug("rcvd RATS response: {0}".format(hexlify(rats_res).decode()))
 
         fsci, fwti = rats_res[1] & 0x0F, rats_res[3] >> 4
         if fsci > 8:
@@ -548,7 +548,7 @@ class Type4BTag(Type4Tag):
         else:
             attrib_cmd = b'\x1D' + self._nfcid + b'\x00\x08\x01\x00'
         attrib_res = self.clf.exchange(attrib_cmd, timeout=0.03)
-        log.debug("rcvd ATTRIB response {0}".format(hexlify(attrib_res)))
+        log.debug("rcvd ATTRIB response %s", hexlify(attrib_res).decode())
 
         fsci, fwti = target.sensb_res[10] >> 4, target.sensb_res[11] >> 4
         if fsci > 8:

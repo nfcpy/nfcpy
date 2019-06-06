@@ -50,21 +50,18 @@ def test_read_ndef(mocker, tag):  # noqa: F811
     assert isinstance(tag.ndef, nfc.tag.Tag.NDEF)
     assert tag.ndef.octets == HEX('')
     assert tag.ndef.records == []
-    assert tag.ndef.message == nfc.ndef.Message(nfc.ndef.Record())
 
     read_ndef_data.return_value = HEX('D00000')
     assert tag.ndef.has_changed is True
     assert isinstance(tag.ndef, nfc.tag.Tag.NDEF)
     assert tag.ndef.octets == HEX('D00000')
     assert tag.ndef.records == [ndef.Record()]
-    assert tag.ndef.message == nfc.ndef.Message(nfc.ndef.Record())
 
     read_ndef_data.return_value = HEX('D50000')
     assert tag.ndef.has_changed is True
     assert isinstance(tag.ndef, nfc.tag.Tag.NDEF)
     assert tag.ndef.octets == HEX('D50000')
     assert tag.ndef.records == [ndef.Record('unknown')]
-    assert tag.ndef.message == nfc.ndef.Message(nfc.ndef.Record('unknown'))
 
     read_ndef_data.return_value = None
     assert tag.ndef.has_changed is True
@@ -98,9 +95,6 @@ def test_write_ndef(mocker, tag):  # noqa: F811
 
     tag.ndef.records = [ndef.Record('unknown')]
     assert tag.ndef.octets == HEX('D50000')
-
-    tag.ndef.message = nfc.ndef.Message(nfc.ndef.Record())
-    assert tag.ndef.octets == HEX('D00000')
 
 
 def test_tag_dump(tag):

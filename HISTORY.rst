@@ -1,6 +1,43 @@
 Changelog for nfcpy
 ===================
 
+1.0.0 (2019-06-06)
+------------------
+
+This is a major major release that brings Python3 compatibility but
+also API changes that may break existing applications. Many thanks to
+@mofe23 and @msnoigrs for their Python3 compatibility patches.
+
+* The `nfc.ndef` package is removed. All NDEF decoding and encoding
+  now uses the https://github.com/nfcpy/ndeflib library.
+
+* The `nfc.snep.SnepClient.put` is removed. Application code must use
+  either `put_records` or `put_octets`.
+
+* The `nfc.snep.SnepClient.get` is removed. Application code must use
+  either `get_records` or `get_octets`.
+
+* The `nfc.snep.SnepServer.put` method changed to `process_put_request`
+  and receives the ndef_message as a list of `ndef.Record` objects.
+
+* The `nfc.snep.SnepServer.get` method changed to `process_get_request`
+  and receives the ndef_message as a list of `ndef.Record` objects.
+  The `acceptable_length` parameter is now handled by the SnepServer.
+
+* The `nfc.handover.HandoverClient.send` method has changed to
+  `send_records` and expects a list of `ndef.Record` objects. The new
+  `send_octets` method allows to send a pre-encoded handover message.
+
+* The `nfc.handover.HandoverClient.recv` method has changed to
+  `recv_records` and returns a list of `ndef.Record` objects. The new
+  `recv_octets` method returns the received encoded handover message.
+
+* The `nfc.tag.Tag.NDEF.message` is removed. Application code must use
+  `records` or `octets`.
+
+* The `examples/ndeftool.py` script is removed. Similar functionality
+  is provided by the https://github.com/nfcpy/ndeftool application.
+
 0.13.6 (2019-06-05)
 -------------------
 

@@ -18,8 +18,8 @@ def HEX(s):
     return bytearray.fromhex(s)
 
 
-@pytest.fixture()  # noqa: F811
-def clf(mocker):
+@pytest.fixture()
+def clf(mocker):  # noqa: F811
     clf = nfc.ContactlessFrontend()
     mocker.patch.object(clf, 'sense', autospec=True)
     mocker.patch.object(clf, 'listen', autospec=True)
@@ -417,6 +417,8 @@ class TestInitiator:
             HEX('F0 04 D507 80'),
         ]
         assert dep.activate(None, brs=0) == HEX('46666D010113')
+        assert dep.clf.exchange.call_count == 0
+
         with pytest.raises(nfc.clf.TimeoutError):
             dep.exchange(HEX('0102'), timeout=0.0001)
         assert dep.clf.exchange.call_count == 1
@@ -1071,7 +1073,7 @@ class TestDepPdu:
         assert pdu.encode() == atr[0:l]
         assert nfc.dep.ATR_REQ.decode(HEX('D401')) is None
 
-    @pytest.mark.parametrize("atr, s, l, id3, , did, bs, br, to, pp, gb, wt", [
+    @pytest.mark.parametrize("atr, s, l, id3, did, bs, br, to, pp, gb, wt", [
         (HEX('D501 01FE0102030405060708 0102030432 4666'), 'ATR-RES '
          'NFCID3=01fe0102030405060708 DID=01 BS=02 BR=03 TO=04 PP=32 GB=4666',
          19, HEX('01FE0102030405060708'), 1, 2, 3, 4, 0x32, HEX('4666'), 4),

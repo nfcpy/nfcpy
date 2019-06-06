@@ -2,13 +2,14 @@
 # -----------------------------------------------------------------------------
 # Copyright 2009, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
 # Licence.
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # You may obtain a copy of the Licence at:
 #
+
 # https://joinup.ec.europa.eu/software/page/eupl
 #
 # Unless required by applicable law or agreed to in
@@ -37,7 +38,10 @@ def hexdump(octets, sep=""):
 
 def chrdump(octets, sep=""):
     return sep.join(
-        ("{:c}".format(x) if 32 <= x <= 126 else ".") for x in octets)
+            (("{:c}".format(x) if 32 <= x <= 126 else ".")
+             if x is not None
+             else ".")
+            for x in octets)
 
 
 def pagedump(page, octets, info=None):
@@ -79,7 +83,7 @@ def read_tlv(memory, offset, skip_bytes):
     if tlv_l == 0xFF:
         tlv_l, offset = (unpack(">H", memory[offset:offset+2])[0], offset+2)
     tlv_v = bytearray(tlv_l)
-    for i in xrange(tlv_l):
+    for i in range(tlv_l):
         while (offset + i) in skip_bytes:
             offset += 1
         tlv_v[i] = memory[offset+i]
@@ -230,7 +234,7 @@ class Type2Tag(Tag):
             # bytes as needed) and let that be written to the tag, and
             # finally write the new ndef message tlv length.
             log.debug("write ndef data {0}{1}".format(
-                hexlify(data[:10]), '...' if len(data) > 10 else ''))
+                hexlify(data[:10]).decode(), '...' if len(data) > 10 else ''))
 
             tag_memory = self._tag_memory
             skip_bytes = self._skip_bytes
@@ -307,7 +311,7 @@ class Type2Tag(Tag):
             if same_data > 0:
                 lines.append(pagedump(page, this_data))
 
-        for i in xrange(4, stop if stop is not None else 0x40000):
+        for i in range(4, stop if stop is not None else 0x40000):
             try:
                 self.sector_select(i >> 8)
                 this_data = self.read(i)[0:4]
@@ -335,7 +339,7 @@ class Type2Tag(Tag):
         # Verify that the tag is still present. This is implemented as
         # reading page 0-3 (from whatever sector is currently active).
         try:
-            data = self.transceive("\x30\x00")
+            data = self.transceive(b"\x30\x00")
         except Type2TagCommandError as error:
             if error.errno != TIMEOUT_ERROR:
                 log.warning("unexpected error in presence check: %s" % error)
@@ -371,11 +375,11 @@ class Type2Tag(Tag):
         if self.ndef and self.ndef.is_writeable:
             memory = self.ndef._tag_memory
             offset = self.ndef._ndef_tlv_offset
-            memory[offset+1:offset+3] = "\x00\xFE"
+            memory[offset+1:offset+3] = b"\x00\xFE"
             if wipe is not None:
                 memory_size = memory[14] * 8 + 16
                 skip_bytes = self.ndef._skip_bytes
-                for offset in xrange(offset + 3, memory_size):
+                for offset in range(offset + 3, memory_size):
                     if offset not in skip_bytes:
                         memory[offset] = wipe & 0xFF
             memory.synchronize()
@@ -431,7 +435,7 @@ class Type2Tag(Tag):
             if tlv_t in (0x03, 0xFE, None):
                 break
             if tlv_t == 0x01:
-                log.debug("lock control tlv {0}".format(hexlify(tlv_v)))
+                log.debug("lock control tlv %s", hexlify(tlv_v).decode())
                 page_addr = tlv_v[0] >> 4
                 byte_offs = tlv_v[0] & 0x0F
                 page_size = 2 ** (tlv_v[2] & 0x0F)  # BytesPerPage
@@ -478,7 +482,7 @@ class Type2Tag(Tag):
         """
         log.debug("read pages {0} to {1}".format(page, page+3))
 
-        data = self.transceive("\x30"+chr(page % 256), timeout=0.005)
+        data = self.transceive(bytearray([0x30, page % 256]), timeout=0.005)
 
         if len(data) == 1 and data[0] & 0xFA == 0x00:
             log.debug("received nak response")
@@ -488,7 +492,7 @@ class Type2Tag(Tag):
                 INVALID_PAGE_ERROR if self.target else nfc.tag.RECEIVE_ERROR)
 
         if len(data) != 16:
-            log.debug("invalid response " + hexlify(data))
+            log.debug("invalid response %s", hexlify(data).decode())
             raise Type2TagCommandError(INVALID_RESPONSE_ERROR)
 
         return data
@@ -506,11 +510,11 @@ class Type2Tag(Tag):
         if len(data) != 4:
             raise ValueError("data must be a four byte string or array")
 
-        log.debug("write {0} to page {1}".format(hexlify(data), page))
-        rsp = self.transceive("\xA2" + chr(page % 256) + data)
+        log.debug("write %s to page %s", hexlify(data).decode(), page)
+        rsp = self.transceive(bytearray([0xA2, page % 256]) + data)
 
         if len(rsp) != 1:
-            log.debug("invalid response " + hexlify(data))
+            log.debug("invalid response %s", hexlify(data).decode())
             raise Type2TagCommandError(INVALID_RESPONSE_ERROR)
 
         if rsp[0] != 0x0A:  # NAK
@@ -572,7 +576,7 @@ class Type2Tag(Tag):
         Command execution errors raise :exc:`Type2TagCommandError`.
 
         """
-        log.debug(">> {0} ({1:f}s)".format(hexlify(data), timeout))
+        log.debug(">> {0} ({1:f}s)".format(hexlify(data).decode(), timeout))
 
         if not self.target:
             # Sometimes we have to (re)sense the target during
@@ -582,11 +586,13 @@ class Type2Tag(Tag):
             raise Type2TagCommandError(nfc.tag.TIMEOUT_ERROR)
 
         started = time.time()
+        error = None
         for retry in range(1 + retries):
             try:
                 data = self.clf.exchange(data, timeout)
                 break
-            except nfc.clf.CommunicationError as error:
+            except nfc.clf.CommunicationError as e:
+                error = e
                 reason = error.__class__.__name__
                 log.debug("%s after %d retries" % (reason, retry))
         else:
@@ -599,7 +605,7 @@ class Type2Tag(Tag):
             raise RuntimeError("unexpected " + repr(error))
 
         elapsed = time.time() - started
-        log.debug("<< {0} ({1:f}s)".format(hexlify(data), elapsed))
+        log.debug("<< {0} ({1:f}s)".format(hexlify(data).decode(), elapsed))
         return data
 
 

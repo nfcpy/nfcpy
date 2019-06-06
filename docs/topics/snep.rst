@@ -79,7 +79,8 @@ Default Server
 --------------
 
 A basic *Default SNEP Server* can be built with *nfcpy* like in the
-following example, where all error and exception handling has been sacrified for brevity. ::
+following example (where all error and exception handling has been
+sacrified for brevity). ::
 
   import nfc
   import nfc.snep
@@ -88,9 +89,10 @@ following example, where all error and exception handling has been sacrified for
       def __init__(self, llc):
           nfc.snep.SnepServer.__init__(self, llc, "urn:nfc:sn:snep")
 
-      def put(self, ndef_message):
-          print "client has put an NDEF message"
-          print ndef_message.pretty()
+      def process_put_request(self, ndef_message):
+          print("client has put an NDEF message")
+          for record in ndef_message:
+              print(record)
           return nfc.snep.Success
 
   def startup(llc):
@@ -119,22 +121,24 @@ size of NDEF messages that can be received, the
 Using SNEP Put
 --------------
 
-Sending an NDEF message to the *Default SNEP Server* is easily done
-with an instance of :class:`nfc.snep.SnepClient` and is basically to
-call :meth:`nfc.snep.SnepClient.put` with the message to send. The
-example below shows how the function to send the NDEF message is
+The :class:`nfc.snep.SnepClient` provides two methods to send an NDEF
+message to the *Default SNEP Server*. A list of :class:`ndef.Record`
+objects can be send with :meth:`nfc.snep.SnepClient.put_records`. This
+encodes the records into a sequence of octets that are then send with
+:meth:`nfc.snep.SnepClient.put_octets`.
+
+The example below shows how the function to send the NDEF message is
 started as a separate thread - it cannot be directly called in
-:func:`connected` because the main thread context is used to run the
-LLCP link. ::
+:func:`connected` because the main thread context is used to operate
+the LLCP link. ::
 
   import nfc
   import nfc.snep
   import threading
 
   def send_ndef_message(llc):
-      sp = nfc.ndef.SmartPosterRecord('http://nfcpy.org', title='nfcpy home')
-      snep = nfc.snep.SnepClient(llc)
-      snep.put( nfc.ndef.Message(sp) )
+      sp = ndef.SmartposterRecord('http://nfcpy.org', 'nfcpy home')
+      nfc.snep.SnepClient(llc).put_records( [sp] )
 
   def connected(llc):
       threading.Thread(target=send_ndef_message, args=(llc,)).start()
@@ -145,8 +149,8 @@ LLCP link. ::
 
 Some phones require that a SNEP be present even if they are not going
 to send anything (Windows Phone 8 is such example). The solution is to
-also run a SNEP server on `urn:nfc:sn:snep` which may just do
-nothing. ::
+also run a SNEP server on `urn:nfc:sn:snep` which will accept but
+discard SNEP Put requests from the peer device. ::
 
   import nfc
   import nfc.snep
@@ -155,9 +159,8 @@ nothing. ::
   server = None
 
   def send_ndef_message(llc):
-      sp = nfc.ndef.SmartPosterRecord('http://nfcpy.org', title='nfcpy home')
-      snep = nfc.snep.SnepClient(llc)
-      snep.put( nfc.ndef.Message(sp) )
+      sp_record = ndef.SmartposterRecord('http://nfcpy.org', 'nfcpy home')
+      nfc.snep.SnepClient(llc).put_records( [sp_record] )
 
   def startup(clf, llc):
       global server
@@ -190,24 +193,22 @@ and name values (for anything else the answer is NOT FOUND). ::
   
   class PrivateSnepServer(nfc.snep.SnepServer):
       def __init__(self, llc):
-          self.ndef_message = nfc.ndef.Message(nfc.ndef.Record())
+          self.ndef_message = [ndef.Record()]
           service_name = "urn:nfc:xsn:nfcpy.org:x-snep"
           nfc.snep.SnepServer.__init__(self, llc, service_name, 2048)
       
-      def put(self, ndef_message):
-          print "client has put an NDEF message"
+      def process_put_request(self, ndef_message):
+          print("client has put an NDEF message")
           self.ndef_message = ndef_message
           return nfc.snep.Success
       
-      def get(self, acceptable_length, ndef_message):
-          print "client requests an NDEF message"
-          if ((ndef_message.type == '' and ndef_message.name == '') or
-              ((ndef_message.type == self.ndef_message.type) and
-               (ndef_message.name == self.ndef_message.name))):
-              if len(str(self.ndef_message)) > acceptable_length:
-                  return nfc.snep.ExcessData
-              return self.ndef_message
-          return nfc.snep.NotFound
+      def process_get_request(self, ndef_message):
+          print("client requests an NDEF message")
+          if ndef_message[0].type and ndef_message[0].type != self.ndef_message[0].type:
+              return nfc.snep.NotFound
+          if ndef_message[0].name and ndef_message[0].name != self.ndef_message[0].name:
+              return nfc.snep.NotFound
+          return self.ndef_message
   
   def startup(clf, llc):
       global my_snep_server
@@ -227,35 +228,29 @@ and GET to set an NDEF message on the server and retrieve it back. The
 example code below also shows how results other than SUCCESS must be
 catched in try-except clauses. Note that *max_ndef_msg_recv_size*
 parameter is a policy sent to the SNEP server with every GET
-request. It is a arbitrary restriction of the
-:class:`nfc.snep.SnepClient` that this parameter can only be set when
-the object is created; the SNEP protocol would allow it to be
-different for every GET request but unless there's demand for such
-flexibility that won't change. ::
+request. ::
 
   import nfc
   import nfc.snep
   import threading
 
   def send_ndef_message(llc):
-      sp = nfc.ndef.SmartPosterRecord('http://nfcpy.org', title='nfcpy home')
+      sp_record = ndef.SmartposterRecord('http://nfcpy.org', 'nfcpy home')
       snep = nfc.snep.SnepClient(llc, max_ndef_msg_recv_size=2048)
       snep.connect("urn:nfc:xsn:nfcpy.org:x-snep")
-      snep.put( nfc.ndef.Message(sp) )
+      snep.put( [sp_record] )
 
-      print "*** get whatever the server has ***"
-      print snep.get().pretty()
+      print("*** get whatever the server has ***")
+      print(snep.get_records( [ndef.Record()] ))
 
-      print "*** get a smart poster with no name ***"
-      r = nfc.ndef.Record(record_type="urn:nfc:wkt:Sp", record_name="")
-      print snep.get( nfc.ndef.Message(r) ).pretty()
+      print("*** get a smart poster record ***")
+      print(snep.get( [ndef.Record("urn:nfc:wkt:Sp")] ))
 
-      print "*** get something that isn't there ***"
-      r = nfc.ndef.Record(record_type="urn:nfc:wkt:Uri")
+      print("*** get something that isn't there ***")
       try:
-          snep.get( nfc.ndef.Message(r) )
+          snep.get( [ndef.Record("urn:nfc:wkt:Uri")] )
       except nfc.snep.SnepError as error:
-          print repr(error)
+          print(repr(error))
 
   def connected(llc):
       threading.Thread(target=send_ndef_message, args=(llc,)).start()
@@ -263,5 +258,3 @@ flexibility that won't change. ::
 
   clf = nfc.ContactlessFrontend("usb")
   clf.connect(llcp={'on-connect': connected})
-
-

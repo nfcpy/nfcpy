@@ -22,8 +22,8 @@ def CMD(hexstr):
     return b'2' + (STD_FRAME(cmd) if len(cmd) < 256 else EXT_FRAME(cmd))
 
 
-@pytest.fixture()  # noqa: F811
-def transport(mocker):
+@pytest.fixture()
+def transport(mocker):  # noqa: F811
     transport = nfc.clf.transport.TTY()
     mocker.patch.object(transport, 'open', autospec=True)
     mocker.patch.object(transport, 'close', autospec=True)
@@ -36,7 +36,7 @@ def transport(mocker):
 
 
 class TestChipsetA(object):
-    @pytest.fixture()  # noqa: F811
+    @pytest.fixture()
     def chipset(self, transport):
         return nfc.clf.arygon.ChipsetA(transport, logger=nfc.clf.arygon.log)
 
@@ -48,7 +48,7 @@ class TestChipsetA(object):
 
 
 class TestChipsetB(object):
-    @pytest.fixture()  # noqa: F811
+    @pytest.fixture()
     def chipset(self, transport):
         return nfc.clf.arygon.ChipsetB(transport, logger=nfc.clf.arygon.log)
 
@@ -60,7 +60,7 @@ class TestChipsetB(object):
 
 
 class TestDeviceA(object):
-    @pytest.fixture()  # noqa: F811
+    @pytest.fixture()
     def device(self, transport):
         transport.read.side_effect = [
             ACK(), RSP('01 00'
@@ -129,7 +129,7 @@ class TestDeviceA(object):
 
 
 class TestDeviceB(object):
-    @pytest.fixture()  # noqa: F811
+    @pytest.fixture()
     def device(self, transport):
         transport.read.side_effect = [
             ACK(), RSP('01 00'

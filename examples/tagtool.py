@@ -3,7 +3,7 @@
 # -----------------------------------------------------------------------------
 # Copyright 2010, 2017 Stephen Tiedemann <stephen.tiedemann@gmail.com>
 #
-# Licensed under the EUPL, Version 1.1 or - as soon they 
+# Licensed under the EUPL, Version 1.1 or - as soon they
 # will be approved by the European Commission - subsequent
 # versions of the EUPL (the "Licence");
 # You may not use this work except in compliance with the
@@ -21,26 +21,25 @@
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
 from __future__ import print_function
-
 import logging
-log = logging.getLogger('main')
-
 import sys
-import time
-import string
 import struct
 import argparse
-import hmac, hashlib
+import hmac
+import hashlib
+import binascii
+import ndef
 
 from cli import CommandLineInterface
 
-import nfc
-import nfc.clf
-import nfc.ndef
+
+log = logging.getLogger('main')
+
 
 def parse_version(string):
-    try: major_version, minor_version = map(int, string.split('.'))
-    except ValueError, AttributeError:
+    try:
+        major_version, minor_version = map(int, string.split('.'))
+    except (ValueError, AttributeError):
         msg = "%r is not a version string, expecting <int>.<int>"
         raise argparse.ArgumentTypeError(msg % string)
     if major_version < 0 or major_version > 15:
@@ -51,11 +50,12 @@ def parse_version(string):
         raise argparse.ArgumentTypeError(msg % minor_version)
     return major_version << 4 | minor_version
 
+
 def parse_uint8(string):
     for base in (10, 16):
         try:
             value = int(string, base)
-            if value >= 0 and value <= 0xff:
+            if 0 <= value <= 0xff:
                 return value
         except ValueError:
             pass
@@ -63,11 +63,12 @@ def parse_uint8(string):
         msg = "%r can not be read as an 8-bit unsigned integer"
         raise argparse.ArgumentTypeError(msg % string)
 
+
 def parse_uint16(string):
     for base in (10, 16):
         try:
             value = int(string, base)
-            if value >= 0 and value <= 0xffff:
+            if 0 <= value <= 0xffff:
                 return value
         except ValueError:
             pass
@@ -75,11 +76,12 @@ def parse_uint16(string):
         msg = "%r can not be read as a 16-bit unsigned integer"
         raise argparse.ArgumentTypeError(msg % string)
 
+
 def parse_uint24(string):
     for base in (10, 16):
         try:
             value = int(string, base)
-            if value >= 0 and value <= 0xffffff:
+            if 0 <= value <= 0xffffff:
                 return value
         except ValueError:
             pass
@@ -87,33 +89,38 @@ def parse_uint24(string):
         msg = "%r can not be read as a 24-bit unsigned integer"
         raise argparse.ArgumentTypeError(msg % string)
 
+
 #
 # command parsers
 #
 def add_show_parser(parser):
     pass
 
+
 def add_dump_parser(parser):
     parser.add_argument(
-        "-o", dest="output", metavar="FILE",
-        type=argparse.FileType('w'), default="-",
-        help="save ndef to FILE (writes binary data)")
-        
+            "-o", dest="output", metavar="FILE",
+            type=argparse.FileType('wb'), default="-",
+            help="save ndef to FILE (writes binary data)")
+
+
 def add_load_parser(parser):
     parser.add_argument(
-        "input", metavar="FILE", type=argparse.FileType('r'),
-        help="ndef data file ('-' reads from stdin)")
-        
+            "input", metavar="FILE", type=argparse.FileType('rb'),
+            help="ndef data file ('-' reads from stdin)")
+
+
 def add_format_parser(parser):
     parser.add_argument(
-        "--wipe", metavar="BYTE", type=int, default=None,
-        help="overwrite all data with BYTE")
+            "--wipe", metavar="BYTE", type=int, default=None,
+            help="overwrite all data with BYTE")
     parser.add_argument(
-        "--version", metavar="x.y", type=parse_version,
-        help="ndef mapping version, default is latest")
+            "--version", metavar="x.y", type=parse_version,
+            help="ndef mapping version, default is latest")
     subparsers = parser.add_subparsers(
-        title="tag type subcommands", dest="tagtype", metavar='{tt1,tt2,tt3}',
-        help="tag type specific arguments")
+            title="tag type subcommands", metavar='{tt1,tt2,tt3}',
+            dest="tagtype", help="tag type specific arguments")
+    subparsers.required = True
     subparsers.add_parser('any')
     description = (
         "The tag type specific arguments are intended to give full "
@@ -122,139 +129,150 @@ def add_format_parser(parser):
         "create a valid configuration. It is thus possible to create "
         "formats that may confuse a reader, as useful for testing.")
     add_format_tt1_parser(subparsers.add_parser(
-        'tt1', description=description))
+            'tt1', description=description))
     add_format_tt2_parser(subparsers.add_parser(
-        'tt2', description=description))
+            'tt2', description=description))
     add_format_tt3_parser(subparsers.add_parser(
-        'tt3', description=description))
+            'tt3', description=description))
+
 
 def add_format_tt1_parser(parser):
     parser.add_argument(
-        "--magic", metavar="BYTE", type=parse_uint8,
-        help="value to use as ndef magic byte")
+            "--magic", metavar="BYTE", type=parse_uint8,
+            help="value to use as ndef magic byte")
     parser.add_argument(
-        "--ver", metavar="x.y", type=parse_version,
-        help="ndef mapping major and minor version")
+            "--ver", metavar="x.y", type=parse_version,
+            help="ndef mapping major and minor version")
     parser.add_argument(
-        "--tms", metavar="BYTE", type=parse_uint8,
-        help="tag memory size, 8*(tms+1)")
+            "--tms", metavar="BYTE", type=parse_uint8,
+            help="tag memory size, 8*(tms+1)")
     parser.add_argument(
-        "--rwa", metavar="BYTE", type=parse_uint8,
-        help="read write access byte")
+            "--rwa", metavar="BYTE", type=parse_uint8,
+            help="read write access byte")
+
 
 def add_format_tt2_parser(parser):
     pass
 
+
 def add_format_tt3_parser(parser):
     parser.add_argument(
-        "--ver", metavar="x.y", type=parse_version,
-        help="ndef mapping major and minor version")
+            "--ver", metavar="x.y", type=parse_version,
+            help="ndef mapping major and minor version")
     parser.add_argument(
-        "--nbr", metavar="BYTE", type=parse_uint8,
-        help="number of blocks that can be written at once")
+            "--nbr", metavar="BYTE", type=parse_uint8,
+            help="number of blocks that can be written at once")
     parser.add_argument(
-        "--nbw", metavar="BYTE", type=parse_uint8,
-        help="number of blocks that can be read at once")
+            "--nbw", metavar="BYTE", type=parse_uint8,
+            help="number of blocks that can be read at once")
     parser.add_argument(
-        "--max", metavar="SHORT", type=parse_uint16,
-        help="maximum number of blocks (nmaxb)")
+            "--max", metavar="SHORT", type=parse_uint16,
+            help="maximum number of blocks (nmaxb)")
     parser.add_argument(
-        "--rfu", metavar="BYTE", type=parse_uint8,
-        help="value to set for reserved bytes")
+            "--rfu", metavar="BYTE", type=parse_uint8,
+            help="value to set for reserved bytes")
     parser.add_argument(
-        "--wf", metavar="BYTE", type=parse_uint8,
-        help="write-flag attribute value")
+            "--wf", metavar="BYTE", type=parse_uint8,
+            help="write-flag attribute value")
     parser.add_argument(
-        "--rw", metavar="BYTE", type=parse_uint8,
-        help="read-write flag attribute value")
+            "--rw", metavar="BYTE", type=parse_uint8,
+            help="read-write flag attribute value")
     parser.add_argument(
-        "--len", metavar="INT", type=parse_uint24,
-        help="ndef length attribute value")
+            "--len", metavar="INT", type=parse_uint24,
+            help="ndef length attribute value")
     parser.add_argument(
-        "--crc", metavar="INT", type=parse_uint16,
-        help="checksum attribute value")
-        
+            "--crc", metavar="INT", type=parse_uint16,
+            help="checksum attribute value")
+
+
 def add_emulate_parser(parser):
-    parser.description = "Emulate an ndef tag."    
+    parser.description = "Emulate an ndef tag."
     parser.add_argument(
-        "-l", "--loop", action="store_true",
-        help="continue (restart) after tag release")
+            "-l", "--loop", action="store_true",
+            help="continue (restart) after tag release")
     parser.add_argument(
-        "-k", "--keep", action="store_true",
-        help="keep tag memory (when --loop is set)")
+            "-k", "--keep", action="store_true",
+            help="keep tag memory (when --loop is set)")
     parser.add_argument(
-        "-s", dest="size", type=int, default="1024",
-        help="minimum ndef data area size (default: %(default)s)")
+            "-s", dest="size", type=int, default="1024",
+            help="minimum ndef data area size (default: %(default)s)")
     parser.add_argument(
-        "-p", dest="preserve", metavar="FILE", type=argparse.FileType('wb'),
-        help="preserve tag memory when released")
+            "-p", dest="preserve", metavar="FILE",
+            type=argparse.FileType('wb'),
+            help="preserve tag memory when released")
     parser.add_argument(
-        "input", metavar="FILE", type=argparse.FileType('r'),
-        nargs="?", default=None,
-        help="ndef message to serve ('-' reads from stdin)")
+            "input", metavar="FILE", type=argparse.FileType('r'),
+            nargs="?", default=None,
+            help="ndef message to serve ('-' reads from stdin)")
     subparsers = parser.add_subparsers(title="Tag Types", dest="tagtype")
+    subparsers.required = True
     add_emulate_tt3_parser(subparsers.add_parser(
             'tt3', help='emulate a type 3 tag'))
-    
+
+
 def add_emulate_tt3_parser(parser):
     parser.add_argument(
-        "--idm", metavar="HEX", default="03FEFFE011223344",
-        help="manufacture identifier (default: %(default)s)")
+            "--idm", metavar="HEX", default="03FEFFE011223344",
+            help="manufacture identifier (default: %(default)s)")
     parser.add_argument(
-        "--pmm", metavar="HEX", default="01E0000000FFFF00",
-        help="manufacture parameter (default: %(default)s)")
+            "--pmm", metavar="HEX", default="01E0000000FFFF00",
+            help="manufacture parameter (default: %(default)s)")
     parser.add_argument(
-        "--sys", "--sc", metavar="HEX", default="12FC",
-        help="system code (default: %(default)s)")
+            "--sys", "--sc", metavar="HEX", default="12FC",
+            help="system code (default: %(default)s)")
     parser.add_argument(
-        "--bitrate", choices=["212", "424"], default="212",
-        help="bitrate to listen (default: %(default)s)")
+            "--bitrate", choices=["212", "424"], default="212",
+            help="bitrate to listen (default: %(default)s)")
     parser.add_argument(
-        "--ver", metavar="x.y", type=parse_version, default="1.0",
-        help="ndef mapping version number (default: %(default)s)")
+            "--ver", metavar="x.y", type=parse_version, default="1.0",
+            help="ndef mapping version number (default: %(default)s)")
     parser.add_argument(
-        "--nbr", metavar="INT", type=int, default=1,
-        help="max read blocks at once (default: %(default)s)")
+            "--nbr", metavar="INT", type=int, default=1,
+            help="max read blocks at once (default: %(default)s)")
     parser.add_argument(
-        "--nbw", metavar="INT", type=int, default=1,
-        help="max write blocks at once (default: %(default)s)")
+            "--nbw", metavar="INT", type=int, default=1,
+            help="max write blocks at once (default: %(default)s)")
     parser.add_argument(
-        "--max", metavar="INT", type=int,
-        help="maximum number of blocks (default: computed)")
+            "--max", metavar="INT", type=int,
+            help="maximum number of blocks (default: computed)")
     parser.add_argument(
-        "--rfu", metavar="INT", type=int, default=0,
-        help="value to set for reserved bytes (default: %(default)s)")
+            "--rfu", metavar="INT", type=int, default=0,
+            help="value to set for reserved bytes (default: %(default)s)")
     parser.add_argument(
-        "--wf", metavar="INT", type=int, default=0,
-        help="write-flag attribute value (default: %(default)s)")
+            "--wf", metavar="INT", type=int, default=0,
+            help="write-flag attribute value (default: %(default)s)")
     parser.add_argument(
-        "--rw", metavar="INT", type=int, default=1,
-        help="read-write flag attribute value (default: %(default)s)")
+            "--rw", metavar="INT", type=int, default=1,
+            help="read-write flag attribute value (default: %(default)s)")
     parser.add_argument(
-        "--crc", metavar="INT", type=int,
-        help="checksum attribute value (default: computed)")
+            "--crc", metavar="INT", type=int,
+            help="checksum attribute value (default: computed)")
+
 
 def add_protect_parser(parser):
     parser.add_argument(
-        "-p", dest="password",
-        help="protect with password if possible")
+            "-p", dest="password",
+            help="protect with password if possible")
     parser.add_argument(
-        "--from", metavar="BLOCK", dest="protect_from", type=int, default=0,
-        help="first block to protect (default: %(default)s)")
+            "--from", metavar="BLOCK", dest="protect_from", type=int,
+            default=0,
+            help="first block to protect (default: %(default)s)")
     parser.add_argument(
-        "--unreadable", action="store_true",
-        help="make tag unreadable without password")
+            "--unreadable", action="store_true",
+            help="make tag unreadable without password")
+
 
 class TagTool(CommandLineInterface):
     def __init__(self):
         parser = ArgumentParser(
-            formatter_class=argparse.RawDescriptionHelpFormatter,
-            description="")
+                formatter_class=argparse.RawDescriptionHelpFormatter,
+                description="")
         parser.add_argument(
-            "-p", dest="authenticate", metavar="PASSWORD",
-            help="unlock with password if supported")
+                "-p", dest="authenticate", metavar="PASSWORD",
+                help="unlock with password if supported")
         subparsers = parser.add_subparsers(
-            title="commands", dest="command")
+                title="commands", dest="command")
+        subparsers.required = True
         add_show_parser(subparsers.add_parser(
                 'show', help='pretty print ndef data'))
         add_dump_parser(subparsers.add_parser(
@@ -268,14 +286,13 @@ class TagTool(CommandLineInterface):
         add_emulate_parser(subparsers.add_parser(
                 'emulate', help='emulate an ndef tag'))
 
-        self.rdwr_commands = {"show": self.show_tag,
-                              "dump": self.dump_tag,
-                              "load": self.load_tag,
-                              "format": self.format_tag,
-                              "protect": self.protect_tag,}
-    
-        super(TagTool, self).__init__(
-            parser, groups="rdwr card dbg clf")
+        self.rdwr_commands = {"show":    self.show_tag,
+                              "dump":    self.dump_tag,
+                              "load":    self.load_tag,
+                              "format":  self.format_tag,
+                              "protect": self.protect_tag, }
+
+        super(TagTool, self).__init__(parser, groups="rdwr card dbg clf")
 
     def on_rdwr_startup(self, targets):
         if self.options.command in self.rdwr_commands.keys():
@@ -288,7 +305,7 @@ class TagTool(CommandLineInterface):
                 key, msg = self.options.authenticate, tag.identifier
                 password = hmac.new(key, msg, hashlib.sha256).digest()
             else:
-                password = "" # use factory default password
+                password = ""  # use factory default password
             result = tag.authenticate(password)
             if result is False:
                 print("I'm sorry, but authentication failed.")
@@ -297,10 +314,10 @@ class TagTool(CommandLineInterface):
                 print(tag)
                 print("I don't know how to authenticate this tag.")
                 return False
-            
+
         self.rdwr_commands[self.options.command](tag)
         return self.options.wait or self.options.loop
-    
+
     def on_card_startup(self, target):
         if self.options.command == "emulate":
             target = self.prepare_tag(target)
@@ -318,39 +335,46 @@ class TagTool(CommandLineInterface):
 
     def show_tag(self, tag):
         print(tag)
-        
+
         if tag.ndef:
             print("NDEF Capabilities:")
-            print("  readable  = %s" % ("no","yes")[tag.ndef.is_readable])
-            print("  writeable = %s" % ("no","yes")[tag.ndef.is_writeable])
+            print("  readable  = %s" % ("no", "yes")[tag.ndef.is_readable])
+            print("  writeable = %s" % ("no", "yes")[tag.ndef.is_writeable])
             print("  capacity  = %d byte" % tag.ndef.capacity)
             print("  message   = %d byte" % tag.ndef.length)
             if tag.ndef.length > 0:
                 print("NDEF Message:")
-                print(tag.ndef.message.pretty())
-        
+                for i, record in enumerate(tag.ndef.records):
+                    print("record", i + 1)
+                    print("  type =", repr(record.type))
+                    print("  name =", repr(record.name))
+                    print("  data =", repr(record.data))
+
         if self.options.verbose:
             print("Memory Dump:")
             print('  ' + '\n  '.join(tag.dump()))
 
     def dump_tag(self, tag):
         if tag.ndef:
-            data = tag.ndef.message
+            data = tag.ndef.octets
             if self.options.output.name == "<stdout>":
-                self.options.output.write(str(data).encode("hex"))
+                self.options.output.write(binascii.hexlify(data).decode())
                 if self.options.loop:
                     self.options.output.write('\n')
                 else:
                     self.options.output.flush()
             else:
-                self.options.output.write(str(data))
+                self.options.output.write(data)
 
     def load_tag(self, tag):
-        try: self.options.data
+        try:
+            self.options.data
         except AttributeError:
             self.options.data = self.options.input.read()
-            try: self.options.data = self.options.data.decode("hex")
-            except TypeError: pass
+            try:
+                self.options.data = binascii.unhexlify(self.options.data)
+            except binascii.Error:
+                pass
 
         if tag.ndef is None:
             print("This is not an NDEF Tag.")
@@ -360,45 +384,57 @@ class TagTool(CommandLineInterface):
             print("This Tag is not writeable.")
             return
 
-        new_ndef_message = nfc.ndef.Message(self.options.data)
-        if new_ndef_message == tag.ndef.message:
+        if self.options.data == tag.ndef.octets:
             print("The Tag already contains the message to write.")
             return
 
-        if len(str(new_ndef_message)) > tag.ndef.capacity:
+        if len(self.options.data) > tag.ndef.capacity:
             print("The new message exceeds the Tag's capacity.")
             return
-        
-        print("Old message:")
-        print(tag.ndef.message.pretty())
-        tag.ndef.message = new_ndef_message
-        print("New message:")
-        print(tag.ndef.message.pretty())
+
+        if tag.ndef.length > 0:
+            print("Old NDEF Message:")
+            for i, record in enumerate(tag.ndef.records):
+                print("record", i + 1)
+                print("  type =", repr(record.type))
+                print("  name =", repr(record.name))
+                print("  data =", repr(record.data))
+
+        tag.ndef.records = list(ndef.message_decoder(self.options.data))
+
+        if tag.ndef.length > 0:
+            print("New NDEF Message:")
+            for i, record in enumerate(tag.ndef.records):
+                print("record", i + 1)
+                print("  type =", repr(record.type))
+                print("  name =", repr(record.name))
+                print("  data =", repr(record.data))
 
     def format_tag(self, tag):
-        if (self.options.tagtype != "any" and
-            self.options.tagtype[2] != tag.type[4]):
-            print("This is not a Type {0} Tag but you said so."
-                  .format(self.options.tagtype[2]))
-            return
+        if not self.options.tagtype == "any":
+            if not self.options.tagtype[2] == tag.type[4]:
+                print("This is not a Type {0} Tag but you said so."
+                      .format(self.options.tagtype[2]))
+                return
 
         if self.options.version is None:
             version = {'Type1Tag': 0x12, 'Type2Tag': 0x12,
                        'Type3Tag': 0x10, 'Type4Tag': 0x30}[tag.type]
-        else: version = self.options.version
-            
+        else:
+            version = self.options.version
+
         formatted = tag.format(version=version, wipe=self.options.wipe)
 
         if formatted is True:
             {'tt1': self.format_tt1_tag, 'tt2': self.format_tt2_tag,
              'tt3': self.format_tt3_tag, 'tt4': self.format_tt4_tag,
-             'any': lambda tag: None}[self.options.tagtype](tag)
+             'any': lambda t: None}[self.options.tagtype](tag)
             print("Formatted %s" % tag)
             if tag.ndef:
-                print("  readable  = %s" % ("no","yes")[tag.ndef.is_readable])
-                print("  writeable = %s" % ("no","yes")[tag.ndef.is_writeable])
-                print("  capacity  = %d byte" % tag.ndef.capacity)
-                print("  message   = %d byte" % tag.ndef.length)
+                print("  readable = %s" % ("no", "yes")[tag.ndef.is_readable])
+                print("  writable = %s" % ("no", "yes")[tag.ndef.is_writeable])
+                print("  capacity = %d byte" % tag.ndef.capacity)
+                print("  message  = %d byte" % tag.ndef.length)
         elif formatted is None:
             print("Sorry, this tag can not be formatted.")
         else:
@@ -447,7 +483,7 @@ class TagTool(CommandLineInterface):
 
     def protect_tag(self, tag):
         print(tag)
-        
+
         if self.options.password is not None:
             if len(self.options.password) >= 8:
                 print("generating diversified key from password")
@@ -459,7 +495,9 @@ class TagTool(CommandLineInterface):
             else:
                 print("A password should be at least 8 characters.")
                 return
-            
+        else:
+            password = None
+
         result = tag.protect(password, self.options.unreadable,
                              self.options.protect_from)
         if result is True:
@@ -479,12 +517,15 @@ class TagTool(CommandLineInterface):
             log.warning("tt3 ndef data area size rounded to {0}"
                         .format(self.options.size))
 
-        try: self.options.data
+        try:
+            self.options.data
         except AttributeError:
             if self.options.input:
                 self.options.data = self.options.input.read()
-                try: self.options.data = self.options.data.decode("hex")
-                except TypeError: pass
+                try:
+                    self.options.data = binascii.unhexlify(self.options.data)
+                except binascii.Error:
+                    pass
             else:
                 self.options.data = ""
 
@@ -493,8 +534,8 @@ class TagTool(CommandLineInterface):
                 ndef_data_size = len(self.options.data)
                 ndef_area_size = ((ndef_data_size + 15) // 16) * 16
                 ndef_area_size = max(ndef_area_size, self.options.size)
-                ndef_data_area = bytearray(self.options.data) + \
-                                 bytearray(ndef_area_size - ndef_data_size)
+                ndef_data_area = bytearray(self.options.data) \
+                    + bytearray(ndef_area_size - ndef_data_size)
             else:
                 ndef_data_area = bytearray(self.options.size)
 
@@ -505,7 +546,8 @@ class TagTool(CommandLineInterface):
             attribute_data[2] = self.options.nbw
             if self.options.max is None:
                 nmaxb = len(ndef_data_area) // 16
-            else: nmaxb = self.options.max
+            else:
+                nmaxb = self.options.max
             attribute_data[3:5] = struct.pack(">H", nmaxb)
             attribute_data[5:9] = 4 * [self.options.rfu]
             attribute_data[9] = self.options.wf
@@ -514,12 +556,12 @@ class TagTool(CommandLineInterface):
             attribute_data[14:16] = struct.pack(">H", sum(attribute_data[:14]))
             self.options.tt3_data = attribute_data + ndef_data_area
 
-        idm = bytearray.fromhex(self.options.idm)
-        pmm = bytearray.fromhex(self.options.pmm)
-        sys = bytearray.fromhex(self.options.sys)
+        idm = bytes.fromhex(self.options.idm)
+        pmm = bytes.fromhex(self.options.pmm)
+        _sys = bytes.fromhex(self.options.sys)
 
-        target.brty = str(self.options.bitrate) + "F"
-        target.sensf_res = "\x01" + idm + pmm + sys
+        target.brty = self.options.bitrate + "F"
+        target.sensf_res = b"\x01" + idm + pmm + _sys
         return target
 
     def emulate_tag_start(self, tag):
@@ -537,13 +579,14 @@ class TagTool(CommandLineInterface):
         def ndef_read(block_number, rb, re):
             log.debug("tt3 read block #{0}".format(block_number))
             if block_number < len(self.options.tt3_data) / 16:
-                first, last = block_number*16, (block_number+1)*16
+                first, last = block_number * 16, (block_number + 1) * 16
                 block_data = self.options.tt3_data[first:last]
                 return block_data
+
         def ndef_write(block_number, block_data, wb, we):
             log.debug("tt3 write block #{0}".format(block_number))
             if block_number < len(self.options.tt3_data) / 16:
-                first, last = block_number*16, (block_number+1)*16
+                first, last = block_number * 16, (block_number + 1) * 16
                 self.options.tt3_data[first:last] = block_data
                 return True
 
@@ -551,28 +594,31 @@ class TagTool(CommandLineInterface):
         tag.add_service(0x000B, ndef_read, lambda: False)
         return True
 
+
 class ArgparseError(SystemExit):
     def __init__(self, prog, message):
         super(ArgparseError, self).__init__(2, prog, message)
-    
+
     def __str__(self):
         return '{0}: {1}'.format(self.args[1], self.args[2])
+
 
 class ArgumentParser(argparse.ArgumentParser):
     def error(self, message):
         raise ArgparseError(self.prog, message)
 
+
 if __name__ == '__main__':
     try:
         TagTool().run()
     except ArgparseError as e:
-        prog = e.args[1].split()
+        _prog = e.args[1].split()
     else:
         sys.exit(0)
 
-    if len(prog) == 1:
+    if len(_prog) == 1:
         sys.argv = sys.argv + ['show']
-    elif prog[-1] == "format":
+    elif _prog[-1] == "format":
         sys.argv = sys.argv + ['any']
 
     try:

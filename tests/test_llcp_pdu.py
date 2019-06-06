@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: latin-1 -*-
 from __future__ import absolute_import, division
 
 import pytest
@@ -432,15 +432,17 @@ class TestUnnumberedInformation:
 class TestConnect:
     pdu_class = nfc.llcp.pdu.Connect
 
-    @pytest.mark.parametrize("octets, offset, size, lpdu, miu, rw, sn", [
-        ("8101",             0, 2, 2, 128, 1, None),
-        ("FF8101FF",         1, 2, 2, 128, 1, None),
-        ("81010202F367",     0, 6, 6, 999, 1, None),
-        ("81010501F9",       0, 5, 5, 128, 9, None),
-        ("81010600",         0, 4, 2, 128, 1, b''),
-        ("810106024142",     0, 6, 6, 128, 1, b'AB'),
-        ("8101000006024142", 0, 8, 6, 128, 1, b'AB'),
-    ])
+    @pytest.mark.parametrize(
+        "octets, offset, size, lpdu, miu, rw, sn", [
+            ("8101",             0, 2, 2, 128, 1, None),
+            ("FF8101FF",         1, 2, 2, 128, 1, None),
+            ("81010202F367",     0, 6, 6, 999, 1, None),
+            ("81010501F9",       0, 5, 5, 128, 9, None),
+            ("81010600",         0, 4, 2, 128, 1, b''),
+            ("810106024142",     0, 6, 6, 128, 1, b'AB'),
+            ("8101000006024142", 0, 8, 6, 128, 1, b'AB'),
+        ]
+    )
     def test_decode_pass(self, octets, offset, size, lpdu, miu, rw, sn):
         pdu = nfc.llcp.pdu.decode(HEX(octets), offset, size)
         assert isinstance(pdu, self.pdu_class)

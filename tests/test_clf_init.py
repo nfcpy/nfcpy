@@ -27,19 +27,19 @@ def test_print_data():
 
 
 class TestContactlessFrontend(object):
-    @pytest.fixture()  # noqa: F811
-    def device_connect(self, mocker):
+    @pytest.fixture()
+    def device_connect(self, mocker):  # noqa: F811
         return mocker.patch('nfc.clf.device.connect')
 
-    @pytest.fixture()  # noqa: F811
-    def device(self, mocker):
+    @pytest.fixture()
+    def device(self, mocker):  # noqa: F811
         device = mocker.Mock(spec=nfc.clf.device.Device)
         device.path = "usb:001:001"
         device.vendor_name = "Vendor"
         device.product_name = "Product"
         return device
 
-    @pytest.fixture()  # noqa: F811
+    @pytest.fixture()
     def clf(self, device_connect, device):
         device_connect.return_value = device
         clf = nfc.clf.ContactlessFrontend('test')
@@ -57,8 +57,8 @@ class TestContactlessFrontend(object):
         assert str(clf) == "Vendor Product on usb:001:001"
         return clf
 
-    @pytest.fixture()  # noqa: F811
-    def terminate(self, mocker):
+    @pytest.fixture()
+    def terminate(self, mocker):  # noqa: F811
         return mocker.Mock(return_value=False)
 
     def test_init(self, device_connect):
@@ -151,6 +151,7 @@ class TestContactlessFrontend(object):
         target.sel_res = HEX('00')
         target.sdd_res = HEX('0416C6C2D73881')
         clf.device.sense_tta.return_value = target
+        clf.device.send_cmd_recv_rsp.return_value = HEX('00')
         rdwr_options = {'iterations': 1, 'targets': ['106A']}
         assert clf.connect(rdwr=rdwr_options, terminate=terminate) is True
 
@@ -169,6 +170,8 @@ class TestContactlessFrontend(object):
         target = nfc.clf.RemoteTarget('106B')
         target.sensb_res = HEX('50E8253EEC00000011008185')
         clf.device.sense_ttb.return_value = target
+        clf.device.get_max_send_data_size.return_value = 290
+        clf.device.get_max_recv_data_size.return_value = 290
         clf.device.send_cmd_recv_rsp.return_value = HEX('00')
         rdwr_options = {'iterations': 1, 'targets': ['106B']}
         assert clf.connect(rdwr=rdwr_options, terminate=terminate) is True
@@ -233,6 +236,8 @@ class TestContactlessFrontend(object):
         target = nfc.clf.RemoteTarget('106B')
         target.sensb_res = HEX('50E8253EEC00000011008185')
         clf.device.sense_ttb.return_value = target
+        clf.device.get_max_send_data_size.return_value = 290
+        clf.device.get_max_recv_data_size.return_value = 290
         clf.device.send_cmd_recv_rsp.side_effect = nfc.clf.TimeoutError
         rdwr_options = {'iterations': 1}
         assert clf.connect(rdwr=rdwr_options, terminate=terminate) is None

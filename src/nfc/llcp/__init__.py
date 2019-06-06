@@ -26,7 +26,7 @@ the connection-less and connection-mode transport facilities of LLCP.
 """
 from .socket import Socket                                         # noqa: F401
 from .llc import LOGICAL_DATA_LINK, DATA_LINK_CONNECTION           # noqa: F401
-from .err import Error, ConnectRefused                             # noqa: F401
+from .err import Error, ConnectRefused, errno                      # noqa: F401
 
 SO_SNDMIU = 1
 SO_RCVMIU = 2

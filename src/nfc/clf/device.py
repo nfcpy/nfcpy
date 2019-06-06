@@ -106,6 +106,7 @@ def connect(path):
             for dev in devices:
                 log.debug("trying {0} on {1}".format(drv, dev))
                 driver = importlib.import_module("nfc.clf." + drv)
+                tty = None
                 try:
                     tty = transport.TTY(dev)
                     device = driver.init(tty)
@@ -113,7 +114,8 @@ def connect(path):
                     return device
                 except IOError as error:
                     log.debug(error)
-                    tty.close()
+                    if tty is not None:
+                        tty.close()
                     if not globbed:
                         raise
 

@@ -24,6 +24,8 @@ import nfc.clf
 import os
 import time
 import collections
+import struct
+from binascii import hexlify
 
 import logging
 log = logging.getLogger(__name__)
@@ -45,7 +47,8 @@ class DataExchangeProtocol(object):
 
         def __str__(self):
             s = "sent/rcvd {0}/{1}".format(self.sent_count, self.rcvd_count)
-            for name in sorted(set(self.sent.keys() + self.rcvd.keys())):
+            for name in sorted(set(list(self.sent.keys())
+                                   + list(self.rcvd.keys()))):
                 s += " {name} {sent}/{rcvd}".format(
                     name=name, sent=self.sent[name], rcvd=self.rcvd[name])
             return s
@@ -53,16 +56,18 @@ class DataExchangeProtocol(object):
     def __init__(self, clf):
         self.pcnt = DataExchangeProtocol.Counter()
         self.clf = clf
-        self.gbi = ""
-        self.gbt = ""
+        self.gbi = b""
+        self.gbt = b""
 
     @property
     def general_bytes(self):
         """The general bytes received with the ATR exchange"""
+        pass
 
     @property
     def role(self):
         """Role in DEP communication, either 'Target' or 'Initiator'"""
+        pass
 
 
 class Initiator(DataExchangeProtocol):
@@ -85,7 +90,7 @@ class Initiator(DataExchangeProtocol):
 
     @property
     def general_bytes(self):
-        return bytes(self.gbt)
+        return self.gbt
 
     @property
     def acm(self):
@@ -102,7 +107,7 @@ class Initiator(DataExchangeProtocol):
 
         self.did = options.get('did', None)
         self.nad = options.get('nad', None)
-        self.gbi = options.get('gbi', '')[0:48]
+        self.gbi = options.get('gbi', b'')[0:48]
         self.brs = min(max(0, options.get('brs', 2)), 2)
         self.lri = min(max(0, options.get('lri', 3)), 3)
         if self._acm is None or 'acm' in options:
@@ -210,7 +215,7 @@ class Initiator(DataExchangeProtocol):
             pfb = DEP_REQ.PFB(pdu_type, nad is not None, did is not None, 0)
             return DEP_REQ(pfb, did, nad, data=bytearray([rtox]))
 
-        # log.debug("dep raw >> " + str(send_data).encode("hex"))
+        # log.debug("dep raw >> %s", hexlify(send_data).decode())
         send_data = bytearray(send_data)
 
         while send_data:
@@ -222,7 +227,7 @@ class Initiator(DataExchangeProtocol):
                 for i in range(3):
                     req = RTOX(res.data[0], self.did, self.nad)
                     rwt = res.data[0] * self.rwt
-                    log.warn("target requested %.3f sec more time", rwt)
+                    log.warning("target requested %.3f sec more time", rwt)
                     res = self.send_dep_req_recv_dep_res(req, rwt, timeout)
                     if res.pfb.fmt != DEP_RES.TimeoutExtension:
                         break
@@ -251,7 +256,7 @@ class Initiator(DataExchangeProtocol):
                 for i in range(3):
                     req = RTOX(res.data[0], self.did, self.nad)
                     rwt = res.data[0] * self.rwt
-                    log.warn("target requested %.3f sec more time", rwt)
+                    log.warning("target requested %.3f sec more time", rwt)
                     res = self.send_dep_req_recv_dep_res(req, rwt, timeout)
                     if res.pfb.fmt != DEP_RES.TimeoutExtension:
                         break
@@ -267,8 +272,8 @@ class Initiator(DataExchangeProtocol):
             recv_data += res.data
             self.pni = (self.pni + 1) & 0x3
 
-        # log.debug("dep raw << " + str(recv_data).encode("hex"))
-        return str(recv_data)
+        # log.debug("dep raw << %s", hexlify(recv_data).decode())
+        return recv_data
 
     def send_dep_req_recv_dep_res(self, req, rwt, timeout):
         def NAK(pni, did, nad):
@@ -325,7 +330,7 @@ class Initiator(DataExchangeProtocol):
 
         if rwt > timeout:
             text = "response waiting time %.3f exceeds the timeout of %.3f sec"
-            log.warn(text, rwt, timeout)
+            log.warning(text, rwt, timeout)
 
         deadline = time.time() + timeout
         while True:
@@ -370,10 +375,10 @@ class Initiator(DataExchangeProtocol):
 
     def encode_frame(self, packet):
         frame = packet.encode()
-        frame = chr(len(frame) + 1) + frame
+        frame = struct.pack("B", len(frame) + 1) + frame
         if self.target.brty == '106A':
-            frame = '\xF0' + frame
-        return frame
+            frame = b'\xF0' + frame
+        return bytearray(frame)
 
     def decode_frame(self, frame):
         if self.target.brty == '106A' and frame.pop(0) != 0xF0:
@@ -407,7 +412,7 @@ class Target(DataExchangeProtocol):
 
     @property
     def general_bytes(self):
-        return bytes(self.gbi)
+        return self.gbi
 
     def __str__(self):
         msg = "NFC-DEP Target {brty} {mode} mode MIU={miu} RWT={rwt:.6f}"
@@ -419,12 +424,12 @@ class Target(DataExchangeProtocol):
 
         if timeout is None:
             timeout = 1.0
-        gbt = options.get('gbt', '')[0:47]
+        gbt = options.get('gbt', b'')[0:47]
         lrt = min(max(0, options.get('lrt', 3)), 3)
         rwt = min(max(0, options.get('rwt', 8)), 14)
 
         pp = (lrt << 4) | (bool(gbt) << 1) | int(bool(self.nad))
-        nfcid3t = bytearray.fromhex("01FE") + os.urandom(6) + "ST"
+        nfcid3t = bytearray.fromhex("01FE") + os.urandom(6) + b"ST"
         atr_res = ATR_RES(nfcid3t, 0, 0, 0, rwt, pp, gbt)
         atr_res = atr_res.encode()
 
@@ -448,9 +453,10 @@ class Target(DataExchangeProtocol):
             self.rwt = 4096/13.56E6 * pow(2, rwt)
             self.did = atr_req.did if atr_req.did > 0 else None
             self.acm = not (target.sens_res or target.sensf_res)
-            self.cmd = chr(len(target.dep_req)+1) + target.dep_req
+            self.cmd = bytearray(
+                struct.pack("B", len(target.dep_req)+1) + target.dep_req)
             if target.brty == "106A":
-                self.cmd = b"\xF0" + self.cmd
+                self.cmd = bytearray(b"\xF0" + self.cmd)
             self.target = target
 
             self.pcnt.rcvd["ATR"] += 1
@@ -554,7 +560,7 @@ class Target(DataExchangeProtocol):
                 raise nfc.clf.ProtocolError("wrong NFC-DEP packet number")
 
         recv_data += req.data
-        return str(recv_data)
+        return recv_data
 
     def send_timeout_extension(self, rtox):
         def RTOX(rtox, did, nad):
@@ -636,10 +642,10 @@ class Target(DataExchangeProtocol):
 
     def encode_frame(self, packet):
         frame = packet.encode()
-        frame = chr(len(frame) + 1) + frame
+        frame = struct.pack("B", len(frame) + 1) + frame
         if self.target.brty == '106A':
-            frame = '\xF0' + frame
-        return frame
+            frame = b'\xF0' + frame
+        return bytearray(frame)
 
     def decode_frame(self, frame):
         if self.target.brty == '106A' and frame.pop(0) != 0xF0:
@@ -662,7 +668,7 @@ class Target(DataExchangeProtocol):
 #
 class ATR_REQ_RES(object):
     def __str__(self):
-        nfcid3, gb = [str(ba).encode("hex") for ba in [self.nfcid3, self.gb]]
+        nfcid3, gb = [hexlify(ba).decode() for ba in [self.nfcid3, self.gb]]
         return self.PDU_SHOW.format(self=self, nfcid3=nfcid3, gb=gb)
 
     @property
@@ -802,7 +808,11 @@ class DEP_REQ_RES(object):
         self.data = bytearray() if data is None else data
 
     def __str__(self):
-        data = str(self.data).encode("hex")
+        data = hexlify(self.data).decode()
+        return self.PDU_SHOW.format(self=self, data=data)
+
+    def bytes(self):
+        data = hexlify(self.data)
         return self.PDU_SHOW.format(self=self, data=data)
 
     @classmethod
@@ -822,7 +832,7 @@ class DEP_REQ_RES(object):
     def encode(self):
         pfb = self.pfb
         pfb = (pfb.fmt << 4) | (pfb.nad << 3) | (pfb.did << 2) | (pfb.pni)
-        data = self.PDU_CODE + chr(pfb)
+        data = self.PDU_CODE + struct.pack("B", pfb)
         if self.pfb.did:
             data.append(self.did)
         if self.pfb.nad:
@@ -856,7 +866,9 @@ class DSL_REQ_RES(object):
             return cls(data[2] if len(data) == 3 else None)
 
     def encode(self):
-        return self.PDU_CODE + ('' if self.did is None else chr(self.did))
+        return self.PDU_CODE + (b""
+                                if self.did is None
+                                else struct.pack("B", self.did))
 
 
 class DSL_REQ(DSL_REQ_RES):

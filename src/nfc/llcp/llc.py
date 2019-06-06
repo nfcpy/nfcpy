@@ -44,7 +44,8 @@ wks_map = {
     b"urn:nfc:sn:snep": 4,
 }
 
-service_name_format = re.compile(r"^urn:nfc:[x]?sn:[a-zA-Z][a-zA-Z0-9-_:\.]*$")
+service_name_format = \
+    re.compile(b"^urn:nfc:[x]?sn:[a-zA-Z][a-zA-Z0-9-_:\\.]*$")
 
 
 class ServiceAccessPoint(object):
@@ -157,7 +158,7 @@ class ServiceDiscovery(object):
     def __init__(self, llc):
         self.llc = llc
         self.snl = dict()
-        self.tids = range(256)
+        self.tids = list(range(256))
         self.resp = threading.Condition(self.llc.lock)
         self.sent = dict()
         self.sdreq = collections.deque()
@@ -175,7 +176,7 @@ class ServiceDiscovery(object):
         with self.resp:
             if self.snl is None:
                 return None
-            log.debug("resolve service name '{0}'".format(name))
+            log.debug("resolve service name %r", name)
             try:
                 return self.snl[name]
             except KeyError:
@@ -279,7 +280,8 @@ class LogicalLinkController(object):
 
         def __str__(self):
             s = "sent/rcvd {0}/{1}".format(self.sent_count, self.rcvd_count)
-            for name in sorted(set(self.sent.keys() + self.rcvd.keys())):
+            for name in sorted(set(list(self.sent.keys())
+                                   + list(self.rcvd.keys()))):
                 s += " {name} {sent}/{rcvd}".format(
                     name=name, sent=self.sent[name], rcvd=self.rcvd[name])
             return s
@@ -298,7 +300,7 @@ class LogicalLinkController(object):
             self.cfg['llcp-sec'] = False
         log.debug("llc cfg {0}".format(self.cfg))
         self.sec = None
-        self.snl = dict({"urn:nfc:sn:sdp": 1})
+        self.snl = dict({b"urn:nfc:sn:sdp": 1})
         self.sap = 64 * [None]
         self.sap[0] = ServiceAccessPoint(0, self)
         self.sap[1] = ServiceDiscovery(self)
@@ -342,7 +344,7 @@ class LogicalLinkController(object):
             gb = mac.activate(gbt=gb, **options)
             self.run = self.run_as_target
 
-        if gb and gb.startswith('Ffm') and len(gb) >= 6:
+        if gb and gb.startswith(b'Ffm') and len(gb) >= 6:
             if ((isinstance(mac, nfc.dep.Target)
                  and mac.rwt >= send_pax.lto * 1E-3)):
                 msg = "local NFC-DEP RWT {0:.3f} contradicts LTO {1:.3f} sec"
@@ -685,7 +687,9 @@ class LogicalLinkController(object):
                 log.debug("can't dispatch PDU %s", rcvd_pdu)
 
     def resolve(self, name):
-        return self.sap[1].resolve(name)
+        if isinstance(name, (bytes, bytearray)):
+            return self.sap[1].resolve(bytes(name))
+        return self.sap[1].resolve(name.encode('latin'))
 
     def socket(self, socket_type):
         if socket_type == RAW_ACCESS_POINT:
@@ -723,8 +727,10 @@ class LogicalLinkController(object):
             self._bind_by_none(socket)
         elif isinstance(addr_or_name, int):
             self._bind_by_addr(socket, addr_or_name)
-        elif isinstance(addr_or_name, bytes):
-            self._bind_by_name(socket, addr_or_name)
+        elif isinstance(addr_or_name, (bytes, bytearray)):
+            self._bind_by_name(socket, bytes(addr_or_name))
+        elif isinstance(addr_or_name, str):
+            self._bind_by_name(socket, addr_or_name.encode('latin'))
         else:
             raise err.Error(errno.EFAULT)
 
@@ -779,7 +785,7 @@ class LogicalLinkController(object):
         socket.connect(dest)
         log.debug("connected ({0} ===> {1})".format(socket.addr, socket.peer))
         if socket.send_miu > self.cfg['send-miu']:
-            log.warn("reducing outbound miu to not exceed the link miu")
+            log.warning("reducing outbound miu to not exceed the link miu")
             socket.send_miu = self.cfg['send-miu']
 
     def listen(self, socket, backlog):
@@ -807,7 +813,7 @@ class LogicalLinkController(object):
             log.debug("new data link connection ({0} <=== {1})"
                       .format(client.addr, client.peer))
             if client.send_miu > self.cfg['send-miu']:
-                log.warn("reducing outbound miu to comply with link miu")
+                log.warning("reducing outbound miu to comply with link miu")
                 client.send_miu = self.cfg['send-miu']
             return client
 
@@ -825,8 +831,8 @@ class LogicalLinkController(object):
             # FIXME: set socket send miu when activated
             socket.send_miu = self.cfg['send-miu']
             return socket.send(message, flags)
-        if not isinstance(message, bytes):
-            raise TypeError("the message argument must be a byte string")
+        if not isinstance(message, (bytes, bytearray)):
+            raise TypeError("message data must be a bytes-like object")
         if isinstance(socket, tco.LogicalDataLink):
             if dest is None:
                 raise err.Error(errno.EDESTADDRREQ)

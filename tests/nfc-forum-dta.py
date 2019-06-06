@@ -26,6 +26,7 @@ import inspect
 import nfc.clf
 import nfc.dep
 import logging
+from binascii import hexlify
 from time import sleep
 
 log = logging.getLogger()
@@ -39,16 +40,16 @@ def dta_lis_p2p(clf, args):
         rwt = 4096/13.56E6 * 2**8
         data = dep.exchange(None, timeout=1.0)
         while data is not None:
-            # log.info("rcvd data {0}".format(data.encode("hex")))
-            if data == "FFFFFF0103".decode("hex"):
+            # log.info("rcvd data %s", hexlify(data).decode())
+            if data == b"\xFF\xFF\xFF\x01\x03":
                 if dep.send_timeout_extension(2) == 2:
                     sleep(1.5 * rwt)
                 else:
                     break
-            if len(data) == 6 and data.startswith("\xFF\x00\x00\x00"):
-                log.info("pattern number: " + data[4:6].encode("hex"))
+            if len(data) == 6 and data.startswith(b"\xFF\x00\x00\x00"):
+                log.info("pattern number: %s", hexlify(data[4:6]).decode())
                 # pattern_number = data[4:6]
-            # log.info("send back {0}".format(data.encode("hex")))
+            # log.info("send back %s", hexlify(data).decode())
             data = dep.exchange(data, timeout=1.0)
         dep.deactivate()
         log.info("exit nfc-dep target loop")
@@ -67,14 +68,14 @@ def dta_pol_p2p(clf, args):
         try:
             data = dep.exchange(send_data=sot, timeout=lto)
             while data is not None:
-                # log.info("rcvd data {0}".format(data.encode("hex")))
-                if data == "FFFFFF0101".decode("hex"):
+                # log.info("rcvd data %s", hexlify(data).decode())
+                if data == b"\xFF\xFF\xFF\x01\x01":
                     dep.deactivate(release=False)
                     break
-                if data == "FFFFFF0102".decode("hex"):
+                if data == b"\xFF\xFF\xFF\x01\x02":
                     dep.deactivate(release=True)
                     break
-                # log.info("send back {0}".format(data.encode("hex")))
+                # log.info("send back %s", hexlify(data).decode())
                 data = dep.exchange(send_data=data, timeout=lto)
         except nfc.clf.DigitalProtocolError as error:
             log.error(repr(error))
@@ -139,7 +140,7 @@ if __name__ == '__main__':
               "tty[:(usb|com)[:port]] (usb virtual or com port)"))
 
     args = parser.parse_args()
-    print args
+    print(args)
 
     if args.device is None:
         args.device = ['']

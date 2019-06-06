@@ -151,7 +151,7 @@ class Chipset(pn532.Chipset):
 
         # read ACR122U firmware version string
         reader_version = self.ccid_xfr_block(bytearray.fromhex("FF00480000"))
-        if not reader_version.startswith("ACR122U"):
+        if not reader_version.startswith(b"ACR122U"):
             log.error("failed to retrieve ACR122U version string")
             raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
 
@@ -159,7 +159,7 @@ class Chipset(pn532.Chipset):
             log.error("{0} not supported, need 2.x".format(reader_version[7:]))
             raise IOError(errno.ENODEV, os.strerror(errno.ENODEV))
 
-        log.debug("initialize " + str(reader_version))
+        log.debug("initialize " + reader_version.decode())
 
         # set icc power on
         log.debug("CCID ICC-POWER-ON")
@@ -189,7 +189,7 @@ class Chipset(pn532.Chipset):
     def set_buzzer_and_led_to_active(self, duration_in_ms=300):
         """Turn on buzzer and set LED to red only. The timeout here must exceed
          the total buzzer/flash duration defined in bytes 5-8. """
-        duration_in_tenths_of_second = min(duration_in_ms / 100, 255)
+        duration_in_tenths_of_second = int(min(duration_in_ms / 100, 255))
         timeout_in_seconds = (duration_in_tenths_of_second + 1) / 10.0
         data = "FF00400D04{:02X}000101".format(duration_in_tenths_of_second)
         self.ccid_xfr_block(bytearray.fromhex(data),
@@ -214,8 +214,7 @@ class Chipset(pn532.Chipset):
         if frame[0] != 0x80:
             log.error("expected a RDR_to_PC_DataBlock")
             raise IOError(errno.EIO, os.strerror(errno.EIO))
-        # if len(frame) != 10 + struct.unpack("<I", buffer(frame, 1, 4))[0]:
-        if len(frame) != 10 + struct.unpack("<I", frame[1:5])[0]:
+        if len(frame) != 10 + struct.unpack("<I", memoryview(frame)[1:5])[0]:
             log.error("RDR_to_PC_DataBlock length mismatch")
             raise IOError(errno.EIO, os.strerror(errno.EIO))
         return frame[10:]
@@ -224,7 +223,8 @@ class Chipset(pn532.Chipset):
         """Send a host command and return the chip response.
 
         """
-        log.log(logging.DEBUG-1, self.CMD[cmd_code]+" "+hexlify(cmd_data))
+        log.log(logging.DEBUG-1, "{} {}".format(self.CMD[cmd_code],
+                                                hexlify(cmd_data).decode()))
 
         frame = bytearray([0xD4, cmd_code]) + bytearray(cmd_data)
         frame = bytearray([0xFF, 0x00, 0x00, 0x00, len(frame)]) + frame

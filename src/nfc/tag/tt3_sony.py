@@ -23,6 +23,7 @@ import nfc.tag
 from . import tt3
 
 import os
+import struct
 from binascii import hexlify
 from pyDes import triple_des, CBC
 from struct import pack, unpack
@@ -248,7 +249,8 @@ class FelicaStandard(tt3.Type3Tag):
         a, b, e = self.pmm[2] & 7, self.pmm[2] >> 3 & 7, self.pmm[2] >> 6
         timeout = 302E-6 * ((b + 1) * len(service_list) + a + 1) * 4**e
         pack = lambda x: x.pack()  # noqa: E731
-        data = chr(len(service_list)) + ''.join(map(pack, service_list))
+        data = bytearray([len(service_list)]) \
+            + b''.join(map(pack, service_list))
         data = self.send_cmd_recv_rsp(0x02, data, timeout, check_status=False)
         if len(data) != 1 + len(service_list) * 2:
             log.debug("insufficient data received from tag")
@@ -272,7 +274,7 @@ class FelicaStandard(tt3.Type3Tag):
         """
         a, b, e = self.pmm[3] & 7, self.pmm[3] >> 3 & 7, self.pmm[3] >> 6
         timeout = 302E-6 * (b + 1 + a + 1) * 4**e
-        data = self.send_cmd_recv_rsp(0x04, '', timeout, check_status=False)
+        data = self.send_cmd_recv_rsp(0x04, b'', timeout, check_status=False)
         if len(data) != 1:
             log.debug("insufficient data received from tag")
             raise tt3.Type3TagCommandError(tt3.DATA_SIZE_ERROR)
@@ -318,7 +320,7 @@ class FelicaStandard(tt3.Type3Tag):
         timeout = max(302E-6 * (a + 1) * 4**e, 0.002)
         data = pack("<H", service_index)
         data = self.send_cmd_recv_rsp(0x0A, data, timeout, check_status=False)
-        if data != "\xFF\xFF":
+        if data != b"\xFF\xFF":
             unpack_format = "<H" if len(data) == 2 else "<HH"
             return unpack(unpack_format, data)
 
@@ -340,7 +342,7 @@ class FelicaStandard(tt3.Type3Tag):
         log.debug("request system code list")
         a, e = self.pmm[3] & 7, self.pmm[3] >> 6
         timeout = max(302E-6 * (a + 1) * 4**e, 0.002)
-        data = self.send_cmd_recv_rsp(0x0C, '', timeout, check_status=False)
+        data = self.send_cmd_recv_rsp(0x0C, b'', timeout, check_status=False)
         if len(data) != 1 + data[0] * 2:
             log.debug("insufficient data received from tag")
             raise tt3.Type3TagCommandError(tt3.DATA_SIZE_ERROR)
@@ -486,8 +488,12 @@ class FelicaLite(tt3.Type3Tag):
         # reversed order.
         assert len(data) % 8 == 0 and len(key) == 16 and len(iv) == 8
         key = bytes(key[8:] + key[:8]) if flip_key else bytes(key)
-        txt = [''.join(reversed(x)) for x in zip(*[iter(bytes(data))]*8)]
-        return triple_des(key, CBC, bytes(iv)).encrypt(''.join(txt))[:-9:-1]
+        txt = b''.join([
+            struct.pack("{}B".format(len(x)), *reversed(x))
+            if isinstance(x[0], int)
+            else b''.join(reversed(x))
+            for x in zip(*[iter(bytes(data))]*8)])
+        return bytearray(triple_des(key, CBC, bytes(iv)).encrypt(txt)[:-9:-1])
 
     def protect(self, password=None, read_protect=False, protect_from=0):
         """Protect a FeliCa Lite Tag.
@@ -533,9 +539,9 @@ class FelicaLite(tt3.Type3Tag):
                 return False
 
             # if password is empty use factory key of 16 zero bytes
-            key = bytearray(password[0:16] if password else 16*"\0")
+            key = password[0:16] if password else b"\0"*16
 
-            log.debug("protect with key " + hexlify(key))
+            log.debug("protect with key %s", hexlify(key).decode())
             self.write_without_mac(key[7::-1] + key[15:7:-1], 0x87)
 
         if protect_from < 14:
@@ -551,7 +557,7 @@ class FelicaLite(tt3.Type3Tag):
         log.debug("write protect system blocks 82,83,84,86,87")
         mc[2] = 0x00  # set system blocks 82,83,84,86,87 to read only
 
-        log.debug("write memory configuration {0}".format(hexlify(mc)))
+        log.debug("write memory configuration %s", hexlify(mc).decode())
         self.write_without_mac(mc, 0x88)
         return True
 
@@ -580,9 +586,9 @@ class FelicaLite(tt3.Type3Tag):
         # Perform internal authentication, i.e. ensure that the tag
         # has the same card key as in password. If the password is
         # empty, we'll try with the factory key.
-        key = bytes(bytearray(password[0:16])) if password else 16 * b"\0"
+        key = b"\0" * 16 if not password else password[0:16]
 
-        log.debug("authenticate with key " + hexlify(key))
+        log.debug("authenticate with key {}".format(hexlify(key).decode()))
         self._authenticated = False
         self.read_from_ndef_service = self.read_without_mac
         self.write_to_ndef_service = self.write_without_mac
@@ -591,16 +597,16 @@ class FelicaLite(tt3.Type3Tag):
         # that we write to the rc block. Because the tag works little endian,
         # we reverse the order of rc1 and rc2 bytes when writing.
         rc = os.urandom(16)
-        log.debug("rc1 = " + rc[:8].encode("hex"))
-        log.debug("rc2 = " + rc[8:].encode("hex"))
+        log.debug("rc1 = {}".format(hexlify(rc[:8]).decode()))
+        log.debug("rc2 = {}".format(hexlify(rc[8:]).decode()))
         self.write_without_mac(rc[7::-1] + rc[15:7:-1], 0x80)
 
         # The session key becomes the triple_des encryption of the random
         # challenge under the card key and with an initialization vector of
         # all zero.
-        sk = triple_des(key, CBC, 8 * '\0').encrypt(rc)
-        log.debug("sk1 = " + sk[:8].encode("hex"))
-        log.debug("sk2 = " + sk[8:].encode("hex"))
+        sk = triple_des(key, CBC, b'\00' * 8).encrypt(rc)
+        log.debug("sk1 = {}".format(hexlify(sk[:8]).decode()))
+        log.debug("sk2 = {}".format(hexlify(sk[8:]).decode()))
 
         # By reading the id and mac block together we get the mac that the
         # tag has generated over the id block data under it's session key
@@ -666,7 +672,7 @@ class FelicaLite(tt3.Type3Tag):
         attribute_data = bytearray(16)
         attribute_data[:14] = pack(">BBBHxxxxxBxxx", version, 4, 1, nmaxb, 1)
         attribute_data[14:] = pack(">H", sum(attribute_data[:14]))
-        log.debug("set ndef attributes {}".format(hexlify(attribute_data)))
+        log.debug("set ndef attributes %s", hexlify(attribute_data).decode())
         self.write_without_mac(attribute_data, 0)
 
         # Overwrite the ndef message area if a wipe is requested.
@@ -841,13 +847,13 @@ class FelicaLiteS(FelicaLite):
                     return False
 
             # if password is empty use factory key of 16 zero bytes
-            key = bytearray(password[0:16] if password else 16*"\0")
+            key = password[0:16].encode("ascii") if password else b'\0' * 16
 
-            log.debug("protect with key " + hexlify(key))
+            log.debug("protect with key %s", hexlify(key).decode())
             ckv = self.read_without_mac(0x86)
-            ckv = min(unpack("<H", str(ckv[0:2]))[0] + 1, 0xffff)
+            ckv = min(unpack("<H", ckv[0:2])[0] + 1, 0xffff)
             log.debug("new card key version is {0}".format(ckv))
-            self.write_without_mac(pack("<H", ckv) + 14*"\0", 0x86)
+            self.write_without_mac(pack("<H", ckv) + b"\0" * 14, 0x86)
             self.write_without_mac(key[7::-1] + key[15:7:-1], 0x87)
 
             if not self.authenticate(key):
@@ -875,7 +881,7 @@ class FelicaLiteS(FelicaLite):
         mc[5] = 0x01  # but allow write with mac to ck and ckv block
 
         # Write the new memory control block.
-        log.debug("write memory configuration {0}".format(hexlify(mc)))
+        log.debug("write memory configuration %s", hexlify(mc).decode())
         self.write_without_mac(mc, 0x88)
         return True
 
@@ -910,7 +916,7 @@ class FelicaLiteS(FelicaLite):
             # To authenticate to the tag we write a 01h into the
             # ext_auth byte of the state block (block 0x92). The other
             # bytes of the state block can be all set to zero.
-            self.write_with_mac("\x01" + 15*"\0", 0x92)
+            self.write_with_mac(b"\x01" + 15*b"\0", 0x92)
 
             # Now read the state block and check the value of the
             # ext_auth to see if we are authenticated. If it's 01h
@@ -945,8 +951,8 @@ class FelicaLiteS(FelicaLite):
             raise RuntimeError("tag must be authenticated first")
 
         # The write count is the first three byte of the wcnt block.
-        wcnt = str(self.read_without_mac(0x90)[0:3])
-        log.debug("write count is 0x{0}".format(wcnt[::-1].encode("hex")))
+        wcnt = self.read_without_mac(0x90)[0:3]
+        log.debug("write count is %s", hexlify(wcnt[::-1]).decode())
 
         # We must generate the mac_a block to write the data. The data
         # to encrypt to the mac is composed of write count and block
@@ -955,8 +961,8 @@ class FelicaLiteS(FelicaLite):
         def flip(sk):
             return sk[8:16] + sk[0:8]
 
-        data = wcnt + "\x00" + chr(block) + "\x00\x91\x00" + data
-        maca = self.generate_mac(data, flip(self._sk), self._iv) + wcnt+5*"\0"
+        data = wcnt + b"\x00" + bytearray([block]) + b"\x00\x91\x00" + data
+        maca = self.generate_mac(data, flip(self._sk), self._iv) + wcnt+5*b"\0"
 
         # Now we can write the data block with our computed mac to the
         # desired block and the maca block. Write without encryption

@@ -147,7 +147,7 @@ class Chipset(pn53x.Chipset):
 
         """
         mode = self.sam_configuration_modes.index(mode) + 1
-        self.command(0x14, chr(mode) + chr(timeout), timeout=0.1)
+        self.command(0x14, bytearray([mode, timeout]), timeout=0.1)
 
     power_down_wakeup_sources = ("INT0", "INT1", "USB", "RF", "HSU", "SPI")
     """Possible wake up sources for the :meth:`power_down` method."""
@@ -164,7 +164,7 @@ class Chipset(pn53x.Chipset):
         for i, src in enumerate(self.power_down_wakeup_sources):
             if src in wakeup_enable:
                 wakeup_set |= 1 << i
-        data = self.command(0x16, chr(wakeup_set), timeout=0.1)
+        data = self.command(0x16, bytearray([wakeup_set]), timeout=0.1)
         if data[0] != 0:
             self.chipset_error(data)
 
@@ -176,7 +176,7 @@ class Chipset(pn53x.Chipset):
         assert len(felica_params) == 18
         assert len(nfcid3t) == 10
 
-        data = chr(mode) + mifare_params + felica_params + nfcid3t + gt
+        data = bytearray([mode]) + mifare_params + felica_params + nfcid3t + gt
         return self.command(0x8c, data, timeout)
 
 
@@ -193,9 +193,9 @@ class Device(pn53x.Device):
 
         self.chipset.sam_configuration("normal")
         self.chipset.set_parameters(0b00000000)
-        self.chipset.rf_configuration(0x02, "\x00\x0B\x0A")
-        self.chipset.rf_configuration(0x04, "\x00")
-        self.chipset.rf_configuration(0x05, "\x01\x00\x01")
+        self.chipset.rf_configuration(0x02, b"\x00\x0B\x0A")
+        self.chipset.rf_configuration(0x04, b"\x00")
+        self.chipset.rf_configuration(0x05, b"\x01\x00\x01")
         self.mute()
 
     def close(self):
@@ -258,7 +258,9 @@ class Device(pn53x.Device):
 
         if target.atr_res[16] & 0x30 == 0x30:
             self.log.warning("must reduce the max payload size in atr_res")
-            target.atr_res[16] = (target.atr_res[16] & 0xCF) | 0x20
+            atr_res = bytearray(target.atr_res)
+            atr_res[16] = (target.atr_res[16] & 0xCF) | 0x20
+            target.atr_res = bytes(atr_res)
 
         return target
 
@@ -301,8 +303,8 @@ class Device(pn53x.Device):
         return super(Device, self).listen_dep(target, timeout)
 
     def _init_as_target(self, mode, tta_params, ttf_params, timeout):
-        nfcid3t = ttf_params[0:8] + "\x00\x00"
-        args = (mode, tta_params, ttf_params, nfcid3t, '', timeout)
+        nfcid3t = ttf_params[0:8] + b"\x00\x00"
+        args = (mode, tta_params, ttf_params, nfcid3t, b'', timeout)
         return self.chipset.tg_init_tama_target(*args)
 
 

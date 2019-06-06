@@ -50,7 +50,7 @@ class Topaz(tt1.Type1Tag):
 
     def _format(self, version, wipe):
         tag_memory = tt1.Type1TagMemoryReader(self)
-        tag_memory[8:14] = "\xE1\x10\x0E\x00\x03\x00"
+        tag_memory[8:14] = b"\xE1\x10\x0E\x00\x03\x00"
 
         if version is not None:
             if version >> 4 == 1:
@@ -60,7 +60,7 @@ class Topaz(tt1.Type1Tag):
                 return False
 
         if wipe is not None:
-            tag_memory[14:104] = 90 * chr(wipe & 0xFF)
+            tag_memory[14:104] = bytearray([wipe & 0xFF]) * 90
 
         tag_memory.synchronize()
         return True
@@ -111,8 +111,8 @@ class Topaz512(tt1.Type1Tag):
 
     def _format(self, version, wipe):
         tag_memory = tt1.Type1TagMemoryReader(self)
-        tag_memory[8:16] = ("E1103F00" "0103F230").decode("hex")
-        tag_memory[16:24] = ("330203F0" "02030300").decode("hex")
+        tag_memory[8:16] = bytearray.fromhex("E1103F000103F230")
+        tag_memory[16:24] = bytearray.fromhex("330203F002030300")
 
         if version is not None:
             if version >> 4 == 1:
@@ -122,8 +122,8 @@ class Topaz512(tt1.Type1Tag):
                 return False
 
         if wipe is not None:
-            tag_memory[24:104] = 80 * chr(wipe & 0xFF)
-            tag_memory[128:512] = 384 * chr(wipe & 0xFF)
+            tag_memory[24:104] = bytearray([wipe & 0xFF]) * 80
+            tag_memory[128:512] = bytearray([wipe & 0xFF]) * 384
 
         tag_memory.synchronize()
         return True
@@ -153,7 +153,7 @@ class Topaz512(tt1.Type1Tag):
 
 def activate(clf, target):
     hrom = target.rid_res[0:2]
-    if hrom == "\x11\x48":
+    if hrom == b"\x11\x48":
         return Topaz(clf, target)
-    if hrom == "\x12\x4C":
+    if hrom == b"\x12\x4C":
         return Topaz512(clf, target)

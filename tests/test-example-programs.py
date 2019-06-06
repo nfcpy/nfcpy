@@ -63,21 +63,21 @@ device = sys.argv[1] if len(sys.argv) > 1 else 'udp'
 
 started = time.time()
 for server, client in test_programs:
-    print "*** {0} ***".format(client)
+    print("*** {0} ***".format(client))
 
     server = examples + "/{0} --device {1} -q".format(server, device)
-    print server
+    print(server)
     server = Popen(shlex.split(server), stderr=PIPE, stdout=PIPE)
 
     client = examples + "/{0} --device {1} -q".format(client, device)
-    print client
+    print(client)
     client = Popen(shlex.split(client), stderr=STDOUT)
 
-    print "waiting for client to terminate"
+    print("waiting for client to terminate")
     client.wait()
-    print "waiting for server to terminate"
+    print("waiting for server to terminate")
     server.wait()
-    print "allow some time for readers to recover"
+    print("allow some time for readers to recover")
     time.sleep(5)
 
 elapsed = int(time.time() - started)

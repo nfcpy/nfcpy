@@ -72,7 +72,7 @@ def read_tlv(memory, offset, skip_bytes):
         tlv_l, offset = (unpack(">H", memory[offset:offset+2])[0], offset+2)
 
     tlv_v = bytearray(tlv_l)
-    for i in xrange(tlv_l):
+    for i in range(tlv_l):
         while (offset + i) in skip_bytes:
             offset += 1
         tlv_v[i] = memory[offset+i]
@@ -207,7 +207,7 @@ class Type1Tag(Tag):
 
         def _write_ndef_data(self, data):
             log.debug("write ndef data {0}{1}".format(
-                hexlify(data[:10]), '...' if len(data) > 10 else ''))
+                hexlify(data[:10]).decode(), '...' if len(data) > 10 else ''))
 
             tag_memory = self._tag_memory
             skip_bytes = self._skip_bytes
@@ -222,7 +222,7 @@ class Type1Tag(Tag):
             # ndef data into the memory image, but jump over skip
             # bytes.
             offset += 2 if len(data) < 255 else 4
-            for i in xrange(len(data)):
+            for i in range(len(data)):
                 while offset + i in skip_bytes:
                     offset += 1
                 tag_memory[offset+i] = data[i]
@@ -304,7 +304,7 @@ class Type1Tag(Tag):
 
         lines.append("HR0={0:02X}h, HR1={1:02X}h".format(*hrom))
         lines.append("  0: {0} ({1})".format(oprint(data[0:8]), txt[0]))
-        for i in xrange(8, 104, 8):
+        for i in range(8, 104, 8):
             lines.append(lprint("{0:3}: {1} |{2}|", data[i:i+8], i//8))
         lines.append(" 13: {0} ({1})".format(oprint(data[104:112]), txt[1]))
         lines.append(" 14: {0} ({1})".format(oprint(data[112:120]), txt[2]))
@@ -328,7 +328,7 @@ class Type1Tag(Tag):
             if same_data > 0:
                 lines.append(lprint(data_line_fmt, this_data, page))
 
-        for i in xrange(16, stop if stop is not None else 256):
+        for i in range(16, stop if stop is not None else 256):
             try:
                 this_data = self.read_block(i)
                 if stop is None:
@@ -381,14 +381,14 @@ class Type1Tag(Tag):
         """Returns the 2 byte Header ROM and 4 byte UID.
         """
         log.debug("read identification")
-        cmd = "\x78\x00\x00\x00\x00\x00\x00"
+        cmd = b"\x78\x00\x00\x00\x00\x00\x00"
         return self.transceive(cmd)
 
     def read_all(self):
         """Returns the 2 byte Header ROM and all 120 byte static memory.
         """
         log.debug("read all static memory")
-        cmd = "\x00\x00\x00" + self.uid
+        cmd = b"\x00\x00\x00" + self.uid
         return self.transceive(cmd)
 
     def read_byte(self, addr):
@@ -397,7 +397,7 @@ class Type1Tag(Tag):
         if addr < 0 or addr > 127:
             raise ValueError("invalid byte address")
         log.debug("read byte at address {0} ({0:02X}h)".format(addr))
-        cmd = "\x01" + chr(addr) + "\x00" + self.uid
+        cmd = bytearray([0x01, addr, 0x00]) + self.uid
         return self.transceive(cmd)[-1]
 
     def read_block(self, block):
@@ -406,7 +406,7 @@ class Type1Tag(Tag):
         if block < 0 or block > 255:
             raise ValueError("invalid block number")
         log.debug("read block {0}".format(block))
-        cmd = "\x02" + chr(block) + 8 * chr(0) + self.uid
+        cmd = bytearray([0x02, block] + [0x00 for _ in range(8)]) + self.uid
         return self.transceive(cmd)[1:9]
 
     def read_segment(self, segment):
@@ -415,7 +415,8 @@ class Type1Tag(Tag):
         log.debug("read segment {0}".format(segment))
         if segment < 0 or segment > 15:
             raise ValueError("invalid segment number")
-        cmd = "\x10" + chr(segment << 4) + 8 * chr(0) + self.uid
+        cmd = bytearray([0x10, segment << 4] + [0x00 for _ in range(8)]) \
+            + self.uid
         rsp = self.transceive(cmd)
         if len(rsp) < 129:
             raise Type1TagCommandError(RESPONSE_ERROR)
@@ -429,8 +430,8 @@ class Type1Tag(Tag):
         if addr < 0 or addr >= 128:
             raise ValueError("invalid byte address")
         log.debug("write byte at address {0} ({0:02X}h)".format(addr))
-        cmd = "\x53" if erase is True else "\x1A"
-        cmd = cmd + chr(addr) + chr(data) + self.uid
+        cmd = b"\x53" if erase is True else b"\x1A"
+        cmd = cmd + bytearray([addr, data]) + self.uid
         return self.transceive(cmd)
 
     def write_block(self, block, data, erase=True):
@@ -441,8 +442,8 @@ class Type1Tag(Tag):
         if block < 0 or block > 255:
             raise ValueError("invalid block number")
         log.debug("write block {0}".format(block))
-        cmd = "\x54" if erase is True else "\x1B"
-        cmd = cmd + chr(block) + data + self.uid
+        cmd = b"\x54" if erase is True else b"\x1B"
+        cmd = cmd + bytearray([block]) + data + self.uid
         rsp = self.transceive(cmd)
         if len(rsp) < 9:
             raise Type1TagCommandError(RESPONSE_ERROR)
@@ -450,14 +451,16 @@ class Type1Tag(Tag):
             raise Type1TagCommandError(WRITE_ERROR)
 
     def transceive(self, data, timeout=0.1):
-        log.debug(">> {0} ({1:f}s)".format(hexlify(data), timeout))
+        log.debug(">> {0} ({1:f}s)".format(hexlify(data).decode(), timeout))
 
         started = time.time()
+        error = None
         for retry in range(3):
             try:
                 data = self.clf.exchange(data, timeout)
                 break
-            except nfc.clf.CommunicationError as error:
+            except nfc.clf.CommunicationError as e:
+                error = e
                 reason = error.__class__.__name__
                 log.debug("%s after %d retries" % (reason, retry))
         else:
@@ -470,7 +473,7 @@ class Type1Tag(Tag):
             raise RuntimeError("unexpected " + repr(error))
 
         elapsed = time.time() - started
-        log.debug("<< {0} ({1:f}s)".format(hexlify(data), elapsed))
+        log.debug("<< {0} ({1:f}s)".format(hexlify(data).decode(), elapsed))
         return data
 
 
@@ -499,7 +502,7 @@ class Type1TagMemoryReader(object):
     def __setitem__(self, key, value):
         self.__getitem__(key)
         if isinstance(key, slice):
-            if len(value) != len(xrange(*key.indices(0x100000))):
+            if len(value) != len(range(*key.indices(0x100000))):
                 msg = "{cls} requires item assignment of identical length"
                 raise ValueError(msg.format(cls=self.__class__.__name__))
         self._data_in_cache[key] = value
@@ -529,13 +532,13 @@ class Type1TagMemoryReader(object):
     def _write_to_tag(self, stop):
         hr0 = self._header_rom[0]
         if hr0 >> 4 == 1 and hr0 & 0x0F != 1:
-            for i in xrange(0, stop, 8):
+            for i in range(0, stop, 8):
                 data = self._data_in_cache[i:i+8]
                 if data != self._data_from_tag[i:i+8]:
                     self._tag.write_block(i//8, data)
                     self._data_from_tag[i:i+8] = data
         else:
-            for i in xrange(0, stop):
+            for i in range(0, stop):
                 data = self._data_in_cache[i]
                 if data != self._data_from_tag[i]:
                     self._tag.write_byte(i, data)

@@ -102,7 +102,7 @@ class TransmissionControlObject(object):
 
     def bind(self, addr):
         if self.addr and addr and self.addr != addr:
-            log.warn("socket rebound from {0} to {1}".format(self.addr, addr))
+            log.warning("socket rebound from {} to {}".format(self.addr, addr))
         self.addr = addr
         return self.addr
 
@@ -153,7 +153,7 @@ class TransmissionControlObject(object):
                 self.recv_ready.notify()
                 return True
             else:
-                log.warn("discard {0}".format(rcvd_pdu))
+                log.warning("discard {0}".format(rcvd_pdu))
                 return False
 
     def dequeue(self, miu_size, icv_size, notify=True):
@@ -202,7 +202,9 @@ class RawAccessPoint(TransmissionControlObject):
         self.state.ESTABLISHED = True
 
     def __str__(self):
-        return "RAW {0:2} ->  ?".format(self.addr)
+        return "RAW {:2} ->  ?".format(self.addr
+                                       if self.addr is not None
+                                       else "None")
 
     def setsockopt(self, option, value):
         if self.state.SHUTDOWN:
@@ -263,7 +265,10 @@ class LogicalDataLink(TransmissionControlObject):
         self.state.ESTABLISHED = True
 
     def __str__(self):
-        return "LDL {0:2} -> {1:2}".format(self.addr, self.peer)
+        return "LDL {addr:2} -> {peer:2}".format(
+                addr=self.addr if self.addr is not None else "None",
+                peer=self.peer if self.peer is not None else "None"
+        )
 
     def setsockopt(self, option, value):
         if self.state.SHUTDOWN:
@@ -317,10 +322,10 @@ class LogicalDataLink(TransmissionControlObject):
     #
     def enqueue(self, rcvd_pdu):
         if not rcvd_pdu.name == "UI":
-            log.warn("ignore %s PDU on logical data link", rcvd_pdu.name)
+            log.warning("ignore %s PDU on logical data link", rcvd_pdu.name)
             return False
         if len(rcvd_pdu.data) > self.recv_miu:
-            log.warn("received UI PDU exceeds local link MIU")
+            log.warning("received UI PDU exceeds local link MIU")
             return False
         return super(LogicalDataLink, self).enqueue(rcvd_pdu)
 
@@ -366,10 +371,14 @@ class DataLinkConnection(TransmissionControlObject):
         self.send_ack = 0         # V(SA)
 
     def __str__(self):
-        s = "DLC {dlc.addr:2} <-> {dlc.peer:2} {dlc.state} "
+        s = "DLC {addr:2} <-> {peer:2} {dlc.state} "
         s += "RW(R)={dlc.send_win} V(S)={dlc.send_cnt} V(SA)={dlc.send_ack} "
         s += "RW(L)={dlc.recv_win} V(R)={dlc.recv_cnt} V(RA)={dlc.recv_ack}"
-        return s.format(dlc=self)
+        return s.format(
+                dlc=self,
+                addr=self.addr if self.addr is not None else "None",
+                peer=self.peer if self.peer is not None else "None"
+        )
 
     def log(self, string):
         log.debug("DLC ({dlc.addr},{dlc.peer}) {dlc.state} {s}"
@@ -451,6 +460,9 @@ class DataLinkConnection(TransmissionControlObject):
             if isinstance(dest, (bytes, bytearray)):
                 send_pdu = pdu.Connect(1, self.addr, self.recv_miu,
                                        self.recv_win, bytes(dest))
+            elif isinstance(dest, str):
+                send_pdu = pdu.Connect(1, self.addr, self.recv_miu,
+                                       self.recv_win, dest.encode('latin'))
             elif isinstance(dest, int):
                 send_pdu = pdu.Connect(dest, self.addr, self.recv_miu,
                                        self.recv_win)
@@ -598,7 +610,7 @@ class DataLinkConnection(TransmissionControlObject):
 
         elif self.state.LISTEN and rcvd_pdu.name == "CONNECT":
             if super(DataLinkConnection, self).enqueue(rcvd_pdu) is False:
-                log.warn("full backlog on listening socket")
+                log.warning("full backlog on listening socket")
                 self.send_queue.append(pdu.DisconnectedMode(
                     rcvd_pdu.ssap, rcvd_pdu.dsap, reason=0x20))
 
