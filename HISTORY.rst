@@ -1,6 +1,15 @@
 Changelog for nfcpy
 ===================
 
+1.0.1 (2019-06-07)
+------------------
+
+* Correct a missing Python3 related use of bytes instead of str when
+  determing hexadecimal log output formatting.
+
+* Use Sphinx 1.x compatible config file to get documentation built on
+  ReadTheDocs.
+
 1.0.0 (2019-06-06)
 ------------------
 
