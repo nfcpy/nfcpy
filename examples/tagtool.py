@@ -201,7 +201,7 @@ def add_emulate_parser(parser):
             type=argparse.FileType('wb'),
             help="preserve tag memory when released")
     parser.add_argument(
-            "input", metavar="FILE", type=argparse.FileType('r'),
+            "input", metavar="FILE", type=argparse.FileType('rb'),
             nargs="?", default=None,
             help="ndef message to serve ('-' reads from stdin)")
     subparsers = parser.add_subparsers(title="Tag Types", dest="tagtype")
@@ -370,7 +370,7 @@ class TagTool(CommandLineInterface):
         try:
             self.options.data
         except AttributeError:
-            self.options.data = self.options.input.read()
+            self.options.data = self.options.input.buffer.read()
             try:
                 self.options.data = binascii.unhexlify(self.options.data)
             except binascii.Error:
@@ -521,7 +521,7 @@ class TagTool(CommandLineInterface):
             self.options.data
         except AttributeError:
             if self.options.input:
-                self.options.data = self.options.input.read()
+                self.options.data = self.options.input.buffer.read()
                 try:
                     self.options.data = binascii.unhexlify(self.options.data)
                 except binascii.Error:
