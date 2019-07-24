@@ -1,6 +1,13 @@
 Changelog for nfcpy
 ===================
 
+1.0.2 (2019-07-24)
+------------------
+
+* Bugfix: In tagtool.py the NDEF message input file for tag emulation must
+  be opened in binary mode. Also reading from stdin must use the TextIO
+  buffer attribute to get binary data.
+
 1.0.1 (2019-06-07)
 ------------------
 
