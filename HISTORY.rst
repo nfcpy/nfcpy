@@ -1,6 +1,15 @@
 Changelog for nfcpy
 ===================
 
+1.0.3 (2019-07-27)
+------------------
+
+* Correct the IO handling of binary file input in `tagtool.py` when doing
+  tag emulation. This wasn't properly tested for the 1.0.2 release.
+
+* Use the correct name of `_get_osfhandle` Windows function for color output
+  stream handler in command line interface helper module.
+
 1.0.2 (2019-07-24)
 ------------------
 
