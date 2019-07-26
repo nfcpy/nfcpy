@@ -498,7 +498,7 @@ class WindowsColorStreamHandler(logging.StreamHandler):
 
         crtname = ctypes.util.find_msvcrt()
         crtlib = ctypes.cdll.LoadLibrary(crtname)
-        self._outhdl = crtlib.get_osfhandle(self.stream.fileno())
+        self._outhdl = crtlib._get_osfhandle(self.stream.fileno())
 
     def emit(self, record):
         color = self._get_color(record.levelno)
