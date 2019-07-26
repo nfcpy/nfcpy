@@ -21,17 +21,18 @@
 # permissions and limitations under the Licence.
 # -----------------------------------------------------------------------------
 from __future__ import print_function
-import logging
-import sys
-import struct
 import argparse
-import hmac
-import hashlib
 import binascii
+import logging
+import hashlib
+import struct
 import ndef
+import hmac
+import cli
+import sys
 
-from cli import CommandLineInterface
-
+if sys.version_info.major < 3:
+    sys.exit("This script requires Python 3")
 
 log = logging.getLogger('main')
 
@@ -262,7 +263,7 @@ def add_protect_parser(parser):
             help="make tag unreadable without password")
 
 
-class TagTool(CommandLineInterface):
+class TagTool(cli.CommandLineInterface):
     def __init__(self):
         parser = ArgumentParser(
                 formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -370,7 +371,10 @@ class TagTool(CommandLineInterface):
         try:
             self.options.data
         except AttributeError:
-            self.options.data = self.options.input.buffer.read()
+            try:
+                self.options.data = self.options.input.buffer.read()
+            except AttributeError:
+                self.options.data = self.options.input.read()
             try:
                 self.options.data = binascii.unhexlify(self.options.data)
             except binascii.Error:
@@ -521,7 +525,10 @@ class TagTool(CommandLineInterface):
             self.options.data
         except AttributeError:
             if self.options.input:
-                self.options.data = self.options.input.buffer.read()
+                try:
+                    self.options.data = self.options.input.buffer.read()
+                except AttributeError:
+                    self.options.data = self.options.input.read()
                 try:
                     self.options.data = binascii.unhexlify(self.options.data)
                 except binascii.Error:
