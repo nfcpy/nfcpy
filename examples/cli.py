@@ -28,6 +28,7 @@ import threading
 from operator import itemgetter
 import platform
 import nfc
+import msvcrt
 
 
 log = logging.getLogger('main')
@@ -497,8 +498,11 @@ class WindowsColorStreamHandler(logging.StreamHandler):
         import ctypes
 
         crtname = ctypes.util.find_msvcrt()
-        crtlib = ctypes.cdll.LoadLibrary(crtname)
-        self._outhdl = crtlib._get_osfhandle(self.stream.fileno())
+        if crtname != None:
+            crtlib = ctypes.cdll.LoadLibrary(crtname)
+            self._outhdl = crtlib._get_osfhandle(self.stream.fileno())
+        else:
+            self._outhdl = msvcrt.get_osfhandle(self.stream.fileno())
 
     def emit(self, record):
         color = self._get_color(record.levelno)
