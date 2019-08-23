@@ -493,12 +493,8 @@ class WindowsColorStreamHandler(logging.StreamHandler):
     def __init__(self, stream=None):
         super(WindowsColorStreamHandler, self).__init__(stream)
         # get file handle for the stream
-        import ctypes.util
-        import ctypes
-
-        crtname = ctypes.util.find_msvcrt()
-        crtlib = ctypes.cdll.LoadLibrary(crtname)
-        self._outhdl = crtlib._get_osfhandle(self.stream.fileno())
+        import msvcrt
+        self._outhdl = msvcrt.get_osfhandle(self.stream.fileno())
 
     def emit(self, record):
         color = self._get_color(record.levelno)
