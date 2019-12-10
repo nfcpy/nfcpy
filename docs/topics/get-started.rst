@@ -52,8 +52,7 @@ Then, install libusb:
 
 **Install Python and nfcpy**
 
-Download and install the latest version of `Python`_ 2.7.x (
-*nfcpy* does not support Python 3 (yet) [#py3issue]_).
+Download and install `Python`_ (2.7 or 3.5 or later).
 
 .. note::
 
@@ -617,6 +616,3 @@ different service name.
 
 .. _NFC Forum Assigned Numbers Register:
    http://members.nfc-forum.org/specs/nfc_forum_assigned_numbers_register
-
-
-.. [#py3issue] https://github.com/nfcpy/nfcpy/issues/47

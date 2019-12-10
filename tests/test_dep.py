@@ -619,16 +619,16 @@ class TestTarget:
         assert dep.role == "Target"
         assert dep.target.brty == brty
 
-    @pytest.mark.parametrize("request", [
+    @pytest.mark.parametrize("request_data", [
         HEX(''), nfc.clf.CommunicationError,
     ])
-    def test_deactivate_with_immediate_return(self, dep, request):
+    def test_deactivate_with_immediate_return(self, dep, request_data):
         target = nfc.clf.RemoteTarget('106A')
         target.atr_req = HEX('D400 01FE0102030405060708 01000032 46666D010113')
         target.dep_req = HEX('D406 04 01 0000')
         dep.clf.listen.return_value = target
         assert dep.activate() == HEX('46666D010113')
-        dep.clf.exchange.side_effect = [request]
+        dep.clf.exchange.side_effect = [request_data]
         assert dep.deactivate(HEX('0000')) is None
         assert dep.clf.exchange.mock_calls[0][1] == (HEX('F007D50704010000'),)
         assert dep.clf.exchange.call_count == 1

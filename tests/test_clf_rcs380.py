@@ -373,12 +373,12 @@ class TestChipset(object):
             call(CMD('120a00')), call(ACK()),
         ]
 
-    @pytest.mark.parametrize("request", [None, 0x60, 0x61, 0x80])
-    def test_get_firmware_version(self, chipset, request):
+    @pytest.mark.parametrize("request_data", [None, 0x60, 0x61, 0x80])
+    def test_get_firmware_version(self, chipset, request_data):
         chipset.transport.read.side_effect = [ACK(), RSP('210123')]
-        assert chipset.get_firmware_version(request) == HEX('0123')
+        assert chipset.get_firmware_version(request_data) == HEX('0123')
         assert chipset.transport.write.mock_calls == [
-            call(CMD('20' + (('%02x' % request) if request else '')))
+            call(CMD('20' + (('%02x' % request_data) if request_data else '')))
         ]
 
     def test_get_command_type(self, chipset):
