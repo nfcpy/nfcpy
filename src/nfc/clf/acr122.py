@@ -128,7 +128,11 @@ class Device(pn532.Device):
 
     def turn_on_led_and_buzzer(self):
         """Buzz and turn red."""
-        self.chipset.set_buzzer_and_led_to_active()
+        try:
+            tag_length = tag.ndef.length
+            self.chipset.set_buzzer_and_led_to_active()
+        except AttributeError:
+            print("Error during reading tag!")
 
     def turn_off_led_and_buzzer(self):
         """Back to green."""
