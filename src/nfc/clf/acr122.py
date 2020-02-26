@@ -126,7 +126,7 @@ class Device(pn532.Device):
         info = "{device} does not support listen as DEP Target"
         raise nfc.clf.UnsupportedTargetError(info.format(device=self))
 
-    def turn_on_led_and_buzzer(self):
+    def turn_on_led_and_buzzer(self, tag):
         """Buzz and turn red."""
         try:
             tag_length = tag.ndef.length

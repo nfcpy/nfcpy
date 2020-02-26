@@ -611,7 +611,7 @@ class ContactlessFrontend(object):
                     log.debug("connected to {0}".format(tag))
                     if options['on-connect'](tag):
                         if options['beep-on-connect']:
-                            self.device.turn_on_led_and_buzzer()
+                            self.device.turn_on_led_and_buzzer(tag)
                         while not terminate() and tag.is_present:
                             time.sleep(0.1)
                         self.device.turn_off_led_and_buzzer()
