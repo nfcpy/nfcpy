@@ -192,9 +192,9 @@ class Type4Tag(nfc.tag.Tag):
         # class that is returned by the Tag.ndef attribute.
 
         def _select_ndef_application(self):
-            for self._aid in (ndef_aid_v2, ndef_aid_v1):
+            for self._aid, mrl in ((ndef_aid_v2, 256), (ndef_aid_v1, 0)):
                 try:
-                    self.tag.send_apdu(0, 0xA4, 0x04, 0x00, self._aid)
+                    self.tag.send_apdu(0, 0xA4, 0x04, 0x00, self._aid, mrl)
                     log.debug("selected %s", hexlify(self._aid).decode())
                     return True
                 except Type4TagCommandError as error:
