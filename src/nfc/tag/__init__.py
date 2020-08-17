@@ -21,7 +21,11 @@
 # -----------------------------------------------------------------------------
 import logging
 from binascii import hexlify
-from ndef import message_decoder, message_encoder
+
+try:
+    from ndef import message_decoder, message_encoder
+except ImportError:
+    from ndef.message import message_decoder, message_encoder
 
 
 logging.captureWarnings(True)
