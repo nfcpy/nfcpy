@@ -72,8 +72,8 @@ def main(args):
                 data = b""
                 if (target and args.atr and target.brty in brty_for_dep and
                     ((target.sel_res and target.sel_res[0] & 0x40)
-                     or(target.sensf_res
-                        and target.sensf_res[1:3] == '\1\xFE'))):
+                     or (target.sensf_res
+                         and target.sensf_res[1:3] == '\1\xFE'))):
                     atr_req = args.atr[:]
                     if atr_req[0] == 0xFF:
                         atr_req[0] = 0xD4

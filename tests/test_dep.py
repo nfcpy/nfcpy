@@ -1045,7 +1045,7 @@ class TestTarget:
 
 
 class TestDepPdu:
-    @pytest.mark.parametrize("atr, s, l, id3, , did, bs, br, pp, gb, lr", [
+    @pytest.mark.parametrize("atr, s, ln, id3, , did, bs, br, pp, gb, lr", [
         (HEX('D400 01FE0102030405060708 01020332 46666D'), 'ATR-REQ '
          'NFCID3=01fe0102030405060708 DID=01 BS=02 BR=03 PP=32 GB=46666d',
          19, HEX('01FE0102030405060708'), 1, 2, 3, 0x32, HEX('46666d'), 254),
@@ -1059,10 +1059,10 @@ class TestDepPdu:
          'NFCID3=01fe0102030405060708 DID=00 BS=02 BR=03 PP=02 GB=',
          16, HEX('01FE0102030405060708'), 0, 2, 3, 0x02, HEX(''), 64),
     ])
-    def test_atr_req(self, atr, s, l, id3, did, bs, br, pp, gb, lr):
+    def test_atr_req(self, atr, s, ln, id3, did, bs, br, pp, gb, lr):
         pdu = nfc.dep.ATR_REQ.decode(atr)
         assert str(pdu) == s
-        assert len(pdu) == l
+        assert len(pdu) == ln
         assert pdu.nfcid3 == id3
         assert pdu.did == did
         assert pdu.bs == bs
@@ -1070,10 +1070,10 @@ class TestDepPdu:
         assert pdu.pp == pp
         assert pdu.lr == lr
         assert pdu.gb == gb
-        assert pdu.encode() == atr[0:l]
+        assert pdu.encode() == atr[0:ln]
         assert nfc.dep.ATR_REQ.decode(HEX('D401')) is None
 
-    @pytest.mark.parametrize("atr, s, l, id3, did, bs, br, to, pp, gb, wt", [
+    @pytest.mark.parametrize("atr, s, ln, id3, did, bs, br, to, pp, gb, wt", [
         (HEX('D501 01FE0102030405060708 0102030432 4666'), 'ATR-RES '
          'NFCID3=01fe0102030405060708 DID=01 BS=02 BR=03 TO=04 PP=32 GB=4666',
          19, HEX('01FE0102030405060708'), 1, 2, 3, 4, 0x32, HEX('4666'), 4),
@@ -1081,10 +1081,10 @@ class TestDepPdu:
          'NFCID3=01fe0102030405060708 DID=01 BS=02 BR=03 TO=ff PP=32 GB=4666',
          19, HEX('01FE0102030405060708'), 1, 2, 3, 4, 0x32, HEX('4666'), 15),
     ])
-    def test_atr_res(self, atr, s, l, id3, did, bs, br, to, pp, gb, wt):
+    def test_atr_res(self, atr, s, ln, id3, did, bs, br, to, pp, gb, wt):
         pdu = nfc.dep.ATR_RES.decode(atr)
         assert str(pdu) == s
-        assert len(pdu) == l
+        assert len(pdu) == ln
         assert pdu.nfcid3 == id3
         assert pdu.did == did
         assert pdu.bs == bs
@@ -1092,7 +1092,7 @@ class TestDepPdu:
         assert pdu.pp == pp
         assert pdu.wt == wt
         assert pdu.gb == gb
-        assert pdu.encode() == atr[0:l]
+        assert pdu.encode() == atr[0:ln]
         assert nfc.dep.ATR_RES.decode(HEX('D500')) is None
 
     def test_psl_req(self):
