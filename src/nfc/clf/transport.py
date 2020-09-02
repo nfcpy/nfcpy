@@ -27,10 +27,11 @@ import re
 import errno
 from binascii import hexlify
 
-try:
-    import usb1 as libusb
-except ImportError:  # pragma: no cover
-    raise ImportError("missing usb1 module, try 'pip install libusb1'")
+if not os.getenv("READTHEDOCS"):  # pragma: no cover
+    try:
+        import usb1 as libusb
+    except ImportError:  # pragma: no cover
+        raise ImportError("missing usb1 module, try 'pip install libusb1'")
 
 try:
     import serial
