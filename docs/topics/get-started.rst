@@ -31,7 +31,8 @@ simpler approach is to use `Zadig`_ (a driver installation helper
 application).
 
 * Download `Zadig`_
-* Run the standalone exe
+* Connect your NFC device
+* Run the downloaded executable
 * Click Options -> List All Devices 
 * Select your NFC reading/writing device from the list
 * Select the WinUSB driver from the other drop down and install it
