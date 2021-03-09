@@ -25,7 +25,7 @@ from . import tt2
 import os
 import struct
 from binascii import hexlify
-from pyDes import triple_des, CBC
+from Crypto.Cipher import DES3
 
 import logging
 log = logging.getLogger(__name__)
@@ -213,7 +213,8 @@ class MifareUltralightC(tt2.Type2Tag):
         rsp = self.transceive(b"\x1A\x00")
         m1 = bytes(rsp[1:9])
         iv = b"\x00\x00\x00\x00\x00\x00\x00\x00"
-        rb = triple_des(key, CBC, iv).decrypt(m1)
+        m1_cipher = DES3.new(key=key, mode=DES3.MODE_CBC, iv=iv)
+        rb = m1_cipher.decrypt(m1)
 
         log.debug("received challenge")
         log.debug("iv = %s", hexlify(iv).decode())
@@ -223,8 +224,10 @@ class MifareUltralightC(tt2.Type2Tag):
         ra = os.urandom(8)
         iv = bytes(rsp[1:9])
 
-        m2 = triple_des(key, CBC, iv).encrypt(ra + rb[1:8] + (
-            struct.pack("B", rb[0]) if isinstance(rb[0], int) else rb[0]))
+        m2_cipher = DES3.new(key=key, mode=DES3.MODE_CBC, iv=iv)
+        m2 = m2_cipher.encrypt(ra + rb[1:8] + (
+            struct.pack("B", rb[0]) if isinstance(rb[0], int) else rb[0])
+        )
 
         log.debug("sending response")
         log.debug("ra = %s", hexlify(ra).decode())
@@ -241,7 +244,8 @@ class MifareUltralightC(tt2.Type2Tag):
         log.debug("iv = %s", hexlify(iv).decode())
         log.debug("m3 = %s", hexlify(m3).decode())
 
-        return triple_des(key, CBC, iv).decrypt(m3) == ra[1:9] \
+        m3_cipher = DES3.new(key=key, mode=DES3.MODE_CBC, iv=iv)
+        return m3_cipher.decrypt(m3) == ra[1:9] \
             + (struct.pack("B", ra[0]) if isinstance(ra[0], int) else ra[0])
 
 

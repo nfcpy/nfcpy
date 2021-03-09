@@ -26,7 +26,7 @@ CLASSIFIERS = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "License :: OSI Approved :: European Union Public Licence 1.1 (EUPL 1.1)",
 ]
-INSTALL_REQUIRES = ["libusb1", "pyserial", "ndeflib", "pydes"]
+INSTALL_REQUIRES = ["libusb1", "pyserial", "ndeflib", "pycryptodome"]
 PYTHON_REQUIRES = ">=2.6"
 
 ###############################################################################
