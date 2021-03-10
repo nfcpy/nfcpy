@@ -260,7 +260,7 @@ class Tag(object):
         structure of the tag, suitable for printing with join(). The
         list format makes custom indentation a bit easier. ::
 
-            print("\\n".join(["\\t" + line for line in tag.dump]))
+            print("\\n".join(["\\t" + line for line in tag.dump()]))
 
         """
         return []
