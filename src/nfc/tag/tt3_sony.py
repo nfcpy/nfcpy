@@ -25,7 +25,7 @@ from . import tt3
 import os
 import struct
 from binascii import hexlify
-from pyDes import triple_des, CBC
+from Crypto.Cipher import DES3
 from struct import pack, unpack
 import itertools
 
@@ -478,7 +478,7 @@ class FelicaLite(tt3.Type3Tag):
         return lines
 
     @staticmethod
-    def generate_mac(data, key, iv, flip_key=False):
+    def _generate_mac(data, key, iv, flip_key=False):
         # Data is first split into tuples of 8 character bytes, each
         # tuple then reversed and joined, finally all joined back to
         # one string that is then triple des encrypted with key and
@@ -493,7 +493,9 @@ class FelicaLite(tt3.Type3Tag):
             if isinstance(x[0], int)
             else b''.join(reversed(x))
             for x in zip(*[iter(bytes(data))]*8)])
-        return bytearray(triple_des(key, CBC, bytes(iv)).encrypt(txt)[:-9:-1])
+
+        cipher = DES3.new(key=key, mode=DES3.MODE_CBC, iv=bytes(iv))
+        return bytearray(cipher.encrypt(txt)[:-9:-1])
 
     def protect(self, password=None, read_protect=False, protect_from=0):
         """Protect a FeliCa Lite Tag.
@@ -601,10 +603,11 @@ class FelicaLite(tt3.Type3Tag):
         log.debug("rc2 = {}".format(hexlify(rc[8:]).decode()))
         self.write_without_mac(rc[7::-1] + rc[15:7:-1], 0x80)
 
-        # The session key becomes the triple_des encryption of the random
+        # The session key becomes the DES3 encryption of the random
         # challenge under the card key and with an initialization vector of
         # all zero.
-        sk = triple_des(key, CBC, b'\00' * 8).encrypt(rc)
+        cipher = DES3.new(key=key, mode=DES3.MODE_CBC, iv=b'\00' * 8)
+        sk = cipher.encrypt(rc)
         log.debug("sk1 = {}".format(hexlify(sk[:8]).decode()))
         log.debug("sk2 = {}".format(hexlify(sk[8:]).decode()))
 
@@ -618,7 +621,7 @@ class FelicaLite(tt3.Type3Tag):
         # Note that, because of endianess, data must be reversed in chunks
         # of 8 bytes as does the 8 byte mac - this is all done within the
         # generate_mac() function.
-        if data[-16:-8] == self.generate_mac(data[0:-16], sk, iv=rc[0:8]):
+        if data[-16:-8] == self._generate_mac(data[0:-16], sk, iv=rc[0:8]):
             log.debug("tag authentication completed")
             self._sk = sk
             self._iv = rc[0:8]
@@ -725,7 +728,7 @@ class FelicaLite(tt3.Type3Tag):
 
         data = self.read_without_encryption(service_list, block_list)
         data, mac = data[0:-16], data[-16:-8]
-        if mac != self.generate_mac(data, self._sk, self._iv):
+        if mac != self._generate_mac(data, self._sk, self._iv):
             log.warning("mac verification failed")
         else:
             return data
@@ -962,7 +965,7 @@ class FelicaLiteS(FelicaLite):
             return sk[8:16] + sk[0:8]
 
         data = wcnt + b"\x00" + bytearray([block]) + b"\x00\x91\x00" + data
-        maca = self.generate_mac(data, flip(self._sk), self._iv) + wcnt+5*b"\0"
+        maca = self._generate_mac(data, flip(self._sk), self._iv) + wcnt+5*b"\0"
 
         # Now we can write the data block with our computed mac to the
         # desired block and the maca block. Write without encryption

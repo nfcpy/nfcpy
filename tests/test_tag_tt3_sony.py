@@ -811,11 +811,11 @@ class TestFelicaLite:
         (False, "0b1268d7a4ac6932"),
         (True, "18cdd33c0fb25dd7"),
     ])
-    def test_generate_mac(self, flip_key, mac_result):
+    def test__generate_mac(self, flip_key, mac_result):
         data = bytearray(range(32))
         key = bytearray(range(16))
         iv = bytearray(range(8))
-        mac = nfc.tag.tt3_sony.FelicaLite.generate_mac(data, key, iv, flip_key)
+        mac = nfc.tag.tt3_sony.FelicaLite._generate_mac(data, key, iv, flip_key)
         assert mac == HEX(mac_result)
 
     def test_read_with_mac(self, tag):
