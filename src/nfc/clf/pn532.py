@@ -134,6 +134,9 @@ class Chipset(pn53x.Chipset):
         0xff: "Insufficient data received from executing chip command",
     }
 
+    br = (9600, 19200, 38400, 57600, 115200,
+          230400, 460800, 921600, 1288000)
+
     host_command_frame_max_size = 265
     in_list_passive_target_max_target = 2
     in_list_passive_target_brty_range = (0, 1, 2, 3, 4)
@@ -145,9 +148,7 @@ class Chipset(pn53x.Chipset):
         self.command(0x08, data, timeout=0.25)
 
     def set_serial_baudrate(self, baudrate):
-        br = (9600, 19200, 38400, 57600, 115200,
-              230400, 460800, 921600, 1288000)
-        self.command(0x10, bytearray([br.index(baudrate)]), timeout=0.1)
+        self.command(0x10, bytearray([Chipset.br.index(baudrate)]), timeout=0.1)
         self.write_frame(self.ACK)
         time.sleep(0.001)
 
@@ -432,7 +433,7 @@ def init(transport):
         if baudrate > 115200:
             set_baudrate_cmd = bytearray.fromhex("0000ff03fdd410000000")
             set_baudrate_rsp = bytearray.fromhex("0000ff02fed5111a00")
-            set_baudrate_cmd[7] = 5 + (230400, 460800, 921600).index(baudrate)
+            set_baudrate_cmd[7] = Chipset.br.index(baudrate)
             set_baudrate_cmd[8] = 256 - sum(set_baudrate_cmd[5:8])
             transport.write(long_preamble + set_baudrate_cmd)
             if not transport.read(timeout=100) == Chipset.ACK:
