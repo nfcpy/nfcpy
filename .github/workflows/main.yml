@@ -24,6 +24,10 @@ jobs:
       - uses: "actions/setup-python@v2"
         with:
           python-version: "${{ matrix.python-version }}"
+      - name: "Install libssl 1.0"
+        run: |
+          wget http://security.ubuntu.com/ubuntu/pool/main/o/openssl1.0/libssl1.0.0_1.0.2n-1ubuntu5.6_amd64.deb
+          sudo apt install ./libssl1.0.0_1.0.2n-1ubuntu5.6_amd64.deb
       - name: "Install dependencies"
         run: |
           set -xe
@@ -31,6 +35,5 @@ jobs:
           python -m site
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install --upgrade coverage[toml] virtualenv tox tox-gh-actions          
-
       - name: "Run tox targets for ${{ matrix.python-version }}"
         run: "python -m tox"
