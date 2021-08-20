@@ -9,9 +9,9 @@ Python module for near field communication
    :target: http://nfcpy.readthedocs.io/en/latest/?badge=latest
    :alt: Documentation
 
-.. image:: https://travis-ci.org/nfcpy/nfcpy.svg?branch=master
-   :target: https://travis-ci.org/nfcpy/nfcpy
-   :alt: Build Status
+.. image:: https://github.com/nfcpy/nfcpy/workflows/CI/badge.svg?branch=master
+   :target: https://github.com/nfcpy/nfcpy/actions?workflow=CI
+   :alt: CI Status
 
 .. image:: https://codecov.io/gh/nfcpy/nfcpy/branch/master/graph/badge.svg
    :target: https://codecov.io/gh/nfcpy/nfcpy
