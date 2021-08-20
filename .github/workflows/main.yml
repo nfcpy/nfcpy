@@ -13,11 +13,11 @@ jobs:
     name: "Python ${{ matrix.python-version }}"
     runs-on: "ubuntu-latest"
     env:
-      USING_COVERAGE: '2.7,3.8'
+      USING_COVERAGE: '2.7,3.9'
 
     strategy:
       matrix:
-        python-version: ["2.7", "3.5", "3.6", "3.7", "3.8", "pypy3"]
+        python-version: ["2.7", "3.6", "3.7", "3.8", "3.9", "pypy3"]
 
     steps:
       - uses: "actions/checkout@v2"
@@ -41,7 +41,7 @@ jobs:
       - name: "Run tox targets for ${{ matrix.python-version }}"
         run: "python -m tox"
 
-      # Use a modern Python version for combining coverage to prevent
+      # Always use a modern Python version for combining coverage to prevent
       # parsing errors in older versions for modern code.
       - uses: "actions/setup-python@v2"
         with:
