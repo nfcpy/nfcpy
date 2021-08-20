@@ -50,7 +50,7 @@ jobs:
       - name: "Combine coverage"
         run: |
           set -xe
-          python -m pip install coverage[toml]
+          python -m pip install coverage
           python -m coverage combine
           python -m coverage xml
         if: "contains(env.USING_COVERAGE, matrix.python-version)"
