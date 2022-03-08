@@ -420,8 +420,8 @@ class TestInitiator:
         assert dep.clf.exchange.call_count == 0
 
         with pytest.raises(nfc.clf.TimeoutError):
-            dep.exchange(HEX('0102'), timeout=0.0001)
-        assert dep.clf.exchange.call_count == 1
+            dep.exchange(HEX('0102'), timeout=0.00001)
+        assert dep.clf.exchange.call_count >= 1
 
     def test_exchange_retransmission_recoverable_error(self, dep):
         target = nfc.clf.RemoteTarget("106A", atr_res=HEX(self.atr_res))
@@ -501,7 +501,7 @@ class TestInitiator:
         ]
         assert dep.activate(None, brs=0) == HEX('46666D010113')
         with pytest.raises(nfc.clf.TimeoutError):
-            dep.exchange(HEX('0102'), timeout=0.0001)
+            dep.exchange(HEX('0102'), timeout=0.00001)
         assert dep.clf.exchange.call_count == 1
 
     def test_exchange_raises_timeout_error(self, dep):
