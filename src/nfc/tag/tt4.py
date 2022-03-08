@@ -69,7 +69,7 @@ class IsoDepInitiator(object):
     def __init__(self, clf, fsc, fwt):
         self.clf = clf
         self.pni = 0
-        self.miu = fsc-1
+        self.miu = fsc - 3  # account for 1 byte PCB and 2 byte EDC
         self.fwt = fwt
         self.delta_fwt = 49152 / 13.56E6
         self.n_retry_ack = min(int(1/self.fwt), 5)

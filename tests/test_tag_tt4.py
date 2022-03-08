@@ -21,23 +21,23 @@ def HEX(s):
 
 
 @pytest.mark.parametrize("rats_response, max_send, max_recv, result", [
-    ('067077010280', 256, 256, "Type4ATag MIU=15 FWT=0.000302"),
-    ('067177110280', 256, 256, "Type4ATag MIU=23 FWT=0.000604"),
-    ('067277210280', 256, 256, "Type4ATag MIU=31 FWT=0.001208"),
-    ('067377310280', 256, 256, "Type4ATag MIU=39 FWT=0.002417"),
-    ('067477410280', 256, 256, "Type4ATag MIU=47 FWT=0.004833"),
-    ('067577510280', 256, 256, "Type4ATag MIU=63 FWT=0.009666"),
-    ('067677610280', 256, 256, "Type4ATag MIU=95 FWT=0.019332"),
-    ('067777710280', 256, 256, "Type4ATag MIU=127 FWT=0.038664"),
-    ('067877810280', 256, 256, "Type4ATag MIU=255 FWT=0.077329"),
-    ('067977910280', 256, 256, "Type4ATag MIU=255 FWT=0.154657"),
-    ('067A77A10280', 256, 256, "Type4ATag MIU=255 FWT=0.309314"),
-    ('067B77B10280', 256, 256, "Type4ATag MIU=255 FWT=0.618629"),
-    ('067C77C10280', 256, 256, "Type4ATag MIU=255 FWT=1.237258"),
-    ('067D77D10280', 256, 256, "Type4ATag MIU=255 FWT=2.474516"),
-    ('067E77E10280', 256, 256, "Type4ATag MIU=255 FWT=4.949031"),
-    ('067F77F10280', 256, 256, "Type4ATag MIU=255 FWT=0.004833"),
-    ('067F77F10280', 255, 255, "Type4ATag MIU=254 FWT=0.004833"),
+    ('067077010280', 256, 256, "Type4ATag MIU=13 FWT=0.000302"),
+    ('067177110280', 256, 256, "Type4ATag MIU=21 FWT=0.000604"),
+    ('067277210280', 256, 256, "Type4ATag MIU=29 FWT=0.001208"),
+    ('067377310280', 256, 256, "Type4ATag MIU=37 FWT=0.002417"),
+    ('067477410280', 256, 256, "Type4ATag MIU=45 FWT=0.004833"),
+    ('067577510280', 256, 256, "Type4ATag MIU=61 FWT=0.009666"),
+    ('067677610280', 256, 256, "Type4ATag MIU=93 FWT=0.019332"),
+    ('067777710280', 256, 256, "Type4ATag MIU=125 FWT=0.038664"),
+    ('067877810280', 256, 256, "Type4ATag MIU=253 FWT=0.077329"),
+    ('067977910280', 256, 256, "Type4ATag MIU=253 FWT=0.154657"),
+    ('067A77A10280', 256, 256, "Type4ATag MIU=253 FWT=0.309314"),
+    ('067B77B10280', 256, 256, "Type4ATag MIU=253 FWT=0.618629"),
+    ('067C77C10280', 256, 256, "Type4ATag MIU=253 FWT=1.237258"),
+    ('067D77D10280', 256, 256, "Type4ATag MIU=253 FWT=2.474516"),
+    ('067E77E10280', 256, 256, "Type4ATag MIU=253 FWT=4.949031"),
+    ('067F77F10280', 256, 256, "Type4ATag MIU=253 FWT=0.004833"),
+    ('067F77F10280', 255, 255, "Type4ATag MIU=252 FWT=0.004833"),
 ])
 def test_init_T4A(
         mocker, rats_response, max_send, max_recv, result):  # noqa: F811
@@ -62,23 +62,23 @@ def test_init_T4A(
 
 
 @pytest.mark.parametrize("sensb_res, max_send, max_recv, result", [
-    ('5030702A1C00000011000105', 256, 256, "Type4BTag MIU=15 FWT=0.000302"),
-    ('5030702A1C00000011001115', 256, 256, "Type4BTag MIU=23 FWT=0.000604"),
-    ('5030702A1C00000011002125', 256, 256, "Type4BTag MIU=31 FWT=0.001208"),
-    ('5030702A1C00000011003135', 256, 256, "Type4BTag MIU=39 FWT=0.002417"),
-    ('5030702A1C00000011004145', 256, 256, "Type4BTag MIU=47 FWT=0.004833"),
-    ('5030702A1C00000011005155', 256, 256, "Type4BTag MIU=63 FWT=0.009666"),
-    ('5030702A1C00000011006165', 256, 256, "Type4BTag MIU=95 FWT=0.019332"),
-    ('5030702A1C00000011007175', 256, 256, "Type4BTag MIU=127 FWT=0.038664"),
-    ('5030702A1C00000011008185', 256, 256, "Type4BTag MIU=255 FWT=0.077329"),
-    ('5030702A1C00000011009195', 256, 256, "Type4BTag MIU=255 FWT=0.154657"),
-    ('5030702A1C0000001100A1A5', 256, 256, "Type4BTag MIU=255 FWT=0.309314"),
-    ('5030702A1C0000001100B1B5', 256, 256, "Type4BTag MIU=255 FWT=0.618629"),
-    ('5030702A1C0000001100C1C5', 256, 256, "Type4BTag MIU=255 FWT=1.237258"),
-    ('5030702A1C0000001100D1D5', 256, 256, "Type4BTag MIU=255 FWT=2.474516"),
-    ('5030702A1C0000001100E1E5', 256, 256, "Type4BTag MIU=255 FWT=4.949031"),
-    ('5030702A1C0000001100F1F5', 256, 256, "Type4BTag MIU=255 FWT=0.004833"),
-    ('5030702A1C0000001100F1F5', 255, 255, "Type4BTag MIU=254 FWT=0.004833"),
+    ('5030702A1C00000011000105', 256, 256, "Type4BTag MIU=13 FWT=0.000302"),
+    ('5030702A1C00000011001115', 256, 256, "Type4BTag MIU=21 FWT=0.000604"),
+    ('5030702A1C00000011002125', 256, 256, "Type4BTag MIU=29 FWT=0.001208"),
+    ('5030702A1C00000011003135', 256, 256, "Type4BTag MIU=37 FWT=0.002417"),
+    ('5030702A1C00000011004145', 256, 256, "Type4BTag MIU=45 FWT=0.004833"),
+    ('5030702A1C00000011005155', 256, 256, "Type4BTag MIU=61 FWT=0.009666"),
+    ('5030702A1C00000011006165', 256, 256, "Type4BTag MIU=93 FWT=0.019332"),
+    ('5030702A1C00000011007175', 256, 256, "Type4BTag MIU=125 FWT=0.038664"),
+    ('5030702A1C00000011008185', 256, 256, "Type4BTag MIU=253 FWT=0.077329"),
+    ('5030702A1C00000011009195', 256, 256, "Type4BTag MIU=253 FWT=0.154657"),
+    ('5030702A1C0000001100A1A5', 256, 256, "Type4BTag MIU=253 FWT=0.309314"),
+    ('5030702A1C0000001100B1B5', 256, 256, "Type4BTag MIU=253 FWT=0.618629"),
+    ('5030702A1C0000001100C1C5', 256, 256, "Type4BTag MIU=253 FWT=1.237258"),
+    ('5030702A1C0000001100D1D5', 256, 256, "Type4BTag MIU=253 FWT=2.474516"),
+    ('5030702A1C0000001100E1E5', 256, 256, "Type4BTag MIU=253 FWT=4.949031"),
+    ('5030702A1C0000001100F1F5', 256, 256, "Type4BTag MIU=253 FWT=0.004833"),
+    ('5030702A1C0000001100F1F5', 255, 255, "Type4BTag MIU=252 FWT=0.004833"),
 ])
 def test_init_T4B(
         mocker, sensb_res, max_send, max_recv, result):  # noqa: F811
@@ -646,7 +646,7 @@ class TestIsoDepInitiator:
         commands = [
             (HEX('02 01'), 1.0),
             (HEX('03 0102'), 1.0),
-            (HEX('02 01020304050607'), 1.0),
+            (HEX('02 0102030405'), 1.0),
         ]
         responses = [
             HEX('02 0203'),
@@ -656,20 +656,20 @@ class TestIsoDepInitiator:
         dep.clf.exchange.side_effect = responses
         assert dep.exchange(HEX('01'), 1.0) == HEX('0203')
         assert dep.exchange(HEX('0102'), 1.0) == HEX('0203')
-        assert dep.exchange(HEX('01020304050607'), 1.0) == HEX('0203')
+        assert dep.exchange(HEX('0102030405'), 1.0) == HEX('0203')
         assert dep.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_send_more_than_miu(self, dep):
         commands = [
-            (HEX('12 01020304050607'), 1.0),
-            (HEX('03 08'), 1.0)
+            (HEX('12 0102030405'), 1.0),
+            (HEX('03 06'), 1.0)
         ]
         responses = [
             HEX('A2'),
             HEX('03 0203'),
         ]
         dep.clf.exchange.side_effect = responses
-        assert dep.exchange(HEX('0102030405060708'), 1.0) == HEX('0203')
+        assert dep.exchange(HEX('010203040506'), 1.0) == HEX('0203')
         assert dep.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
     def test_send_retransmit_after_ack(self, dep):
@@ -766,14 +766,14 @@ class TestIsoDepInitiator:
 
     def test_send_more_recv_not_ack(self, dep):
         commands = [
-            (HEX('12 01020304050607'), 1.0),
+            (HEX('12 0102030405'), 1.0),
         ]
         responses = [
             HEX('02 0203'),
         ]
         dep.clf.exchange.side_effect = responses
         with pytest.raises(nfc.tag.tt4.Type4TagCommandError) as excinfo:
-            dep.exchange(HEX('0102030405060708'), 1.0)
+            dep.exchange(HEX('010203040506'), 1.0)
         assert excinfo.value.errno == nfc.tag.PROTOCOL_ERROR
         assert dep.clf.exchange.mock_calls == [mock.call(*_) for _ in commands]
 
