@@ -1,6 +1,18 @@
 Changelog for nfcpy
 ===================
 
+1.0.4 (2022-03-10)
+------------------
+
+* Bugfix: In Type 4 Tag communication the ISO-DEP MIU must be 2 octets less
+  accomodate the EDC field that gets added by the reader device.
+
+* Bugfix: Add trailing APDU LE byte when sending the application identifier
+  during Type 4 Tag initialization. Code contributed by @kieran-mackey.
+
+* Bugfix: Correct acquisition of Windows output stream handle for colorized
+  terminal messages in example scripts. Code contributed by @mizutoki79.
+
 1.0.3 (2019-07-27)
 ------------------
 
