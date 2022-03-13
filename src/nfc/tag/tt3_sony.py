@@ -70,6 +70,7 @@ class FelicaStandard(tt3.Type3Tag):
         0x20: ("RC-S962",   12, 10),  # RC-S885/888/892/893
         0x32: ("RC-SA00/1",  1,  1),  # AES chip
         0x35: ("RC-SA00/2",  1,  1),
+        0x36: ("RC-S???",    1,  1),  # new icoca
     }
 
     def __init__(self, clf, target):
