@@ -717,6 +717,172 @@ class NT3H1201(NTAGI2C):
         return super(NT3H1201, self)._dump(480)
 
 
+class NTAGI2CPlus(tt2.Type2Tag):
+    class NDEF(tt2.Type2Tag.NDEF):
+        def _read_capability_data(self, tag_memory):
+            if super(NTAGI2CPlus.NDEF, self)._read_capability_data(tag_memory):
+                if self.tag.is_authenticated:
+                    if not self._readable and tag_memory[15] >> 4 == 8:
+                        self._readable = True
+                    if not self._writeable and tag_memory[15] & 0xF == 0xF:
+                        self._writeable = bool(tag_memory[10:12] == b"\0\0")
+                return True
+            return False
+
+    @property
+    def signature(self):
+        """The 32-byte ECC tag signature programmed at chip production. The
+        signature is provided as a string and can only be read.
+        The signature attribute is always loaded from the tag when it
+        is accessed, i.e. it is not cached. If communication with the
+        tag fails for some reason the signature attribute is set to a
+        32-byte string of all zeros.
+        """
+        try:
+            return bytes(self.transceive(b"\x3C\x00"))
+        except tt2.Type2TagCommandError:
+            return 32 * b"\0"
+
+    def protect(self, password=None, read_protect=False, protect_from=0):
+        """Set password protection or permanent lock bits.
+        If the *password* argument is None, all memory pages will be
+        protected by setting the relevant lock bits (note that lock
+        bits can not be reset). If valid NDEF management data is
+        found, protect() also sets the NDEF write flag to read-only.
+        All Tags of the NTAG21x family can alternatively be protected
+        by password. If a *password* argument is provided, the
+        protect() method writes the first 4 byte of the *password*
+        string into the Tag's password (PWD) memory bytes and the
+        following 2 byte of the *password* string into the password
+        acknowledge (PACK) memory bytes. Factory default values are
+        used if the *password* argument is an empty string. Lock bits
+        are not set for password protection.
+        The *read_protect* and *protect_from* arguments are only
+        evaluated if *password* is not None. If *read_protect* is
+        True, the memory protection bit (PROT) is set to require
+        password verification also for reading of protected memory
+        pages. The value of *protect_from* determines the first
+        password protected memory page (one page is 4 byte) with the
+        exception that the smallest set value is page 3 even if
+        *protect_from* is smaller.
+        """
+        args = (password, read_protect, protect_from)
+        return super(NTAGI2CPlus, self).protect(*args)
+
+    def _protect(self, password, read_protect, protect_from):
+        if password is None:
+            return self._protect_with_lockbits()
+        else:
+            args = (password, read_protect, protect_from)
+            return self._protect_with_password(*args)
+
+    def _protect_with_password(self, password, read_protect, protect_from):
+        if password and len(password) < 6:
+            raise ValueError("password must be at least 6 bytes")
+
+        key = password[0:6] if password != b"" else b"\xFF\xFF\xFF\xFF\0\0"
+        log.debug("protect with key " + hexlify(key))
+
+        # read CFG0, CFG1, PWD and PACK
+        cfg = self.read(self._cfgpage)
+
+        # set password and acknowledge
+        cfg[8:14] = key
+
+        # start protection from page
+        cfg[3] = max(3, min(protect_from, 255))
+
+        # set read protection bit
+        if read_protect:
+            cfg[4] = cfg[4] | 0x80
+        else:
+            cfg[4] = 0x00
+
+        # write configuration to tag
+        for i in range(4):
+            self.write(self._cfgpage + i, cfg[i * 4:(i + 1) * 4])
+
+        # Set NDEF read/write permissions if protection starts at page
+        # 3 and the tag is formatted for NDEF. We set the read/write
+        # permission flags to 8, thus indicating proprietary access.
+        if protect_from <= 3:
+            ndef_cc = self.read(3)[0:4]
+            if ndef_cc[0] == 0xE1 and ndef_cc[1] & 0xF0 == 0x10:
+                ndef_cc[3] |= (0x88 if read_protect else 0x0F)  # according to datasheet write 0x0F to RF read only
+                self.write(3, ndef_cc)
+
+        # Reactivate the tag to have the key effective and
+        # authenticate with the same key
+        self._target = self.clf.sense(self.target)
+        return self.authenticate(key) if self.target else False
+
+    def authenticate(self, password):
+        """Authenticate with password to access protected memory.
+        An NTAG21x implements a simple password protection scheme. The
+        reader proofs possession of a share secret by sending a 4-byte
+        password and the tag proofs possession of a shared secret by
+        returning a 2-byte password acknowledge. Because password and
+        password acknowledge are transmitted in plain text special
+        considerations should be given to under which conditions
+        authentication is performed. If, for example, an attacker is
+        able to mount a relay attack both secret values are easily
+        lost.
+        The *password* argument must be a string of length zero or at
+        least 6 byte characters. If the *password* length is zero,
+        authentication is performed with factory default values. If
+        the *password* contains at least 6 bytes, the first 4 byte are
+        send to the tag as the password secret and the following 2
+        byte are compared against the password acknowledge that is
+        received from the tag.
+        The authentication result is True if the password was
+        confirmed and False if not.
+        """
+        return super(NTAGI2CPlus, self).authenticate(password)
+
+    def _authenticate(self, password):
+        if password and len(password) < 6:
+            raise ValueError("password must be at least 6 bytes")
+
+        key = password[0:6] if password != b"" else b"\xFF\xFF\xFF\xFF\0\0"
+        log.debug("authenticate with key " + key.hex())
+
+        try:
+            rsp = self.transceive(b"\x1B" + key[0:4])
+            return rsp == key[4:6]
+        except tt2.Type2TagCommandError:
+            return False
+
+    def _dump(self, stop, footer):
+        lines = super(NTAGI2CPlus, self)._dump(stop)
+        for i in sorted(footer.keys()):
+            try:
+                data = self.read(i)[0:4]
+            except tt2.Type2TagCommandError:
+                data = [None, None, None, None]
+            lines.append(tt2.pagedump(i, data, footer[i]))
+        return lines
+
+class NT3H2111(NTAGI2CPlus):
+    """NTAG I2C 1K.
+    """
+    def __init__(self, clf, target):
+        super(NT3H2111, self).__init__(clf, target)
+        self._product = "NT3H2111"
+        self._cfgpage = 227 # 0x0E2 - page where configuration registers start
+
+    def _format(self, version, wipe):
+        if self.ndef is None:
+            log.debug("no management data, writing factory defaults")
+            self.write(3, b'\xE1\x10\x6D\x00') #write "memory content at delivery" according to datasheet page 27
+            self.write(4, b'\x03\x00\xFE\x00') #write "memory content at delivery" according to datasheet page 27
+        return super(NT3H2111, self)._format(version, wipe)
+
+    def dump(self):
+        text = ("LOCK2-LOCK4", "MIRROR, RFU, MIRROR_PAGE, AUTH0",
+                "ACCESS", "PWD0-PWD3", "PACK0-PACK1")
+        footer = dict(zip(range(226, 226+len(text)), text)) #read all valid pages - range is cfgpage-1
+        return super(NT3H2111, self)._dump(225, footer)
+
 VERSION_MAP = {
     b"\x00\x04\x03\x01\x01\x00\x0B\x03": MF0UL11,
     b"\x00\x04\x03\x02\x01\x00\x0B\x03": MF0ULH11,
@@ -729,8 +895,8 @@ VERSION_MAP = {
     b"\x00\x04\x04\x02\x01\x00\x13\x03": NTAG216,
     b"\x00\x04\x04\x05\x02\x01\x13\x03": NT3H1101,
     b"\x00\x04\x04\x05\x02\x01\x15\x03": NT3H1201,
-    # b"\x00\x04\x04\x05\x02\x02\x13\x03": NT3H2111,
-    # b"\x00\x04\x04\x05\x02\x02\x15\x03": NT3H2211,
+    b"\x00\x04\x04\x05\x02\x02\x13\x03": NT3H2111,
+    #b"\x00\x04\x04\x05\x02\x02\x15\x03": NT3H2211,
 }
 
 
