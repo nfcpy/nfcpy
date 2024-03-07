@@ -207,7 +207,7 @@ class Device(pn53x.Device):
         self.chipset.rf_configuration(0x0B, data)
 
         self.log.debug("write analog settings for Type B 106 kbps")
-        data = bytearray.fromhex("FF 04 85")
+        data = bytearray.fromhex("FF 17 85")
         self.chipset.rf_configuration(0x0C, data)
 
         self.log.debug("write analog settings for 14443-4 212/424/848 kbps")
